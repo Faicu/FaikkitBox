@@ -1,5 +1,4 @@
 import { createServerFn } from "@tanstack/react-start";
-import { requireAdmin } from "./admin.functions";
 
 export type AgentCommand =
   | "apt_update"
@@ -36,6 +35,7 @@ export const runAgentCommand = createServerFn({ method: "POST" })
     return data;
   })
   .handler(async ({ data }): Promise<AgentResult> => {
+    const { requireAdmin } = await import("./admin.server");
     await requireAdmin();
     const url = process.env.AGENT_URL;
     const token = process.env.AGENT_TOKEN;
