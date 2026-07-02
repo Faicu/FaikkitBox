@@ -1,12 +1,9 @@
-## Plan: Refresh stats every 2 seconds without full-page reload
+## Plan
 
-Update `src/lib/queries.ts` to poll every 2 seconds instead of 5s/15s. TanStack Query's `refetchInterval` refreshes data in the background and only re-renders the components that consume each query — no page reload occurs.
-
-### Changes
-- `REFRESH_MS`: `5000` → `2000` (applies to Plex, qBittorrent, Host).
-- `immichQuery.refetchInterval`: `15_000` → `2000`.
-- Keep `refetchIntervalInBackground: false` so polling pauses when the tab is hidden (saves API quota on Plex/Immich/qBit).
+1. Store `GLANCES_URL = https://glances.faicu.ro/` as a runtime secret via `set_secret` (no user form needed — value is known).
+2. Verify the Host page works by invoking the `getHost` server function and checking the response (status `ok` with CPU/mem/disk data means the reverse proxy is reachable from the Lovable server runtime).
+3. Report back whether Glances responded successfully, or surface the error (e.g. Cloudflare 502, auth challenge from Zero Trust) so we can adjust.
 
 ### Notes
-- No changes to `index.tsx` or route files needed; queries are shared and every page using them (`/`, `/plex`, `/immich`, `/qbit`, `/host`) will inherit the 2s cadence.
-- 2s polling hits Plex discovery/Immich/qBit/host endpoints frequently. If any endpoint is slow (>2s) React Query will still wait for the previous request to complete before firing the next, so this is safe but may increase server load. Let me know if you'd like different intervals per service.
+- No code changes needed — `src/lib/services.functions.ts` already reads `GLANCES_URL` from env.
+- If Cloudflare Zero Trust requires a service-token (CF-Access-Client-Id / CF-Access-Client-Secret) because the app is behind an Access policy, the fetch will get an HTML login page instead of JSON. In that case we'll need to either bypass Access for this hostname or add the two service-token headers as additional secrets and send them from `getHost`.
