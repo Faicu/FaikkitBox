@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Cpu, MemoryStick, HardDrive, Network, Thermometer, Terminal } from "lucide-react";
+import { Cpu, MemoryStick, HardDrive, Network, Thermometer, Terminal, Boxes, HardDriveDownload } from "lucide-react";
 
 import { PageShell } from "@/components/PageShell";
 import { ServicePill } from "@/components/ServicePill";
@@ -8,7 +8,7 @@ import { Meter } from "@/components/Meter";
 import { StatCard } from "@/components/StatCard";
 import { ErrorCard } from "@/components/ErrorCard";
 import { hostQuery } from "@/lib/queries";
-import { formatBytes, formatSpeed, formatDuration } from "@/lib/format";
+import { formatBytes, formatSpeed, formatDurationHMS } from "@/lib/format";
 
 export const Route = createFileRoute("/host")({
   head: () => ({ meta: [{ title: "Host — Server Monitor" }] }),
@@ -38,8 +38,40 @@ function HostPage() {
             <StatCard label="CPU" value={`${(data.cpuPercent ?? 0).toFixed(0)}%`} sub={`${data.cpuCores ?? "?"} cores · load ${data.loadAvg?.[0].toFixed(2)}`} icon={<Cpu className="h-4 w-4" />} accent="text-emerald-400" />
             <StatCard label="Memory" value={`${(data.memPercent ?? 0).toFixed(0)}%`} sub={`${formatBytes(data.memUsedBytes ?? 0)} / ${formatBytes(data.memTotalBytes ?? 0)}`} icon={<MemoryStick className="h-4 w-4" />} accent="text-emerald-400" />
             <StatCard label="Swap" value={`${(data.swapPercent ?? 0).toFixed(0)}%`} icon={<MemoryStick className="h-4 w-4" />} accent="text-emerald-400" />
-            <StatCard label="Uptime" value={formatDuration(data.uptimeSec ?? 0)} icon={<Cpu className="h-4 w-4" />} accent="text-emerald-400" />
+            <StatCard label="Uptime" value={formatDurationHMS(data.uptimeSec ?? 0)} icon={<Cpu className="h-4 w-4" />} accent="text-emerald-400" />
           </div>
+
+          {data.apps && data.apps.length > 0 && (
+            <section>
+              <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
+                <Boxes className="h-3.5 w-3.5" /> Apps
+              </h2>
+              <ul className="rounded-2xl border border-border bg-card divide-y divide-border">
+                {data.apps.map((a) => (
+                  <li key={a.name} className="flex items-center justify-between px-3 py-2 text-sm">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="font-medium">{a.name}</span>
+                      <span className="rounded bg-muted px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-muted-foreground">
+                        {a.source}
+                      </span>
+                    </div>
+                    <div className="shrink-0 text-right text-xs tabular-nums">
+                      <div>
+                        <span className="text-emerald-400">CPU {a.cpu.toFixed(1)}%</span>{" · "}
+                        <span className="text-emerald-400">MEM {a.mem.toFixed(1)}%</span>
+                      </div>
+                      {(a.netRx != null || a.netTx != null) && (
+                        <div className="text-[10px] text-muted-foreground">
+                          <span className="text-sky-400">↓ {formatSpeed(a.netRx ?? 0)}</span>{" · "}
+                          <span className="text-emerald-400">↑ {formatSpeed(a.netTx ?? 0)}</span>
+                        </div>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
 
           <section>
             <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
@@ -101,6 +133,24 @@ function HostPage() {
                     <span className="truncate pr-2 font-mono text-xs">{p.name}</span>
                     <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
                       CPU {p.cpu.toFixed(0)}% · MEM {p.mem.toFixed(0)}%
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {data.diskIO && data.diskIO.length > 0 && (
+            <section>
+              <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
+                <HardDriveDownload className="h-3.5 w-3.5" /> Top disk I/O
+              </h2>
+              <ul className="rounded-2xl border border-border bg-card divide-y divide-border">
+                {data.diskIO.map((p, i) => (
+                  <li key={i} className="flex items-center justify-between px-3 py-2 text-sm">
+                    <span className="truncate pr-2 font-mono text-xs">{p.name}</span>
+                    <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                      R {formatBytes(p.ioRead)} · W {formatBytes(p.ioWrite)}
                     </span>
                   </li>
                 ))}

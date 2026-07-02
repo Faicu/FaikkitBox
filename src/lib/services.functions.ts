@@ -36,6 +36,9 @@ export interface PlexData {
   sessions: PlexSession[];
   libraries: PlexLibrary[];
   recentlyAdded: Array<{ title: string; type: string; addedAt: number }>;
+  topShows?: Array<{ title: string; plays: number; lastViewedAt: number }>;
+  topMovies?: Array<{ title: string; plays: number; lastViewedAt: number }>;
+  topWatchers?: Array<{ user: string; plays: number; lastViewedAt: number }>;
 }
 
 export interface ImmichData {
@@ -48,6 +51,10 @@ export interface ImmichData {
   usageBytes?: number;
   usageByUser?: Array<{ userName: string; usage: number; photos: number; videos: number }>;
   activeJobs?: Array<{ name: string; active: number; waiting: number }>;
+  topUploaders?: Array<{ userName: string; total: number; photos: number; videos: number; usage: number }>;
+  jobQueueDepth?: number;
+  uploadsToday?: number;
+  uploadsThisWeek?: number;
 }
 
 export interface QbitTorrent {
@@ -78,6 +85,12 @@ export interface QbitData {
   globalRatio: number;
   torrents: QbitTorrent[];
   counts: { downloading: number; seeding: number; paused: number; total: number };
+  sessionDl?: number;
+  sessionUp?: number;
+  alltimeDl?: number;
+  alltimeUp?: number;
+  largestEta?: { name: string; eta: number; remaining: number } | null;
+  perCategory?: Array<{ category: string; count: number; dlspeed: number; upspeed: number }>;
 }
 
 export interface HostData {
@@ -98,6 +111,8 @@ export interface HostData {
   net?: Array<{ name: string; rxSec: number; txSec: number }>;
   sensors?: Array<{ label: string; value: number; unit: string }>;
   topProcesses?: Array<{ name: string; cpu: number; mem: number }>;
+  apps?: Array<{ name: string; cpu: number; mem: number; netRx?: number; netTx?: number; source: "process" | "container" }>;
+  diskIO?: Array<{ name: string; ioRead: number; ioWrite: number }>;
 }
 
 // ---------- Helpers ----------
@@ -167,6 +182,68 @@ interface PlexConnectionCandidate {
 }
 
 let plexDiscoveryCache: { url: string; source: string; expiresAt: number } | null = null;
+let plexHistoryCache: {
+  url: string;
+  topShows: PlexData["topShows"];
+  topMovies: PlexData["topMovies"];
+  topWatchers: PlexData["topWatchers"];
+  expiresAt: number;
+} | null = null;
+
+async function fetchPlexHistory(url: string, headers: Record<string, string>): Promise<{
+  topShows: PlexData["topShows"];
+  topMovies: PlexData["topMovies"];
+  topWatchers: PlexData["topWatchers"];
+}> {
+  if (plexHistoryCache && plexHistoryCache.url === url && plexHistoryCache.expiresAt > Date.now()) {
+    return {
+      topShows: plexHistoryCache.topShows,
+      topMovies: plexHistoryCache.topMovies,
+      topWatchers: plexHistoryCache.topWatchers,
+    };
+  }
+  const historyJson = await fetchJson<any>(
+    `${url}/status/sessions/history/all?sort=viewedAt:desc&X-Plex-Container-Start=0&X-Plex-Container-Size=1000`,
+    { headers },
+    12000,
+  );
+  const entries: any[] = historyJson?.MediaContainer?.Metadata ?? [];
+
+  const showMap = new Map<string, { plays: number; lastViewedAt: number }>();
+  const movieMap = new Map<string, { plays: number; lastViewedAt: number }>();
+  const watcherMap = new Map<string, { plays: number; lastViewedAt: number }>();
+
+  for (const e of entries) {
+    const viewedAt = Number(e.viewedAt ?? 0);
+    if (e.type === "episode" || e.grandparentTitle) {
+      const key = String(e.grandparentTitle ?? e.title ?? "Unknown");
+      const prev = showMap.get(key) ?? { plays: 0, lastViewedAt: 0 };
+      showMap.set(key, { plays: prev.plays + 1, lastViewedAt: Math.max(prev.lastViewedAt, viewedAt) });
+    } else if (e.type === "movie") {
+      const key = String(e.title ?? "Unknown");
+      const prev = movieMap.get(key) ?? { plays: 0, lastViewedAt: 0 };
+      movieMap.set(key, { plays: prev.plays + 1, lastViewedAt: Math.max(prev.lastViewedAt, viewedAt) });
+    }
+    const user = String(e?.accountID != null ? e?.User?.title ?? e?.title ?? `user ${e.accountID}` : e?.User?.title ?? "");
+    const wkey = user || "Unknown";
+    const wprev = watcherMap.get(wkey) ?? { plays: 0, lastViewedAt: 0 };
+    watcherMap.set(wkey, { plays: wprev.plays + 1, lastViewedAt: Math.max(wprev.lastViewedAt, viewedAt) });
+  }
+
+  const toRanked = <T extends { plays: number; lastViewedAt: number }>(m: Map<string, T>, keyField: string) =>
+    Array.from(m.entries())
+      .map(([k, v]) => ({ [keyField]: k, ...v }))
+      .sort((a: any, b: any) => b.plays - a.plays)
+      .slice(0, 5) as any;
+
+  const result = {
+    topShows: toRanked(showMap, "title"),
+    topMovies: toRanked(movieMap, "title"),
+    topWatchers: toRanked(watcherMap, "user"),
+  };
+  plexHistoryCache = { url, ...result, expiresAt: Date.now() + 60_000 };
+  return result;
+}
 
 function parseAttributes(raw: string): Record<string, string> {
   const attrs: Record<string, string> = {};
@@ -284,11 +361,12 @@ export const getPlex = createServerFn({ method: "GET" }).handler(async (): Promi
   try {
     const discovered = await discoverPlexUrl(token, base);
     const url = discovered.url;
-    const [rootJson, sessionsJson, libsJson, recentJson] = await Promise.all([
+    const [rootJson, sessionsJson, libsJson, recentJson, history] = await Promise.all([
       fetchJson<any>(`${url}/`, { headers }),
       fetchJson<any>(`${url}/status/sessions`, { headers }),
       fetchJson<any>(`${url}/library/sections`, { headers }),
       fetchJson<any>(`${url}/library/recentlyAdded?X-Plex-Container-Start=0&X-Plex-Container-Size=8`, { headers }).catch(() => ({ MediaContainer: { Metadata: [] } })),
+      fetchPlexHistory(url, headers).catch(() => ({ topShows: [], topMovies: [], topWatchers: [] })),
     ]);
 
     const mc = rootJson?.MediaContainer ?? {};
@@ -346,6 +424,9 @@ export const getPlex = createServerFn({ method: "GET" }).handler(async (): Promi
         type: m.type,
         addedAt: Number(m.addedAt ?? 0),
       })),
+      topShows: history.topShows,
+      topMovies: history.topMovies,
+      topWatchers: history.topWatchers,
     };
   } catch (e) {
     return { status: "error", error: errMsg(e), sessions: [], libraries: [], recentlyAdded: [] };
@@ -362,13 +443,34 @@ export const getImmich = createServerFn({ method: "GET" }).handler(async (): Pro
   const headers = { "x-api-key": key, Accept: "application/json" };
 
   try {
-    const [version, stats, jobs] = await Promise.all([
+    const nowIso = new Date().toISOString();
+    const startOfDayIso = new Date(new Date().setHours(0, 0, 0, 0)).toISOString();
+    const weekAgoIso = new Date(Date.now() - 7 * 86400_000).toISOString();
+
+    async function countSince(iso: string): Promise<number | undefined> {
+      try {
+        const res = await fetchJson<any>(`${url}/api/search/metadata`, {
+          method: "POST",
+          headers: { ...headers, "Content-Type": "application/json" },
+          body: JSON.stringify({ takenAfter: iso, takenBefore: nowIso, size: 1 }),
+        }, 6000);
+        const total = res?.assets?.total ?? res?.total ?? undefined;
+        return typeof total === "number" ? total : undefined;
+      } catch {
+        return undefined;
+      }
+    }
+
+    const [version, stats, jobs, uploadsToday, uploadsThisWeek] = await Promise.all([
       fetchJson<any>(`${url}/api/server/version`, { headers }).catch(() => null),
       fetchJson<any>(`${url}/api/server/statistics`, { headers }),
       fetchJson<any>(`${url}/api/jobs`, { headers }).catch(() => null),
+      countSince(startOfDayIso),
+      countSince(weekAgoIso),
     ]);
 
-    const usageByUser = Array.isArray(stats?.usageByUser)
+    type UsageRow = { userName: string; usage: number; photos: number; videos: number };
+    const usageByUser: UsageRow[] = Array.isArray(stats?.usageByUser)
       ? stats.usageByUser.map((u: any) => ({
           userName: u.userName ?? u.userId ?? "user",
           usage: Number(u.usage ?? 0),
@@ -387,6 +489,13 @@ export const getImmich = createServerFn({ method: "GET" }).handler(async (): Pro
           .filter((j) => j.active > 0 || j.waiting > 0)
       : [];
 
+    const topUploaders = usageByUser
+      .map((u) => ({ userName: u.userName, total: u.photos + u.videos, photos: u.photos, videos: u.videos, usage: u.usage }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 5);
+
+    const jobQueueDepth = activeJobs.reduce((sum, j) => sum + j.active + j.waiting, 0);
+
     return {
       status: "ok",
       version: version ? `${version.major}.${version.minor}.${version.patch}` : undefined,
@@ -396,6 +505,10 @@ export const getImmich = createServerFn({ method: "GET" }).handler(async (): Pro
       usageBytes: Number(stats?.usage ?? 0),
       usageByUser,
       activeJobs,
+      topUploaders,
+      jobQueueDepth,
+      uploadsToday,
+      uploadsThisWeek,
     };
   } catch (e) {
     return { status: "error", error: errMsg(e) };
@@ -460,10 +573,14 @@ export const getQbit = createServerFn({ method: "GET" }).handler(async (): Promi
 
     // Preferences for free disk space
     let freeSpace = 0;
+    let alltimeDl = 0;
+    let alltimeUp = 0;
     try {
       const mainRes = await qbitFetch(url, "/api/v2/sync/maindata", user, pass);
       const main = await mainRes.json();
       freeSpace = Number(main?.server_state?.free_space_on_disk ?? 0);
+      alltimeDl = Number(main?.server_state?.alltime_dl ?? 0);
+      alltimeUp = Number(main?.server_state?.alltime_ul ?? 0);
     } catch {}
 
     const torrents: QbitTorrent[] = torrentsRaw.slice(0, 40).map((t: any) => ({
@@ -487,6 +604,32 @@ export const getQbit = createServerFn({ method: "GET" }).handler(async (): Promi
       else downloading++;
     }
 
+    // Largest remaining download
+    let largestEta: { name: string; eta: number; remaining: number } | null = null;
+    for (const t of torrentsRaw) {
+      const p = Number(t.progress ?? 0);
+      if (p >= 1) continue;
+      const remaining = Number(t.size ?? 0) * (1 - p);
+      if (!largestEta || remaining > largestEta.remaining) {
+        largestEta = { name: t.name, eta: Number(t.eta ?? 0), remaining };
+      }
+    }
+
+    // Per-category aggregation
+    const catMap = new Map<string, { count: number; dlspeed: number; upspeed: number }>();
+    for (const t of torrentsRaw) {
+      const cat = (t.category && String(t.category)) || "uncategorized";
+      const prev = catMap.get(cat) ?? { count: 0, dlspeed: 0, upspeed: 0 };
+      catMap.set(cat, {
+        count: prev.count + 1,
+        dlspeed: prev.dlspeed + Number(t.dlspeed ?? 0),
+        upspeed: prev.upspeed + Number(t.upspeed ?? 0),
+      });
+    }
+    const perCategory = Array.from(catMap.entries())
+      .map(([category, v]) => ({ category, ...v }))
+      .sort((a, b) => b.count - a.count);
+
     return {
       status: "ok",
       version,
@@ -500,6 +643,12 @@ export const getQbit = createServerFn({ method: "GET" }).handler(async (): Promi
       globalRatio: Number(xfer?.global_ratio ?? 0) || (Number(xfer?.up_info_data ?? 0) / Math.max(1, Number(xfer?.dl_info_data ?? 1))),
       torrents,
       counts: { downloading, seeding, paused, total: torrentsRaw.length },
+      sessionDl: Number(xfer?.dl_info_data ?? 0),
+      sessionUp: Number(xfer?.up_info_data ?? 0),
+      alltimeDl,
+      alltimeUp,
+      largestEta,
+      perCategory,
     };
   } catch (e) {
     qbitCookie = null;
@@ -531,6 +680,15 @@ export const getHost = createServerFn({ method: "GET" }).handler(async (): Promi
       all = await tryApi("3");
     }
 
+    // Containers endpoint (may not exist if docker plugin is off)
+    let containers: any[] = [];
+    try {
+      const c4 = await fetchJson<any>(`${url}/api/4/containers`).catch(() => null);
+      const c3 = c4 ?? (await fetchJson<any>(`${url}/api/3/containers`).catch(() => null));
+      if (Array.isArray(c3)) containers = c3;
+      else if (Array.isArray(c3?.containers)) containers = c3.containers;
+    } catch { /* ignore */ }
+
     const system = all.system ?? {};
     const cpu = all.cpu ?? all.quicklook ?? {};
     const load = all.load ?? {};
@@ -541,6 +699,58 @@ export const getHost = createServerFn({ method: "GET" }).handler(async (): Promi
     const sensorsRaw = Array.isArray(all.sensors) ? all.sensors : [];
     const processlist = Array.isArray(all.processlist) ? all.processlist : [];
     const uptime = all.uptime;
+
+    // ---- App identification ----
+    // Map of display name -> regex tested against process/container name (case-insensitive)
+    const APP_MAP: Array<{ name: string; match: RegExp }> = [
+      { name: "Plex", match: /plex/i },
+      { name: "Immich", match: /immich/i },
+      { name: "qBittorrent", match: /qbittorrent|qbit/i },
+      { name: "Glances", match: /glances/i },
+      { name: "cloudflared", match: /cloudflared/i },
+      { name: "Docker", match: /dockerd|docker-proxy/i },
+    ];
+
+    const procName = (p: any): string =>
+      Array.isArray(p.name) ? p.name.join(" ") : p.name ?? p.cmdline?.[0] ?? "";
+
+    const containerName = (c: any): string =>
+      String(c.name ?? c.Name ?? c.image ?? "").replace(/^\//, "");
+
+    const apps: HostData["apps"] = APP_MAP.map(({ name, match }) => {
+      const matchedContainers = containers.filter((c) => match.test(containerName(c)));
+      if (matchedContainers.length > 0) {
+        let cpuSum = 0, memSum = 0, rxSum = 0, txSum = 0;
+        for (const c of matchedContainers) {
+          cpuSum += Number(c.cpu?.total ?? c.cpu_percent ?? 0);
+          memSum += Number(c.memory?.usage ?? c.memory_usage ?? 0);
+          rxSum += Number(c.network?.rx ?? c.io_rx ?? 0);
+          txSum += Number(c.network?.tx ?? c.io_tx ?? 0);
+        }
+        // memory% ~ (container mem / host total mem) * 100
+        const memPct = mem.total ? (memSum / Number(mem.total)) * 100 : 0;
+        return { name, cpu: cpuSum, mem: memPct, netRx: rxSum, netTx: txSum, source: "container" as const };
+      }
+      const matchedProcs = processlist.filter((p: any) => match.test(procName(p)));
+      if (matchedProcs.length === 0) return null;
+      const cpuSum = matchedProcs.reduce((s: number, p: any) => s + Number(p.cpu_percent ?? 0), 0);
+      const memSum = matchedProcs.reduce((s: number, p: any) => s + Number(p.memory_percent ?? 0), 0);
+      return { name, cpu: cpuSum, mem: memSum, source: "process" as const };
+    }).filter((x): x is NonNullable<typeof x> => x !== null);
+
+    // Top disk I/O processes (Glances io_counters = [read_count, write_count, read_bytes, write_bytes])
+    const diskIO = processlist
+      .map((p: any) => {
+        const io = Array.isArray(p.io_counters) ? p.io_counters : [];
+        return {
+          name: procName(p) || "?",
+          ioRead: Number(io[2] ?? 0),
+          ioWrite: Number(io[3] ?? 0),
+        };
+      })
+      .filter((p: any) => p.ioRead > 0 || p.ioWrite > 0)
+      .sort((a: any, b: any) => (b.ioRead + b.ioWrite) - (a.ioRead + a.ioWrite))
+      .slice(0, 5);
 
     return {
       status: "ok",
@@ -578,10 +788,12 @@ export const getHost = createServerFn({ method: "GET" }).handler(async (): Promi
         .sort((a: any, b: any) => Number(b.cpu_percent ?? 0) - Number(a.cpu_percent ?? 0))
         .slice(0, 6)
         .map((p: any) => ({
-          name: Array.isArray(p.name) ? p.name.join(" ") : p.name ?? p.cmdline?.[0] ?? "?",
+          name: procName(p) || "?",
           cpu: Number(p.cpu_percent ?? 0),
           mem: Number(p.memory_percent ?? 0),
         })),
+      apps,
+      diskIO,
     };
   } catch (e) {
     return { status: "error", configured: true, error: errMsg(e) };
