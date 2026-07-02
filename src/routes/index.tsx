@@ -7,6 +7,7 @@ import { PageShell } from "@/components/PageShell";
 import { ServicePill } from "@/components/ServicePill";
 import { RadialGauge } from "@/components/RadialGauge";
 import { plexQuery, immichQuery, qbitQuery, hostQuery } from "@/lib/queries";
+import type { HostData } from "@/lib/services.functions";
 import { formatBytes, formatSpeed } from "@/lib/format";
 
 export const Route = createFileRoute("/")({
@@ -105,7 +106,7 @@ function Overview() {
   );
 }
 
-function HostGauges({ data }: { data: NonNullable<ReturnType<typeof useQuery<typeof hostQuery>>["data"]> }) {
+function HostGauges({ data }: { data: HostData }) {
   const cpu = data.cpuPercent ?? 0;
   const mem = data.memPercent ?? 0;
   const netTotal = (data.net ?? []).reduce((sum, n) => sum + (n.rxSec ?? 0) + (n.txSec ?? 0), 0);
