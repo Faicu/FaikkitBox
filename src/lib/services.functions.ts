@@ -189,6 +189,8 @@ let plexHistoryCache: {
   topShows: PlexData["topShows"];
   topMovies: PlexData["topMovies"];
   topWatchers: PlexData["topWatchers"];
+  episodesToday: number;
+  activeUsersToday: number;
   expiresAt: number;
 } | null = null;
 
@@ -196,12 +198,16 @@ async function fetchPlexHistory(url: string, headers: Record<string, string>): P
   topShows: PlexData["topShows"];
   topMovies: PlexData["topMovies"];
   topWatchers: PlexData["topWatchers"];
+  episodesToday: number;
+  activeUsersToday: number;
 }> {
   if (plexHistoryCache && plexHistoryCache.url === url && plexHistoryCache.expiresAt > Date.now()) {
     return {
       topShows: plexHistoryCache.topShows,
       topMovies: plexHistoryCache.topMovies,
       topWatchers: plexHistoryCache.topWatchers,
+      episodesToday: plexHistoryCache.episodesToday,
+      activeUsersToday: plexHistoryCache.activeUsersToday,
     };
   }
   const historyJson = await fetchJson<any>(
@@ -214,6 +220,9 @@ async function fetchPlexHistory(url: string, headers: Record<string, string>): P
   const showMap = new Map<string, { plays: number; lastViewedAt: number }>();
   const movieMap = new Map<string, { plays: number; lastViewedAt: number }>();
   const watcherMap = new Map<string, { plays: number; lastViewedAt: number }>();
+  const startOfTodaySec = Math.floor(new Date(new Date().setHours(0, 0, 0, 0)).getTime() / 1000);
+  let episodesToday = 0;
+  const todayUsers = new Set<string>();
 
   for (const e of entries) {
     const viewedAt = Number(e.viewedAt ?? 0);
@@ -230,6 +239,10 @@ async function fetchPlexHistory(url: string, headers: Record<string, string>): P
     const wkey = user || "Unknown";
     const wprev = watcherMap.get(wkey) ?? { plays: 0, lastViewedAt: 0 };
     watcherMap.set(wkey, { plays: wprev.plays + 1, lastViewedAt: Math.max(wprev.lastViewedAt, viewedAt) });
+    if (viewedAt >= startOfTodaySec) {
+      if (e.type === "episode" || e.grandparentTitle) episodesToday++;
+      todayUsers.add(wkey);
+    }
   }
 
   const toRanked = <T extends { plays: number; lastViewedAt: number }>(m: Map<string, T>, keyField: string) =>
@@ -242,6 +255,8 @@ async function fetchPlexHistory(url: string, headers: Record<string, string>): P
     topShows: toRanked(showMap, "title"),
     topMovies: toRanked(movieMap, "title"),
     topWatchers: toRanked(watcherMap, "user"),
+    episodesToday,
+    activeUsersToday: todayUsers.size,
   };
   plexHistoryCache = { url, ...result, expiresAt: Date.now() + 60_000 };
   return result;
