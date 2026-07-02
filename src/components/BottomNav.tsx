@@ -1,7 +1,9 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { LayoutDashboard, PlayCircle, Images, Download, Cpu } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { LayoutDashboard, PlayCircle, Images, Download, Cpu, RefreshCcw } from "lucide-react";
+import { adminStatusQuery } from "@/lib/queries";
 
-const items = [
+const baseItems = [
   { to: "/", label: "Acasă", icon: LayoutDashboard },
   { to: "/plex", label: "Plex", icon: PlayCircle },
   { to: "/immich", label: "Immich", icon: Images },
@@ -9,8 +11,12 @@ const items = [
   { to: "/host", label: "Gazdă", icon: Cpu },
 ] as const;
 
+const adminExtra = { to: "/updates", label: "Update", icon: RefreshCcw } as const;
+
 export function BottomNav() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const admin = useQuery(adminStatusQuery);
+  const items = admin.data?.isAdmin ? [...baseItems, adminExtra] : baseItems;
   return (
     <nav
       className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card/95 backdrop-blur"
