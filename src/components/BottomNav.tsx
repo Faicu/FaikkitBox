@@ -2,11 +2,11 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { LayoutDashboard, PlayCircle, Images, Download, Cpu } from "lucide-react";
 
 const items = [
-  { to: "/", label: "Overview", icon: LayoutDashboard },
+  { to: "/", label: "Acasă", icon: LayoutDashboard },
   { to: "/plex", label: "Plex", icon: PlayCircle },
   { to: "/immich", label: "Immich", icon: Images },
   { to: "/qbit", label: "qBit", icon: Download },
-  { to: "/host", label: "Host", icon: Cpu },
+  { to: "/host", label: "Gazdă", icon: Cpu },
 ] as const;
 
 export function BottomNav() {
