@@ -41,6 +41,17 @@ export interface PlexData {
   topWatchers?: Array<{ user: string; plays: number; lastViewedAt: number }>;
   episodesToday?: number;
   activeUsersToday?: number;
+  userHistory?: Record<string, PlexHistoryEntry[]>;
+}
+
+export interface PlexHistoryEntry {
+  title: string;
+  show?: string;
+  season?: number;
+  episode?: number;
+  type: string;
+  viewedAt: number;
+  player?: string;
 }
 
 export interface ImmichData {
