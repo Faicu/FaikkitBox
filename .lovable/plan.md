@@ -1,36 +1,34 @@
-## Diagnosis
+## Status
 
-Your Glances is running in **server mode** (`-s -B 127.0.0.1`), which exposes only the XML-RPC protocol on port **61209** for the Glances desktop client. Our app needs the **REST/Web API** on port **61208**, which requires the `-w` flag. That's why Cloudflare returns 502 — nothing is listening on the port the tunnel is trying to reach.
+- Glances is now running on port 61208 (curl reached it — the 404 came from Glances, not the OS).
+- Glances v3.4 uses `/api/3/`, which matches what `src/lib/services.functions.ts` already calls. **No code changes needed.**
 
-## Fix (on the mini-PC, no code changes needed)
+## Remaining step (on your side)
 
-Edit the systemd unit to use `-w` instead of `-s`:
+Confirm the cloudflared tunnel ingress for `glances.faicu.ro` points to `http://localhost:61208`:
 
 ```bash
-sudo systemctl edit --full glances.service
+cat /etc/cloudflared/config.yml
 ```
 
-Change the `ExecStart` line to:
-```
-ExecStart=/usr/bin/glances -w --disable-webui -B 127.0.0.1
+The ingress rule should look like:
+```yaml
+- hostname: glances.faicu.ro
+  service: http://localhost:61208
 ```
 
-- `-w` enables the REST API on port 61208
-- `--disable-webui` skips the HTML UI (we only need the JSON API)
-- `-B 127.0.0.1` keeps it bound to localhost (safe, cloudflared reaches it locally)
-
-Then:
+If it says `61209` (or anything else), fix it and:
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl restart glances
-curl http://127.0.0.1:61208/api/4/all | head -c 200
+sudo systemctl restart cloudflared
 ```
 
-If curl returns JSON, verify your cloudflared ingress for `glances.faicu.ro` points to `http://localhost:61208` (not 61209), restart cloudflared, and the Host page will go green within 2 seconds.
+Then verify from anywhere:
+```bash
+curl -s https://glances.faicu.ro/api/3/all | head -c 200
+```
 
-## If Glances is v4+
+Once that returns JSON, the Host page will go green within 2 seconds — no redeploy needed.
 
-Newer Glances uses `/api/4/`. Our code currently calls `/api/3/all`. Once you confirm which version responds (`glances -V`), I'll update `src/lib/services.functions.ts` to try `/api/4` first and fall back to `/api/3`.
+## If you'd like me to act
 
-### Notes
-- No app-side code changes until you confirm the API version and the tunnel reaches port 61208.
+Paste the output of the two curl commands above and I'll confirm end-to-end, or say "test it" and I'll poll the server function from here.
