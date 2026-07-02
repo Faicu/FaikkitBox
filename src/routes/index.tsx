@@ -1,12 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { PlayCircle, Images, Download, Cpu, ChevronRight, Users, HardDrive } from "lucide-react";
+import { PlayCircle, Images, Download, Cpu, ChevronRight, Users, HardDrive, ListChecks, Network } from "lucide-react";
 
 import { PageShell } from "@/components/PageShell";
 import { ServicePill } from "@/components/ServicePill";
-import { Meter } from "@/components/Meter";
+import { RadialGauge } from "@/components/RadialGauge";
 import { plexQuery, immichQuery, qbitQuery, hostQuery } from "@/lib/queries";
+import type { HostData } from "@/lib/services.functions";
 import { formatBytes, formatSpeed } from "@/lib/format";
 
 export const Route = createFileRoute("/")({
@@ -36,9 +37,21 @@ function Overview() {
         error={plex.data?.error}
       >
         {plex.data?.status === "ok" && (
-          <div className="grid grid-cols-2 gap-2 text-sm">
-            <Metric icon={<Users className="h-3.5 w-3.5" />} label="Se redă acum" value={String(plex.data.sessions.length)} />
-            <Metric label="Biblioteci" value={String(plex.data.libraries.length)} />
+          <div className="space-y-2 text-sm">
+            <div className="rounded-lg bg-muted/40 px-2.5 py-1.5">
+              <div className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                <Users className="h-3.5 w-3.5" />Se uită acum
+              </div>
+              <div className="mt-0.5 truncate text-sm font-semibold">
+                {plex.data.sessions.length > 0
+                  ? plex.data.sessions.map((s) => s.user).join(", ")
+                  : "Nimeni"}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Metric label="Episoade azi" value={String(plex.data.episodesToday ?? 0)} />
+              <Metric label="Utilizatori activi azi" value={String(plex.data.activeUsersToday ?? 0)} />
+            </div>
           </div>
         )}
       </ServiceRow>
@@ -52,9 +65,10 @@ function Overview() {
         error={immich.data?.error}
       >
         {immich.data?.status === "ok" && (
-          <div className="grid grid-cols-2 gap-2 text-sm">
+          <div className="grid grid-cols-3 gap-2 text-sm">
             <Metric label="Fișiere" value={(immich.data.totalAssets ?? 0).toLocaleString()} />
             <Metric icon={<HardDrive className="h-3.5 w-3.5" />} label="Spațiu" value={formatBytes(immich.data.usageBytes ?? 0)} />
+            <Metric icon={<ListChecks className="h-3.5 w-3.5" />} label="Sarcini în curs" value={(immich.data.jobQueueDepth ?? 0).toLocaleString()} />
           </div>
         )}
       </ServiceRow>
@@ -71,7 +85,7 @@ function Overview() {
           <div className="grid grid-cols-3 gap-2 text-sm">
             <Metric label="↓" value={formatSpeed(qbit.data.dlSpeed)} />
             <Metric label="↑" value={formatSpeed(qbit.data.upSpeed)} />
-            <Metric label="Active" value={String(qbit.data.counts.total)} />
+            <Metric label="Active" value={`${qbit.data.counts.downloading + qbit.data.counts.seeding} / ${qbit.data.counts.total}`} />
           </div>
         )}
       </ServiceRow>
@@ -85,17 +99,42 @@ function Overview() {
         error={host.data?.error}
       >
         {host.data?.status === "ok" && (
-          <div className="space-y-2">
-            <Meter label="CPU" right={`${(host.data.cpuPercent ?? 0).toFixed(0)}%`} value={host.data.cpuPercent ?? 0} />
-            <Meter
-              label="Memorie"
-              right={`${formatBytes(host.data.memUsedBytes ?? 0)} / ${formatBytes(host.data.memTotalBytes ?? 0)}`}
-              value={host.data.memPercent ?? 0}
-            />
-          </div>
+          <HostGauges data={host.data} />
         )}
       </ServiceRow>
     </PageShell>
+  );
+}
+
+function HostGauges({ data }: { data: HostData }) {
+  const cpu = data.cpuPercent ?? 0;
+  const mem = data.memPercent ?? 0;
+  const netTotal = (data.net ?? []).reduce((sum, n) => sum + (n.rxSec ?? 0) + (n.txSec ?? 0), 0);
+  // Scale network to a rough 100 Mbit/s = 100% reference
+  const netRef = 100 * 1024 * 1024 / 8; // bytes/s
+  const netPct = Math.min(100, (netTotal / netRef) * 100);
+  return (
+    <div className="grid grid-cols-3 gap-2">
+      <RadialGauge
+        label="Procesor"
+        value={cpu}
+        centerText={`${cpu.toFixed(0)}%`}
+        colorClass="text-emerald-400"
+      />
+      <RadialGauge
+        label="Memorie"
+        value={mem}
+        centerText={`${mem.toFixed(0)}%`}
+        sub={data.memUsedBytes != null && data.memTotalBytes != null ? `${formatBytes(data.memUsedBytes)}` : undefined}
+        colorClass="text-primary"
+      />
+      <RadialGauge
+        label="Rețea"
+        value={netPct}
+        centerText={formatSpeed(netTotal)}
+        colorClass="text-sky-400"
+      />
+    </div>
   );
 }
 
