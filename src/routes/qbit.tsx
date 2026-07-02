@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, HardDrive, Percent } from "lucide-react";
+import { ArrowDown, ArrowUp, HardDrive, Percent, Timer, Tag } from "lucide-react";
 
 import { PageShell } from "@/components/PageShell";
 import { ServicePill } from "@/components/ServicePill";
@@ -51,6 +51,48 @@ function QbitPage() {
             <div className="rounded-xl bg-emerald-500/15 py-2 text-emerald-400"><b className="block text-lg">{data.counts.seeding}</b>Seeding</div>
             <div className="rounded-xl bg-muted py-2 text-muted-foreground"><b className="block text-lg">{data.counts.paused}</b>Paused</div>
           </div>
+
+          {(data.alltimeDl != null || data.alltimeUp != null) && (
+            <div className="grid grid-cols-2 gap-2">
+              <StatCard label="All-time down" value={formatBytes(data.alltimeDl ?? 0)} icon={<ArrowDown className="h-4 w-4" />} accent="text-sky-400" />
+              <StatCard label="All-time up" value={formatBytes(data.alltimeUp ?? 0)} icon={<ArrowUp className="h-4 w-4" />} accent="text-emerald-400" />
+            </div>
+          )}
+
+          {data.largestEta && (
+            <section>
+              <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
+                <Timer className="h-3.5 w-3.5" /> Largest download
+              </h2>
+              <div className="rounded-2xl border border-border bg-card p-3">
+                <div className="truncate text-sm font-medium">{data.largestEta.name}</div>
+                <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground tabular-nums">
+                  <span>{formatBytes(data.largestEta.remaining)} remaining</span>
+                  <span>ETA {formatEta(data.largestEta.eta)}</span>
+                </div>
+              </div>
+            </section>
+          )}
+
+          {data.perCategory && data.perCategory.length > 0 && (
+            <section>
+              <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
+                <Tag className="h-3.5 w-3.5" /> Categories
+              </h2>
+              <ul className="rounded-2xl border border-border bg-card divide-y divide-border">
+                {data.perCategory.map((c) => (
+                  <li key={c.category} className="flex items-center justify-between px-3 py-2 text-sm">
+                    <span className="truncate pr-2 font-medium">{c.category}</span>
+                    <span className="shrink-0 text-xs tabular-nums">
+                      <span className="text-muted-foreground">{c.count} · </span>
+                      <span className="text-sky-400">↓ {formatSpeed(c.dlspeed)}</span>{" · "}
+                      <span className="text-emerald-400">↑ {formatSpeed(c.upspeed)}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
 
           <section>
             <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
