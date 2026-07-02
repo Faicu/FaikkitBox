@@ -547,6 +547,55 @@ async function qbitFetch(url: string, path: string, user: string, pass: string):
   return res;
 }
 
+async function qbitPost(url: string, path: string, user: string, pass: string, form: Record<string, string>): Promise<Response> {
+  if (!qbitCookie) qbitCookie = await qbitLogin(url, user, pass);
+  const body = new URLSearchParams(form);
+  const doFetch = () =>
+    fetch(`${url}${path}`, {
+      method: "POST",
+      headers: {
+        Cookie: qbitCookie!,
+        Referer: url,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body,
+    });
+  let res = await doFetch();
+  if (res.status === 403 || res.status === 401) {
+    qbitCookie = await qbitLogin(url, user, pass);
+    res = await doFetch();
+  }
+  return res;
+}
+
+export const qbitAction = createServerFn({ method: "POST" })
+  .inputValidator((data: { hashes: string[] | "all"; action: "pause" | "resume" }) => data)
+  .handler(async ({ data }): Promise<{ ok: boolean; error?: string }> => {
+    const base = process.env.QBIT_URL;
+    const user = process.env.QBIT_USERNAME;
+    const pass = process.env.QBIT_PASSWORD;
+    if (!base || !user || !pass) return { ok: false, error: "qBittorrent not configured" };
+    const url = stripSlash(base);
+    const hashesStr = data.hashes === "all" ? "all" : data.hashes.join("|");
+    // qBit 4.x: pause/resume. 5.x also accepts stop/start. Try primary then fallback.
+    const primary = data.action === "pause" ? "/api/v2/torrents/pause" : "/api/v2/torrents/resume";
+    const fallback = data.action === "pause" ? "/api/v2/torrents/stop" : "/api/v2/torrents/start";
+    try {
+      let res = await qbitPost(url, primary, user, pass, { hashes: hashesStr });
+      if (!res.ok) {
+        res = await qbitPost(url, fallback, user, pass, { hashes: hashesStr });
+      }
+      if (!res.ok) {
+        const t = await res.text().catch(() => "");
+        return { ok: false, error: `HTTP ${res.status} ${t.slice(0, 120)}` };
+      }
+      return { ok: true };
+    } catch (e) {
+      qbitCookie = null;
+      return { ok: false, error: errMsg(e) };
+    }
+  });
+
 export const getQbit = createServerFn({ method: "GET" }).handler(async (): Promise<QbitData> => {
   const base = process.env.QBIT_URL;
   const user = process.env.QBIT_USERNAME;
