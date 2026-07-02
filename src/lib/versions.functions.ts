@@ -1,5 +1,4 @@
 import { createServerFn } from "@tanstack/react-start";
-import { requireAdmin } from "./admin.functions";
 
 export type ServiceVersion = {
   name: "Plex" | "Immich" | "qBittorrent";
@@ -116,6 +115,7 @@ async function qbitVersion(): Promise<ServiceVersion> {
 }
 
 export const getVersions = createServerFn({ method: "GET" }).handler(async () => {
+  const { requireAdmin } = await import("./admin.server");
   await requireAdmin();
   const [plex, immich, qbit] = await Promise.all([plexVersion(), immichVersion(), qbitVersion()]);
   return { plex, immich, qbit, fetchedAt: new Date().toISOString() };
