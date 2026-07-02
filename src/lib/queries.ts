@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 import { getPlex, getImmich, getQbit, getHost } from "./services.functions";
 
-const REFRESH_MS = 1000;
+const REFRESH_MS = 1100;
 
 export const plexQuery = queryOptions({
   queryKey: ["plex"],
