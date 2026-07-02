@@ -1,5 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 import { getPlex, getImmich, getQbit, getHost } from "./services.functions";
+import { getAdminStatus } from "./admin.functions";
+import { getVersions } from "./versions.functions";
 
 const REFRESH_MS = 1100;
 
@@ -30,4 +32,18 @@ export const hostQuery = queryOptions({
   queryFn: () => getHost(),
   refetchInterval: REFRESH_MS,
   staleTime: 0,
+});
+
+export const adminStatusQuery = queryOptions({
+  queryKey: ["adminStatus"],
+  queryFn: () => getAdminStatus(),
+  staleTime: 30_000,
+  refetchOnWindowFocus: true,
+});
+
+export const versionsQuery = queryOptions({
+  queryKey: ["versions"],
+  queryFn: () => getVersions(),
+  refetchInterval: 5 * 60_000,
+  staleTime: 60_000,
 });
