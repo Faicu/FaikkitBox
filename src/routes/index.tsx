@@ -26,7 +26,7 @@ function Overview() {
   const host = useQuery(hostQuery);
 
   return (
-    <PageShell title="Server Monitor" subtitle="Live overview">
+    <PageShell title="Server Monitor" subtitle="Statististici în Timp Real">
       <ServiceRow
         to="/plex"
         title="Plex"
