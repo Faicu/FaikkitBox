@@ -106,6 +106,23 @@ function stripSlash(url: string): string {
   return url.replace(/\/+$/, "");
 }
 
+async function fetchText(url: string, init?: RequestInit, timeoutMs = 8000): Promise<string> {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { ...init, signal: ctrl.signal });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`HTTP ${res.status} ${res.statusText}${body ? ` — ${body.slice(0, 160)}` : ""}`);
+    }
+    return await res.text();
+  } catch (e) {
+    throw new Error(`${url} → ${errMsg(e)}`);
+  } finally {
+    clearTimeout(t);
+  }
+}
+
 async function fetchJson<T>(url: string, init?: RequestInit, timeoutMs = 8000): Promise<T> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -143,16 +160,123 @@ function errMsg(e: unknown): string {
 
 // ---------- Plex ----------
 
+interface PlexConnectionCandidate {
+  uri: string;
+  source: string;
+  priority: number;
+}
+
+function parseAttributes(raw: string): Record<string, string> {
+  const attrs: Record<string, string> = {};
+  for (const match of raw.matchAll(/([\w:-]+)="([^"]*)"/g)) {
+    attrs[match[1]] = match[2].replace(/&quot;/g, '"').replace(/&amp;/g, "&");
+  }
+  return attrs;
+}
+
+function uniqueCandidates(candidates: PlexConnectionCandidate[]): PlexConnectionCandidate[] {
+  const seen = new Set<string>();
+  return candidates
+    .filter((c) => {
+      const uri = stripSlash(c.uri);
+      if (!uri || seen.has(uri)) return false;
+      seen.add(uri);
+      c.uri = uri;
+      return true;
+    })
+    .sort((a, b) => a.priority - b.priority);
+}
+
+function parsePlexResources(payload: string): PlexConnectionCandidate[] {
+  const candidates: PlexConnectionCandidate[] = [];
+
+  try {
+    const data = JSON.parse(payload);
+    const devices = data?.MediaContainer?.Device ?? data?.devices ?? [];
+    const deviceList = Array.isArray(devices) ? devices : [devices];
+    for (const device of deviceList) {
+      const provides = String(device?.provides ?? "");
+      if (!provides.includes("server")) continue;
+      const connections = Array.isArray(device?.Connection) ? device.Connection : Array.isArray(device?.connections) ? device.connections : [];
+      for (const conn of connections) {
+        const uri = String(conn?.uri ?? "");
+        if (!uri) continue;
+        const protocol = String(conn?.protocol ?? (uri.startsWith("https:") ? "https" : "http"));
+        const isPlexDirect = uri.includes("plex.direct");
+        const isRelay = String(conn?.relay ?? "0") === "1";
+        candidates.push({
+          uri,
+          source: isRelay ? "Plex Relay" : isPlexDirect ? "Plex Direct" : "Plex resource",
+          priority: protocol === "https" && isPlexDirect && !isRelay ? 0 : protocol === "https" && !isRelay ? 1 : protocol === "http" && !isRelay ? 2 : 3,
+        });
+      }
+    }
+    return uniqueCandidates(candidates);
+  } catch {
+    // Plex's resources endpoint often returns XML, so fall through to XML parsing.
+  }
+
+  const deviceMatches = payload.matchAll(/<Device\b([^>]*)>([\s\S]*?)<\/Device>/g);
+  for (const deviceMatch of deviceMatches) {
+    const deviceAttrs = parseAttributes(deviceMatch[1]);
+    if (!String(deviceAttrs.provides ?? "").includes("server")) continue;
+
+    const connectionMatches = deviceMatch[2].matchAll(/<Connection\b([^/>]*)(?:\/>|>[\s\S]*?<\/Connection>)/g);
+    for (const connectionMatch of connectionMatches) {
+      const conn = parseAttributes(connectionMatch[1]);
+      const uri = conn.uri;
+      if (!uri) continue;
+      const protocol = conn.protocol ?? (uri.startsWith("https:") ? "https" : "http");
+      const isPlexDirect = uri.includes("plex.direct");
+      const isRelay = conn.relay === "1";
+      candidates.push({
+        uri,
+        source: isRelay ? "Plex Relay" : isPlexDirect ? "Plex Direct" : "Plex resource",
+        priority: protocol === "https" && isPlexDirect && !isRelay ? 0 : protocol === "https" && !isRelay ? 1 : protocol === "http" && !isRelay ? 2 : 3,
+      });
+    }
+  }
+
+  return uniqueCandidates(candidates);
+}
+
+async function discoverPlexUrl(token: string, fallbackBase?: string): Promise<{ url: string; source: string; attempts: string[] }> {
+  const headers = { Accept: "application/json, application/xml;q=0.9, text/xml;q=0.8", "X-Plex-Token": token };
+  const attempts: string[] = [];
+  const resourcesText = await fetchText("https://plex.tv/api/resources?includeHttps=1&includeRelay=1", { headers }, 10000);
+  const candidates = parsePlexResources(resourcesText);
+
+  if (fallbackBase) {
+    candidates.push({ uri: stripSlash(fallbackBase), source: "Manual PLEX_URL fallback", priority: 10 });
+  }
+
+  if (candidates.length === 0) {
+    throw new Error("No Plex server connections found for this token");
+  }
+
+  for (const candidate of uniqueCandidates(candidates)) {
+    try {
+      await fetchJson<any>(`${candidate.uri}/`, { headers }, 5000);
+      return { url: candidate.uri, source: candidate.source, attempts };
+    } catch (e) {
+      attempts.push(`${candidate.source} ${candidate.uri}: ${errMsg(e)}`);
+    }
+  }
+
+  throw new Error(`No reachable Plex connection. Tried: ${attempts.join(" | ")}`);
+}
+
 export const getPlex = createServerFn({ method: "GET" }).handler(async (): Promise<PlexData> => {
   const base = process.env.PLEX_URL;
   const token = process.env.PLEX_TOKEN;
-  if (!base || !token) {
-    return { status: "error", error: "PLEX_URL / PLEX_TOKEN not configured", sessions: [], libraries: [], recentlyAdded: [] };
+  if (!token) {
+    return { status: "error", error: "PLEX_TOKEN not configured", sessions: [], libraries: [], recentlyAdded: [] };
   }
-  const url = stripSlash(base);
   const headers = { Accept: "application/json", "X-Plex-Token": token };
 
   try {
+    const discovered = await discoverPlexUrl(token, base);
+    const url = discovered.url;
     const [rootJson, sessionsJson, libsJson, recentJson] = await Promise.all([
       fetchJson<any>(`${url}/`, { headers }),
       fetchJson<any>(`${url}/status/sessions`, { headers }),
@@ -206,7 +330,7 @@ export const getPlex = createServerFn({ method: "GET" }).handler(async (): Promi
     return {
       status: "ok",
       serverName: mc.friendlyName,
-      version: mc.version,
+      version: mc.version ? `${mc.version} · ${discovered.source}` : discovered.source,
       platform: mc.platform,
       sessions,
       libraries,
