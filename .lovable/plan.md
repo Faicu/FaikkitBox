@@ -1,20 +1,23 @@
-## Add qBittorrent Controls
+## Traducere completă în română
 
-Extend the qBit page with interactive controls so torrents can be managed directly from the dashboard.
+Înlocuiesc toate textele UI (etichete, titluri, subtitluri, mesaje, tooltip-uri, toast-uri) cu versiunea în română, direct în componente și rute. Fără librărie i18n, fără comutator.
 
-### Server functions (`src/lib/services.functions.ts`)
-Add authenticated server functions that proxy to the qBittorrent Web API (reusing the existing login/cookie logic):
-- `qbitTorrentAction({ hashes: string[] | "all", action: "pause" | "resume" })` → calls `/api/v2/torrents/pause` or `/api/v2/torrents/resume` with `hashes=<joined>|all`.
-- Return `{ ok: true }` on success; surface qBit errors otherwise.
+### Fișiere modificate
 
-### UI (`src/routes/qbit.tsx`)
-- **Global controls** (header row): two buttons
-  - **Resume All Torrents** (Play icon) → `qbitTorrentAction({ hashes: "all", action: "resume" })`
-  - **Stop All Torrents** (Square/Pause icon) → `qbitTorrentAction({ hashes: "all", action: "pause" })`
-- **Per-torrent controls**: in each torrent row, add a small Pause/Resume toggle button based on the torrent's current state (paused/stopped states show Resume, active states show Pause).
-- Use `useMutation` with `onSuccess` invalidating the qBit query key so the list refreshes immediately (next 1.1s poll will also refresh).
-- Show a subtle loading state on the clicked button while the mutation is in flight; toast on error via existing toast setup (if present) or inline error text.
+- `src/routes/__root.tsx` — `<html lang="ro">`, meta title/description în română.
+- `src/routes/index.tsx` — pagina de start (titlu, subtitluri, carduri servicii).
+- `src/routes/plex.tsx` — „Sesiuni active”, „Biblioteci”, „Adăugate recent”, „Top seriale/filme/spectatori” etc.
+- `src/routes/immich.tsx` — „Fotografii”, „Videoclipuri”, „Utilizare”, „Încărcări azi / săptămâna asta”, „Top uploaderi”, „Cozi de joburi”.
+- `src/routes/qbit.tsx` — „Descărcare/Încărcare”, „Rație”, „Spațiu liber”, „Categorii”, „Cel mai mare download”, „Torrente”, „Reia toate / Oprește toate”, badge-uri stare (În descărcare, Seed, Oprit, Blocat, Eroare), toast-uri.
+- `src/routes/host.tsx` — „Timp funcționare”, „Procesor”, „Memorie”, „Discuri”, „Rețea”, „Senzori”, „Aplicații”, „Top procese”, „Top I/O disc”.
+- `src/components/AppHeader.tsx`, `BottomNav.tsx`, `ServicePill.tsx`, `ErrorCard.tsx`, `PageShell.tsx`, `StatCard.tsx`, `Meter.tsx` — etichete de navigare („Acasă”, „Gazdă”), stări („OK”, „Se încarcă…”, „Eroare”), mesajele de eroare generice.
 
-### Notes
-- All logic stays in the existing qBit auth/session flow — no new secrets.
-- No changes to other services or shared layout.
+### Ce NU se traduce
+
+- Denumirile serviciilor (Plex, Immich, qBittorrent), numele proprii, nume de torrente/filme/utilizatori (vin din API), unități tehnice (MB/s, GB, %, H:M:S).
+- Cheile de query, variabile de mediu, nume de fișiere.
+
+### Verificare
+
+- `tsgo --noEmit` după modificări.
+- Vizual pe fiecare rută (/, /plex, /immich, /qbit, /host) că nu a rămas text în engleză.
