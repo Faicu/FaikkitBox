@@ -217,6 +217,19 @@ async function fetchPlexHistory(url: string, headers: Record<string, string>): P
   );
   const entries: any[] = historyJson?.MediaContainer?.Metadata ?? [];
 
+  const accountMap = new Map<number, string>();
+  try {
+    const accountsJson = await fetchJson<any>(`${url}/accounts`, { headers }, 8000);
+    const accounts: any[] = accountsJson?.MediaContainer?.Account ?? [];
+    for (const a of accounts) {
+      const id = Number(a?.id);
+      const name = String(a?.name ?? a?.title ?? "").trim();
+      if (Number.isFinite(id) && name) accountMap.set(id, name);
+    }
+  } catch {
+    // ignore, fallback below
+  }
+
   const showMap = new Map<string, { plays: number; lastViewedAt: number }>();
   const movieMap = new Map<string, { plays: number; lastViewedAt: number }>();
   const watcherMap = new Map<string, { plays: number; lastViewedAt: number }>();
@@ -235,8 +248,14 @@ async function fetchPlexHistory(url: string, headers: Record<string, string>): P
       const prev = movieMap.get(key) ?? { plays: 0, lastViewedAt: 0 };
       movieMap.set(key, { plays: prev.plays + 1, lastViewedAt: Math.max(prev.lastViewedAt, viewedAt) });
     }
-    const user = String(e?.accountID != null ? e?.User?.title ?? e?.title ?? `user ${e.accountID}` : e?.User?.title ?? "");
-    const wkey = user || "Unknown";
+    const accountId = e?.accountID != null ? Number(e.accountID) : null;
+    const fromMap = accountId != null ? accountMap.get(accountId) : undefined;
+    const fromInline = typeof e?.User?.title === "string" ? e.User.title : undefined;
+    const user =
+      fromMap ??
+      fromInline ??
+      (accountId != null ? `Utilizator #${accountId}` : "Necunoscut");
+    const wkey = user;
     const wprev = watcherMap.get(wkey) ?? { plays: 0, lastViewedAt: 0 };
     watcherMap.set(wkey, { plays: wprev.plays + 1, lastViewedAt: Math.max(wprev.lastViewedAt, viewedAt) });
     if (viewedAt >= startOfTodaySec) {
