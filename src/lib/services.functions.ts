@@ -39,6 +39,8 @@ export interface PlexData {
   topShows?: Array<{ title: string; plays: number; lastViewedAt: number }>;
   topMovies?: Array<{ title: string; plays: number; lastViewedAt: number }>;
   topWatchers?: Array<{ user: string; plays: number; lastViewedAt: number }>;
+  episodesToday?: number;
+  activeUsersToday?: number;
 }
 
 export interface ImmichData {
