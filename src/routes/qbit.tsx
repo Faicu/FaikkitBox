@@ -1,6 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, HardDrive, Percent, Timer, Tag } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { ArrowDown, ArrowUp, HardDrive, Percent, Timer, Tag, Play, Pause } from "lucide-react";
+import { toast } from "sonner";
 
 import { PageShell } from "@/components/PageShell";
 import { ServicePill } from "@/components/ServicePill";
@@ -9,6 +11,7 @@ import { Meter } from "@/components/Meter";
 import { ErrorCard } from "@/components/ErrorCard";
 import { qbitQuery } from "@/lib/queries";
 import { formatBytes, formatSpeed, formatEta } from "@/lib/format";
+import { qbitAction } from "@/lib/services.functions";
 
 export const Route = createFileRoute("/qbit")({
   head: () => ({ meta: [{ title: "qBittorrent — Server Monitor" }] }),
@@ -28,6 +31,28 @@ function stateBadge(state: string) {
 function QbitPage() {
   const { data, isLoading } = useQuery(qbitQuery);
   const status = isLoading ? "loading" : data?.status ?? "error";
+  const queryClient = useQueryClient();
+  const action = useServerFn(qbitAction);
+  const mutation = useMutation({
+    mutationFn: (vars: { hashes: string[] | "all"; action: "pause" | "resume" }) =>
+      action({ data: vars }),
+    onSuccess: (res, vars) => {
+      if (!res.ok) {
+        toast.error(`qBit ${vars.action} failed: ${res.error ?? "unknown"}`);
+        return;
+      }
+      const target = vars.hashes === "all" ? "all torrents" : `${vars.hashes.length} torrent${vars.hashes.length === 1 ? "" : "s"}`;
+      toast.success(`${vars.action === "pause" ? "Stopped" : "Resumed"} ${target}`);
+      queryClient.invalidateQueries({ queryKey: ["qbit"] });
+    },
+    onError: (e) => toast.error(`qBit action error: ${(e as Error).message}`),
+  });
+
+  const pendingHash =
+    mutation.isPending && mutation.variables && mutation.variables.hashes !== "all"
+      ? (mutation.variables.hashes as string[])[0]
+      : null;
+  const pendingAll = mutation.isPending && mutation.variables?.hashes === "all";
 
   return (
     <PageShell
@@ -39,6 +64,23 @@ function QbitPage() {
 
       {data?.status === "ok" && (
         <>
+          <div className="flex gap-2">
+            <button
+              onClick={() => mutation.mutate({ hashes: "all", action: "resume" })}
+              disabled={pendingAll}
+              className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/15 px-3 py-2 text-sm font-medium text-emerald-400 hover:bg-emerald-500/25 disabled:opacity-50"
+            >
+              <Play className="h-4 w-4" /> Resume all
+            </button>
+            <button
+              onClick={() => mutation.mutate({ hashes: "all", action: "pause" })}
+              disabled={pendingAll}
+              className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-amber-500/30 bg-amber-500/15 px-3 py-2 text-sm font-medium text-amber-400 hover:bg-amber-500/25 disabled:opacity-50"
+            >
+              <Pause className="h-4 w-4" /> Stop all
+            </button>
+          </div>
+
           <div className="grid grid-cols-2 gap-2">
             <StatCard label="Download" value={formatSpeed(data.dlSpeed)} sub={`Total ${formatBytes(data.totalDl)}`} icon={<ArrowDown className="h-4 w-4" />} accent="text-sky-400" />
             <StatCard label="Upload" value={formatSpeed(data.upSpeed)} sub={`Total ${formatBytes(data.totalUp)}`} icon={<ArrowUp className="h-4 w-4" />} accent="text-emerald-400" />
@@ -104,11 +146,29 @@ function QbitPage() {
               <div className="space-y-2">
                 {data.torrents.map((t) => {
                   const b = stateBadge(t.state);
+                  const isPaused = /paus|stop/i.test(t.state);
+                  const busy = pendingHash === t.hash;
                   return (
                     <div key={t.hash} className="rounded-2xl border border-border bg-card p-3">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 flex-1 truncate text-sm font-medium">{t.name}</div>
-                        <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide ${b.cls}`}>{b.text}</span>
+                        <div className="flex shrink-0 items-center gap-1">
+                          <span className={`rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide ${b.cls}`}>{b.text}</span>
+                          <button
+                            onClick={() =>
+                              mutation.mutate({ hashes: [t.hash], action: isPaused ? "resume" : "pause" })
+                            }
+                            disabled={busy}
+                            title={isPaused ? "Resume" : "Stop"}
+                            className={`rounded-md border p-1 transition disabled:opacity-50 ${
+                              isPaused
+                                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"
+                                : "border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20"
+                            }`}
+                          >
+                            {isPaused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
+                          </button>
+                        </div>
                       </div>
                       <div className="mt-2">
                         <Meter value={t.progress * 100} right={`${(t.progress * 100).toFixed(1)}%`} tone="default" />
