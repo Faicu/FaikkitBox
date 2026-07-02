@@ -124,12 +124,18 @@ function QbitPage() {
           </div>
 
           {openList && (() => {
-            const filtered = data.torrents.filter((t) => {
-              const s = t.state.toLowerCase();
-              if (openList === "downloading") return s.includes("download");
-              if (openList === "seeding") return s.includes("up") || s === "uploading" || s === "stalledup";
-              return s.includes("paus") || s.includes("stop");
-            });
+            const filtered = data.torrents
+              .filter((t) => {
+                const s = t.state.toLowerCase();
+                if (openList === "downloading") return s.includes("download");
+                if (openList === "seeding") return s.includes("up") || s === "uploading" || s === "stalledup";
+                return s.includes("paus") || s.includes("stop");
+              })
+              .sort((a, b) => {
+                if (openList === "downloading") return b.dlspeed - a.dlspeed;
+                if (openList === "seeding") return b.upspeed - a.upspeed;
+                return b.size - a.size;
+              });
             const label = openList === "downloading" ? "În descărcare" : openList === "seeding" ? "Seed" : "Oprite";
             const tone = openList === "downloading" ? "text-sky-400" : openList === "seeding" ? "text-emerald-400" : "text-muted-foreground";
             return (
