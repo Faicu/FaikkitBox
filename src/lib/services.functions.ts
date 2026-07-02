@@ -166,6 +166,8 @@ interface PlexConnectionCandidate {
   priority: number;
 }
 
+let plexDiscoveryCache: { url: string; source: string; expiresAt: number } | null = null;
+
 function parseAttributes(raw: string): Record<string, string> {
   const attrs: Record<string, string> = {};
   for (const match of raw.matchAll(/([\w:-]+)="([^"]*)"/g)) {
@@ -241,6 +243,10 @@ function parsePlexResources(payload: string): PlexConnectionCandidate[] {
 }
 
 async function discoverPlexUrl(token: string, fallbackBase?: string): Promise<{ url: string; source: string; attempts: string[] }> {
+  if (plexDiscoveryCache && plexDiscoveryCache.expiresAt > Date.now()) {
+    return { url: plexDiscoveryCache.url, source: plexDiscoveryCache.source, attempts: [] };
+  }
+
   const headers = { Accept: "application/json, application/xml;q=0.9, text/xml;q=0.8", "X-Plex-Token": token };
   const attempts: string[] = [];
   const resourcesText = await fetchText("https://plex.tv/api/resources?includeHttps=1&includeRelay=1", { headers }, 10000);
@@ -257,6 +263,7 @@ async function discoverPlexUrl(token: string, fallbackBase?: string): Promise<{ 
   for (const candidate of uniqueCandidates(candidates)) {
     try {
       await fetchJson<any>(`${candidate.uri}/`, { headers }, 5000);
+      plexDiscoveryCache = { url: candidate.uri, source: candidate.source, expiresAt: Date.now() + 5 * 60 * 1000 };
       return { url: candidate.uri, source: candidate.source, attempts };
     } catch (e) {
       attempts.push(`${candidate.source} ${candidate.uri}: ${errMsg(e)}`);
