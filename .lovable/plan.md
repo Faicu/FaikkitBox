@@ -1,24 +1,34 @@
-## Problemă
+## Scop
 
-În `fetchPlexHistory` (src/lib/services.functions.ts, linia 238), numele utilizatorului se ia din `e.User?.title`. Endpoint-ul `/status/sessions/history/all` returnat ca JSON nu include obiectul `User` pe fiecare intrare — doar `accountID` (număr). În plus, ternarul actual e greșit logic:
+Pe pagina `/plex`, în lista "Top spectatori", fiecare rând devine apăsabil și deschide un drawer cu istoricul de vizionare al utilizatorului selectat (ultimele vizionări: titlu, tip, când, player dacă e disponibil).
 
-```
-e?.accountID != null ? e?.User?.title ?? e?.title ?? `user ${e.accountID}` : e?.User?.title ?? ""
-```
+## Design UX
 
-Rezultat: toți utilizatorii ajung în bucket-ul `"Unknown"` sau primesc etichete generice, iar "Top Spectatori" nu afișează nume reale.
+- Rândurile din "Top spectatori" primesc `role="button"`, hover state și un indicator (chevron dreapta).
+- La tap se deschide un `Drawer` (shadcn/vaul) mobile-first, cu:
+  - Header: numele utilizatorului + total vizionări.
+  - Listă scrollabilă cu ultimele ~50 intrări: titlu (episod: `Serial — SxxEyy · Titlu episod`; film: titlul), badge `episode`/`movie`, data+ora, player dacă există.
+  - Stare goală: "Nu există istoric".
+- Se afișează doar pentru intrările cu user identificabil (deja garantat de fix-ul anterior).
 
-## Soluție
+## Date
 
-1. În `fetchPlexHistory`, înainte de agregare, apelez `${url}/accounts` (JSON) și construiesc `Map<number, string>` din `MediaContainer.Account[]` cu `id` → `name` (fallback `title`). Erorile la /accounts nu opresc restul (try/catch, map gol).
-2. Pentru fiecare intrare din istoric, calculez `user`:
-   - Dacă `e.accountID != null` → nume din map; fallback `User.title`; fallback `Utilizator #<id>`.
-   - Dacă lipsește complet → `"Necunoscut"`.
-3. Elimin bucket-ul `"Unknown"` din top (skip intrări fără user identificabil dacă map-ul e gol și `accountID` lipsește).
-4. Cache-ul de 60s rămâne — accounts sunt luate în același ciclu.
+Extind server function-ul Plex să returneze și istoricul brut pe utilizator, ca să nu mai fac fetch la tap (istoricul e deja adus în `fetchPlexHistory`).
 
-## Fișiere
+- În `fetchPlexHistory` construiesc `userHistory: Map<user, Array<{title, show?, season?, episode?, type, viewedAt, player?}>>` (max 50/user, sortat desc după `viewedAt`).
+- Adaug câmp `userHistory: Record<string, Array<HistoryEntry>>` la `PlexData` și la cache.
+- Numele cheii = același `user` folosit pentru `topWatchers` (nume real din `/accounts`).
 
-- `src/lib/services.functions.ts` — funcția `fetchPlexHistory` (parse accounts + fix maparea user-ului).
+## Fișiere modificate
 
-Nicio schimbare de UI; `topWatchers[].user` va conține numele real.
+- `src/lib/services.functions.ts`
+  - Nou tip `PlexHistoryEntry`.
+  - `PlexData` primește `userHistory?: Record<string, PlexHistoryEntry[]>`.
+  - `fetchPlexHistory` populează și returnează `userHistory`; cache-ul de 60s îl include.
+  - `getPlex` propagă `userHistory` în răspuns.
+- `src/routes/plex.tsx`
+  - `RankedList` pentru "Top spectatori" primește un `onSelect(user)`.
+  - Nou component local `WatcherHistoryDrawer` (folosind `@/components/ui/drawer`) care primește `user` + `entries` și randează lista.
+  - State local `selectedUser: string | null` pe pagină.
+
+Fără modificări de schemă, fără API-uri noi, fără business logic în afara Plex.

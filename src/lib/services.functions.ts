@@ -41,6 +41,17 @@ export interface PlexData {
   topWatchers?: Array<{ user: string; plays: number; lastViewedAt: number }>;
   episodesToday?: number;
   activeUsersToday?: number;
+  userHistory?: Record<string, PlexHistoryEntry[]>;
+}
+
+export interface PlexHistoryEntry {
+  title: string;
+  show?: string;
+  season?: number;
+  episode?: number;
+  type: string;
+  viewedAt: number;
+  player?: string;
 }
 
 export interface ImmichData {
@@ -191,6 +202,7 @@ let plexHistoryCache: {
   topWatchers: PlexData["topWatchers"];
   episodesToday: number;
   activeUsersToday: number;
+  userHistory: Record<string, PlexHistoryEntry[]>;
   expiresAt: number;
 } | null = null;
 
@@ -200,6 +212,7 @@ async function fetchPlexHistory(url: string, headers: Record<string, string>): P
   topWatchers: PlexData["topWatchers"];
   episodesToday: number;
   activeUsersToday: number;
+  userHistory: Record<string, PlexHistoryEntry[]>;
 }> {
   if (plexHistoryCache && plexHistoryCache.url === url && plexHistoryCache.expiresAt > Date.now()) {
     return {
@@ -208,6 +221,7 @@ async function fetchPlexHistory(url: string, headers: Record<string, string>): P
       topWatchers: plexHistoryCache.topWatchers,
       episodesToday: plexHistoryCache.episodesToday,
       activeUsersToday: plexHistoryCache.activeUsersToday,
+      userHistory: plexHistoryCache.userHistory,
     };
   }
   const historyJson = await fetchJson<any>(
@@ -233,6 +247,7 @@ async function fetchPlexHistory(url: string, headers: Record<string, string>): P
   const showMap = new Map<string, { plays: number; lastViewedAt: number }>();
   const movieMap = new Map<string, { plays: number; lastViewedAt: number }>();
   const watcherMap = new Map<string, { plays: number; lastViewedAt: number }>();
+  const historyByUser = new Map<string, PlexHistoryEntry[]>();
   const startOfTodaySec = Math.floor(new Date(new Date().setHours(0, 0, 0, 0)).getTime() / 1000);
   let episodesToday = 0;
   const todayUsers = new Set<string>();
@@ -258,6 +273,19 @@ async function fetchPlexHistory(url: string, headers: Record<string, string>): P
     const wkey = user;
     const wprev = watcherMap.get(wkey) ?? { plays: 0, lastViewedAt: 0 };
     watcherMap.set(wkey, { plays: wprev.plays + 1, lastViewedAt: Math.max(wprev.lastViewedAt, viewedAt) });
+    const list = historyByUser.get(wkey) ?? [];
+    if (list.length < 100) {
+      list.push({
+        title: String(e.title ?? "—"),
+        show: e.grandparentTitle ? String(e.grandparentTitle) : undefined,
+        season: e.parentIndex != null ? Number(e.parentIndex) : undefined,
+        episode: e.index != null ? Number(e.index) : undefined,
+        type: String(e.type ?? "unknown"),
+        viewedAt,
+        player: typeof e?.Player?.title === "string" ? e.Player.title : undefined,
+      });
+      historyByUser.set(wkey, list);
+    }
     if (viewedAt >= startOfTodaySec) {
       if (e.type === "episode" || e.grandparentTitle) episodesToday++;
       todayUsers.add(wkey);
@@ -270,12 +298,18 @@ async function fetchPlexHistory(url: string, headers: Record<string, string>): P
       .sort((a: any, b: any) => b.plays - a.plays)
       .slice(0, 5) as any;
 
+  const userHistory: Record<string, PlexHistoryEntry[]> = {};
+  for (const [k, list] of historyByUser.entries()) {
+    userHistory[k] = list.sort((a, b) => b.viewedAt - a.viewedAt).slice(0, 50);
+  }
+
   const result = {
     topShows: toRanked(showMap, "title"),
     topMovies: toRanked(movieMap, "title"),
     topWatchers: toRanked(watcherMap, "user"),
     episodesToday,
     activeUsersToday: todayUsers.size,
+    userHistory,
   };
   plexHistoryCache = { url, ...result, expiresAt: Date.now() + 60_000 };
   return result;
@@ -402,7 +436,7 @@ export const getPlex = createServerFn({ method: "GET" }).handler(async (): Promi
       fetchJson<any>(`${url}/status/sessions`, { headers }),
       fetchJson<any>(`${url}/library/sections`, { headers }),
       fetchJson<any>(`${url}/library/recentlyAdded?X-Plex-Container-Start=0&X-Plex-Container-Size=8`, { headers }).catch(() => ({ MediaContainer: { Metadata: [] } })),
-      fetchPlexHistory(url, headers).catch(() => ({ topShows: [], topMovies: [], topWatchers: [], episodesToday: 0, activeUsersToday: 0 })),
+      fetchPlexHistory(url, headers).catch(() => ({ topShows: [], topMovies: [], topWatchers: [], episodesToday: 0, activeUsersToday: 0, userHistory: {} })),
     ]);
 
     const mc = rootJson?.MediaContainer ?? {};
@@ -465,6 +499,7 @@ export const getPlex = createServerFn({ method: "GET" }).handler(async (): Promi
       topWatchers: history.topWatchers,
       episodesToday: history.episodesToday,
       activeUsersToday: history.activeUsersToday,
+      userHistory: history.userHistory,
     };
   } catch (e) {
     return { status: "error", error: errMsg(e), sessions: [], libraries: [], recentlyAdded: [] };
