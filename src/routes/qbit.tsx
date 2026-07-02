@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowDown, ArrowUp, HardDrive, Percent, Timer, Tag, Play, Pause } from "lucide-react";
+import { ArrowDown, ArrowUp, HardDrive, Percent, Timer, Play, Pause, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageShell } from "@/components/PageShell";
@@ -35,6 +36,7 @@ function QbitPage() {
   const status = isLoading ? "loading" : data?.status ?? "error";
   const queryClient = useQueryClient();
   const action = useServerFn(qbitAction);
+  const [openList, setOpenList] = useState<"downloading" | "seeding" | "paused" | null>(null);
   const mutation = useMutation({
     mutationFn: (vars: { hashes: string[] | "all"; action: "pause" | "resume" }) =>
       action({ data: vars }),
@@ -101,10 +103,71 @@ function QbitPage() {
           </div>
 
           <div className="grid grid-cols-3 gap-2 text-center text-xs">
-            <div className="rounded-xl bg-sky-500/15 py-2 text-sky-400"><b className="block text-lg">{data.counts.downloading}</b>În descărcare</div>
-            <div className="rounded-xl bg-emerald-500/15 py-2 text-emerald-400"><b className="block text-lg">{data.counts.seeding}</b>Seed</div>
-            <div className="rounded-xl bg-muted py-2 text-muted-foreground"><b className="block text-lg">{data.counts.paused}</b>Oprite</div>
+            <button
+              onClick={() => setOpenList((v) => (v === "downloading" ? null : "downloading"))}
+              className={`rounded-xl bg-sky-500/15 py-2 text-sky-400 transition hover:bg-sky-500/25 ${openList === "downloading" ? "ring-1 ring-sky-400" : ""}`}
+            >
+              <b className="block text-lg">{data.counts.downloading}</b>În descărcare
+            </button>
+            <button
+              onClick={() => setOpenList((v) => (v === "seeding" ? null : "seeding"))}
+              className={`rounded-xl bg-emerald-500/15 py-2 text-emerald-400 transition hover:bg-emerald-500/25 ${openList === "seeding" ? "ring-1 ring-emerald-400" : ""}`}
+            >
+              <b className="block text-lg">{data.counts.seeding}</b>Seed
+            </button>
+            <button
+              onClick={() => setOpenList((v) => (v === "paused" ? null : "paused"))}
+              className={`rounded-xl bg-muted py-2 text-muted-foreground transition hover:bg-muted/70 ${openList === "paused" ? "ring-1 ring-muted-foreground" : ""}`}
+            >
+              <b className="block text-lg">{data.counts.paused}</b>Oprite
+            </button>
           </div>
+
+          {openList && (() => {
+            const filtered = data.torrents.filter((t) => {
+              const s = t.state.toLowerCase();
+              if (openList === "downloading") return s.includes("download");
+              if (openList === "seeding") return s.includes("up") || s === "uploading" || s === "stalledup";
+              return s.includes("paus") || s.includes("stop");
+            });
+            const label = openList === "downloading" ? "În descărcare" : openList === "seeding" ? "Seed" : "Oprite";
+            const tone = openList === "downloading" ? "text-sky-400" : openList === "seeding" ? "text-emerald-400" : "text-muted-foreground";
+            return (
+              <section>
+                <div className="mb-2 flex items-center justify-between px-1">
+                  <h2 className={`text-xs font-semibold uppercase tracking-wide ${tone}`}>
+                    {label} ({filtered.length})
+                  </h2>
+                  <button onClick={() => setOpenList(null)} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
+                    Închide <ChevronDown className="h-3 w-3" />
+                  </button>
+                </div>
+                {filtered.length === 0 ? (
+                  <div className="rounded-2xl border border-border bg-card p-3 text-sm text-muted-foreground">Niciun torrent.</div>
+                ) : (
+                  <ul className="rounded-2xl border border-border bg-card divide-y divide-border">
+                    {filtered.map((t) => (
+                      <li key={t.hash} className="px-3 py-2">
+                        <div className="truncate text-sm">{t.name}</div>
+                        <div className="mt-0.5 flex items-center justify-between text-[11px] text-muted-foreground tabular-nums">
+                          <span>{(t.progress * 100).toFixed(1)}%</span>
+                          <span>
+                            {openList === "seeding" ? (
+                              <span className="text-emerald-400">↑ {formatSpeed(t.upspeed)}</span>
+                            ) : openList === "downloading" ? (
+                              <span className="text-sky-400">↓ {formatSpeed(t.dlspeed)}</span>
+                            ) : (
+                              <span>{formatBytes(t.size)}</span>
+                            )}
+                          </span>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            );
+          })()}
 
           {(data.alltimeDl != null || data.alltimeUp != null) && (
             <div className="grid grid-cols-2 gap-2">
@@ -131,26 +194,6 @@ function QbitPage() {
                   <span>ETA {formatEta(data.largestEta.eta)}</span>
                 </div>
               </div>
-            </section>
-          )}
-
-          {data.perCategory && data.perCategory.length > 0 && (
-            <section>
-              <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
-                <Tag className="h-3.5 w-3.5" /> Categorii
-              </h2>
-              <ul className="rounded-2xl border border-border bg-card divide-y divide-border">
-                {data.perCategory.map((c) => (
-                  <li key={c.category} className="flex items-center justify-between px-3 py-2 text-sm">
-                    <span className="truncate pr-2 font-medium">{c.category}</span>
-                    <span className="shrink-0 text-xs tabular-nums">
-                      <span className="text-muted-foreground">{c.count} · </span>
-                      <span className="text-sky-400">↓ {formatSpeed(c.dlspeed)}</span>{" · "}
-                      <span className="text-emerald-400">↑ {formatSpeed(c.upspeed)}</span>
-                    </span>
-                  </li>
-                ))}
-              </ul>
             </section>
           )}
 

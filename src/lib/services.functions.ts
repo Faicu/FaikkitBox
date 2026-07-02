@@ -708,7 +708,7 @@ export const getQbit = createServerFn({ method: "GET" }).handler(async (): Promi
       alltimeUp = Number(main?.server_state?.alltime_ul ?? 0);
     } catch {}
 
-    const torrents: QbitTorrent[] = torrentsRaw.slice(0, 40).map((t: any) => ({
+    const torrents: QbitTorrent[] = torrentsRaw.map((t: any) => ({
       hash: t.hash,
       name: t.name,
       progress: Number(t.progress ?? 0),

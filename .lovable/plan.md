@@ -1,18 +1,18 @@
-## Problemă
-`Rație totală` afișează `data.globalRatio`, luat din `/transfer/info → global_ratio`. Acest câmp e adesea `"0"` sau `"0.00"` la qBit (nu reflectă all-time, ci sesiunea curentă, și uneori nici atât). De aceea vezi 0.00 chiar dacă `alltime_ul`/`alltime_dl` sunt reale (8.4 TB).
+## Modificări pe pagina `/qbit`
 
-## Fix
-Calculăm rația all-time din valorile reale pe care deja le avem.
+### 1. Elimină „Categorii"
+Șterg blocul liniile 137-155 din `src/routes/qbit.tsx`. Nu ating `perCategory` din `services.functions.ts` (rămâne inofensiv în tip).
 
-### `src/routes/qbit.tsx` (linia 112)
-Înlocuiesc sub-eticheta de la cardul „Total încărcat" să calculeze:
-```
-rație = alltimeUp / max(alltimeDl, 1)
-```
-- Dacă `alltimeDl > 0` → afișez `Rație totală X.XX`.
-- Dacă `alltimeDl == 0` și `alltimeUp > 0` → `Rație totală ∞`.
-- Altfel → `Rație totală 0.00`.
+### 2. Afișează toate torrentele
+În `src/lib/services.functions.ts` linia 711 scot `.slice(0, 40)` — mapez întreg `torrentsRaw`. Fără altă limită.
 
-Nu mai folosim `data.globalRatio` aici (rămâne totuși în tip pentru alte locuri).
+### 3. Cardurile „În descărcare" și „Seed" devin butoane cu listă
+Grid-ul cu 3 pastile de la linia 103 devine interactiv:
+- „În descărcare" (sky) și „Seed" (emerald) devin `<button>` — apăsare toggle deschide un panou dedesubt cu lista torrentelor filtrate.
+- „Oprite" rămâne static (sau, pentru consistență, îl fac și pe el buton — confirm mai jos).
+- Filtrarea se face client-side pe `data.torrents` după `state` folosind aceleași reguli ca `stateBadge` (`download*` → descărcare, `up*`/`stalledUP`/`uploading` → seed).
+- Panoul afișează pentru fiecare intrare: nume (trunchiat), % progres, viteza corespunzătoare (↓ pentru descărcări, ↑ pentru seed). Design consecvent cu lista principală, dar compact.
+- Dacă lista filtrată e goală → mesaj „Niciun torrent".
+- Stare deschis/închis într-un `useState<"downloading" | "seeding" | null>`.
 
-Atât — o singură modificare punctuală în `qbit.tsx`, nu ating logica din server.
+Notă: din moment ce ridic limita la 40, lista principală de „Torrente" va afișa tot ce e — asta e comportamentul cerut. Fac și pastila „Oprite" buton pentru simetrie (spune-mi dacă nu vrei).
