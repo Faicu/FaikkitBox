@@ -682,6 +682,7 @@ export const getQbit = createServerFn({ method: "GET" }).handler(async (): Promi
       dlSpeed: 0, upSpeed: 0, dlSpeedLimit: 0, upSpeedLimit: 0,
       totalDl: 0, totalUp: 0, freeSpaceOnDisk: 0, globalRatio: 0,
       torrents: [], counts: { downloading: 0, seeding: 0, paused: 0, total: 0 },
+      sessionDl: 0, sessionUp: 0,
     };
   }
   const url = stripSlash(base);
