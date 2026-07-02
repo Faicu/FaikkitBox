@@ -36,6 +36,9 @@ export interface PlexData {
   sessions: PlexSession[];
   libraries: PlexLibrary[];
   recentlyAdded: Array<{ title: string; type: string; addedAt: number }>;
+  topShows?: Array<{ title: string; plays: number; lastViewedAt: number }>;
+  topMovies?: Array<{ title: string; plays: number; lastViewedAt: number }>;
+  topWatchers?: Array<{ user: string; plays: number; lastViewedAt: number }>;
 }
 
 export interface ImmichData {
@@ -48,6 +51,10 @@ export interface ImmichData {
   usageBytes?: number;
   usageByUser?: Array<{ userName: string; usage: number; photos: number; videos: number }>;
   activeJobs?: Array<{ name: string; active: number; waiting: number }>;
+  topUploaders?: Array<{ userName: string; total: number; photos: number; videos: number; usage: number }>;
+  jobQueueDepth?: number;
+  uploadsToday?: number;
+  uploadsThisWeek?: number;
 }
 
 export interface QbitTorrent {
@@ -78,6 +85,12 @@ export interface QbitData {
   globalRatio: number;
   torrents: QbitTorrent[];
   counts: { downloading: number; seeding: number; paused: number; total: number };
+  sessionDl?: number;
+  sessionUp?: number;
+  alltimeDl?: number;
+  alltimeUp?: number;
+  largestEta?: { name: string; eta: number; remaining: number } | null;
+  perCategory?: Array<{ category: string; count: number; dlspeed: number; upspeed: number }>;
 }
 
 export interface HostData {
@@ -98,6 +111,8 @@ export interface HostData {
   net?: Array<{ name: string; rxSec: number; txSec: number }>;
   sensors?: Array<{ label: string; value: number; unit: string }>;
   topProcesses?: Array<{ name: string; cpu: number; mem: number }>;
+  apps?: Array<{ name: string; cpu: number; mem: number; netRx?: number; netTx?: number; source: "process" | "container" }>;
+  diskIO?: Array<{ name: string; ioRead: number; ioWrite: number }>;
 }
 
 // ---------- Helpers ----------
