@@ -436,7 +436,7 @@ export const getPlex = createServerFn({ method: "GET" }).handler(async (): Promi
       fetchJson<any>(`${url}/status/sessions`, { headers }),
       fetchJson<any>(`${url}/library/sections`, { headers }),
       fetchJson<any>(`${url}/library/recentlyAdded?X-Plex-Container-Start=0&X-Plex-Container-Size=8`, { headers }).catch(() => ({ MediaContainer: { Metadata: [] } })),
-      fetchPlexHistory(url, headers).catch(() => ({ topShows: [], topMovies: [], topWatchers: [], episodesToday: 0, activeUsersToday: 0 })),
+      fetchPlexHistory(url, headers).catch(() => ({ topShows: [], topMovies: [], topWatchers: [], episodesToday: 0, activeUsersToday: 0, userHistory: {} })),
     ]);
 
     const mc = rootJson?.MediaContainer ?? {};
@@ -499,6 +499,7 @@ export const getPlex = createServerFn({ method: "GET" }).handler(async (): Promi
       topWatchers: history.topWatchers,
       episodesToday: history.episodesToday,
       activeUsersToday: history.activeUsersToday,
+      userHistory: history.userHistory,
     };
   } catch (e) {
     return { status: "error", error: errMsg(e), sessions: [], libraries: [], recentlyAdded: [] };
