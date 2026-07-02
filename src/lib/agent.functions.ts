@@ -44,7 +44,7 @@ export const runAgentCommand = createServerFn({ method: "POST" })
     }
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 120_000);
+      const timeout = setTimeout(() => controller.abort(), 1_800_000);
       const res = await fetch(`${url.replace(/\/$/, "")}/exec`, {
         method: "POST",
         headers: {
