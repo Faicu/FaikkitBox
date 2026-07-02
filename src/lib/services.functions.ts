@@ -573,10 +573,14 @@ export const getQbit = createServerFn({ method: "GET" }).handler(async (): Promi
 
     // Preferences for free disk space
     let freeSpace = 0;
+    let alltimeDl = 0;
+    let alltimeUp = 0;
     try {
       const mainRes = await qbitFetch(url, "/api/v2/sync/maindata", user, pass);
       const main = await mainRes.json();
       freeSpace = Number(main?.server_state?.free_space_on_disk ?? 0);
+      alltimeDl = Number(main?.server_state?.alltime_dl ?? 0);
+      alltimeUp = Number(main?.server_state?.alltime_ul ?? 0);
     } catch {}
 
     const torrents: QbitTorrent[] = torrentsRaw.slice(0, 40).map((t: any) => ({
@@ -600,6 +604,32 @@ export const getQbit = createServerFn({ method: "GET" }).handler(async (): Promi
       else downloading++;
     }
 
+    // Largest remaining download
+    let largestEta: { name: string; eta: number; remaining: number } | null = null;
+    for (const t of torrentsRaw) {
+      const p = Number(t.progress ?? 0);
+      if (p >= 1) continue;
+      const remaining = Number(t.size ?? 0) * (1 - p);
+      if (!largestEta || remaining > largestEta.remaining) {
+        largestEta = { name: t.name, eta: Number(t.eta ?? 0), remaining };
+      }
+    }
+
+    // Per-category aggregation
+    const catMap = new Map<string, { count: number; dlspeed: number; upspeed: number }>();
+    for (const t of torrentsRaw) {
+      const cat = (t.category && String(t.category)) || "uncategorized";
+      const prev = catMap.get(cat) ?? { count: 0, dlspeed: 0, upspeed: 0 };
+      catMap.set(cat, {
+        count: prev.count + 1,
+        dlspeed: prev.dlspeed + Number(t.dlspeed ?? 0),
+        upspeed: prev.upspeed + Number(t.upspeed ?? 0),
+      });
+    }
+    const perCategory = Array.from(catMap.entries())
+      .map(([category, v]) => ({ category, ...v }))
+      .sort((a, b) => b.count - a.count);
+
     return {
       status: "ok",
       version,
@@ -613,6 +643,12 @@ export const getQbit = createServerFn({ method: "GET" }).handler(async (): Promi
       globalRatio: Number(xfer?.global_ratio ?? 0) || (Number(xfer?.up_info_data ?? 0) / Math.max(1, Number(xfer?.dl_info_data ?? 1))),
       torrents,
       counts: { downloading, seeding, paused, total: torrentsRaw.length },
+      sessionDl: Number(xfer?.dl_info_data ?? 0),
+      sessionUp: Number(xfer?.up_info_data ?? 0),
+      alltimeDl,
+      alltimeUp,
+      largestEta,
+      perCategory,
     };
   } catch (e) {
     qbitCookie = null;
