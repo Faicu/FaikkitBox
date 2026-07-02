@@ -469,7 +469,8 @@ export const getImmich = createServerFn({ method: "GET" }).handler(async (): Pro
       countSince(weekAgoIso),
     ]);
 
-    const usageByUser = Array.isArray(stats?.usageByUser)
+    type UsageRow = { userName: string; usage: number; photos: number; videos: number };
+    const usageByUser: UsageRow[] = Array.isArray(stats?.usageByUser)
       ? stats.usageByUser.map((u: any) => ({
           userName: u.userName ?? u.userId ?? "user",
           usage: Number(u.usage ?? 0),
