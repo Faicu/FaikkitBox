@@ -116,13 +116,28 @@ async function fetchJson<T>(url: string, init?: RequestInit, timeoutMs = 8000): 
       throw new Error(`HTTP ${res.status} ${res.statusText}${body ? ` — ${body.slice(0, 160)}` : ""}`);
     }
     return (await res.json()) as T;
+  } catch (e) {
+    // Undici hides the real reason under `cause`; surface it.
+    throw new Error(`${url} → ${errMsg(e)}`);
   } finally {
     clearTimeout(t);
   }
 }
 
 function errMsg(e: unknown): string {
-  if (e instanceof Error) return e.message;
+  if (!e) return "unknown error";
+  if (e instanceof Error) {
+    const parts = [e.message];
+    const cause = (e as { cause?: unknown }).cause;
+    if (cause) {
+      if (cause instanceof Error) {
+        parts.push(`(${cause.message}${(cause as any).code ? ` [${(cause as any).code}]` : ""})`);
+      } else {
+        parts.push(`(${String(cause)})`);
+      }
+    }
+    return parts.join(" ");
+  }
   return String(e);
 }
 
