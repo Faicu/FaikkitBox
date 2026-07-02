@@ -443,10 +443,30 @@ export const getImmich = createServerFn({ method: "GET" }).handler(async (): Pro
   const headers = { "x-api-key": key, Accept: "application/json" };
 
   try {
-    const [version, stats, jobs] = await Promise.all([
+    const nowIso = new Date().toISOString();
+    const startOfDayIso = new Date(new Date().setHours(0, 0, 0, 0)).toISOString();
+    const weekAgoIso = new Date(Date.now() - 7 * 86400_000).toISOString();
+
+    async function countSince(iso: string): Promise<number | undefined> {
+      try {
+        const res = await fetchJson<any>(`${url}/api/search/metadata`, {
+          method: "POST",
+          headers: { ...headers, "Content-Type": "application/json" },
+          body: JSON.stringify({ takenAfter: iso, takenBefore: nowIso, size: 1 }),
+        }, 6000);
+        const total = res?.assets?.total ?? res?.total ?? undefined;
+        return typeof total === "number" ? total : undefined;
+      } catch {
+        return undefined;
+      }
+    }
+
+    const [version, stats, jobs, uploadsToday, uploadsThisWeek] = await Promise.all([
       fetchJson<any>(`${url}/api/server/version`, { headers }).catch(() => null),
       fetchJson<any>(`${url}/api/server/statistics`, { headers }),
       fetchJson<any>(`${url}/api/jobs`, { headers }).catch(() => null),
+      countSince(startOfDayIso),
+      countSince(weekAgoIso),
     ]);
 
     const usageByUser = Array.isArray(stats?.usageByUser)
@@ -468,6 +488,13 @@ export const getImmich = createServerFn({ method: "GET" }).handler(async (): Pro
           .filter((j) => j.active > 0 || j.waiting > 0)
       : [];
 
+    const topUploaders = usageByUser
+      .map((u) => ({ userName: u.userName, total: u.photos + u.videos, photos: u.photos, videos: u.videos, usage: u.usage }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 5);
+
+    const jobQueueDepth = activeJobs.reduce((sum, j) => sum + j.active + j.waiting, 0);
+
     return {
       status: "ok",
       version: version ? `${version.major}.${version.minor}.${version.patch}` : undefined,
@@ -477,6 +504,10 @@ export const getImmich = createServerFn({ method: "GET" }).handler(async (): Pro
       usageBytes: Number(stats?.usage ?? 0),
       usageByUser,
       activeJobs,
+      topUploaders,
+      jobQueueDepth,
+      uploadsToday,
+      uploadsThisWeek,
     };
   } catch (e) {
     return { status: "error", error: errMsg(e) };
