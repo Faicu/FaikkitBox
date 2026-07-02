@@ -82,9 +82,15 @@ function UpdatesInner() {
         <div className="grid grid-cols-1 gap-2 rounded-2xl border border-border bg-card p-3">
           <ActionButton icon={<PackageOpen className="h-4 w-4" />} label="apt-get update" cmd="apt_update" running={running} onRun={m.mutate} />
           <ActionButton icon={<PackageCheck className="h-4 w-4" />} label="apt-get upgrade -y" cmd="apt_upgrade" running={running} onRun={m.mutate} />
-          <ActionButton icon={<Trash2 className="h-4 w-4" />} label="Clear DNS Cache (resolvectl flush-caches)" cmd="flush_dns" running={running} onRun={m.mutate} />
+          <ActionButton icon={<Trash2 className="h-4 w-4" />} label="Clear DNS Cache + repornește qBittorrent" cmd="flush_dns" running={running} onRun={m.mutate} />
         </div>
       </section>
+
+      {running && (
+        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+          Se rulează <span className="font-mono">{running}</span>... poate dura câteva minute, nu închide pagina.
+        </div>
+      )}
 
       {output && (
         <section className="space-y-1">
@@ -92,12 +98,26 @@ function UpdatesInner() {
             Ieșire: {output.cmd}
           </h2>
           <div className="rounded-2xl border border-border bg-black/40 p-3">
-            <div className={`text-xs mb-2 ${output.res.ok ? "text-emerald-400" : "text-red-400"}`}>
-              {output.res.ok ? "✓ Succes" : "✗ Eșec"} {output.res.exit_code != null && `· exit ${output.res.exit_code}`}
-              {output.res.error && ` · ${output.res.error}`}
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <div className={`text-xs ${output.res.ok ? "text-emerald-400" : "text-red-400"}`}>
+                {output.res.ok ? "✓ Succes" : "✗ Eșec"} {output.res.exit_code != null && `· exit ${output.res.exit_code}`}
+                {output.res.error && ` · ${output.res.error}`}
+              </div>
+              <button
+                onClick={() => {
+                  const text = `${output.res.stdout ?? ""}${output.res.stderr ? `\n${output.res.stderr}` : ""}`;
+                  navigator.clipboard.writeText(text).then(
+                    () => toast.success("Copiat"),
+                    () => toast.error("Nu s-a putut copia"),
+                  );
+                }}
+                className="rounded-md border border-border px-2 py-0.5 text-[11px] text-muted-foreground hover:text-foreground"
+              >
+                Copiază
+              </button>
             </div>
             {(output.res.stdout || output.res.stderr) && (
-              <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-all text-[11px] text-muted-foreground">
+              <pre className="overflow-auto whitespace-pre-wrap break-all text-[11px] text-muted-foreground">
 {output.res.stdout ?? ""}{output.res.stderr ? `\n${output.res.stderr}` : ""}
               </pre>
             )}
