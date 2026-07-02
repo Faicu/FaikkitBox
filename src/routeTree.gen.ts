@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as QbitRouteImport } from './routes/qbit'
 import { Route as PlexRouteImport } from './routes/plex'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as ImmichRouteImport } from './routes/immich'
 import { Route as HostRouteImport } from './routes/host'
 import { Route as IndexRouteImport } from './routes/index'
@@ -23,6 +24,11 @@ const QbitRoute = QbitRouteImport.update({
 const PlexRoute = PlexRouteImport.update({
   id: '/plex',
   path: '/plex',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ImmichRoute = ImmichRouteImport.update({
@@ -45,6 +51,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/host': typeof HostRoute
   '/immich': typeof ImmichRoute
+  '/login': typeof LoginRoute
   '/plex': typeof PlexRoute
   '/qbit': typeof QbitRoute
 }
@@ -52,6 +59,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/host': typeof HostRoute
   '/immich': typeof ImmichRoute
+  '/login': typeof LoginRoute
   '/plex': typeof PlexRoute
   '/qbit': typeof QbitRoute
 }
@@ -60,21 +68,23 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/host': typeof HostRoute
   '/immich': typeof ImmichRoute
+  '/login': typeof LoginRoute
   '/plex': typeof PlexRoute
   '/qbit': typeof QbitRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/host' | '/immich' | '/plex' | '/qbit'
+  fullPaths: '/' | '/host' | '/immich' | '/login' | '/plex' | '/qbit'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/host' | '/immich' | '/plex' | '/qbit'
-  id: '__root__' | '/' | '/host' | '/immich' | '/plex' | '/qbit'
+  to: '/' | '/host' | '/immich' | '/login' | '/plex' | '/qbit'
+  id: '__root__' | '/' | '/host' | '/immich' | '/login' | '/plex' | '/qbit'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   HostRoute: typeof HostRoute
   ImmichRoute: typeof ImmichRoute
+  LoginRoute: typeof LoginRoute
   PlexRoute: typeof PlexRoute
   QbitRoute: typeof QbitRoute
 }
@@ -93,6 +103,13 @@ declare module '@tanstack/react-router' {
       path: '/plex'
       fullPath: '/plex'
       preLoaderRoute: typeof PlexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/immich': {
@@ -123,6 +140,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   HostRoute: HostRoute,
   ImmichRoute: ImmichRoute,
+  LoginRoute: LoginRoute,
   PlexRoute: PlexRoute,
   QbitRoute: QbitRoute,
 }
