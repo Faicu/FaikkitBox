@@ -14,17 +14,17 @@ import { formatBytes, formatSpeed, formatEta } from "@/lib/format";
 import { qbitAction } from "@/lib/services.functions";
 
 export const Route = createFileRoute("/qbit")({
-  head: () => ({ meta: [{ title: "qBittorrent — Server Monitor" }] }),
+  head: () => ({ meta: [{ title: "qBittorrent — Monitor Server" }] }),
   component: QbitPage,
 });
 
 function stateBadge(state: string) {
   const s = state.toLowerCase();
-  if (s.includes("download")) return { text: "Down", cls: "bg-sky-500/20 text-sky-400" };
+  if (s.includes("download")) return { text: "Descarcă", cls: "bg-sky-500/20 text-sky-400" };
   if (s.includes("up") || s === "uploading" || s === "stalledup") return { text: "Seed", cls: "bg-emerald-500/20 text-emerald-400" };
-  if (s.includes("paus")) return { text: "Paused", cls: "bg-muted text-muted-foreground" };
-  if (s.includes("error")) return { text: "Error", cls: "bg-red-500/20 text-red-400" };
-  if (s.includes("stall")) return { text: "Stalled", cls: "bg-amber-500/20 text-amber-400" };
+  if (s.includes("paus") || s.includes("stop")) return { text: "Oprit", cls: "bg-muted text-muted-foreground" };
+  if (s.includes("error")) return { text: "Eroare", cls: "bg-red-500/20 text-red-400" };
+  if (s.includes("stall")) return { text: "Blocat", cls: "bg-amber-500/20 text-amber-400" };
   return { text: state, cls: "bg-muted text-muted-foreground" };
 }
 
@@ -38,14 +38,14 @@ function QbitPage() {
       action({ data: vars }),
     onSuccess: (res, vars) => {
       if (!res.ok) {
-        toast.error(`qBit ${vars.action} failed: ${res.error ?? "unknown"}`);
+        toast.error(`Acțiunea qBit ${vars.action} a eșuat: ${res.error ?? "necunoscut"}`);
         return;
       }
-      const target = vars.hashes === "all" ? "all torrents" : `${vars.hashes.length} torrent${vars.hashes.length === 1 ? "" : "s"}`;
-      toast.success(`${vars.action === "pause" ? "Stopped" : "Resumed"} ${target}`);
+      const target = vars.hashes === "all" ? "toate torrentele" : `${vars.hashes.length} torrent${vars.hashes.length === 1 ? "" : "e"}`;
+      toast.success(`${vars.action === "pause" ? "Oprite" : "Reluate"}: ${target}`);
       queryClient.invalidateQueries({ queryKey: ["qbit"] });
     },
-    onError: (e) => toast.error(`qBit action error: ${(e as Error).message}`),
+    onError: (e) => toast.error(`Eroare acțiune qBit: ${(e as Error).message}`),
   });
 
   const pendingHash =
@@ -57,10 +57,10 @@ function QbitPage() {
   return (
     <PageShell
       title="qBittorrent"
-      subtitle={data?.status === "ok" ? `v${data.version} · ${data.counts.total} torrents` : "Torrent client"}
+      subtitle={data?.status === "ok" ? `v${data.version} · ${data.counts.total} torrente` : "Client torrent"}
       right={<ServicePill status={status} />}
     >
-      {data?.status === "error" && <ErrorCard title="qBittorrent unreachable" message={data.error ?? "Unknown error"} />}
+      {data?.status === "error" && <ErrorCard title="qBittorrent indisponibil" message={data.error ?? "Eroare necunoscută"} />}
 
       {data?.status === "ok" && (
         <>
@@ -70,46 +70,46 @@ function QbitPage() {
               disabled={pendingAll}
               className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/15 px-3 py-2 text-sm font-medium text-emerald-400 hover:bg-emerald-500/25 disabled:opacity-50"
             >
-              <Play className="h-4 w-4" /> Resume all
+              <Play className="h-4 w-4" /> Reia toate
             </button>
             <button
               onClick={() => mutation.mutate({ hashes: "all", action: "pause" })}
               disabled={pendingAll}
               className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-amber-500/30 bg-amber-500/15 px-3 py-2 text-sm font-medium text-amber-400 hover:bg-amber-500/25 disabled:opacity-50"
             >
-              <Pause className="h-4 w-4" /> Stop all
+              <Pause className="h-4 w-4" /> Oprește toate
             </button>
           </div>
 
           <div className="grid grid-cols-2 gap-2">
-            <StatCard label="Download" value={formatSpeed(data.dlSpeed)} sub={`Total ${formatBytes(data.totalDl)}`} icon={<ArrowDown className="h-4 w-4" />} accent="text-sky-400" />
-            <StatCard label="Upload" value={formatSpeed(data.upSpeed)} sub={`Total ${formatBytes(data.totalUp)}`} icon={<ArrowUp className="h-4 w-4" />} accent="text-emerald-400" />
-            <StatCard label="Ratio" value={data.globalRatio.toFixed(2)} icon={<Percent className="h-4 w-4" />} accent="text-sky-400" />
-            <StatCard label="Free disk" value={formatBytes(data.freeSpaceOnDisk)} icon={<HardDrive className="h-4 w-4" />} accent="text-sky-400" />
+            <StatCard label="Descărcare" value={formatSpeed(data.dlSpeed)} sub={`Total ${formatBytes(data.totalDl)}`} icon={<ArrowDown className="h-4 w-4" />} accent="text-sky-400" />
+            <StatCard label="Încărcare" value={formatSpeed(data.upSpeed)} sub={`Total ${formatBytes(data.totalUp)}`} icon={<ArrowUp className="h-4 w-4" />} accent="text-emerald-400" />
+            <StatCard label="Rație" value={data.globalRatio.toFixed(2)} icon={<Percent className="h-4 w-4" />} accent="text-sky-400" />
+            <StatCard label="Spațiu liber" value={formatBytes(data.freeSpaceOnDisk)} icon={<HardDrive className="h-4 w-4" />} accent="text-sky-400" />
           </div>
 
           <div className="grid grid-cols-3 gap-2 text-center text-xs">
-            <div className="rounded-xl bg-sky-500/15 py-2 text-sky-400"><b className="block text-lg">{data.counts.downloading}</b>Downloading</div>
-            <div className="rounded-xl bg-emerald-500/15 py-2 text-emerald-400"><b className="block text-lg">{data.counts.seeding}</b>Seeding</div>
-            <div className="rounded-xl bg-muted py-2 text-muted-foreground"><b className="block text-lg">{data.counts.paused}</b>Paused</div>
+            <div className="rounded-xl bg-sky-500/15 py-2 text-sky-400"><b className="block text-lg">{data.counts.downloading}</b>În descărcare</div>
+            <div className="rounded-xl bg-emerald-500/15 py-2 text-emerald-400"><b className="block text-lg">{data.counts.seeding}</b>Seed</div>
+            <div className="rounded-xl bg-muted py-2 text-muted-foreground"><b className="block text-lg">{data.counts.paused}</b>Oprite</div>
           </div>
 
           {(data.alltimeDl != null || data.alltimeUp != null) && (
             <div className="grid grid-cols-2 gap-2">
-              <StatCard label="All-time down" value={formatBytes(data.alltimeDl ?? 0)} icon={<ArrowDown className="h-4 w-4" />} accent="text-sky-400" />
-              <StatCard label="All-time up" value={formatBytes(data.alltimeUp ?? 0)} icon={<ArrowUp className="h-4 w-4" />} accent="text-emerald-400" />
+              <StatCard label="Total descărcat" value={formatBytes(data.alltimeDl ?? 0)} icon={<ArrowDown className="h-4 w-4" />} accent="text-sky-400" />
+              <StatCard label="Total încărcat" value={formatBytes(data.alltimeUp ?? 0)} icon={<ArrowUp className="h-4 w-4" />} accent="text-emerald-400" />
             </div>
           )}
 
           {data.largestEta && (
             <section>
               <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
-                <Timer className="h-3.5 w-3.5" /> Largest download
+                <Timer className="h-3.5 w-3.5" /> Cea mai mare descărcare
               </h2>
               <div className="rounded-2xl border border-border bg-card p-3">
                 <div className="truncate text-sm font-medium">{data.largestEta.name}</div>
                 <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground tabular-nums">
-                  <span>{formatBytes(data.largestEta.remaining)} remaining</span>
+                  <span>{formatBytes(data.largestEta.remaining)} rămași</span>
                   <span>ETA {formatEta(data.largestEta.eta)}</span>
                 </div>
               </div>
@@ -119,7 +119,7 @@ function QbitPage() {
           {data.perCategory && data.perCategory.length > 0 && (
             <section>
               <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
-                <Tag className="h-3.5 w-3.5" /> Categories
+                <Tag className="h-3.5 w-3.5" /> Categorii
               </h2>
               <ul className="rounded-2xl border border-border bg-card divide-y divide-border">
                 {data.perCategory.map((c) => (
@@ -138,10 +138,10 @@ function QbitPage() {
 
           <section>
             <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Torrents ({data.torrents.length})
+              Torrente ({data.torrents.length})
             </h2>
             {data.torrents.length === 0 ? (
-              <div className="rounded-2xl border border-border bg-card p-4 text-sm text-muted-foreground">No torrents.</div>
+              <div className="rounded-2xl border border-border bg-card p-4 text-sm text-muted-foreground">Niciun torrent.</div>
             ) : (
               <div className="space-y-2">
                 {data.torrents.map((t) => {
@@ -159,7 +159,7 @@ function QbitPage() {
                               mutation.mutate({ hashes: [t.hash], action: isPaused ? "resume" : "pause" })
                             }
                             disabled={busy}
-                            title={isPaused ? "Resume" : "Stop"}
+                            title={isPaused ? "Reia" : "Oprește"}
                             className={`rounded-md border p-1 transition disabled:opacity-50 ${
                               isPaused
                                 ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"
