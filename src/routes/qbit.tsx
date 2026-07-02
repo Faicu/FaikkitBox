@@ -109,7 +109,7 @@ function QbitPage() {
           {(data.alltimeDl != null || data.alltimeUp != null) && (
             <div className="grid grid-cols-2 gap-2">
               <StatCard label="Total descărcat" value={formatBytes(data.alltimeDl ?? 0)} icon={<ArrowDown className="h-4 w-4" />} accent="text-sky-400" />
-              <StatCard label="Total încărcat" value={formatBytes(data.alltimeUp ?? 0)} icon={<ArrowUp className="h-4 w-4" />} accent="text-emerald-400" />
+              <StatCard label="Total încărcat" value={formatBytes(data.alltimeUp ?? 0)} sub={`Rație totală ${data.globalRatio.toFixed(2)}`} icon={<ArrowUp className="h-4 w-4" />} accent="text-emerald-400" />
             </div>
           )}
 
