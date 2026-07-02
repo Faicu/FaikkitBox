@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as UpdatesRouteImport } from './routes/updates'
 import { Route as QbitRouteImport } from './routes/qbit'
 import { Route as PlexRouteImport } from './routes/plex'
 import { Route as LoginRouteImport } from './routes/login'
@@ -16,6 +17,11 @@ import { Route as ImmichRouteImport } from './routes/immich'
 import { Route as HostRouteImport } from './routes/host'
 import { Route as IndexRouteImport } from './routes/index'
 
+const UpdatesRoute = UpdatesRouteImport.update({
+  id: '/updates',
+  path: '/updates',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const QbitRoute = QbitRouteImport.update({
   id: '/qbit',
   path: '/qbit',
@@ -54,6 +60,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/plex': typeof PlexRoute
   '/qbit': typeof QbitRoute
+  '/updates': typeof UpdatesRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -62,6 +69,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/plex': typeof PlexRoute
   '/qbit': typeof QbitRoute
+  '/updates': typeof UpdatesRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -71,13 +79,29 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/plex': typeof PlexRoute
   '/qbit': typeof QbitRoute
+  '/updates': typeof UpdatesRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/host' | '/immich' | '/login' | '/plex' | '/qbit'
+  fullPaths:
+    | '/'
+    | '/host'
+    | '/immich'
+    | '/login'
+    | '/plex'
+    | '/qbit'
+    | '/updates'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/host' | '/immich' | '/login' | '/plex' | '/qbit'
-  id: '__root__' | '/' | '/host' | '/immich' | '/login' | '/plex' | '/qbit'
+  to: '/' | '/host' | '/immich' | '/login' | '/plex' | '/qbit' | '/updates'
+  id:
+    | '__root__'
+    | '/'
+    | '/host'
+    | '/immich'
+    | '/login'
+    | '/plex'
+    | '/qbit'
+    | '/updates'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -87,10 +111,18 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   PlexRoute: typeof PlexRoute
   QbitRoute: typeof QbitRoute
+  UpdatesRoute: typeof UpdatesRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/updates': {
+      id: '/updates'
+      path: '/updates'
+      fullPath: '/updates'
+      preLoaderRoute: typeof UpdatesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/qbit': {
       id: '/qbit'
       path: '/qbit'
@@ -143,6 +175,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   PlexRoute: PlexRoute,
   QbitRoute: QbitRoute,
+  UpdatesRoute: UpdatesRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

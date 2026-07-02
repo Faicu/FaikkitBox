@@ -6,7 +6,6 @@ import { RefreshCw, PlayCircle, Images, Download, Terminal, Trash2, PackageCheck
 import { toast } from "sonner";
 
 import { PageShell } from "@/components/PageShell";
-import { ErrorCard } from "@/components/ErrorCard";
 import { adminStatusQuery, versionsQuery } from "@/lib/queries";
 import { runAgentCommand, type AgentCommand, type AgentResult } from "@/lib/agent.functions";
 import type { ServiceVersion } from "@/lib/versions.functions";
@@ -106,14 +105,8 @@ function UpdatesInner() {
         </section>
       )}
 
-      {!process.env && null}
-      <ErrorHintIfNoAgent />
     </PageShell>
   );
-}
-
-function ErrorHintIfNoAgent() {
-  return null;
 }
 
 function VersionCard({
