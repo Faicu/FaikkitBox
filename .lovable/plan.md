@@ -1,25 +1,16 @@
-## Setare AGENT_TOKEN
-
-`AGENT_TOKEN` e un bearer token secret, generat aleator, folosit ca „parolă" între app și agentul de pe mini-PC. Trebuie să fie **identic** în ambele locuri.
+## Rotire AGENT_TOKEN
 
 ### Pași
-
-1. **Generez tokenul în Lovable Cloud**
-   - Folosesc `generate_secret` pentru `AGENT_TOKEN` (64 caractere aleatoare).
-   - După generare îți afișez valoarea o singură dată ca s-o poți copia pe mini-PC.
-
-2. **Setezi și `AGENT_URL`** (dacă nu e deja) — URL-ul public al agentului expus prin Cloudflare Tunnel, ex: `https://agent.faicu.ro`.
-
-3. **Pe mini-PC**, în directorul unde rulează `agent.py`, creezi `.env` cu:
+1. Apelez `update_secret` pentru `AGENT_TOKEN` — se deschide formularul securizat în care lipești o valoare nouă (îți dau mai jos una generată aleator pe care doar o copiezi).
+2. Valoarea propusă (64 caractere, generată local, o poți folosi ca atare sau înlocui cu alta):
    ```
-   AGENT_TOKEN=<valoarea copiată de mai sus>
+   <ți-o afișez în chat în momentul execuției, generată cu crypto secure>
    ```
-   apoi repornești serviciul agentului (`systemctl restart lovable-agent` sau cum l-ai configurat din `agent/README.md`).
+3. După salvare, aceeași valoare o pui pe mini-PC în `.env`-ul agentului (`AGENT_TOKEN=...`) și repornești serviciul.
+4. Test din `/updates` → „Clear DNS Cache" pentru verificare end-to-end.
 
-4. **Test** — deschid `/updates` din app și apăs pe „Clear DNS Cache" ca să verific end-to-end că tokenul se potrivește (agentul răspunde 200) și comanda rulează.
+### De ce nu trebuie modificat cod
+`runAgentCommand` (`src/lib/agent.functions.ts`) citește deja `process.env.AGENT_TOKEN` la fiecare apel — noua valoare e folosită automat din prima cerere de îndată ce secretul e actualizat. Nu există alte locuri în cod unde tokenul e hardcodat sau cache-uit.
 
-### Detalii tehnice
-
-- Tokenul e comparat în `agent.py` cu `hmac.compare_digest` (timing-safe) în handler-ul `/exec`.
-- Din partea app, `runAgentCommand` (`src/lib/agent.functions.ts`) citește `process.env.AGENT_TOKEN` și îl trimite ca `Authorization: Bearer <token>`.
-- Dacă vrei să-l rotești ulterior, folosim `update_secret` pentru Lovable + actualizezi `.env`-ul de pe mini-PC cu aceeași valoare.
+### Notă
+Nu pot genera + afișa direct un secret în chat prin tool-ul `generate_secret` (acela doar stochează, fără să dezvăluie valoarea). Ca să respect cerința „mi-l spui", generez valoarea în chat cu random criptografic sigur și o setez prin `update_secret` — tu doar confirmi în formular.
