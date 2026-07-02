@@ -11,7 +11,7 @@ import { plexQuery } from "@/lib/queries";
 import { formatMs } from "@/lib/format";
 
 export const Route = createFileRoute("/plex")({
-  head: () => ({ meta: [{ title: "Plex — Server Monitor" }] }),
+  head: () => ({ meta: [{ title: "Plex — Monitor Server" }] }),
   component: PlexPage,
 });
 
@@ -30,20 +30,20 @@ function PlexPage() {
   return (
     <PageShell
       title="Plex"
-      subtitle={data?.status === "ok" ? `${data.serverName ?? "Server"} · v${data.version ?? ""}` : "Media server"}
+      subtitle={data?.status === "ok" ? `${data.serverName ?? "Server"} · v${data.version ?? ""}` : "Server media"}
       right={<ServicePill status={status} />}
     >
-      {data?.status === "error" && <ErrorCard title="Plex unreachable" message={data.error ?? "Unknown error"} />}
+      {data?.status === "error" && <ErrorCard title="Plex indisponibil" message={data.error ?? "Eroare necunoscută"} />}
 
       {data?.status === "ok" && (
         <>
           <section>
             <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Now playing ({data.sessions.length})
+              Se redă acum ({data.sessions.length})
             </h2>
             {data.sessions.length === 0 ? (
               <div className="rounded-2xl border border-border bg-card p-4 text-sm text-muted-foreground">
-                Nothing playing right now.
+                Nimic în redare momentan.
               </div>
             ) : (
               <div className="space-y-2">
@@ -82,7 +82,7 @@ function PlexPage() {
           </section>
 
           <section>
-            <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Libraries</h2>
+            <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Biblioteci</h2>
             <div className="grid grid-cols-2 gap-2">
               {data.libraries.map((lib) => (
                 <StatCard
@@ -99,7 +99,7 @@ function PlexPage() {
 
           {data.recentlyAdded.length > 0 && (
             <section>
-              <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Recently added</h2>
+              <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Adăugate recent</h2>
               <ul className="rounded-2xl border border-border bg-card divide-y divide-border">
                 {data.recentlyAdded.map((r, i) => (
                   <li key={i} className="flex items-center justify-between px-3 py-2 text-sm">
@@ -115,25 +115,25 @@ function PlexPage() {
 
           {data.topShows && data.topShows.length > 0 && (
             <RankedList
-              title="Top shows"
+              title="Top seriale"
               icon={<Tv className="h-3.5 w-3.5" />}
-              rows={data.topShows.map((r) => ({ label: r.title, sub: `${r.plays} plays`, date: r.lastViewedAt }))}
+              rows={data.topShows.map((r) => ({ label: r.title, sub: `${r.plays} vizionări`, date: r.lastViewedAt }))}
             />
           )}
 
           {data.topMovies && data.topMovies.length > 0 && (
             <RankedList
-              title="Top movies"
+              title="Top filme"
               icon={<Film className="h-3.5 w-3.5" />}
-              rows={data.topMovies.map((r) => ({ label: r.title, sub: `${r.plays} plays`, date: r.lastViewedAt }))}
+              rows={data.topMovies.map((r) => ({ label: r.title, sub: `${r.plays} vizionări`, date: r.lastViewedAt }))}
             />
           )}
 
           {data.topWatchers && data.topWatchers.length > 0 && (
             <RankedList
-              title="Top watchers"
+              title="Top spectatori"
               icon={<Trophy className="h-3.5 w-3.5" />}
-              rows={data.topWatchers.map((r) => ({ label: r.user, sub: `${r.plays} plays`, date: r.lastViewedAt }))}
+              rows={data.topWatchers.map((r) => ({ label: r.user, sub: `${r.plays} vizionări`, date: r.lastViewedAt }))}
             />
           )}
         </>

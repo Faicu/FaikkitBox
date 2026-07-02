@@ -25,7 +25,7 @@ export function AppHeader({ title, subtitle, right }: Props) {
           <button
             onClick={() => qc.invalidateQueries()}
             className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-muted-foreground hover:text-foreground"
-            aria-label="Refresh"
+            aria-label="Reîmprospătează"
           >
             <RefreshCw className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
           </button>

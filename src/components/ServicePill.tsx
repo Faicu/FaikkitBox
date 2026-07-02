@@ -10,7 +10,7 @@ export function ServicePill({ status, label }: Props) {
   const map = {
     ok: { bg: "bg-emerald-500/15 text-emerald-500", Icon: CircleCheck, text: label ?? "Online" },
     error: { bg: "bg-red-500/15 text-red-500", Icon: CircleAlert, text: label ?? "Offline" },
-    loading: { bg: "bg-muted text-muted-foreground", Icon: Loader2, text: label ?? "Loading" },
+    loading: { bg: "bg-muted text-muted-foreground", Icon: Loader2, text: label ?? "Se încarcă" },
   } as const;
   const cfg = map[status];
   return (

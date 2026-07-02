@@ -11,7 +11,7 @@ import { hostQuery } from "@/lib/queries";
 import { formatBytes, formatSpeed, formatDurationHMS } from "@/lib/format";
 
 export const Route = createFileRoute("/host")({
-  head: () => ({ meta: [{ title: "Host — Server Monitor" }] }),
+  head: () => ({ meta: [{ title: "Gazdă — Monitor Server" }] }),
   component: HostPage,
 });
 
@@ -21,13 +21,13 @@ function HostPage() {
 
   return (
     <PageShell
-      title="Host"
-      subtitle={data?.status === "ok" ? `${data.hostname ?? "mini-pc"} · ${data.os ?? ""}` : "System metrics (Glances)"}
+      title="Gazdă"
+      subtitle={data?.status === "ok" ? `${data.hostname ?? "mini-pc"} · ${data.os ?? ""}` : "Metrici sistem (Glances)"}
       right={<ServicePill status={status} />}
     >
       {data?.status === "error" && (
         <>
-          <ErrorCard title="Glances not reachable" message={data.error ?? "Unknown error"} />
+          <ErrorCard title="Glances indisponibil" message={data.error ?? "Eroare necunoscută"} />
           <GlancesSetup />
         </>
       )}
@@ -35,16 +35,16 @@ function HostPage() {
       {data?.status === "ok" && (
         <>
           <div className="grid grid-cols-2 gap-2">
-            <StatCard label="CPU" value={`${(data.cpuPercent ?? 0).toFixed(0)}%`} sub={`${data.cpuCores ?? "?"} cores · load ${data.loadAvg?.[0].toFixed(2)}`} icon={<Cpu className="h-4 w-4" />} accent="text-emerald-400" />
-            <StatCard label="Memory" value={`${(data.memPercent ?? 0).toFixed(0)}%`} sub={`${formatBytes(data.memUsedBytes ?? 0)} / ${formatBytes(data.memTotalBytes ?? 0)}`} icon={<MemoryStick className="h-4 w-4" />} accent="text-emerald-400" />
+            <StatCard label="Procesor" value={`${(data.cpuPercent ?? 0).toFixed(0)}%`} sub={`${data.cpuCores ?? "?"} nuclee · încărcare ${data.loadAvg?.[0].toFixed(2)}`} icon={<Cpu className="h-4 w-4" />} accent="text-emerald-400" />
+            <StatCard label="Memorie" value={`${(data.memPercent ?? 0).toFixed(0)}%`} sub={`${formatBytes(data.memUsedBytes ?? 0)} / ${formatBytes(data.memTotalBytes ?? 0)}`} icon={<MemoryStick className="h-4 w-4" />} accent="text-emerald-400" />
             <StatCard label="Swap" value={`${(data.swapPercent ?? 0).toFixed(0)}%`} icon={<MemoryStick className="h-4 w-4" />} accent="text-emerald-400" />
-            <StatCard label="Uptime" value={formatDurationHMS(data.uptimeSec ?? 0)} icon={<Cpu className="h-4 w-4" />} accent="text-emerald-400" />
+            <StatCard label="Timp funcționare" value={formatDurationHMS(data.uptimeSec ?? 0)} icon={<Cpu className="h-4 w-4" />} accent="text-emerald-400" />
           </div>
 
           {data.apps && data.apps.length > 0 && (
             <section>
               <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
-                <Boxes className="h-3.5 w-3.5" /> Apps
+                <Boxes className="h-3.5 w-3.5" /> Aplicații
               </h2>
               <ul className="rounded-2xl border border-border bg-card divide-y divide-border">
                 {data.apps.map((a) => (
@@ -75,7 +75,7 @@ function HostPage() {
 
           <section>
             <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
-              <HardDrive className="h-3.5 w-3.5" /> Disks
+              <HardDrive className="h-3.5 w-3.5" /> Discuri
             </h2>
             <div className="rounded-2xl border border-border bg-card p-3 space-y-3">
               {(data.disks ?? []).map((d, i) => (
@@ -86,14 +86,14 @@ function HostPage() {
                   right={`${formatBytes(d.usedBytes)} / ${formatBytes(d.totalBytes)}`}
                 />
               ))}
-              {(!data.disks || data.disks.length === 0) && <div className="text-sm text-muted-foreground">No disks reported.</div>}
+              {(!data.disks || data.disks.length === 0) && <div className="text-sm text-muted-foreground">Niciun disc raportat.</div>}
             </div>
           </section>
 
           {data.net && data.net.length > 0 && (
             <section>
               <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
-                <Network className="h-3.5 w-3.5" /> Network
+                <Network className="h-3.5 w-3.5" /> Rețea
               </h2>
               <ul className="rounded-2xl border border-border bg-card divide-y divide-border">
                 {data.net.map((n) => (
@@ -112,7 +112,7 @@ function HostPage() {
           {data.sensors && data.sensors.length > 0 && (
             <section>
               <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
-                <Thermometer className="h-3.5 w-3.5" /> Sensors
+                <Thermometer className="h-3.5 w-3.5" /> Senzori
               </h2>
               <div className="grid grid-cols-2 gap-2">
                 {data.sensors.map((s, i) => (
@@ -125,7 +125,7 @@ function HostPage() {
           {data.topProcesses && data.topProcesses.length > 0 && (
             <section>
               <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
-                <Terminal className="h-3.5 w-3.5" /> Top processes
+                <Terminal className="h-3.5 w-3.5" /> Top procese
               </h2>
               <ul className="rounded-2xl border border-border bg-card divide-y divide-border">
                 {data.topProcesses.map((p, i) => (
@@ -143,7 +143,7 @@ function HostPage() {
           {data.diskIO && data.diskIO.length > 0 && (
             <section>
               <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
-                <HardDriveDownload className="h-3.5 w-3.5" /> Top disk I/O
+                <HardDriveDownload className="h-3.5 w-3.5" /> Top I/O disc
               </h2>
               <ul className="rounded-2xl border border-border bg-card divide-y divide-border">
                 {data.diskIO.map((p, i) => (
@@ -166,10 +166,10 @@ function HostPage() {
 function GlancesSetup() {
   return (
     <div className="rounded-2xl border border-border bg-card p-4 text-sm">
-      <h3 className="font-semibold">Enable host metrics</h3>
+      <h3 className="font-semibold">Activează metricile gazdei</h3>
       <p className="mt-1 text-muted-foreground">
-        Install <b>Glances</b> on your mini-PC, expose its web/REST API behind HTTPS,
-        then add a <code className="rounded bg-muted px-1">GLANCES_URL</code> secret.
+        Instalează <b>Glances</b> pe mini-PC, expune API-ul web/REST prin HTTPS,
+        apoi adaugă secretul <code className="rounded bg-muted px-1">GLANCES_URL</code>.
       </p>
       <pre className="mt-2 overflow-auto rounded-lg bg-muted p-3 text-[11px] leading-relaxed">
 {`# Debian / Ubuntu
@@ -193,7 +193,7 @@ sudo systemctl enable --now glances
 # Now reverse-proxy https://glances.example.com -> localhost:61208`}
       </pre>
       <p className="mt-3 text-xs text-muted-foreground">
-        Then ask me to add the <code className="rounded bg-muted px-1">GLANCES_URL</code> secret.
+        Apoi cere-mi să adaug secretul <code className="rounded bg-muted px-1">GLANCES_URL</code>.
       </p>
     </div>
   );

@@ -12,8 +12,8 @@ import { formatBytes, formatSpeed } from "@/lib/format";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Overview — Server Monitor" },
-      { name: "description", content: "Live status of Plex, Immich, qBittorrent, and host." },
+      { title: "Prezentare generală — Monitor Server" },
+      { name: "description", content: "Stare în timp real pentru Plex, Immich, qBittorrent și gazdă." },
     ],
   }),
   component: Overview,
@@ -26,7 +26,7 @@ function Overview() {
   const host = useQuery(hostQuery);
 
   return (
-    <PageShell title="Server Monitor" subtitle="Statististici în Timp Real">
+    <PageShell title="Monitor Server" subtitle="Statistici în timp real">
       <ServiceRow
         to="/plex"
         title="Plex"
@@ -37,8 +37,8 @@ function Overview() {
       >
         {plex.data?.status === "ok" && (
           <div className="grid grid-cols-2 gap-2 text-sm">
-            <Metric icon={<Users className="h-3.5 w-3.5" />} label="Now playing" value={String(plex.data.sessions.length)} />
-            <Metric label="Libraries" value={String(plex.data.libraries.length)} />
+            <Metric icon={<Users className="h-3.5 w-3.5" />} label="Se redă acum" value={String(plex.data.sessions.length)} />
+            <Metric label="Biblioteci" value={String(plex.data.libraries.length)} />
           </div>
         )}
       </ServiceRow>
@@ -53,8 +53,8 @@ function Overview() {
       >
         {immich.data?.status === "ok" && (
           <div className="grid grid-cols-2 gap-2 text-sm">
-            <Metric label="Assets" value={(immich.data.totalAssets ?? 0).toLocaleString()} />
-            <Metric icon={<HardDrive className="h-3.5 w-3.5" />} label="Storage" value={formatBytes(immich.data.usageBytes ?? 0)} />
+            <Metric label="Fișiere" value={(immich.data.totalAssets ?? 0).toLocaleString()} />
+            <Metric icon={<HardDrive className="h-3.5 w-3.5" />} label="Spațiu" value={formatBytes(immich.data.usageBytes ?? 0)} />
           </div>
         )}
       </ServiceRow>
@@ -78,7 +78,7 @@ function Overview() {
 
       <ServiceRow
         to="/host"
-        title="Host"
+        title="Gazdă"
         icon={<Cpu className="h-5 w-5" />}
         accent="text-emerald-400"
         status={host.isLoading ? "loading" : host.data?.status ?? "error"}
@@ -88,7 +88,7 @@ function Overview() {
           <div className="space-y-2">
             <Meter label="CPU" right={`${(host.data.cpuPercent ?? 0).toFixed(0)}%`} value={host.data.cpuPercent ?? 0} />
             <Meter
-              label="Memory"
+              label="Memorie"
               right={`${formatBytes(host.data.memUsedBytes ?? 0)} / ${formatBytes(host.data.memTotalBytes ?? 0)}`}
               value={host.data.memPercent ?? 0}
             />

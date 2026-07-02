@@ -10,7 +10,7 @@ import { immichQuery } from "@/lib/queries";
 import { formatBytes } from "@/lib/format";
 
 export const Route = createFileRoute("/immich")({
-  head: () => ({ meta: [{ title: "Immich — Server Monitor" }] }),
+  head: () => ({ meta: [{ title: "Immich — Monitor Server" }] }),
   component: ImmichPage,
 });
 
@@ -21,40 +21,40 @@ function ImmichPage() {
   return (
     <PageShell
       title="Immich"
-      subtitle={data?.status === "ok" ? `Photos & videos · v${data.version ?? ""}` : "Photo library"}
+      subtitle={data?.status === "ok" ? `Fotografii & videoclipuri · v${data.version ?? ""}` : "Bibliotecă foto"}
       right={<ServicePill status={status} />}
     >
-      {data?.status === "error" && <ErrorCard title="Immich unreachable" message={data.error ?? "Unknown error"} />}
+      {data?.status === "error" && <ErrorCard title="Immich indisponibil" message={data.error ?? "Eroare necunoscută"} />}
 
       {data?.status === "ok" && (
         <>
           <div className="grid grid-cols-2 gap-2">
-            <StatCard label="Total assets" value={(data.totalAssets ?? 0).toLocaleString()} icon={<Activity className="h-4 w-4" />} accent="text-purple-400" />
-            <StatCard label="Storage" value={formatBytes(data.usageBytes ?? 0)} icon={<HardDrive className="h-4 w-4" />} accent="text-purple-400" />
-            <StatCard label="Photos" value={(data.photos ?? 0).toLocaleString()} icon={<Images className="h-4 w-4" />} accent="text-purple-400" />
-            <StatCard label="Videos" value={(data.videos ?? 0).toLocaleString()} icon={<Film className="h-4 w-4" />} accent="text-purple-400" />
+            <StatCard label="Total fișiere" value={(data.totalAssets ?? 0).toLocaleString()} icon={<Activity className="h-4 w-4" />} accent="text-purple-400" />
+            <StatCard label="Spațiu folosit" value={formatBytes(data.usageBytes ?? 0)} icon={<HardDrive className="h-4 w-4" />} accent="text-purple-400" />
+            <StatCard label="Fotografii" value={(data.photos ?? 0).toLocaleString()} icon={<Images className="h-4 w-4" />} accent="text-purple-400" />
+            <StatCard label="Videoclipuri" value={(data.videos ?? 0).toLocaleString()} icon={<Film className="h-4 w-4" />} accent="text-purple-400" />
           </div>
 
           {(data.uploadsToday != null || data.uploadsThisWeek != null || data.jobQueueDepth != null) && (
             <div className="grid grid-cols-3 gap-2">
               <StatCard
-                label="Today"
+                label="Azi"
                 value={data.uploadsToday != null ? data.uploadsToday.toLocaleString() : "—"}
-                sub="uploads"
+                sub="încărcări"
                 icon={<Upload className="h-4 w-4" />}
                 accent="text-purple-400"
               />
               <StatCard
-                label="This week"
+                label="Săptămâna asta"
                 value={data.uploadsThisWeek != null ? data.uploadsThisWeek.toLocaleString() : "—"}
-                sub="uploads"
+                sub="încărcări"
                 icon={<Upload className="h-4 w-4" />}
                 accent="text-purple-400"
               />
               <StatCard
-                label="Job queue"
+                label="Coadă joburi"
                 value={(data.jobQueueDepth ?? 0).toLocaleString()}
-                sub="tasks"
+                sub="sarcini"
                 icon={<ListChecks className="h-4 w-4" />}
                 accent="text-purple-400"
               />
@@ -64,7 +64,7 @@ function ImmichPage() {
           {data.topUploaders && data.topUploaders.length > 0 && (
             <section>
               <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
-                <Trophy className="h-3.5 w-3.5" /> Top uploaders
+                <Trophy className="h-3.5 w-3.5" /> Top încărcători
               </h2>
               <ol className="rounded-2xl border border-border bg-card divide-y divide-border">
                 {data.topUploaders.map((u, i) => (
@@ -85,13 +85,13 @@ function ImmichPage() {
 
           {data.usageByUser && data.usageByUser.length > 0 && (
             <section>
-              <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Per user</h2>
+              <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Pe utilizator</h2>
               <ul className="rounded-2xl border border-border bg-card divide-y divide-border">
                 {data.usageByUser.map((u, i) => (
                   <li key={i} className="flex items-center justify-between px-3 py-2 text-sm">
                     <div>
                       <div className="font-medium">{u.userName}</div>
-                      <div className="text-xs text-muted-foreground">{u.photos.toLocaleString()} photos · {u.videos.toLocaleString()} videos</div>
+                      <div className="text-xs text-muted-foreground">{u.photos.toLocaleString()} fotografii · {u.videos.toLocaleString()} videoclipuri</div>
                     </div>
                     <div className="text-sm font-semibold tabular-nums">{formatBytes(u.usage)}</div>
                   </li>
@@ -102,13 +102,13 @@ function ImmichPage() {
 
           {data.activeJobs && data.activeJobs.length > 0 && (
             <section>
-              <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Active jobs</h2>
+              <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Joburi active</h2>
               <ul className="rounded-2xl border border-border bg-card divide-y divide-border">
                 {data.activeJobs.map((j) => (
                   <li key={j.name} className="flex items-center justify-between px-3 py-2 text-sm">
                     <span className="capitalize">{j.name.replace(/([A-Z])/g, " $1").trim()}</span>
                     <span className="text-xs text-muted-foreground tabular-nums">
-                      {j.active} active · {j.waiting} waiting
+                      {j.active} active · {j.waiting} în așteptare
                     </span>
                   </li>
                 ))}
@@ -118,7 +118,7 @@ function ImmichPage() {
 
           {(!data.activeJobs || data.activeJobs.length === 0) && (
             <div className="rounded-2xl border border-border bg-card p-3 text-sm text-muted-foreground">
-              No active background jobs.
+              Niciun job activ în fundal.
             </div>
           )}
         </>
