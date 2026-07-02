@@ -361,11 +361,12 @@ export const getPlex = createServerFn({ method: "GET" }).handler(async (): Promi
   try {
     const discovered = await discoverPlexUrl(token, base);
     const url = discovered.url;
-    const [rootJson, sessionsJson, libsJson, recentJson] = await Promise.all([
+    const [rootJson, sessionsJson, libsJson, recentJson, history] = await Promise.all([
       fetchJson<any>(`${url}/`, { headers }),
       fetchJson<any>(`${url}/status/sessions`, { headers }),
       fetchJson<any>(`${url}/library/sections`, { headers }),
       fetchJson<any>(`${url}/library/recentlyAdded?X-Plex-Container-Start=0&X-Plex-Container-Size=8`, { headers }).catch(() => ({ MediaContainer: { Metadata: [] } })),
+      fetchPlexHistory(url, headers).catch(() => ({ topShows: [], topMovies: [], topWatchers: [] })),
     ]);
 
     const mc = rootJson?.MediaContainer ?? {};
@@ -423,6 +424,9 @@ export const getPlex = createServerFn({ method: "GET" }).handler(async (): Promi
         type: m.type,
         addedAt: Number(m.addedAt ?? 0),
       })),
+      topShows: history.topShows,
+      topMovies: history.topMovies,
+      topWatchers: history.topWatchers,
     };
   } catch (e) {
     return { status: "error", error: errMsg(e), sessions: [], libraries: [], recentlyAdded: [] };
