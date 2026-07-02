@@ -1,34 +1,10 @@
-## Status
+## Plan
 
-- Glances is now running on port 61208 (curl reached it — the 404 came from Glances, not the OS).
-- Glances v3.4 uses `/api/3/`, which matches what `src/lib/services.functions.ts` already calls. **No code changes needed.**
+Cloudflared ingress now points to `http://192.168.1.192:61208`. Verify the Host page loads live Glances data by polling the server function from the preview and reading the rendered Host page.
 
-## Remaining step (on your side)
+Steps:
+1. Navigate the preview to `/host` and wait for the 2s poll to fire.
+2. Read the visible page text — success looks like CPU/Memory/Disk numbers instead of an error card.
+3. If it still fails, capture the exact error string (Cloudflare status, timeout, JSON parse) and adjust from there — e.g. some cloudflared setups strip the trailing slash and Glances is picky about `/api/3/all` vs `/api/3/all/`.
 
-Confirm the cloudflared tunnel ingress for `glances.faicu.ro` points to `http://localhost:61208`:
-
-```bash
-cat /etc/cloudflared/config.yml
-```
-
-The ingress rule should look like:
-```yaml
-- hostname: glances.faicu.ro
-  service: http://localhost:61208
-```
-
-If it says `61209` (or anything else), fix it and:
-```bash
-sudo systemctl restart cloudflared
-```
-
-Then verify from anywhere:
-```bash
-curl -s https://glances.faicu.ro/api/3/all | head -c 200
-```
-
-Once that returns JSON, the Host page will go green within 2 seconds — no redeploy needed.
-
-## If you'd like me to act
-
-Paste the output of the two curl commands above and I'll confirm end-to-end, or say "test it" and I'll poll the server function from here.
+No code changes expected.
