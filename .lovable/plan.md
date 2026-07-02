@@ -1,19 +1,24 @@
+## Problemă
 
-## Modificări
+Cardul "Rație" afișează `1044995792.00` pentru că qBit returnează `global_ratio: "0"` la pornire, iar fallback-ul actual `up_info_data / max(1, dl_info_data)` împarte octeții încărcați la 1 când nu s-a descărcat nimic încă în sesiune. Rezultatul: număr uriaș fără sens.
 
-### 1. `agent/agent.py` (pe mini-PC)
-- Mărește `timeout=600` → `timeout=1800` (30 min) pentru comenzi lungi (ex. `apt upgrade`).
-- Nu mai trunchia output-ul: elimină `[-4000:]` și returnează `stdout`/`stderr` complete.
-- Modifică handler-ul `flush_dns` să ruleze o secvență: `resolvectl flush-caches`, apoi `sleep 2`, apoi `systemctl restart qbittorrent-nox`; concatenând output-urile în răspuns. Implementat printr-un caz special în `exec_cmd` (listă de comenzi cu delay între ele) — restul rămân o singură comandă.
+## Ce fac
 
-### 2. `src/lib/agent.functions.ts`
-- Mărește timeout-ul fetch de la 120s → 1800s (aliniat cu agentul) ca să nu abandoneze cererea înainte ca `apt upgrade` să termine.
+qBit nu are un contor „per zi", dar are contoare de sesiune (`up_info_data` / `dl_info_data` din `/api/v2/transfer/info`), care se resetează la fiecare pornire a qBit — adică efectiv „de azi" în cazul tău (qBit-ul rulează continuu, resetat prin restart-ul zilnic sau la boot).
 
-### 3. `src/routes/updates.tsx`
-- Afișează output-ul complet: scoate `max-h-72` de pe `<pre>` (sau înlocuiește cu `max-h-none`) ca să nu mai fie tăiat vizual; păstrează scroll-ul opțional cu `overflow-auto` doar pe orizontală. Adaugă buton mic „Copiază" care copiază `stdout+stderr` în clipboard.
-- Etichetează butonul „Clear DNS Cache" ca „Clear DNS Cache + repornește qBittorrent" pentru claritate.
-- Adaugă un indicator vizibil „Se rulează... (poate dura câteva minute)" cât timp mutation-ul e `pending`, ca să fie clar că nu s-a blocat.
+1. În `src/lib/services.functions.ts`:
+   - Adaug două câmpuri noi în `QbitData`: `sessionDl: number`, `sessionUp: number` (din `xfer.dl_info_data` / `xfer.up_info_data`).
+   - Elimin fallback-ul periculos din `globalRatio` — folosesc doar `global_ratio` real de la qBit (rația all-time, ce vezi și în client).
 
-### Note
-- Utilizatorul trebuie să repornească agentul pe mini-PC după update (`sudo systemctl restart lovable-agent`) ca modificările din `agent.py` să fie active.
-- Cloudflare Tunnel poate impune propriul timeout (~100s implicit pe unele setup-uri); dacă `apt upgrade` tot se termină prematur cu eroare de rețea, va trebui ajustat `proxy_read_timeout`/`connectTimeout` pe tunel — voi menționa asta în răspuns.
+2. În `src/routes/qbit.tsx`:
+   - Redenumesc cardul „Rație" → „Rație azi" și calculez `sessionUp / sessionDl`, cu guard:
+     - dacă `sessionDl < 1 MB` și `sessionUp > 0` → afișez `∞`;
+     - dacă ambele sunt 0 → afișez `0.00`;
+     - altfel → `(sessionUp / sessionDl).toFixed(2)`.
+   - Sub-textul cardului: `↑ formatBytes(sessionUp) · ↓ formatBytes(sessionDl)` ca să fie clar de unde vine numărul.
+   - Cardul „Total descărcat / Total încărcat" rămân neschimbate (alltime).
+   - Adaug un al 5-lea card mic sau reordonez ca să păstrez grid-ul 2×2 curat (rația all-time reală de la qBit o mut ca sub-text la „Total încărcat": `Rație totală X.XX`).
+
+## Note
+
+- Dacă vrei rație strict calendaristică „de la 00:00 azi" (nu de la ultima repornire qBit), avem nevoie de persistență (snapshot zilnic în DB) — activăm Lovable Cloud și adaug un job. Spune-mi dacă preferi asta; altfel merg pe sesiune, care e ce afișează și clientul qBit ca „Session".
