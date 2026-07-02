@@ -680,6 +680,15 @@ export const getHost = createServerFn({ method: "GET" }).handler(async (): Promi
       all = await tryApi("3");
     }
 
+    // Containers endpoint (may not exist if docker plugin is off)
+    let containers: any[] = [];
+    try {
+      const c4 = await fetchJson<any>(`${url}/api/4/containers`).catch(() => null);
+      const c3 = c4 ?? (await fetchJson<any>(`${url}/api/3/containers`).catch(() => null));
+      if (Array.isArray(c3)) containers = c3;
+      else if (Array.isArray(c3?.containers)) containers = c3.containers;
+    } catch { /* ignore */ }
+
     const system = all.system ?? {};
     const cpu = all.cpu ?? all.quicklook ?? {};
     const load = all.load ?? {};
@@ -690,6 +699,58 @@ export const getHost = createServerFn({ method: "GET" }).handler(async (): Promi
     const sensorsRaw = Array.isArray(all.sensors) ? all.sensors : [];
     const processlist = Array.isArray(all.processlist) ? all.processlist : [];
     const uptime = all.uptime;
+
+    // ---- App identification ----
+    // Map of display name -> regex tested against process/container name (case-insensitive)
+    const APP_MAP: Array<{ name: string; match: RegExp }> = [
+      { name: "Plex", match: /plex/i },
+      { name: "Immich", match: /immich/i },
+      { name: "qBittorrent", match: /qbittorrent|qbit/i },
+      { name: "Glances", match: /glances/i },
+      { name: "cloudflared", match: /cloudflared/i },
+      { name: "Docker", match: /dockerd|docker-proxy/i },
+    ];
+
+    const procName = (p: any): string =>
+      Array.isArray(p.name) ? p.name.join(" ") : p.name ?? p.cmdline?.[0] ?? "";
+
+    const containerName = (c: any): string =>
+      String(c.name ?? c.Name ?? c.image ?? "").replace(/^\//, "");
+
+    const apps: HostData["apps"] = APP_MAP.map(({ name, match }) => {
+      const matchedContainers = containers.filter((c) => match.test(containerName(c)));
+      if (matchedContainers.length > 0) {
+        let cpuSum = 0, memSum = 0, rxSum = 0, txSum = 0;
+        for (const c of matchedContainers) {
+          cpuSum += Number(c.cpu?.total ?? c.cpu_percent ?? 0);
+          memSum += Number(c.memory?.usage ?? c.memory_usage ?? 0);
+          rxSum += Number(c.network?.rx ?? c.io_rx ?? 0);
+          txSum += Number(c.network?.tx ?? c.io_tx ?? 0);
+        }
+        // memory% ~ (container mem / host total mem) * 100
+        const memPct = mem.total ? (memSum / Number(mem.total)) * 100 : 0;
+        return { name, cpu: cpuSum, mem: memPct, netRx: rxSum, netTx: txSum, source: "container" as const };
+      }
+      const matchedProcs = processlist.filter((p: any) => match.test(procName(p)));
+      if (matchedProcs.length === 0) return null;
+      const cpuSum = matchedProcs.reduce((s: number, p: any) => s + Number(p.cpu_percent ?? 0), 0);
+      const memSum = matchedProcs.reduce((s: number, p: any) => s + Number(p.memory_percent ?? 0), 0);
+      return { name, cpu: cpuSum, mem: memSum, source: "process" as const };
+    }).filter((x): x is NonNullable<typeof x> => x !== null);
+
+    // Top disk I/O processes (Glances io_counters = [read_count, write_count, read_bytes, write_bytes])
+    const diskIO = processlist
+      .map((p: any) => {
+        const io = Array.isArray(p.io_counters) ? p.io_counters : [];
+        return {
+          name: procName(p) || "?",
+          ioRead: Number(io[2] ?? 0),
+          ioWrite: Number(io[3] ?? 0),
+        };
+      })
+      .filter((p: any) => p.ioRead > 0 || p.ioWrite > 0)
+      .sort((a: any, b: any) => (b.ioRead + b.ioWrite) - (a.ioRead + a.ioWrite))
+      .slice(0, 5);
 
     return {
       status: "ok",
@@ -727,10 +788,12 @@ export const getHost = createServerFn({ method: "GET" }).handler(async (): Promi
         .sort((a: any, b: any) => Number(b.cpu_percent ?? 0) - Number(a.cpu_percent ?? 0))
         .slice(0, 6)
         .map((p: any) => ({
-          name: Array.isArray(p.name) ? p.name.join(" ") : p.name ?? p.cmdline?.[0] ?? "?",
+          name: procName(p) || "?",
           cpu: Number(p.cpu_percent ?? 0),
           mem: Number(p.memory_percent ?? 0),
         })),
+      apps,
+      diskIO,
     };
   } catch (e) {
     return { status: "error", configured: true, error: errMsg(e) };
