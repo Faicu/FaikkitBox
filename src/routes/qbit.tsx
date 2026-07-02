@@ -9,7 +9,7 @@ import { ServicePill } from "@/components/ServicePill";
 import { StatCard } from "@/components/StatCard";
 import { Meter } from "@/components/Meter";
 import { ErrorCard } from "@/components/ErrorCard";
-import { qbitQuery } from "@/lib/queries";
+import { qbitQuery, adminStatusQuery } from "@/lib/queries";
 import { formatBytes, formatSpeed, formatEta } from "@/lib/format";
 import { qbitAction } from "@/lib/services.functions";
 
@@ -30,6 +30,8 @@ function stateBadge(state: string) {
 
 function QbitPage() {
   const { data, isLoading } = useQuery(qbitQuery);
+  const admin = useQuery(adminStatusQuery);
+  const isAdmin = !!admin.data?.isAdmin;
   const status = isLoading ? "loading" : data?.status ?? "error";
   const queryClient = useQueryClient();
   const action = useServerFn(qbitAction);
@@ -64,7 +66,7 @@ function QbitPage() {
 
       {data?.status === "ok" && (
         <>
-          <div className="flex gap-2">
+          {isAdmin && <div className="flex gap-2">
             <button
               onClick={() => mutation.mutate({ hashes: "all", action: "resume" })}
               disabled={pendingAll}
@@ -79,7 +81,7 @@ function QbitPage() {
             >
               <Pause className="h-4 w-4" /> Oprește toate
             </button>
-          </div>
+          </div>}
 
           <div className="grid grid-cols-2 gap-2">
             <StatCard label="Descărcare" value={formatSpeed(data.dlSpeed)} sub={`Total ${formatBytes(data.totalDl)}`} icon={<ArrowDown className="h-4 w-4" />} accent="text-sky-400" />
@@ -154,7 +156,7 @@ function QbitPage() {
                         <div className="min-w-0 flex-1 truncate text-sm font-medium">{t.name}</div>
                         <div className="flex shrink-0 items-center gap-1">
                           <span className={`rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide ${b.cls}`}>{b.text}</span>
-                          <button
+                          {isAdmin && <button
                             onClick={() =>
                               mutation.mutate({ hashes: [t.hash], action: isPaused ? "resume" : "pause" })
                             }
@@ -167,7 +169,7 @@ function QbitPage() {
                             }`}
                           >
                             {isPaused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
-                          </button>
+                          </button>}
                         </div>
                       </div>
                       <div className="mt-2">
