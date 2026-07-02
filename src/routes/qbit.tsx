@@ -86,7 +86,17 @@ function QbitPage() {
           <div className="grid grid-cols-2 gap-2">
             <StatCard label="Descărcare" value={formatSpeed(data.dlSpeed)} sub={`Total ${formatBytes(data.totalDl)}`} icon={<ArrowDown className="h-4 w-4" />} accent="text-sky-400" />
             <StatCard label="Încărcare" value={formatSpeed(data.upSpeed)} sub={`Total ${formatBytes(data.totalUp)}`} icon={<ArrowUp className="h-4 w-4" />} accent="text-emerald-400" />
-            <StatCard label="Rație" value={data.globalRatio.toFixed(2)} icon={<Percent className="h-4 w-4" />} accent="text-sky-400" />
+            <StatCard
+              label="Rație azi"
+              value={
+                data.sessionDl < 1_000_000
+                  ? data.sessionUp > 0 ? "∞" : "0.00"
+                  : (data.sessionUp / data.sessionDl).toFixed(2)
+              }
+              sub={`↑ ${formatBytes(data.sessionUp)} · ↓ ${formatBytes(data.sessionDl)}`}
+              icon={<Percent className="h-4 w-4" />}
+              accent="text-sky-400"
+            />
             <StatCard label="Spațiu liber" value={formatBytes(data.freeSpaceOnDisk)} icon={<HardDrive className="h-4 w-4" />} accent="text-sky-400" />
           </div>
 
@@ -99,7 +109,7 @@ function QbitPage() {
           {(data.alltimeDl != null || data.alltimeUp != null) && (
             <div className="grid grid-cols-2 gap-2">
               <StatCard label="Total descărcat" value={formatBytes(data.alltimeDl ?? 0)} icon={<ArrowDown className="h-4 w-4" />} accent="text-sky-400" />
-              <StatCard label="Total încărcat" value={formatBytes(data.alltimeUp ?? 0)} icon={<ArrowUp className="h-4 w-4" />} accent="text-emerald-400" />
+              <StatCard label="Total încărcat" value={formatBytes(data.alltimeUp ?? 0)} sub={`Rație totală ${data.globalRatio.toFixed(2)}`} icon={<ArrowUp className="h-4 w-4" />} accent="text-emerald-400" />
             </div>
           )}
 

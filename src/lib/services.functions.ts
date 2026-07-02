@@ -98,8 +98,8 @@ export interface QbitData {
   globalRatio: number;
   torrents: QbitTorrent[];
   counts: { downloading: number; seeding: number; paused: number; total: number };
-  sessionDl?: number;
-  sessionUp?: number;
+  sessionDl: number;
+  sessionUp: number;
   alltimeDl?: number;
   alltimeUp?: number;
   largestEta?: { name: string; eta: number; remaining: number } | null;
@@ -682,6 +682,7 @@ export const getQbit = createServerFn({ method: "GET" }).handler(async (): Promi
       dlSpeed: 0, upSpeed: 0, dlSpeedLimit: 0, upSpeedLimit: 0,
       totalDl: 0, totalUp: 0, freeSpaceOnDisk: 0, globalRatio: 0,
       torrents: [], counts: { downloading: 0, seeding: 0, paused: 0, total: 0 },
+      sessionDl: 0, sessionUp: 0,
     };
   }
   const url = stripSlash(base);
@@ -764,7 +765,7 @@ export const getQbit = createServerFn({ method: "GET" }).handler(async (): Promi
       totalDl: Number(xfer?.dl_info_data ?? 0),
       totalUp: Number(xfer?.up_info_data ?? 0),
       freeSpaceOnDisk: freeSpace,
-      globalRatio: Number(xfer?.global_ratio ?? 0) || (Number(xfer?.up_info_data ?? 0) / Math.max(1, Number(xfer?.dl_info_data ?? 1))),
+      globalRatio: Number(xfer?.global_ratio ?? 0),
       torrents,
       counts: { downloading, seeding, paused, total: torrentsRaw.length },
       sessionDl: Number(xfer?.dl_info_data ?? 0),
@@ -781,6 +782,7 @@ export const getQbit = createServerFn({ method: "GET" }).handler(async (): Promi
       dlSpeed: 0, upSpeed: 0, dlSpeedLimit: 0, upSpeedLimit: 0,
       totalDl: 0, totalUp: 0, freeSpaceOnDisk: 0, globalRatio: 0,
       torrents: [], counts: { downloading: 0, seeding: 0, paused: 0, total: 0 },
+      sessionDl: 0, sessionUp: 0,
     };
   }
 });
