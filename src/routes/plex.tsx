@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Film, Tv, Music, Image as ImageIcon, User } from "lucide-react";
+import { Film, Tv, Music, Image as ImageIcon, User, Trophy } from "lucide-react";
 
 import { PageShell } from "@/components/PageShell";
 import { ServicePill } from "@/components/ServicePill";
@@ -112,8 +112,68 @@ function PlexPage() {
               </ul>
             </section>
           )}
+
+          {data.topShows && data.topShows.length > 0 && (
+            <RankedList
+              title="Top shows"
+              icon={<Tv className="h-3.5 w-3.5" />}
+              rows={data.topShows.map((r) => ({ label: r.title, sub: `${r.plays} plays`, date: r.lastViewedAt }))}
+            />
+          )}
+
+          {data.topMovies && data.topMovies.length > 0 && (
+            <RankedList
+              title="Top movies"
+              icon={<Film className="h-3.5 w-3.5" />}
+              rows={data.topMovies.map((r) => ({ label: r.title, sub: `${r.plays} plays`, date: r.lastViewedAt }))}
+            />
+          )}
+
+          {data.topWatchers && data.topWatchers.length > 0 && (
+            <RankedList
+              title="Top watchers"
+              icon={<Trophy className="h-3.5 w-3.5" />}
+              rows={data.topWatchers.map((r) => ({ label: r.user, sub: `${r.plays} plays`, date: r.lastViewedAt }))}
+            />
+          )}
         </>
       )}
     </PageShell>
+  );
+}
+
+function RankedList({
+  title,
+  icon,
+  rows,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  rows: Array<{ label: string; sub: string; date: number }>;
+}) {
+  return (
+    <section>
+      <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
+        {icon} {title}
+      </h2>
+      <ol className="rounded-2xl border border-border bg-card divide-y divide-border">
+        {rows.map((r, i) => (
+          <li key={i} className="flex items-center justify-between px-3 py-2 text-sm">
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="w-4 shrink-0 text-xs font-mono text-muted-foreground">{i + 1}</span>
+              <span className="truncate">{r.label}</span>
+            </div>
+            <div className="shrink-0 pl-2 text-right">
+              <div className="text-xs font-medium tabular-nums">{r.sub}</div>
+              {r.date > 0 && (
+                <div className="text-[10px] text-muted-foreground">
+                  {new Date(r.date * 1000).toLocaleDateString()}
+                </div>
+              )}
+            </div>
+          </li>
+        ))}
+      </ol>
+    </section>
   );
 }
