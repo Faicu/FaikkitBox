@@ -182,6 +182,68 @@ interface PlexConnectionCandidate {
 }
 
 let plexDiscoveryCache: { url: string; source: string; expiresAt: number } | null = null;
+let plexHistoryCache: {
+  url: string;
+  topShows: PlexData["topShows"];
+  topMovies: PlexData["topMovies"];
+  topWatchers: PlexData["topWatchers"];
+  expiresAt: number;
+} | null = null;
+
+async function fetchPlexHistory(url: string, headers: Record<string, string>): Promise<{
+  topShows: PlexData["topShows"];
+  topMovies: PlexData["topMovies"];
+  topWatchers: PlexData["topWatchers"];
+}> {
+  if (plexHistoryCache && plexHistoryCache.url === url && plexHistoryCache.expiresAt > Date.now()) {
+    return {
+      topShows: plexHistoryCache.topShows,
+      topMovies: plexHistoryCache.topMovies,
+      topWatchers: plexHistoryCache.topWatchers,
+    };
+  }
+  const historyJson = await fetchJson<any>(
+    `${url}/status/sessions/history/all?sort=viewedAt:desc&X-Plex-Container-Start=0&X-Plex-Container-Size=1000`,
+    { headers },
+    12000,
+  );
+  const entries: any[] = historyJson?.MediaContainer?.Metadata ?? [];
+
+  const showMap = new Map<string, { plays: number; lastViewedAt: number }>();
+  const movieMap = new Map<string, { plays: number; lastViewedAt: number }>();
+  const watcherMap = new Map<string, { plays: number; lastViewedAt: number }>();
+
+  for (const e of entries) {
+    const viewedAt = Number(e.viewedAt ?? 0);
+    if (e.type === "episode" || e.grandparentTitle) {
+      const key = String(e.grandparentTitle ?? e.title ?? "Unknown");
+      const prev = showMap.get(key) ?? { plays: 0, lastViewedAt: 0 };
+      showMap.set(key, { plays: prev.plays + 1, lastViewedAt: Math.max(prev.lastViewedAt, viewedAt) });
+    } else if (e.type === "movie") {
+      const key = String(e.title ?? "Unknown");
+      const prev = movieMap.get(key) ?? { plays: 0, lastViewedAt: 0 };
+      movieMap.set(key, { plays: prev.plays + 1, lastViewedAt: Math.max(prev.lastViewedAt, viewedAt) });
+    }
+    const user = String(e?.accountID != null ? e?.User?.title ?? e?.title ?? `user ${e.accountID}` : e?.User?.title ?? "");
+    const wkey = user || "Unknown";
+    const wprev = watcherMap.get(wkey) ?? { plays: 0, lastViewedAt: 0 };
+    watcherMap.set(wkey, { plays: wprev.plays + 1, lastViewedAt: Math.max(wprev.lastViewedAt, viewedAt) });
+  }
+
+  const toRanked = <T extends { plays: number; lastViewedAt: number }>(m: Map<string, T>, keyField: string) =>
+    Array.from(m.entries())
+      .map(([k, v]) => ({ [keyField]: k, ...v }))
+      .sort((a: any, b: any) => b.plays - a.plays)
+      .slice(0, 5) as any;
+
+  const result = {
+    topShows: toRanked(showMap, "title"),
+    topMovies: toRanked(movieMap, "title"),
+    topWatchers: toRanked(watcherMap, "user"),
+  };
+  plexHistoryCache = { url, ...result, expiresAt: Date.now() + 60_000 };
+  return result;
+}
 
 function parseAttributes(raw: string): Record<string, string> {
   const attrs: Record<string, string> = {};
