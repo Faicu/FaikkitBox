@@ -35,10 +35,10 @@ export type AgentResult = {
 type Step = { argv: string[] } | { sleepMs: number };
 
 // Caile compose sunt configurabile via env, cu valori implicite conform
-// instalarii curente (~/plex si ~/immich-app).
+// instalarii curente (/root/plex si /root/immich-app).
 function commandSteps(cmd: AgentCommand): Step[] {
-  const plexCompose = process.env.PLEX_COMPOSE_FILE ?? `${process.env.HOME}/plex/docker-compose.yml`;
-  const immichCompose = process.env.IMMICH_COMPOSE_FILE ?? `${process.env.HOME}/immich-app/docker-compose.yml`;
+  const plexCompose = process.env.PLEX_COMPOSE_FILE ?? "/root/plex/docker-compose.yml";
+  const immichCompose = process.env.IMMICH_COMPOSE_FILE ?? "/root/immich-app/docker-compose.yml";
 
   switch (cmd) {
     case "apt_update":
@@ -52,9 +52,11 @@ function commandSteps(cmd: AgentCommand): Step[] {
         { argv: ["sudo", "systemctl", "restart", "qbittorrent-nox"] },
       ];
     case "restart_plex":
-      return [{ argv: ["docker", "compose", "-f", plexCompose, "restart"] }];
+      // "sudo" e necesar aici nu doar pentru docker, ci si pentru ca /root/plex
+      // e ilizibil pentru orice user in afara de root (permisiuni implicite 700).
+      return [{ argv: ["sudo", "docker-compose", "-f", plexCompose, "restart"] }];
     case "restart_immich":
-      return [{ argv: ["docker", "compose", "-f", immichCompose, "restart"] }];
+      return [{ argv: ["sudo", "docker-compose", "-f", immichCompose, "restart"] }];
     case "restart_qbit":
       return [{ argv: ["sudo", "systemctl", "restart", "qbittorrent-nox"] }];
     case "uptime":
