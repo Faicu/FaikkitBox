@@ -549,6 +549,9 @@ export const getPlex = createServerFn({ method: "GET" }).handler(async (): Promi
       episodesToday: history.episodesToday,
       activeUsersToday: history.activeUsersToday,
       userHistory: history.userHistory,
+      todayViews: history.todayViews,
+      activeUsersTodayList: history.activeUsersTodayList,
+      recentHistory: history.recentHistory,
     };
   } catch (e) {
     return { status: "error", error: errMsg(e), sessions: [], libraries: [], recentlyAdded: [] };
