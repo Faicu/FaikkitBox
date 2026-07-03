@@ -2,10 +2,12 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { PlayCircle, Images, Download, Cpu, ChevronRight, Users, HardDrive, ListChecks, Network } from "lucide-react";
+import { useState } from "react";
 
 import { PageShell } from "@/components/PageShell";
 import { ServicePill } from "@/components/ServicePill";
 import { RadialGauge } from "@/components/RadialGauge";
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription } from "@/components/ui/drawer";
 import { plexQuery, immichQuery, qbitQuery, hostQuery } from "@/lib/queries";
 import type { HostData } from "@/lib/services.functions";
 import { formatBytes, formatSpeed } from "@/lib/format";
@@ -25,6 +27,13 @@ function Overview() {
   const immich = useQuery(immichQuery);
   const qbit = useQuery(qbitQuery);
   const host = useQuery(hostQuery);
+  const [plexDrawer, setPlexDrawer] = useState<"views" | "users" | null>(null);
+
+  const stop = (fn: () => void) => (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    fn();
+  };
 
   return (
     <PageShell title="Monitor Server" subtitle="Statistici în timp real">
@@ -49,8 +58,16 @@ function Overview() {
               </div>
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <Metric label="Episoade azi" value={String(plex.data.episodesToday ?? 0)} />
-              <Metric label="Utilizatori activi azi" value={String(plex.data.activeUsersToday ?? 0)} />
+              <MetricButton
+                label="Vizionate Azi"
+                value={String(plex.data.episodesToday ?? 0)}
+                onClick={stop(() => setPlexDrawer("views"))}
+              />
+              <MetricButton
+                label="Utilizatori activi azi"
+                value={String(plex.data.activeUsersToday ?? 0)}
+                onClick={stop(() => setPlexDrawer("users"))}
+              />
             </div>
           </div>
         )}
@@ -102,6 +119,76 @@ function Overview() {
           <HostGauges data={host.data} />
         )}
       </ServiceRow>
+
+      <Drawer open={plexDrawer === "views"} onOpenChange={(o) => !o && setPlexDrawer(null)}>
+        <DrawerContent className="max-h-[85vh]">
+          <DrawerHeader className="text-left">
+            <DrawerTitle>Vizionate Azi</DrawerTitle>
+            <DrawerDescription>
+              {plex.data?.status === "ok" ? `${plex.data.todayViews?.length ?? 0} vizionări` : ""}
+            </DrawerDescription>
+          </DrawerHeader>
+          <div className="overflow-y-auto px-4 pb-6">
+            {plex.data?.status === "ok" && (plex.data.todayViews?.length ?? 0) > 0 ? (
+              <ul className="rounded-2xl border border-border bg-card divide-y divide-border">
+                {plex.data.todayViews!.map((e, i) => {
+                  const seasonEp =
+                    e.season != null && e.episode != null
+                      ? `S${String(e.season).padStart(2, "0")}E${String(e.episode).padStart(2, "0")}`
+                      : null;
+                  const heading = e.show
+                    ? `${e.show}${seasonEp ? ` — ${seasonEp}` : ""}${e.title ? ` · ${e.title}` : ""}`
+                    : e.title;
+                  return (
+                    <li key={i} className="px-3 py-2 text-sm">
+                      <div className="truncate">{heading}</div>
+                      <div className="mt-0.5 flex items-center justify-between text-[11px] text-muted-foreground">
+                        <span className="truncate">{e.user ?? "—"}</span>
+                        <span className="tabular-nums shrink-0 pl-2">
+                          {e.viewedAt > 0 ? new Date(e.viewedAt * 1000).toLocaleTimeString() : "—"}
+                        </span>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <div className="rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground">
+                Nicio vizionare azi.
+              </div>
+            )}
+          </div>
+        </DrawerContent>
+      </Drawer>
+
+      <Drawer open={plexDrawer === "users"} onOpenChange={(o) => !o && setPlexDrawer(null)}>
+        <DrawerContent className="max-h-[85vh]">
+          <DrawerHeader className="text-left">
+            <DrawerTitle>Utilizatori activi azi</DrawerTitle>
+            <DrawerDescription>
+              {plex.data?.status === "ok" ? `${plex.data.activeUsersTodayList?.length ?? 0} utilizatori` : ""}
+            </DrawerDescription>
+          </DrawerHeader>
+          <div className="overflow-y-auto px-4 pb-6">
+            {plex.data?.status === "ok" && (plex.data.activeUsersTodayList?.length ?? 0) > 0 ? (
+              <ul className="rounded-2xl border border-border bg-card divide-y divide-border">
+                {plex.data.activeUsersTodayList!.map((u, i) => (
+                  <li key={i} className="flex items-center justify-between px-3 py-2 text-sm">
+                    <span className="truncate">{u.user}</span>
+                    <span className="shrink-0 pl-2 text-xs font-medium tabular-nums text-muted-foreground">
+                      {u.count} {u.count === 1 ? "vizionare" : "vizionări"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground">
+                Niciun utilizator activ azi.
+              </div>
+            )}
+          </div>
+        </DrawerContent>
+      </Drawer>
     </PageShell>
   );
 }
@@ -175,5 +262,30 @@ function Metric({ label, value, icon }: { label: string; value: string; icon?: R
       </div>
       <div className="text-sm font-semibold tabular-nums">{value}</div>
     </div>
+  );
+}
+
+function MetricButton({
+  label,
+  value,
+  icon,
+  onClick,
+}: {
+  label: string;
+  value: string;
+  icon?: React.ReactNode;
+  onClick: (e: React.MouseEvent) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-lg bg-muted/40 px-2.5 py-1.5 text-left transition-colors hover:bg-muted/60 active:bg-muted"
+    >
+      <div className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+        {icon}{label}
+      </div>
+      <div className="text-sm font-semibold tabular-nums">{value}</div>
+    </button>
   );
 }

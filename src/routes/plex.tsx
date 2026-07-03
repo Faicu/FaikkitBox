@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Film, Tv, Music, Image as ImageIcon, User, Trophy, ChevronRight } from "lucide-react";
+import { Film, Tv, Music, Image as ImageIcon, User, Trophy, ChevronRight, History } from "lucide-react";
 import { useState } from "react";
 
 import { PageShell } from "@/components/PageShell";
@@ -142,6 +142,38 @@ function PlexPage() {
               rows={data.topWatchers.map((r) => ({ label: r.user, sub: `${r.plays} vizionări`, date: r.lastViewedAt }))}
               onSelect={(i) => setSelectedUser(data.topWatchers![i].user)}
             />
+          )}
+
+          {data.recentHistory && data.recentHistory.length > 0 && (
+            <section>
+              <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
+                <History className="h-3.5 w-3.5" /> Istoric vizionări
+              </h2>
+              <ul className="rounded-2xl border border-border bg-card divide-y divide-border">
+                {data.recentHistory.map((e, i) => {
+                  const seasonEp =
+                    e.season != null && e.episode != null
+                      ? `S${String(e.season).padStart(2, "0")}E${String(e.episode).padStart(2, "0")}`
+                      : null;
+                  const heading = e.show
+                    ? `${e.show}${seasonEp ? ` — ${seasonEp}` : ""}${e.title ? ` · ${e.title}` : ""}`
+                    : e.title;
+                  return (
+                    <li key={i} className="px-3 py-2 text-sm">
+                      <div className="truncate">{heading}</div>
+                      <div className="mt-0.5 flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                        <span className="truncate">
+                          {e.user ?? "—"}{e.player ? ` · ${e.player}` : ""}
+                        </span>
+                        <span className="shrink-0 tabular-nums">
+                          {e.viewedAt > 0 ? new Date(e.viewedAt * 1000).toLocaleString() : "—"}
+                        </span>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
           )}
         </>
       )}
