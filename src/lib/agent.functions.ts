@@ -1,4 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+
+const execFileAsync = promisify(execFile);
 
 export type AgentCommand =
   | "apt_update"
@@ -27,6 +31,37 @@ export type AgentResult = {
   error?: string;
 };
 
+// Un pas e fie un argv (rulat direct, fara shell), fie o pauza intre pasi.
+type Step = { argv: string[] } | { sleepMs: number };
+
+// Caile compose sunt configurabile via env, cu valori implicite conform
+// instalarii curente (~/plex si ~/immich-app).
+function commandSteps(cmd: AgentCommand): Step[] {
+  const plexCompose = process.env.PLEX_COMPOSE_FILE ?? `${process.env.HOME}/plex/docker-compose.yml`;
+  const immichCompose = process.env.IMMICH_COMPOSE_FILE ?? `${process.env.HOME}/immich-app/docker-compose.yml`;
+
+  switch (cmd) {
+    case "apt_update":
+      return [{ argv: ["sudo", "apt-get", "update"] }];
+    case "apt_upgrade":
+      return [{ argv: ["sudo", "apt-get", "-y", "upgrade"] }];
+    case "flush_dns":
+      return [
+        { argv: ["sudo", "resolvectl", "flush-caches"] },
+        { sleepMs: 2000 },
+        { argv: ["sudo", "systemctl", "restart", "qbittorrent-nox"] },
+      ];
+    case "restart_plex":
+      return [{ argv: ["docker", "compose", "-f", plexCompose, "restart"] }];
+    case "restart_immich":
+      return [{ argv: ["docker", "compose", "-f", immichCompose, "restart"] }];
+    case "restart_qbit":
+      return [{ argv: ["sudo", "systemctl", "restart", "qbittorrent-nox"] }];
+    case "uptime":
+      return [{ argv: ["uptime"] }];
+  }
+}
+
 export const runAgentCommand = createServerFn({ method: "POST" })
   .inputValidator((data: { cmd: AgentCommand }) => {
     if (!ALLOWED.includes(data.cmd)) {
@@ -37,39 +72,38 @@ export const runAgentCommand = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<AgentResult> => {
     const { requireAdmin } = await import("./admin.server");
     await requireAdmin();
-    const url = process.env.AGENT_URL;
-    const token = process.env.AGENT_TOKEN;
-    if (!url || !token) {
-      return { ok: false, error: "AGENT_URL sau AGENT_TOKEN nu sunt configurate." };
-    }
+
+    const steps = commandSteps(data.cmd);
+    const stdoutParts: string[] = [];
+    const stderrParts: string[] = [];
+    let lastCode = 0;
+
     try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 1_800_000);
-      const res = await fetch(`${url.replace(/\/$/, "")}/exec`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ cmd: data.cmd }),
-        signal: controller.signal,
-      });
-      clearTimeout(timeout);
-      const text = await res.text();
-      let body: any = {};
-      try {
-        body = JSON.parse(text);
-      } catch {
-        return { ok: false, error: `Răspuns invalid de la agent (HTTP ${res.status}): ${text.slice(0, 200)}` };
-      }
-      if (!res.ok) {
-        return { ok: false, error: body.error ?? `HTTP ${res.status}`, stdout: body.stdout, stderr: body.stderr };
+      for (const step of steps) {
+        if ("sleepMs" in step) {
+          await new Promise((r) => setTimeout(r, step.sleepMs));
+          stdoutParts.push(`[sleep ${step.sleepMs / 1000}s]\n`);
+          continue;
+        }
+        const [cmd, ...args] = step.argv;
+        stdoutParts.push(`$ ${step.argv.join(" ")}\n`);
+        try {
+          const { stdout, stderr } = await execFileAsync(cmd, args, { timeout: 1_800_000 });
+          if (stdout) stdoutParts.push(stdout);
+          if (stderr) stderrParts.push(stderr);
+        } catch (e: any) {
+          lastCode = typeof e.code === "number" ? e.code : 1;
+          if (e.stdout) stdoutParts.push(e.stdout);
+          if (e.stderr) stderrParts.push(e.stderr);
+          else stderrParts.push(e.message ?? String(e));
+          break;
+        }
       }
       return {
-        ok: (body.exit_code ?? 0) === 0,
-        exit_code: body.exit_code,
-        stdout: body.stdout ?? "",
-        stderr: body.stderr ?? "",
+        ok: lastCode === 0,
+        exit_code: lastCode,
+        stdout: stdoutParts.join(""),
+        stderr: stderrParts.join(""),
       };
     } catch (e) {
       return { ok: false, error: (e as Error).message };

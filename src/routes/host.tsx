@@ -22,14 +22,11 @@ function HostPage() {
   return (
     <PageShell
       title="Gazdă"
-      subtitle={data?.status === "ok" ? `${data.hostname ?? "mini-pc"} · ${data.os ?? ""}` : "Metrici sistem (Glances)"}
+      subtitle={data?.status === "ok" ? `${data.hostname ?? "mini-pc"} · ${data.os ?? ""}` : "Metrici sistem"}
       right={<ServicePill status={status} />}
     >
       {data?.status === "error" && (
-        <>
-          <ErrorCard title="Glances indisponibil" message={data.error ?? "Eroare necunoscută"} />
-          <GlancesSetup />
-        </>
+        <ErrorCard title="Metrici indisponibile" message={data.error ?? "Eroare necunoscută"} />
       )}
 
       {data?.status === "ok" && (
@@ -160,41 +157,5 @@ function HostPage() {
         </>
       )}
     </PageShell>
-  );
-}
-
-function GlancesSetup() {
-  return (
-    <div className="rounded-2xl border border-border bg-card p-4 text-sm">
-      <h3 className="font-semibold">Activează metricile gazdei</h3>
-      <p className="mt-1 text-muted-foreground">
-        Instalează <b>Glances</b> pe mini-PC, expune API-ul web/REST prin HTTPS,
-        apoi adaugă secretul <code className="rounded bg-muted px-1">GLANCES_URL</code>.
-      </p>
-      <pre className="mt-2 overflow-auto rounded-lg bg-muted p-3 text-[11px] leading-relaxed">
-{`# Debian / Ubuntu
-sudo apt install glances
-
-# Run as a service (systemd)
-sudo tee /etc/systemd/system/glances.service > /dev/null <<'EOF'
-[Unit]
-Description=Glances
-After=network.target
-
-[Service]
-ExecStart=/usr/bin/glances -w --disable-webui
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-sudo systemctl enable --now glances
-# Now reverse-proxy https://glances.example.com -> localhost:61208`}
-      </pre>
-      <p className="mt-3 text-xs text-muted-foreground">
-        Apoi cere-mi să adaug secretul <code className="rounded bg-muted px-1">GLANCES_URL</code>.
-      </p>
-    </div>
   );
 }

@@ -839,151 +839,123 @@ export const getQbit = createServerFn({ method: "GET" }).handler(async (): Promi
   }
 });
 
-// ---------- Host (Glances) ----------
+
+// ---------- Host (systeminformation, local — nu mai trece prin Glances) ----------
 
 export const getHost = createServerFn({ method: "GET" }).handler(async (): Promise<HostData> => {
-  const base = process.env.GLANCES_URL;
-  if (!base) return { status: "error", configured: false, error: "GLANCES_URL not configured. Install Glances on your mini-PC and add the secret." };
-  const url = stripSlash(base);
-
-  // Try API v4 first, then v3
-  async function tryApi(v: string): Promise<any> {
-    return fetchJson<any>(`${url}/api/${v}/all`);
-  }
   try {
-    let all: any;
-    try {
-      all = await tryApi("4");
-    } catch {
-      all = await tryApi("3");
-    }
+    const si = await import("systeminformation");
+    const os = await import("node:os");
 
-    // Containers endpoint (may not exist if docker plugin is off)
-    let containers: any[] = [];
-    try {
-      const c4 = await fetchJson<any>(`${url}/api/4/containers`).catch(() => null);
-      const c3 = c4 ?? (await fetchJson<any>(`${url}/api/3/containers`).catch(() => null));
-      if (Array.isArray(c3)) containers = c3;
-      else if (Array.isArray(c3?.containers)) containers = c3.containers;
-    } catch { /* ignore */ }
+    const [osInfo, currentLoad, mem, fsSize, netStats, cpuTemp, cpu, processes, dockerContainers] =
+      await Promise.all([
+        si.osInfo(),
+        si.currentLoad(),
+        si.mem(),
+        si.fsSize(),
+        si.networkStats(),
+        si.cpuTemperature().catch(() => null),
+        si.cpu(),
+        si.processes(),
+        si.dockerContainers().catch(() => [] as Awaited<ReturnType<typeof si.dockerContainers>>),
+      ]);
 
-    const system = all.system ?? {};
-    const cpu = all.cpu ?? all.quicklook ?? {};
-    const load = all.load ?? {};
-    const mem = all.mem ?? {};
-    const memswap = all.memswap ?? {};
-    const fsRaw = Array.isArray(all.fs) ? all.fs : [];
-    const netRaw = Array.isArray(all.network) ? all.network : [];
-    const sensorsRaw = Array.isArray(all.sensors) ? all.sensors : [];
-    const processlist = Array.isArray(all.processlist) ? all.processlist : [];
-    const uptime = all.uptime;
+    const loadAvg = os.loadavg() as [number, number, number];
 
-    // ---- App identification ----
-    // Map of display name -> regex tested against process/container name (case-insensitive)
+    const disks = fsSize
+      .filter((f) => f.size > 0)
+      .map((f) => ({
+        mount: f.mount,
+        percent: Number(f.use ?? 0),
+        usedBytes: Number(f.used ?? 0),
+        totalBytes: Number(f.size ?? 0),
+      }));
+
+    const net = netStats
+      .filter((n) => n.iface && !n.iface.startsWith("lo"))
+      .map((n) => ({
+        name: n.iface,
+        rxSec: Number(n.rx_sec ?? 0),
+        txSec: Number(n.tx_sec ?? 0),
+      }));
+
+    const sensors = cpuTemp && typeof cpuTemp.main === "number" && cpuTemp.main > 0
+      ? [{ label: "CPU", value: cpuTemp.main, unit: "°C" }]
+      : [];
+
+    const topProcesses = (processes.list ?? [])
+      .slice()
+      .sort((a, b) => Number(b.cpu ?? 0) - Number(a.cpu ?? 0))
+      .slice(0, 6)
+      .map((p) => ({ name: p.name || "?", cpu: Number(p.cpu ?? 0), mem: Number(p.mem ?? 0) }));
+
+    // Docker containers (Plex, Immich) — recunoscute dupa nume/imagine.
+    // qBittorrent ruleaza ca proces systemd nativ, il gasim in lista de procese.
     const APP_MAP: Array<{ name: string; match: RegExp }> = [
       { name: "Plex", match: /plex/i },
       { name: "Immich", match: /immich/i },
       { name: "qBittorrent", match: /qbittorrent|qbit/i },
-      { name: "Glances", match: /glances/i },
-      { name: "cloudflared", match: /cloudflared/i },
-      { name: "Docker", match: /dockerd|docker-proxy/i },
     ];
 
-    const procName = (p: any): string =>
-      Array.isArray(p.name) ? p.name.join(" ") : p.name ?? p.cmdline?.[0] ?? "";
-
-    const containerName = (c: any): string =>
-      String(c.name ?? c.Name ?? c.image ?? "").replace(/^\//, "");
+    const containerStats = await Promise.all(
+      dockerContainers.map(async (c) => {
+        try {
+          const stats = await si.dockerContainerStats(c.id);
+          return { container: c, stats: Array.isArray(stats) ? stats[0] : stats };
+        } catch {
+          return { container: c, stats: null };
+        }
+      }),
+    );
 
     const apps: HostData["apps"] = APP_MAP.map(({ name, match }) => {
-      const matchedContainers = containers.filter((c) => match.test(containerName(c)));
+      const matchedContainers = containerStats.filter(
+        ({ container }) => match.test(container.name ?? "") || match.test(container.image ?? ""),
+      );
       if (matchedContainers.length > 0) {
-        let cpuSum = 0, memSum = 0, rxSum = 0, txSum = 0;
-        for (const c of matchedContainers) {
-          cpuSum += Number(c.cpu?.total ?? c.cpu_percent ?? 0);
-          memSum += Number(c.memory?.usage ?? c.memory_usage ?? 0);
-          rxSum += Number(c.network?.rx ?? c.io_rx ?? 0);
-          txSum += Number(c.network?.tx ?? c.io_tx ?? 0);
+        let cpuSum = 0;
+        let memSum = 0;
+        let rxSum = 0;
+        let txSum = 0;
+        for (const { stats } of matchedContainers) {
+          if (!stats) continue;
+          cpuSum += Number(stats.cpuPercent ?? 0);
+          memSum += Number(stats.memPercent ?? 0);
+          rxSum += Number(stats.netIO?.rx ?? 0);
+          txSum += Number(stats.netIO?.wx ?? 0);
         }
-        // memory% ~ (container mem / host total mem) * 100
-        const memPct = mem.total ? (memSum / Number(mem.total)) * 100 : 0;
-        return { name, cpu: cpuSum, mem: memPct, netRx: rxSum, netTx: txSum, source: "container" as const };
+        return { name, cpu: cpuSum, mem: memSum, netRx: rxSum, netTx: txSum, source: "container" as const };
       }
-      const matchedProcs = processlist.filter((p: any) => match.test(procName(p)));
+      const matchedProcs = (processes.list ?? []).filter((p) => match.test(p.name ?? p.command ?? ""));
       if (matchedProcs.length === 0) return null;
-      const cpuSum = matchedProcs.reduce((s: number, p: any) => s + Number(p.cpu_percent ?? 0), 0);
-      const memSum = matchedProcs.reduce((s: number, p: any) => s + Number(p.memory_percent ?? 0), 0);
+      const cpuSum = matchedProcs.reduce((s, p) => s + Number(p.cpu ?? 0), 0);
+      const memSum = matchedProcs.reduce((s, p) => s + Number(p.mem ?? 0), 0);
       return { name, cpu: cpuSum, mem: memSum, source: "process" as const };
     }).filter((x): x is NonNullable<typeof x> => x !== null);
-
-    // Top disk I/O processes (Glances io_counters = [read_count, write_count, read_bytes, write_bytes])
-    const diskIO = processlist
-      .map((p: any) => {
-        const io = Array.isArray(p.io_counters) ? p.io_counters : [];
-        return {
-          name: procName(p) || "?",
-          ioRead: Number(io[2] ?? 0),
-          ioWrite: Number(io[3] ?? 0),
-        };
-      })
-      .filter((p: any) => p.ioRead > 0 || p.ioWrite > 0)
-      .sort((a: any, b: any) => (b.ioRead + b.ioWrite) - (a.ioRead + a.ioWrite))
-      .slice(0, 5);
 
     return {
       status: "ok",
       configured: true,
-      hostname: system.hostname,
-      os: `${system.os_name ?? ""} ${system.os_version ?? ""}`.trim() || undefined,
-      uptimeSec: typeof uptime === "number" ? uptime : parseUptime(uptime),
-      cpuPercent: Number(cpu.total ?? cpu.cpu_percent ?? 0),
-      cpuCores: Number(all.core?.log ?? all.core?.phys ?? 0) || undefined,
-      loadAvg: [Number(load.min1 ?? 0), Number(load.min5 ?? 0), Number(load.min15 ?? 0)],
-      memPercent: Number(mem.percent ?? 0),
-      memUsedBytes: Number(mem.used ?? 0),
-      memTotalBytes: Number(mem.total ?? 0),
-      swapPercent: Number(memswap.percent ?? 0),
-      disks: fsRaw.map((f: any) => ({
-        mount: f.mnt_point ?? f.device_name ?? "?",
-        percent: Number(f.percent ?? 0),
-        usedBytes: Number(f.used ?? 0),
-        totalBytes: Number(f.size ?? 0),
-      })),
-      net: netRaw
-        .filter((n: any) => (n.interface_name || n.name) && !(n.interface_name || n.name).startsWith("lo"))
-        .map((n: any) => ({
-          name: n.interface_name ?? n.name,
-          rxSec: Number(n.bytes_recv_rate_per_sec ?? n.rx ?? 0),
-          txSec: Number(n.bytes_sent_rate_per_sec ?? n.tx ?? 0),
-        })),
-      sensors: sensorsRaw.slice(0, 8).map((s: any) => ({
-        label: s.label ?? "sensor",
-        value: Number(s.value ?? 0),
-        unit: s.unit ?? "",
-      })),
-      topProcesses: processlist
-        .slice()
-        .sort((a: any, b: any) => Number(b.cpu_percent ?? 0) - Number(a.cpu_percent ?? 0))
-        .slice(0, 6)
-        .map((p: any) => ({
-          name: procName(p) || "?",
-          cpu: Number(p.cpu_percent ?? 0),
-          mem: Number(p.memory_percent ?? 0),
-        })),
+      hostname: osInfo.hostname,
+      os: `${osInfo.distro ?? ""} ${osInfo.release ?? ""}`.trim() || undefined,
+      uptimeSec: os.uptime(),
+      cpuPercent: Number(currentLoad.currentLoad ?? 0),
+      cpuCores: cpu.cores,
+      loadAvg,
+      memPercent: mem.total ? (mem.active / mem.total) * 100 : 0,
+      memUsedBytes: mem.active,
+      memTotalBytes: mem.total,
+      swapPercent: mem.swaptotal ? (mem.swapused / mem.swaptotal) * 100 : 0,
+      disks,
+      net,
+      sensors,
+      topProcesses,
       apps,
-      diskIO,
+      // systeminformation nu expune usor I/O per-proces cross-platform ca Glances;
+      // lasam lista goala mai degraba decat sa afisam date incorecte.
+      diskIO: [],
     };
   } catch (e) {
     return { status: "error", configured: true, error: errMsg(e) };
   }
 });
-
-function parseUptime(u: unknown): number | undefined {
-  if (typeof u !== "string") return undefined;
-  // format like "1 day, 2:34:56" or "2:34:56"
-  const dayMatch = /(\d+)\s+day/.exec(u);
-  const days = dayMatch ? Number(dayMatch[1]) : 0;
-  const timeMatch = /(\d+):(\d+):(\d+)/.exec(u);
-  if (!timeMatch) return days * 86400;
-  return days * 86400 + Number(timeMatch[1]) * 3600 + Number(timeMatch[2]) * 60 + Number(timeMatch[3]);
-}

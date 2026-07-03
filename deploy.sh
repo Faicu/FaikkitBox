@@ -4,6 +4,7 @@ set -euo pipefail
 cd /opt/faikkitbox
 
 BRANCH="${DEPLOY_BRANCH:-main}"
+SERVICE="${DEPLOY_SERVICE:-faikkitbox}"
 
 echo "[deploy] $(date -Is) — verific ${BRANCH}..."
 
@@ -21,7 +22,11 @@ echo "[deploy] schimbări detectate ($LOCAL -> $REMOTE), actualizez..."
 git checkout "$BRANCH" --quiet
 git reset --hard "origin/${BRANCH}" --quiet
 
-echo "[deploy] rebuild + restart container..."
-docker compose up -d --build
+echo "[deploy] instalez dependinte + build..."
+npm install
+npm run build
+
+echo "[deploy] restart serviciu systemd..."
+sudo systemctl restart "$SERVICE"
 
 echo "[deploy] gata: $(git rev-parse --short HEAD)"
