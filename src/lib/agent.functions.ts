@@ -11,6 +11,8 @@ export type AgentCommand =
   | "restart_plex"
   | "restart_immich"
   | "restart_qbit"
+  | "update_plex"
+  | "update_immich"
   | "uptime";
 
 const ALLOWED: AgentCommand[] = [
@@ -20,6 +22,8 @@ const ALLOWED: AgentCommand[] = [
   "restart_plex",
   "restart_immich",
   "restart_qbit",
+  "update_plex",
+  "update_immich",
   "uptime",
 ];
 
@@ -59,6 +63,18 @@ function commandSteps(cmd: AgentCommand): Step[] {
       return [{ argv: ["sudo", "docker-compose", "-f", immichCompose, "restart"] }];
     case "restart_qbit":
       return [{ argv: ["sudo", "systemctl", "restart", "qbittorrent-nox"] }];
+    case "update_plex":
+      return [
+        { argv: ["sudo", "docker-compose", "-f", plexCompose, "down"] },
+        { argv: ["sudo", "docker-compose", "-f", plexCompose, "pull"] },
+        { argv: ["sudo", "docker-compose", "-f", plexCompose, "up", "-d"] },
+      ];
+    case "update_immich":
+      return [
+        { argv: ["sudo", "docker-compose", "-f", immichCompose, "down"] },
+        { argv: ["sudo", "docker-compose", "-f", immichCompose, "pull"] },
+        { argv: ["sudo", "docker-compose", "-f", immichCompose, "up", "-d"] },
+      ];
     case "uptime":
       return [{ argv: ["uptime"] }];
   }

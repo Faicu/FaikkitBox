@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
-import { RefreshCw, PlayCircle, Images, Download, Terminal, Trash2, PackageCheck, PackageOpen } from "lucide-react";
+import { RefreshCw, PlayCircle, Images, Download, Terminal, Trash2, PackageCheck, PackageOpen, ArrowUpCircle } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageShell } from "@/components/PageShell";
@@ -66,9 +66,9 @@ function UpdatesInner() {
         {versions.data && (
           <div className="space-y-2">
             <VersionCard icon={<PlayCircle className="h-5 w-5 text-amber-400" />} v={versions.data.plex}
-              restartCmd="restart_plex" running={running} onRun={m.mutate} />
+              restartCmd="restart_plex" updateCmd="update_plex" running={running} onRun={m.mutate} />
             <VersionCard icon={<Images className="h-5 w-5 text-purple-400" />} v={versions.data.immich}
-              restartCmd="restart_immich" running={running} onRun={m.mutate} />
+              restartCmd="restart_immich" updateCmd="update_immich" running={running} onRun={m.mutate} />
             <VersionCard icon={<Download className="h-5 w-5 text-sky-400" />} v={versions.data.qbit}
               restartCmd="restart_qbit" running={running} onRun={m.mutate} />
           </div>
@@ -133,12 +133,14 @@ function VersionCard({
   icon,
   v,
   restartCmd,
+  updateCmd,
   running,
   onRun,
 }: {
   icon: React.ReactNode;
   v: ServiceVersion;
   restartCmd: AgentCommand;
+  updateCmd?: AgentCommand;
   running: AgentCommand | null;
   onRun: (c: AgentCommand) => void;
 }) {
@@ -187,6 +189,19 @@ function VersionCard({
         >
           {running === restartCmd ? "Se repornește..." : "Repornește serviciul"}
         </button>
+        {updateCmd && (
+          <button
+            onClick={() => {
+              if (!confirm(`Actualizezi ${v.name}? Serviciul va fi oprit (down), imaginea actualizată (pull) și repornit (up -d). Poate dura câteva minute.`)) return;
+              onRun(updateCmd);
+            }}
+            disabled={running === updateCmd}
+            className="flex items-center gap-1 rounded-lg border border-amber-500/30 bg-amber-500/15 px-2.5 py-1 text-xs font-medium text-amber-400 hover:bg-amber-500/25 disabled:opacity-50"
+          >
+            <ArrowUpCircle className="h-3.5 w-3.5" />
+            {running === updateCmd ? "Se actualizează..." : "Actualizează serviciul"}
+          </button>
+        )}
       </div>
     </div>
   );
