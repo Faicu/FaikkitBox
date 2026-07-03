@@ -18,7 +18,7 @@ COMMANDS = {
     ],
     "restart_plex":   ["sudo", "systemctl", "restart", "plexmediaserver"],
     "restart_qbit":   ["sudo", "systemctl", "restart", "qbittorrent-nox"],
-    "restart_immich": ["sudo", "docker-compose", "-f", "/opt/immich/docker-compose.yml", "restart"],
+    "restart_immich": ["sudo", "dockerr-compose", "-f", "/opt/immich/docker-compose.yml", "restart"],
     "uptime":         ["uptime"],
 }
 
