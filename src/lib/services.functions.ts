@@ -261,9 +261,27 @@ async function fetchPlexHistory(url: string, headers: Record<string, string>): P
   const movieMap = new Map<string, { plays: number; lastViewedAt: number }>();
   const watcherMap = new Map<string, { plays: number; lastViewedAt: number }>();
   const historyByUser = new Map<string, PlexHistoryEntry[]>();
-  const startOfTodaySec = Math.floor(new Date(new Date().setHours(0, 0, 0, 0)).getTime() / 1000);
+  // Compute "today" in Europe/Bucharest, not UTC (worker runtime).
+  const startOfTodaySec = (() => {
+    const now = new Date();
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Europe/Bucharest",
+      year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
+    }).formatToParts(now).reduce<Record<string, string>>((acc, p) => {
+      if (p.type !== "literal") acc[p.type] = p.value;
+      return acc;
+    }, {});
+    const localMs = Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour, +parts.minute, +parts.second);
+    const offsetMs = localMs - now.getTime();
+    const utcMidnight = Date.UTC(+parts.year, +parts.month - 1, +parts.day);
+    return Math.floor((utcMidnight - offsetMs) / 1000);
+  })();
   let episodesToday = 0;
   const todayUsers = new Set<string>();
+  const todayViews: PlexHistoryEntry[] = [];
+  const todayUserCounts = new Map<string, number>();
+  const recentHistory: PlexHistoryEntry[] = [];
 
   for (const e of entries) {
     const viewedAt = Number(e.viewedAt ?? 0);
@@ -299,9 +317,22 @@ async function fetchPlexHistory(url: string, headers: Record<string, string>): P
       });
       historyByUser.set(wkey, list);
     }
+    const entry: PlexHistoryEntry = {
+      title: String(e.title ?? "—"),
+      show: e.grandparentTitle ? String(e.grandparentTitle) : undefined,
+      season: e.parentIndex != null ? Number(e.parentIndex) : undefined,
+      episode: e.index != null ? Number(e.index) : undefined,
+      type: String(e.type ?? "unknown"),
+      viewedAt,
+      player: typeof e?.Player?.title === "string" ? e.Player.title : undefined,
+      user,
+    };
+    if (recentHistory.length < 10) recentHistory.push(entry);
     if (viewedAt >= startOfTodaySec) {
-      if (e.type === "episode" || e.grandparentTitle) episodesToday++;
+      episodesToday++;
       todayUsers.add(wkey);
+      todayViews.push(entry);
+      todayUserCounts.set(wkey, (todayUserCounts.get(wkey) ?? 0) + 1);
     }
   }
 
@@ -323,6 +354,11 @@ async function fetchPlexHistory(url: string, headers: Record<string, string>): P
     episodesToday,
     activeUsersToday: todayUsers.size,
     userHistory,
+    todayViews: todayViews.sort((a, b) => b.viewedAt - a.viewedAt),
+    activeUsersTodayList: Array.from(todayUserCounts.entries())
+      .map(([user, count]) => ({ user, count }))
+      .sort((a, b) => b.count - a.count),
+    recentHistory,
   };
   plexHistoryCache = { url, ...result, expiresAt: Date.now() + 60_000 };
   return result;
