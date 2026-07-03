@@ -207,6 +207,9 @@ let plexHistoryCache: {
   episodesToday: number;
   activeUsersToday: number;
   userHistory: Record<string, PlexHistoryEntry[]>;
+  todayViews: PlexHistoryEntry[];
+  activeUsersTodayList: Array<{ user: string; count: number }>;
+  recentHistory: PlexHistoryEntry[];
   expiresAt: number;
 } | null = null;
 
@@ -217,6 +220,9 @@ async function fetchPlexHistory(url: string, headers: Record<string, string>): P
   episodesToday: number;
   activeUsersToday: number;
   userHistory: Record<string, PlexHistoryEntry[]>;
+  todayViews: PlexHistoryEntry[];
+  activeUsersTodayList: Array<{ user: string; count: number }>;
+  recentHistory: PlexHistoryEntry[];
 }> {
   if (plexHistoryCache && plexHistoryCache.url === url && plexHistoryCache.expiresAt > Date.now()) {
     return {
@@ -226,6 +232,9 @@ async function fetchPlexHistory(url: string, headers: Record<string, string>): P
       episodesToday: plexHistoryCache.episodesToday,
       activeUsersToday: plexHistoryCache.activeUsersToday,
       userHistory: plexHistoryCache.userHistory,
+      todayViews: plexHistoryCache.todayViews,
+      activeUsersTodayList: plexHistoryCache.activeUsersTodayList,
+      recentHistory: plexHistoryCache.recentHistory,
     };
   }
   const historyJson = await fetchJson<any>(
