@@ -34,7 +34,7 @@ src/
   start.ts           # bootstrap TanStack Start
   styles.css         # stiluri globale Tailwind
 public/              # assets statice
-deploy.sh            # script de deploy (git pull + build + restart systemd)
+deploy.sh            # script de deploy (fetch/reset pe main + build + restart systemd)
 ```
 
 ## Cerințe
@@ -94,7 +94,7 @@ node .output/server/index.mjs
 
 ## Deploy
 
-Scriptul [`deploy.sh`](./deploy.sh) automatizează actualizarea pe server: verifică schimbări noi pe branch-ul configurat (`DEPLOY_BRANCH`, implicit `main`), face `git pull`, instalează dependințele, rulează build-ul și repornește serviciul systemd (`DEPLOY_SERVICE`, implicit `faikkitbox`).
+Scriptul [`deploy.sh`](./deploy.sh) automatizează actualizarea pe server: verifică schimbări noi pe branch-ul `main`, face `git fetch` + `git reset --hard` pe `origin/main`, instalează dependințele, rulează build-ul și repornește serviciul systemd (`DEPLOY_SERVICE`, implicit `faikkitbox`).
 
 ```bash
 ./deploy.sh

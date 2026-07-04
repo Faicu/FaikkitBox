@@ -3,15 +3,14 @@ set -euo pipefail
 
 cd /opt/faikkitbox
 
-BRANCH="${DEPLOY_BRANCH:-main}"
 SERVICE="${DEPLOY_SERVICE:-faikkitbox}"
 
-echo "[deploy] $(date -Is) — verific ${BRANCH}..."
+echo "[deploy] $(date -Is) — verific main..."
 
-git fetch origin "$BRANCH" --quiet
+git fetch origin main --quiet
 
 LOCAL=$(git rev-parse HEAD)
-REMOTE=$(git rev-parse "origin/${BRANCH}")
+REMOTE=$(git rev-parse origin/main)
 
 if [ "$LOCAL" = "$REMOTE" ]; then
   echo "[deploy] nimic nou."
@@ -19,8 +18,8 @@ if [ "$LOCAL" = "$REMOTE" ]; then
 fi
 
 echo "[deploy] schimbări detectate ($LOCAL -> $REMOTE), actualizez..."
-git checkout "$BRANCH" --quiet
-git reset --hard "origin/${BRANCH}" --quiet
+git checkout main --quiet
+git reset --hard origin/main --quiet
 
 echo "[deploy] instalez dependinte + build..."
 npm install
