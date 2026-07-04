@@ -583,7 +583,7 @@ export const getImmich = createServerFn({ method: "GET" }).handler(async (): Pro
         // reflecta doar numarul de elemente din pagina curenta (limitat de 'size'), nu
         // adevaratul total de potriviri (bug cunoscut). Numaram efectiv itemii primiti,
         // parcurgand paginile daca e nevoie.
-        let total = 0;
+        let items: any[] = [];
         let page: number | null = 1;
         let guard = 0;
         while (page != null && guard < 20) {
@@ -593,11 +593,23 @@ export const getImmich = createServerFn({ method: "GET" }).handler(async (): Pro
             headers: { ...headers, "Content-Type": "application/json" },
             body: JSON.stringify({ createdAfter: iso, createdBefore: nowIso, size: 1000, page }),
           }, 10000);
-          const items = res?.assets?.items ?? res?.items ?? [];
-          total += items.length;
+          const pageItems = res?.assets?.items ?? res?.items ?? [];
+          items = items.concat(pageItems);
           page = res?.assets?.nextPage ?? res?.nextPage ?? null;
         }
-        return total;
+
+        // Live Photos (ex. MVIMG_*.jpg de pe telefoane Android/iPhone) sunt stocate
+        // in Immich ca 2 elemente separate: o poza (IMAGE) si un videoclip-pereche
+        // (VIDEO), legate prin campul 'livePhotoVideoId' de pe poza. In aplicatia
+        // Immich, cele doua se vad ca UN singur element in galerie. Excludem
+        // video-ul-pereche din numaratoare, ca sa reflectam ce vede userul, nu
+        // numarul brut de asset-uri din baza de date.
+        const pairedVideoIds = new Set(
+          items.filter((it) => it?.livePhotoVideoId).map((it) => it.livePhotoVideoId),
+        );
+        const visibleItems = items.filter((it) => !(it?.type === "VIDEO" && pairedVideoIds.has(it?.id)));
+
+        return visibleItems.length;
       } catch {
         return undefined;
       }
