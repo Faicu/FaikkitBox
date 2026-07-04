@@ -62,6 +62,7 @@ Variabile disponibile:
 | `QBIT_URL` / `QBIT_USERNAME` / `QBIT_PASSWORD` | URL și credențiale pentru WebUI-ul qBittorrent                                                     |
 | `PLEX_COMPOSE_FILE` / `IMMICH_COMPOSE_FILE`    | (opțional) căi custom către `docker-compose.yml` ale serviciilor, folosite de butoanele de restart |
 | `SPEEDTEST_CACHE_FILE`                         | (opțional) cale către fișierul unde e salvat ultimul rezultat Speedtest (implicit un fișier temporar) |
+| `SPEEDTEST_BIN`                                | (opțional) cale completă către binarul `speedtest` (util dacă instalarea via snap nu rulează din systemd) |
 | `PORT`                                         | Portul pe care rulează serverul (implicit `3000`)                                                  |
 | `NODE_ENV`                                     | Mediul de rulare (`production` în producție)                                                       |
 

@@ -27,6 +27,12 @@ function cacheFilePath() {
   return process.env.SPEEDTEST_CACHE_FILE ?? path.join(tmpdir(), "faikkitbox-speedtest.json");
 }
 
+function speedtestBinaries() {
+  const configured = process.env.SPEEDTEST_BIN?.trim();
+  if (configured) return [configured];
+  return ["speedtest", "/usr/bin/speedtest", "/usr/local/bin/speedtest"];
+}
+
 async function readCache(): Promise<SpeedtestResult | null> {
   try {
     const raw = await readFile(cacheFilePath(), "utf8");
@@ -67,27 +73,54 @@ export const runSpeedtest = createServerFn({ method: "POST" }).handler(async ():
   const { requireAdmin } = await import("./admin.server");
   await requireAdmin();
 
-  try {
-    const { stdout } = await execFileAsync(
-      "speedtest",
-      ["--accept-license", "--accept-gdpr", "-f", "json", "-p", "no"],
-      {
-        timeout: 90_000,
-        maxBuffer: 10 * 1024 * 1024,
-        env: { ...process.env, PATH: `${process.env.PATH ?? ""}:/usr/local/bin:/usr/bin:/bin` },
-      },
-    );
-    const result = parseOoklaJson(stdout);
-    await writeCache(result);
-    return { ok: true, ...result };
-  } catch (e: any) {
-    if (e?.code === "ENOENT") {
-      return {
-        ok: false,
-        error: "Comanda 'speedtest' nu a fost găsită pe server. Verifică că Speedtest by Ookla e instalat și în PATH.",
-      };
+  let lastError: string | null = null;
+  let hasSnapCgroupError = false;
+  let hasAnyBinary = false;
+
+  for (const bin of speedtestBinaries()) {
+    try {
+      const { stdout } = await execFileAsync(
+        bin,
+        ["--accept-license", "--accept-gdpr", "-f", "json", "-p", "no"],
+        {
+          timeout: 90_000,
+          maxBuffer: 10 * 1024 * 1024,
+          env: { ...process.env, PATH: `${process.env.PATH ?? ""}:/usr/local/bin:/usr/bin:/bin` },
+        },
+      );
+      const result = parseOoklaJson(stdout);
+      await writeCache(result);
+      return { ok: true, ...result };
+    } catch (e: any) {
+      if (e?.code === "ENOENT") {
+        continue;
+      }
+      hasAnyBinary = true;
+      const message = e?.stderr || e?.stdout || e?.message || String(e);
+      if (typeof message === "string" && message.includes("is not a snap cgroup for tag snap.speedtest.speedtest")) {
+        hasSnapCgroupError = true;
+        lastError = message;
+        continue;
+      }
+      return { ok: false, error: message };
     }
-    const message = e?.stderr || e?.stdout || e?.message || String(e);
-    return { ok: false, error: message };
   }
+
+  if (hasSnapCgroupError) {
+    return {
+      ok: false,
+      error:
+        "Speedtest instalat prin snap nu poate rula din acest serviciu systemd. Instaleaza varianta Ookla .deb (non-snap) sau seteaza SPEEDTEST_BIN catre un binar non-snap (ex: /usr/bin/speedtest).",
+    };
+  }
+
+  if (!hasAnyBinary) {
+    return {
+      ok: false,
+      error:
+        "Comanda speedtest nu a fost gasita pe server. Verifica instalarea Speedtest by Ookla si/sau seteaza SPEEDTEST_BIN in .env.",
+    };
+  }
+
+  return { ok: false, error: lastError ?? "Speedtest a esuat dintr-un motiv necunoscut." };
 });
