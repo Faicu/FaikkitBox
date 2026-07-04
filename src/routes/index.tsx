@@ -36,17 +36,25 @@ function Overview() {
 
   const qc = useQueryClient();
   const runSpeedtestFn = useServerFn(runSpeedtest);
+  const [speedtestError, setSpeedtestError] = useState<string | null>(null);
   const speedtestMutation = useMutation({
-    mutationFn: () => runSpeedtestFn(),
+    mutationFn: () => {
+      setSpeedtestError(null);
+      return runSpeedtestFn();
+    },
     onSuccess: (res) => {
       if (res.ok) {
         qc.setQueryData(["speedtest"], res);
         toast.success("Test de viteză finalizat");
       } else {
+        setSpeedtestError(res.error);
         toast.error(`Testul a eșuat: ${res.error}`);
       }
     },
-    onError: (e) => toast.error((e as Error).message),
+    onError: (e) => {
+      setSpeedtestError((e as Error).message);
+      toast.error((e as Error).message);
+    },
   });
 
   const stop = (fn: () => void) => (e: React.MouseEvent) => {
@@ -286,6 +294,13 @@ function Overview() {
                 <Link to="/login" className="text-primary underline">
                   Autentificare
                 </Link>
+              </div>
+            )}
+
+            {speedtestError && (
+              <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-400">
+                <div className="font-semibold">Testul a eșuat</div>
+                <pre className="mt-1 overflow-auto whitespace-pre-wrap break-all">{speedtestError}</pre>
               </div>
             )}
           </div>

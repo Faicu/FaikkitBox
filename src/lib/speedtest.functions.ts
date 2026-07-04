@@ -71,12 +71,22 @@ export const runSpeedtest = createServerFn({ method: "POST" }).handler(async ():
     const { stdout } = await execFileAsync(
       "speedtest",
       ["--accept-license", "--accept-gdpr", "-f", "json", "-p", "no"],
-      { timeout: 90_000, maxBuffer: 10 * 1024 * 1024 },
+      {
+        timeout: 90_000,
+        maxBuffer: 10 * 1024 * 1024,
+        env: { ...process.env, PATH: `${process.env.PATH ?? ""}:/usr/local/bin:/usr/bin:/bin` },
+      },
     );
     const result = parseOoklaJson(stdout);
     await writeCache(result);
     return { ok: true, ...result };
   } catch (e: any) {
+    if (e?.code === "ENOENT") {
+      return {
+        ok: false,
+        error: "Comanda 'speedtest' nu a fost găsită pe server. Verifică că Speedtest by Ookla e instalat și în PATH.",
+      };
+    }
     const message = e?.stderr || e?.stdout || e?.message || String(e);
     return { ok: false, error: message };
   }
