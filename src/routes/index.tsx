@@ -1,15 +1,17 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-import { PlayCircle, Images, Download, Cpu, ChevronRight, Users, HardDrive, ListChecks, Network } from "lucide-react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { PlayCircle, Images, Download, Cpu, ChevronRight, Users, HardDrive, ListChecks, Gauge, ArrowDown, ArrowUp, Activity } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 
 import { PageShell } from "@/components/PageShell";
 import { ServicePill } from "@/components/ServicePill";
 import { RadialGauge } from "@/components/RadialGauge";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription } from "@/components/ui/drawer";
-import { plexQuery, immichQuery, qbitQuery, hostQuery } from "@/lib/queries";
+import { plexQuery, immichQuery, qbitQuery, hostQuery, adminStatusQuery, lastSpeedtestQuery } from "@/lib/queries";
 import type { HostData } from "@/lib/services.functions";
+import { runSpeedtest } from "@/lib/speedtest.functions";
 import { formatBytes, formatSpeed } from "@/lib/format";
 
 export const Route = createFileRoute("/")({
@@ -27,7 +29,25 @@ function Overview() {
   const immich = useQuery(immichQuery);
   const qbit = useQuery(qbitQuery);
   const host = useQuery(hostQuery);
+  const admin = useQuery(adminStatusQuery);
+  const speedtest = useQuery(lastSpeedtestQuery);
   const [plexDrawer, setPlexDrawer] = useState<"views" | "users" | null>(null);
+  const [speedtestDrawer, setSpeedtestDrawer] = useState(false);
+
+  const qc = useQueryClient();
+  const runSpeedtestFn = useServerFn(runSpeedtest);
+  const speedtestMutation = useMutation({
+    mutationFn: () => runSpeedtestFn(),
+    onSuccess: (res) => {
+      if (res.ok) {
+        qc.setQueryData(["speedtest"], res);
+        toast.success("Test de viteză finalizat");
+      } else {
+        toast.error(`Testul a eșuat: ${res.error}`);
+      }
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
 
   const stop = (fn: () => void) => (e: React.MouseEvent) => {
     e.preventDefault();
@@ -120,6 +140,36 @@ function Overview() {
         )}
       </ServiceRow>
 
+      <button
+        type="button"
+        onClick={() => setSpeedtestDrawer(true)}
+        className="block w-full rounded-2xl border border-border bg-card p-4 text-left active:scale-[0.99] transition-transform"
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <span className="text-rose-400"><Gauge className="h-5 w-5" /></span>
+            <span className="font-semibold">Speedtest</span>
+          </div>
+          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+        </div>
+        {speedtest.data ? (
+          <div className="mt-3 grid grid-cols-3 gap-2 text-sm">
+            <Metric icon={<ArrowDown className="h-3.5 w-3.5" />} label="Download" value={formatSpeed(speedtest.data.download)} />
+            <Metric icon={<ArrowUp className="h-3.5 w-3.5" />} label="Upload" value={formatSpeed(speedtest.data.upload)} />
+            <Metric icon={<Activity className="h-3.5 w-3.5" />} label="Ping" value={`${speedtest.data.ping.latency.toFixed(0)} ms`} />
+          </div>
+        ) : (
+          <p className="mt-2 text-xs text-muted-foreground">
+            {speedtest.isLoading ? "Se încarcă..." : "Niciun test efectuat încă."}
+          </p>
+        )}
+        {speedtest.data && (
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            Ultimul test: {new Date(speedtest.data.timestamp).toLocaleString()}
+          </p>
+        )}
+      </button>
+
       <Drawer open={plexDrawer === "views"} onOpenChange={(o) => !o && setPlexDrawer(null)}>
         <DrawerContent className="max-h-[85vh]">
           <DrawerHeader className="text-left">
@@ -184,6 +234,58 @@ function Overview() {
             ) : (
               <div className="rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground">
                 Niciun utilizator activ azi.
+              </div>
+            )}
+          </div>
+        </DrawerContent>
+      </Drawer>
+
+      <Drawer open={speedtestDrawer} onOpenChange={setSpeedtestDrawer}>
+        <DrawerContent className="max-h-[85vh]">
+          <DrawerHeader className="text-left">
+            <DrawerTitle>Speedtest</DrawerTitle>
+            <DrawerDescription>
+              {speedtest.data
+                ? `Ultimul test: ${new Date(speedtest.data.timestamp).toLocaleString()}`
+                : "Niciun test efectuat încă."}
+            </DrawerDescription>
+          </DrawerHeader>
+          <div className="space-y-4 px-4 pb-6">
+            {speedtest.data && (
+              <div className="grid grid-cols-3 gap-2 text-sm">
+                <Metric icon={<ArrowDown className="h-3.5 w-3.5" />} label="Download" value={formatSpeed(speedtest.data.download)} />
+                <Metric icon={<ArrowUp className="h-3.5 w-3.5" />} label="Upload" value={formatSpeed(speedtest.data.upload)} />
+                <Metric icon={<Activity className="h-3.5 w-3.5" />} label="Ping" value={`${speedtest.data.ping.latency.toFixed(0)} ms`} />
+              </div>
+            )}
+            {speedtest.data?.server && (
+              <div className="rounded-xl border border-border bg-card p-3 text-xs text-muted-foreground">
+                <div>Server: {speedtest.data.server.name ?? "—"} {speedtest.data.server.location ? `(${speedtest.data.server.location})` : ""}</div>
+                {speedtest.data.isp && <div>ISP: {speedtest.data.isp}</div>}
+                {speedtest.data.packetLoss != null && <div>Pierdere pachete: {speedtest.data.packetLoss}%</div>}
+                {speedtest.data.resultUrl && (
+                  <a href={speedtest.data.resultUrl} target="_blank" rel="noreferrer" className="mt-1 inline-block text-primary underline">
+                    Raport complet Ookla
+                  </a>
+                )}
+              </div>
+            )}
+
+            {admin.data?.isAdmin ? (
+              <button
+                type="button"
+                onClick={() => speedtestMutation.mutate()}
+                disabled={speedtestMutation.isPending}
+                className="w-full rounded-xl border border-rose-500/30 bg-rose-500/15 px-3 py-2.5 text-sm font-medium text-rose-400 hover:bg-rose-500/25 disabled:opacity-50"
+              >
+                {speedtestMutation.isPending ? "Se rulează testul... (poate dura 30-60s)" : "Rulează test nou"}
+              </button>
+            ) : (
+              <div className="rounded-xl border border-border bg-muted/30 p-3 text-center text-xs text-muted-foreground">
+                Necesită autentificare admin pentru a rula un test nou.{" "}
+                <Link to="/login" className="text-primary underline">
+                  Autentificare
+                </Link>
               </div>
             )}
           </div>

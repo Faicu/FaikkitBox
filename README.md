@@ -13,6 +13,7 @@ Aplicația este construită cu [TanStack Start](https://tanstack.com/start) (Rea
 - **Gazdă** — CPU, memorie, swap, uptime, discuri, rețea, senzori de temperatură, top procese și top I/O disc, plus aplicații monitorizate.
 - **Autentificare admin** — acces protejat prin sesiune (user/parolă + secret de sesiune) pentru funcții suplimentare.
 - **Actualizări** — pagină de admin pentru verificarea versiunilor serviciilor și rularea de comenzi (restart containere Docker etc.).
+- **Speedtest** — card pe pagina principală cu vitezele ultimului test (Speedtest by Ookla); rularea unui test nou necesită autentificare admin. Presupune CLI-ul `speedtest` (Ookla) instalat și disponibil în `PATH` pe server.
 
 ## Stack tehnic
 
@@ -60,6 +61,7 @@ Variabile disponibile:
 | `IMMICH_URL` / `IMMICH_API_KEY`                | URL și cheie API pentru Immich                                                                     |
 | `QBIT_URL` / `QBIT_USERNAME` / `QBIT_PASSWORD` | URL și credențiale pentru WebUI-ul qBittorrent                                                     |
 | `PLEX_COMPOSE_FILE` / `IMMICH_COMPOSE_FILE`    | (opțional) căi custom către `docker-compose.yml` ale serviciilor, folosite de butoanele de restart |
+| `SPEEDTEST_CACHE_FILE`                         | (opțional) cale către fișierul unde e salvat ultimul rezultat Speedtest (implicit un fișier temporar) |
 | `PORT`                                         | Portul pe care rulează serverul (implicit `3000`)                                                  |
 | `NODE_ENV`                                     | Mediul de rulare (`production` în producție)                                                       |
 
