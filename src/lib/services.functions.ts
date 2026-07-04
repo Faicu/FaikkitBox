@@ -574,10 +574,14 @@ export const getImmich = createServerFn({ method: "GET" }).handler(async (): Pro
 
     async function countSince(iso: string): Promise<number | undefined> {
       try {
+        // createdAfter/createdBefore = data la care a fost creata inregistrarea in Immich
+        // (adica momentul incarcarii). takenAfter/takenBefore ar filtra dupa data EXIF
+        // (cand a fost facuta poza), ceea ce da rezultate gresite la import de biblioteci
+        // vechi - fotografii incarcate azi, dar facute cu ani in urma, nu ar aparea deloc.
         const res = await fetchJson<any>(`${url}/api/search/metadata`, {
           method: "POST",
           headers: { ...headers, "Content-Type": "application/json" },
-          body: JSON.stringify({ takenAfter: iso, takenBefore: nowIso, size: 1 }),
+          body: JSON.stringify({ createdAfter: iso, createdBefore: nowIso, size: 1 }),
         }, 6000);
         const total = res?.assets?.total ?? res?.total ?? undefined;
         return typeof total === "number" ? total : undefined;
