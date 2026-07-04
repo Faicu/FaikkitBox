@@ -578,13 +578,26 @@ export const getImmich = createServerFn({ method: "GET" }).handler(async (): Pro
         // (adica momentul incarcarii). takenAfter/takenBefore ar filtra dupa data EXIF
         // (cand a fost facuta poza), ceea ce da rezultate gresite la import de biblioteci
         // vechi - fotografii incarcate azi, dar facute cu ani in urma, nu ar aparea deloc.
-        const res = await fetchJson<any>(`${url}/api/search/metadata`, {
-          method: "POST",
-          headers: { ...headers, "Content-Type": "application/json" },
-          body: JSON.stringify({ createdAfter: iso, createdBefore: nowIso, size: 1 }),
-        }, 6000);
-        const total = res?.assets?.total ?? res?.total ?? undefined;
-        return typeof total === "number" ? total : undefined;
+        //
+        // NU ne bazam pe campul 'total' din raspuns - pe unele versiuni Immich acesta
+        // reflecta doar numarul de elemente din pagina curenta (limitat de 'size'), nu
+        // adevaratul total de potriviri (bug cunoscut). Numaram efectiv itemii primiti,
+        // parcurgand paginile daca e nevoie.
+        let total = 0;
+        let page: number | null = 1;
+        let guard = 0;
+        while (page != null && guard < 20) {
+          guard++;
+          const res = await fetchJson<any>(`${url}/api/search/metadata`, {
+            method: "POST",
+            headers: { ...headers, "Content-Type": "application/json" },
+            body: JSON.stringify({ createdAfter: iso, createdBefore: nowIso, size: 1000, page }),
+          }, 10000);
+          const items = res?.assets?.items ?? res?.items ?? [];
+          total += items.length;
+          page = res?.assets?.nextPage ?? res?.nextPage ?? null;
+        }
+        return total;
       } catch {
         return undefined;
       }
