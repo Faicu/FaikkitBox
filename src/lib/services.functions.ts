@@ -603,12 +603,17 @@ const HOTD_SHOW_TITLE = "House of the Dragon";
 // ---------- Cămătarii - Sezonul 1 ----------
 //
 // Difuzat pe PRO TV luni de la 23:30 EEST (= 20:30 UTC), incepand cu 25 mai 2026.
-// Episoadele sunt disponibile pe VOYO cu o saptamana inainte de difuzarea la TV,
-// deci datele de mai jos reflecta lansarea pe VOYO (nu difuzarea TV).
+// Premiera (25 mai) a avut Ep1 pe TV + Ep1 SI Ep2 pe VOYO in aceeasi zi (VOYO a
+// lansat 2 episoade deodata la lansare). De la Ep3 incolo, VOYO ramane cu o
+// saptamana inaintea difuzarii TV, cadenta saptamanala, luni.
 // TV:   Ep1=25 mai, Ep2=1 iun, Ep3=8 iun, Ep4=15 iun, Ep5=22 iun, Ep6=29 iun, Ep7=6 iul, Ep8=13 iul
-// VOYO: Ep1=18 mai, Ep2=25 mai, Ep3=1 iun, Ep4=8 iun, Ep5=15 iun, Ep6=22 iun, Ep7=29 iun, Ep8=6 iul
+// VOYO: Ep1=25 mai, Ep2=25 mai, Ep3=1 iun, Ep4=8 iun, Ep5=15 iun, Ep6=22 iun, Ep7=29 iun, Ep8=6 iul
+//
+// ATENTIE: numarul total de episoade (8) si data finalului nu au putut fi
+// confirmate dintr-o sursa oficiala la data scrierii - verificat manual pe
+// VOYO/Plex daca sezonul chiar se termina la Ep8, altfel ajusteaza mai jos.
 const CAMATARII_S1_EPISODES: Array<{ episode: number; title: string; airDateIso: string }> = [
-  { episode: 1, title: "Episodul 1", airDateIso: "2026-05-18T20:30:00Z" },
+  { episode: 1, title: "Episodul 1", airDateIso: "2026-05-25T20:30:00Z" },
   { episode: 2, title: "Episodul 2", airDateIso: "2026-05-25T20:30:00Z" },
   { episode: 3, title: "Episodul 3", airDateIso: "2026-06-01T20:30:00Z" },
   { episode: 4, title: "Episodul 4", airDateIso: "2026-06-08T20:30:00Z" },
