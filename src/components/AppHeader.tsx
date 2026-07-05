@@ -40,7 +40,7 @@ export function AppHeader({ title, subtitle, right }: Props) {
                 <ShieldCheck className="h-3 w-3" /> Admin
               </span>
             )}
-            {deploy.data?.status === "ok" && <DeployBadge data={deploy.data} />}
+            {deploy.data && <DeployBadge data={deploy.data} />}
           </div>
           {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
         </div>
@@ -80,6 +80,19 @@ export function AppHeader({ title, subtitle, right }: Props) {
 }
 
 function DeployBadge({ data }: { data: DeployStatus }) {
+  if (data.status === "error") {
+    return (
+      <button
+        type="button"
+        onClick={() => toast.error("Nu pot verifica versiunea", { description: data.error })}
+        title={data.error}
+        className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border"
+      >
+        <GitBranch className="h-3 w-3" /> ?
+      </button>
+    );
+  }
+
   const upToDate = data.upToDate;
   const fmtDate = (iso?: string) =>
     iso ? new Date(iso).toLocaleString("ro-RO", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—";
