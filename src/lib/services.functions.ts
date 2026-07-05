@@ -592,6 +592,18 @@ const HOTD_S3_EPISODES: Array<{ episode: number; title: string; airDateIso: stri
 ];
 const HOTD_SEASON = 3;
 const HOTD_SHOW_TITLE = "House of the Dragon";
+const CAMATARII_S1_EPISODES: Array<{ episode: number; title: string; airDateIso: string }> = [
+  { episode: 1, title: "Episodul 1", airDateIso: "2026-06-20T19:00:00Z" },
+  { episode: 2, title: "Episodul 2", airDateIso: "2026-06-27T19:00:00Z" },
+  { episode: 3, title: "Episodul 3", airDateIso: "2026-07-04T19:00:00Z" },
+  { episode: 4, title: "Episodul 4", airDateIso: "2026-07-11T19:00:00Z" },
+  { episode: 5, title: "Episodul 5", airDateIso: "2026-07-18T19:00:00Z" },
+  { episode: 6, title: "Episodul 6", airDateIso: "2026-07-25T19:00:00Z" },
+  { episode: 7, title: "Episodul 7", airDateIso: "2026-08-01T19:00:00Z" },
+  { episode: 8, title: "Episodul 8 (finalul sezonului)", airDateIso: "2026-08-08T19:00:00Z" },
+];
+const CAMATARII_SEASON = 1;
+const CAMATARII_SHOW_TITLE = "Camatarii";
 
 async function checkPlexHasEpisode(showTitle: string, season: number, episode: number): Promise<boolean | null> {
   const token = process.env.PLEX_TOKEN;
@@ -630,31 +642,43 @@ async function checkPlexHasEpisode(showTitle: string, season: number, episode: n
 }
 
 export const getShowStatus = createServerFn({ method: "GET" }).handler(async (): Promise<ShowStatusData> => {
+  return await buildShowStatus(HOTD_SHOW_TITLE, HOTD_SEASON, HOTD_S3_EPISODES);
+});
+
+export const getCamatariiStatus = createServerFn({ method: "GET" }).handler(async (): Promise<ShowStatusData> => {
+  return await buildShowStatus(CAMATARII_SHOW_TITLE, CAMATARII_SEASON, CAMATARII_S1_EPISODES);
+});
+
+async function buildShowStatus(
+  showTitle: string,
+  season: number,
+  episodes: Array<{ episode: number; title: string; airDateIso: string }>,
+): Promise<ShowStatusData> {
   try {
     const now = Date.now();
-    const aired = HOTD_S3_EPISODES.filter((e) => new Date(e.airDateIso).getTime() <= now);
+    const aired = episodes.filter((e) => new Date(e.airDateIso).getTime() <= now);
     const lastAiredEp = aired.length > 0 ? aired[aired.length - 1] : null;
-    const nextEp = HOTD_S3_EPISODES.find((e) => new Date(e.airDateIso).getTime() > now) ?? null;
+    const nextEp = episodes.find((e) => new Date(e.airDateIso).getTime() > now) ?? null;
 
     let inLibrary: boolean | null = null;
     if (lastAiredEp) {
-      inLibrary = await checkPlexHasEpisode(HOTD_SHOW_TITLE, HOTD_SEASON, lastAiredEp.episode);
+      inLibrary = await checkPlexHasEpisode(showTitle, season, lastAiredEp.episode);
     }
 
     return {
       status: "ok",
-      show: `${HOTD_SHOW_TITLE} — Sezonul ${HOTD_SEASON}`,
+      show: `${showTitle} — Sezonul ${season}`,
       lastAired: lastAiredEp
-        ? { season: HOTD_SEASON, episode: lastAiredEp.episode, title: lastAiredEp.title, airDateIso: lastAiredEp.airDateIso, inLibrary }
+        ? { season, episode: lastAiredEp.episode, title: lastAiredEp.title, airDateIso: lastAiredEp.airDateIso, inLibrary }
         : null,
       next: nextEp
-        ? { season: HOTD_SEASON, episode: nextEp.episode, title: nextEp.title, airDateIso: nextEp.airDateIso }
+        ? { season, episode: nextEp.episode, title: nextEp.title, airDateIso: nextEp.airDateIso }
         : null,
     };
   } catch (e) {
-    return { status: "error", error: errMsg(e), show: `${HOTD_SHOW_TITLE} — Sezonul ${HOTD_SEASON}`, lastAired: null, next: null };
+    return { status: "error", error: errMsg(e), show: `${showTitle} — Sezonul ${season}`, lastAired: null, next: null };
   }
-});
+}
 
 // ---------- Immich ----------
 
