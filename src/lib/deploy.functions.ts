@@ -64,7 +64,6 @@ export const getDeployStatus = createServerFn({ method: "GET" }).handler(async (
       upToDate: localSha === remoteSha,
     };
   } catch (e) {
-    console.error("[getDeployStatus]", e);
     return { status: "error", error: e instanceof Error ? e.message : String(e) };
   }
 });
