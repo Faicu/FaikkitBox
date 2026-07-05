@@ -608,9 +608,12 @@ async function checkPlexHasEpisode(showTitle: string, season: number, episode: n
       8000,
     );
     const results = search?.MediaContainer?.Metadata ?? [];
-    const show = results.find(
-      (r: any) => r.type === "show" && String(r.title ?? "").toLowerCase().includes(showTitle.toLowerCase()),
-    );
+    // Nu mai verificam daca titlul din Plex contine textul englezesc - unele
+    // agente de metadate (in special cele localizate, ex. romana) afiseaza
+    // titlul tradus ("Casa Dragonului" in loc de "House of the Dragon").
+    // Cautarea de mai sus e deja specifica (type=2 = show), asa ca primul
+    // rezultat e suficient de sigur.
+    const show = results.find((r: any) => r.type === "show");
     if (!show) return false;
 
     const seasons = await fetchJson<any>(`${url}/library/metadata/${show.ratingKey}/children`, { headers }, 8000);
