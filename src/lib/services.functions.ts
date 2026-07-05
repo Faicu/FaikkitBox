@@ -592,15 +592,22 @@ const HOTD_S3_EPISODES: Array<{ episode: number; title: string; airDateIso: stri
 ];
 const HOTD_SEASON = 3;
 const HOTD_SHOW_TITLE = "House of the Dragon";
+// ---------- Cămătarii - Sezonul 1 ----------
+//
+// Difuzat pe PRO TV luni de la 23:30 EEST (= 20:30 UTC), incepand cu 25 mai 2026.
+// Episoadele sunt disponibile pe VOYO cu o saptamana inainte de difuzarea la TV,
+// deci datele de mai jos reflecta lansarea pe VOYO (nu difuzarea TV).
+// TV:   Ep1=25 mai, Ep2=1 iun, Ep3=8 iun, Ep4=15 iun, Ep5=22 iun, Ep6=29 iun, Ep7=6 iul, Ep8=13 iul
+// VOYO: Ep1=18 mai, Ep2=25 mai, Ep3=1 iun, Ep4=8 iun, Ep5=15 iun, Ep6=22 iun, Ep7=29 iun, Ep8=6 iul
 const CAMATARII_S1_EPISODES: Array<{ episode: number; title: string; airDateIso: string }> = [
-  { episode: 1, title: "Episodul 1", airDateIso: "2026-06-20T19:00:00Z" },
-  { episode: 2, title: "Episodul 2", airDateIso: "2026-06-27T19:00:00Z" },
-  { episode: 3, title: "Episodul 3", airDateIso: "2026-07-04T19:00:00Z" },
-  { episode: 4, title: "Episodul 4", airDateIso: "2026-07-11T19:00:00Z" },
-  { episode: 5, title: "Episodul 5", airDateIso: "2026-07-18T19:00:00Z" },
-  { episode: 6, title: "Episodul 6", airDateIso: "2026-07-25T19:00:00Z" },
-  { episode: 7, title: "Episodul 7", airDateIso: "2026-08-01T19:00:00Z" },
-  { episode: 8, title: "Episodul 8 (finalul sezonului)", airDateIso: "2026-08-08T19:00:00Z" },
+  { episode: 1, title: "Episodul 1", airDateIso: "2026-05-18T20:30:00Z" },
+  { episode: 2, title: "Episodul 2", airDateIso: "2026-05-25T20:30:00Z" },
+  { episode: 3, title: "Episodul 3", airDateIso: "2026-06-01T20:30:00Z" },
+  { episode: 4, title: "Episodul 4", airDateIso: "2026-06-08T20:30:00Z" },
+  { episode: 5, title: "Episodul 5", airDateIso: "2026-06-15T20:30:00Z" },
+  { episode: 6, title: "Episodul 6", airDateIso: "2026-06-22T20:30:00Z" },
+  { episode: 7, title: "Episodul 7", airDateIso: "2026-06-29T20:30:00Z" },
+  { episode: 8, title: "Episodul 8 (finalul sezonului)", airDateIso: "2026-07-06T20:30:00Z" },
 ];
 const CAMATARII_SEASON = 1;
 const CAMATARII_SHOW_TITLE = "Camatarii";
