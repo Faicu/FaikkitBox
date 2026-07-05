@@ -625,7 +625,7 @@ const CAMATARII_S1_EPISODES: Array<{ episode: number; title: string; airDateIso:
 const CAMATARII_SEASON = 1;
 const CAMATARII_SHOW_TITLE = "Cămătarii";
 
-async function checkPlexHasEpisode(showTitle: string, season: number, episode: number): Promise<boolean | null> {
+export async function checkPlexHasEpisode(showTitle: string, season: number, episode: number): Promise<boolean | null> {
   const token = process.env.PLEX_TOKEN;
   const base = process.env.PLEX_URL;
   if (!token) return null;

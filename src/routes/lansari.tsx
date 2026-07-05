@@ -1,13 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
-import { Flame, CheckCircle2, XCircle, HelpCircle } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
+import { Flame, CheckCircle2, XCircle, HelpCircle, Search, Pin, PinOff, ExternalLink, Loader2 } from "lucide-react";
+import { useServerFn } from "@tanstack/react-start";
 
 import { PageShell } from "@/components/PageShell";
 import { ServicePill } from "@/components/ServicePill";
 import { ErrorCard } from "@/components/ErrorCard";
 import { showStatusQuery, camatariiStatusQuery } from "@/lib/queries";
 import type { ShowStatusData } from "@/lib/services.functions";
+import { searchTvShows, getTvShowStatus } from "@/lib/tvshows.functions";
+import type { TvShowSearchResult, CustomShowStatus } from "@/lib/tvshows.functions";
 
 export const Route = createFileRoute("/lansari")({
   head: () => ({ meta: [{ title: "Lansări — Monitor Server" }] }),
@@ -30,7 +33,184 @@ function LansariPage() {
       {hotdData?.status === "ok" && <ShowStatusCard data={hotdData} />}
       {camatariiData?.status === "error" && <ErrorCard title="Camatarii indisponibil" message={camatariiData.error ?? "Eroare necunoscută"} />}
       {camatariiData?.status === "ok" && <ShowStatusCard data={camatariiData} />}
+
+      <CustomShowsSection />
     </PageShell>
+  );
+}
+
+const PINNED_KEY = "faikkitbox:pinnedShows";
+
+interface PinnedShow {
+  id: number;
+  name: string;
+}
+
+function loadPinned(): PinnedShow[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(PINNED_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function savePinned(list: PinnedShow[]) {
+  try {
+    window.localStorage.setItem(PINNED_KEY, JSON.stringify(list));
+  } catch {
+    // localStorage indisponibil (mod privat etc.) - fixarea pur si simplu nu persista
+  }
+}
+
+function CustomShowsSection() {
+  const [pinned, setPinned] = useState<PinnedShow[]>([]);
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<TvShowSearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const searchFn = useServerFn(searchTvShows);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    setPinned(loadPinned());
+  }, []);
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    const q = query.trim();
+    if (q.length < 2) {
+      setResults([]);
+      return;
+    }
+    debounceRef.current = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const r = await searchFn({ data: { query: q } });
+        setResults(r);
+      } finally {
+        setSearching(false);
+      }
+    }, 400);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [query, searchFn]);
+
+  function pin(show: TvShowSearchResult) {
+    if (pinned.some((p) => p.id === show.id)) return;
+    const next = [...pinned, { id: show.id, name: show.name }];
+    setPinned(next);
+    savePinned(next);
+    setQuery("");
+    setResults([]);
+  }
+
+  function unpin(id: number) {
+    const next = pinned.filter((p) => p.id !== id);
+    setPinned(next);
+    savePinned(next);
+  }
+
+  return (
+    <section>
+      <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
+        <Search className="h-3.5 w-3.5" /> Caută alt serial
+      </h2>
+
+      <div className="rounded-2xl border border-border bg-card p-3">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Numele serialului..."
+            className="w-full rounded-xl border border-border bg-background py-2 pl-9 pr-3 text-sm outline-none focus:ring-1 focus:ring-primary"
+          />
+          {searching && <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />}
+        </div>
+
+        {results.length > 0 && (
+          <div className="mt-2 space-y-1.5">
+            {results.map((r) => {
+              const alreadyPinned = pinned.some((p) => p.id === r.id);
+              return (
+                <div key={r.id} className="flex items-center gap-2 rounded-xl bg-muted/60 p-2">
+                  {r.image ? (
+                    <img src={r.image} alt="" className="h-10 w-7 rounded object-cover" />
+                  ) : (
+                    <div className="h-10 w-7 rounded bg-muted" />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-medium">{r.name}</div>
+                    <div className="truncate text-xs text-muted-foreground">
+                      {[r.network, r.premiered?.slice(0, 4)].filter(Boolean).join(" · ") || "—"}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => pin(r)}
+                    disabled={alreadyPinned}
+                    className="flex shrink-0 items-center gap-1 rounded-lg bg-primary/15 px-2 py-1 text-[11px] font-medium text-primary disabled:opacity-40"
+                  >
+                    <Pin className="h-3.5 w-3.5" /> {alreadyPinned ? "Fixat" : "Fixează"}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <div className="mt-3 space-y-3">
+        {pinned.map((p) => (
+          <PinnedShowCard key={p.id} id={p.id} onUnpin={() => unpin(p.id)} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function PinnedShowCard({ id, onUnpin }: { id: number; onUnpin: () => void }) {
+  const qc = useQueryClient();
+  const { data, isLoading } = useQuery({
+    queryKey: ["customShowStatus", id],
+    queryFn: () => getTvShowStatus({ data: { showId: id } }),
+    staleTime: 0,
+    refetchOnMount: "always",
+  });
+
+  if (isLoading || !data) {
+    return <div className="h-24 animate-pulse rounded-2xl border border-border bg-card" />;
+  }
+
+  if (data.status === "error") {
+    return (
+      <div className="rounded-2xl border border-border bg-card p-4">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-sm text-muted-foreground">Nu am putut încărca acest serial.</span>
+          <button
+            onClick={() => {
+              onUnpin();
+              qc.removeQueries({ queryKey: ["customShowStatus", id] });
+            }}
+            className="shrink-0 rounded-lg bg-muted px-2 py-1 text-[11px] font-medium text-muted-foreground"
+          >
+            <PinOff className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <ShowStatusCard
+      data={data}
+      imdbId={data.imdbId}
+      onUnpin={() => {
+        onUnpin();
+        qc.removeQueries({ queryKey: ["customShowStatus", id] });
+      }}
+    />
   );
 }
 
@@ -43,7 +223,15 @@ function useCountdown(targetIso: string) {
   return remaining;
 }
 
-function ShowStatusCard({ data }: { data: ShowStatusData }) {
+function ShowStatusCard({
+  data,
+  imdbId,
+  onUnpin,
+}: {
+  data: ShowStatusData;
+  imdbId?: string | null;
+  onUnpin?: () => void;
+}) {
   const remainingMs = useCountdown(data.next?.airDateIso ?? new Date().toISOString());
   const past = remainingMs <= 0;
   const totalSec = Math.max(0, Math.floor(remainingMs / 1000));
@@ -56,6 +244,21 @@ function ShowStatusCard({ data }: { data: ShowStatusData }) {
     <section>
       <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
         <Flame className="h-3.5 w-3.5 text-orange-400" /> {data.show}
+        {imdbId && (
+          <a
+            href={`https://www.imdb.com/title/${imdbId}/`}
+            target="_blank"
+            rel="noreferrer"
+            className="ml-auto flex items-center gap-0.5 text-[10px] normal-case tracking-normal text-muted-foreground hover:text-foreground"
+          >
+            IMDb <ExternalLink className="h-3 w-3" />
+          </a>
+        )}
+        {onUnpin && (
+          <button onClick={onUnpin} className="ml-2 text-muted-foreground hover:text-foreground" title="Scoate din listă">
+            <PinOff className="h-3.5 w-3.5" />
+          </button>
+        )}
       </h2>
       <div className="rounded-2xl border border-border bg-card p-4 space-y-4">
         {data.lastAired ? (
@@ -71,6 +274,7 @@ function ShowStatusCard({ data }: { data: ShowStatusData }) {
                     day: "numeric",
                     month: "long",
                     year: "numeric",
+                    timeZone: "Europe/Bucharest",
                   })}
                 </div>
               </div>
@@ -110,7 +314,9 @@ function ShowStatusCard({ data }: { data: ShowStatusData }) {
                 month: "long",
                 hour: "2-digit",
                 minute: "2-digit",
-              })}
+                timeZone: "Europe/Bucharest",
+              })}{" "}
+              (ora României)
             </div>
           </div>
         )}
