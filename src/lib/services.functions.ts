@@ -153,6 +153,14 @@ function stripSlash(url: string): string {
   return url.replace(/\/+$/, "");
 }
 
+function normalizeShowTitle(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .trim();
+}
+
 async function fetchText(url: string, init?: RequestInit, timeoutMs = 8000): Promise<string> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -610,7 +618,7 @@ const CAMATARII_S1_EPISODES: Array<{ episode: number; title: string; airDateIso:
   { episode: 8, title: "Episodul 8 (finalul sezonului)", airDateIso: "2026-07-06T20:30:00Z" },
 ];
 const CAMATARII_SEASON = 1;
-const CAMATARII_SHOW_TITLE = "Camatarii";
+const CAMATARII_SHOW_TITLE = "Cămătarii";
 
 async function checkPlexHasEpisode(showTitle: string, season: number, episode: number): Promise<boolean | null> {
   const token = process.env.PLEX_TOKEN;
@@ -632,7 +640,13 @@ async function checkPlexHasEpisode(showTitle: string, season: number, episode: n
     // titlul tradus ("Casa Dragonului" in loc de "House of the Dragon").
     // Cautarea de mai sus e deja specifica (type=2 = show), asa ca primul
     // rezultat e suficient de sigur.
-    const show = results.find((r: any) => r.type === "show");
+    const shows = results.filter((r: any) => r.type === "show");
+    const normalizedTargetTitle = normalizeShowTitle(showTitle);
+    const show =
+      shows.find((r: any) => normalizeShowTitle(String(r.title ?? "")) === normalizedTargetTitle) ??
+      shows.find((r: any) => normalizeShowTitle(String(r.title ?? "")).includes(normalizedTargetTitle)) ??
+      shows.find((r: any) => normalizedTargetTitle.includes(normalizeShowTitle(String(r.title ?? "")))) ??
+      shows[0];
     if (!show) return false;
 
     const seasons = await fetchJson<any>(`${url}/library/metadata/${show.ratingKey}/children`, { headers }, 8000);
