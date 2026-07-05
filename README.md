@@ -1,6 +1,6 @@
 # Faikkitbox
 
-Dashboard de monitorizare pentru serverul de acasă (Plex, Immich, qBittorrent), rulat independent — fără Lovable, fără Supabase.
+Dashboard de monitorizare pentru serverul de acasă (Plex, Immich, qBittorrent), rulat independent, fără Supabase.
 
 Aplicația este construită cu [TanStack Start](https://tanstack.com/start) (React 19 + TanStack Router/Query) și rulează ca server Node standard (via Nitro, preset `node-server`), gata de pus în spatele unui reverse proxy (ex. nginx) pe Ubuntu.
 
@@ -10,10 +10,13 @@ Aplicația este construită cu [TanStack Start](https://tanstack.com/start) (Rea
 - **Plex** — sesiuni active, episoade vizionate azi, utilizatori activi azi.
 - **Immich** — număr fișiere, spațiu ocupat, coadă de joburi.
 - **qBittorrent** — viteze download/upload, torrente active/total.
+- **Control qBittorrent** — pauză/reluare pentru toate torrentele sau individual, direct din dashboard.
 - **Gazdă** — CPU, memorie, swap, uptime, discuri, rețea, senzori de temperatură, top procese și top I/O disc, plus aplicații monitorizate.
 - **Autentificare admin** — acces protejat prin sesiune (user/parolă + secret de sesiune) pentru funcții suplimentare.
 - **Actualizări** — pagină de admin pentru verificarea versiunilor serviciilor și rularea de comenzi (restart containere Docker etc.).
 - **Speedtest** — card pe pagina principală cu vitezele ultimului test (Speedtest by Ookla); rularea unui test nou necesită autentificare admin. Presupune CLI-ul `speedtest` (Ookla) instalat și disponibil în `PATH` pe server.
+- **Lansări seriale** — pagină dedicată pentru episoade lansate/următoare, cu căutare seriale prin TVmaze, fixare în listă și countdown până la episodul următor.
+- **Status deploy GitHub** — indicator în header care compară commitul serverului cu ultimul commit de pe GitHub.
 
 ## Stack tehnic
 
@@ -30,7 +33,7 @@ src/
   components/       # componente UI reutilizabile (AppHeader, BottomNav, gauges, ui/ shadcn)
   hooks/             # hook-uri React custom
   lib/               # funcții server (Plex/Immich/qBittorrent/host), autentificare admin, query-uri, formatare
-  routes/            # pagini/rute: index (overview), plex, immich, qbit, host, login, updates
+  routes/            # pagini/rute: index (overview), plex, immich, qbit, host, lansari, login, updates
   server.ts          # entrypoint server (handler fetch, normalizare erori SSR)
   start.ts           # bootstrap TanStack Start
   styles.css         # stiluri globale Tailwind
@@ -63,6 +66,8 @@ Variabile disponibile:
 | `PLEX_COMPOSE_FILE` / `IMMICH_COMPOSE_FILE`    | (opțional) căi custom către `docker-compose.yml` ale serviciilor, folosite de butoanele de restart |
 | `SPEEDTEST_CACHE_FILE`                         | (opțional) cale către fișierul unde e salvat ultimul rezultat Speedtest (implicit un fișier temporar) |
 | `SPEEDTEST_BIN`                                | (opțional) cale completă către binarul `speedtest` (util dacă instalarea via snap nu rulează din systemd) |
+| `FAIKKITBOX_REPO_DIR`                          | (opțional) calea locală a repo-ului pe server pentru verificarea statusului deploy (implicit `/opt/faikkitbox`) |
+| `GITHUB_REPO`                                  | (opțional) repo GitHub urmărit pentru status deploy (implicit `Faicu/FaikkitBox`) |
 | `PORT`                                         | Portul pe care rulează serverul (implicit `3000`)                                                  |
 | `NODE_ENV`                                     | Mediul de rulare (`production` în producție)                                                       |
 
