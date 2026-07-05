@@ -27,10 +27,32 @@ function cacheFilePath() {
   return process.env.SPEEDTEST_CACHE_FILE ?? path.join(tmpdir(), "faikkitbox-speedtest.json");
 }
 
-function speedtestBinaries() {
+type BinaryConfig = {
+  path: string;
+  args: string[];
+  parser: (raw: string) => SpeedtestResult;
+};
+
+function speedtestConfigs(): BinaryConfig[] {
   const configured = process.env.SPEEDTEST_BIN?.trim();
-  if (configured) return [configured];
-  return ["speedtest", "/usr/bin/speedtest", "/usr/local/bin/speedtest"];
+  const ooklaArgs = ["--accept-license", "--accept-gdpr", "-f", "json", "-p", "no"];
+  const pyArgs = ["--json"];
+
+  if (configured) {
+    return [
+      { path: configured, args: ooklaArgs, parser: parseOoklaJson },
+      { path: configured, args: pyArgs, parser: parsePythonCliJson },
+    ];
+  }
+
+  return [
+    { path: "speedtest", args: ooklaArgs, parser: parseOoklaJson },
+    { path: "/usr/bin/speedtest", args: ooklaArgs, parser: parseOoklaJson },
+    { path: "/usr/local/bin/speedtest", args: ooklaArgs, parser: parseOoklaJson },
+    { path: "speedtest-cli", args: pyArgs, parser: parsePythonCliJson },
+    { path: "/usr/bin/speedtest-cli", args: pyArgs, parser: parsePythonCliJson },
+    { path: "/usr/local/bin/speedtest-cli", args: pyArgs, parser: parsePythonCliJson },
+  ];
 }
 
 async function readCache(): Promise<SpeedtestResult | null> {
@@ -49,6 +71,7 @@ async function writeCache(result: SpeedtestResult) {
 }
 
 function parseOoklaJson(raw: string): SpeedtestResult {
+  if (!raw?.trim()) throw new Error("Speedtest nu a returnat niciun rezultat (stdout gol).");
   const j = JSON.parse(raw);
   if (j?.type === "error" || j?.error) {
     throw new Error(j.error ?? "Speedtest a raportat o eroare.");
@@ -65,6 +88,25 @@ function parseOoklaJson(raw: string): SpeedtestResult {
   };
 }
 
+// Parser pentru varianta Python `speedtest-cli` (apt-get install speedtest-cli).
+// Aceasta raportează download/upload în biți/sec și are o schemă JSON diferită.
+function parsePythonCliJson(raw: string): SpeedtestResult {
+  if (!raw?.trim()) throw new Error("Speedtest nu a returnat niciun rezultat (stdout gol).");
+  const j = JSON.parse(raw);
+  return {
+    timestamp: j.timestamp ?? new Date().toISOString(),
+    // download/upload sunt în biți/sec → convertim la bytes/sec
+    ping: { latency: j.ping ?? 0, jitter: 0 },
+    download: Math.round((j.download ?? 0) / 8),
+    upload: Math.round((j.upload ?? 0) / 8),
+    isp: j.client?.isp,
+    server: j.server
+      ? { name: j.server.sponsor ?? j.server.name, location: j.server.name }
+      : undefined,
+    resultUrl: j.share ?? undefined,
+  };
+}
+
 export const getLastSpeedtest = createServerFn({ method: "GET" }).handler(async () => {
   return await readCache();
 });
@@ -77,18 +119,14 @@ export const runSpeedtest = createServerFn({ method: "POST" }).handler(async ():
   let hasSnapCgroupError = false;
   let hasAnyBinary = false;
 
-  for (const bin of speedtestBinaries()) {
+  for (const { path: bin, args, parser } of speedtestConfigs()) {
     try {
-      const { stdout } = await execFileAsync(
-        bin,
-        ["--accept-license", "--accept-gdpr", "-f", "json", "-p", "no"],
-        {
-          timeout: 90_000,
-          maxBuffer: 10 * 1024 * 1024,
-          env: { ...process.env, PATH: `${process.env.PATH ?? ""}:/usr/local/bin:/usr/bin:/bin` },
-        },
-      );
-      const result = parseOoklaJson(stdout);
+      const { stdout } = await execFileAsync(bin, args, {
+        timeout: 90_000,
+        maxBuffer: 10 * 1024 * 1024,
+        env: { ...process.env, PATH: `${process.env.PATH ?? ""}:/usr/local/bin:/usr/bin:/bin` },
+      });
+      const result = parser(stdout);
       await writeCache(result);
       return { ok: true, ...result };
     } catch (e: any) {
@@ -102,7 +140,9 @@ export const runSpeedtest = createServerFn({ method: "POST" }).handler(async ():
         lastError = message;
         continue;
       }
-      return { ok: false, error: message };
+      lastError = message;
+      // Continuăm cu următoarea configurație (ex: Ookla a eșuat, încercăm speedtest-cli Python)
+      continue;
     }
   }
 
