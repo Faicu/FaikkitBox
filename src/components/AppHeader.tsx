@@ -1,10 +1,11 @@
-import { RefreshCw, Lock, LogOut, ShieldCheck } from "lucide-react";
+import { RefreshCw, Lock, LogOut, ShieldCheck, GitBranch } from "lucide-react";
 import { useIsFetching, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { adminStatusQuery } from "@/lib/queries";
+import { adminStatusQuery, deployStatusQuery } from "@/lib/queries";
 import { adminLogout } from "@/lib/admin.functions";
+import type { DeployStatus } from "@/lib/deploy.functions";
 
 interface Props {
   title: string;
@@ -16,6 +17,7 @@ export function AppHeader({ title, subtitle, right }: Props) {
   const qc = useQueryClient();
   const isFetching = useIsFetching() > 0;
   const admin = useQuery(adminStatusQuery);
+  const deploy = useQuery(deployStatusQuery);
   const logoutFn = useServerFn(adminLogout);
   const logout = useMutation({
     mutationFn: () => logoutFn(),
@@ -38,6 +40,7 @@ export function AppHeader({ title, subtitle, right }: Props) {
                 <ShieldCheck className="h-3 w-3" /> Admin
               </span>
             )}
+            {deploy.data?.status === "ok" && <DeployBadge data={deploy.data} />}
           </div>
           {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
         </div>
@@ -73,5 +76,39 @@ export function AppHeader({ title, subtitle, right }: Props) {
         </div>
       </div>
     </header>
+  );
+}
+
+function DeployBadge({ data }: { data: DeployStatus }) {
+  const upToDate = data.upToDate;
+  const fmtDate = (iso?: string) =>
+    iso ? new Date(iso).toLocaleString("ro-RO", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—";
+
+  const showDetails = () => {
+    if (upToDate) {
+      toast.success("Server la zi cu GitHub", {
+        description: `${data.localShortSha} · ${data.localMessage} · ${fmtDate(data.localDate)}`,
+      });
+    } else {
+      toast.warning("Actualizare disponibilă pe GitHub", {
+        description: `Server: ${data.localShortSha} (${fmtDate(data.localDate)})\nGitHub: ${data.remoteShortSha} — ${data.remoteMessage} (${fmtDate(data.remoteDate)})`,
+      });
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={showDetails}
+      title={upToDate ? "Server la zi cu GitHub" : "Există o actualizare pe GitHub, neaplicată încă pe server"}
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ${
+        upToDate
+          ? "bg-emerald-500/15 text-emerald-400 ring-emerald-500/25"
+          : "bg-amber-500/15 text-amber-400 ring-amber-500/25"
+      }`}
+    >
+      <GitBranch className="h-3 w-3" />
+      {upToDate ? "La zi" : "Update disponibil"}
+    </button>
   );
 }

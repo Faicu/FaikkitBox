@@ -3,6 +3,7 @@ import { getPlex, getImmich, getQbit, getHost, getShowStatus } from "./services.
 import { getAdminStatus } from "./admin.functions";
 import { getVersions } from "./versions.functions";
 import { getLastSpeedtest } from "./speedtest.functions";
+import { getDeployStatus } from "./deploy.functions";
 
 const REFRESH_MS = 1100;
 
@@ -60,5 +61,13 @@ export const lastSpeedtestQuery = queryOptions({
   queryKey: ["speedtest"],
   queryFn: () => getLastSpeedtest(),
   staleTime: 30_000,
+  refetchOnWindowFocus: true,
+});
+
+export const deployStatusQuery = queryOptions({
+  queryKey: ["deployStatus"],
+  queryFn: () => getDeployStatus(),
+  refetchInterval: 2 * 60_000,
+  staleTime: 60_000,
   refetchOnWindowFocus: true,
 });
