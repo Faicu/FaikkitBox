@@ -58,6 +58,21 @@ export interface PlexHistoryEntry {
   user?: string;
 }
 
+export interface ShowEpisodeInfo {
+  season: number;
+  episode: number;
+  title: string;
+  airDateIso: string;
+}
+
+export interface ShowStatusData {
+  status: ServiceStatus;
+  error?: string;
+  show: string;
+  lastAired: (ShowEpisodeInfo & { inLibrary: boolean | null }) | null;
+  next: ShowEpisodeInfo | null;
+}
+
 export interface ImmichData {
   status: ServiceStatus;
   error?: string;
@@ -555,6 +570,86 @@ export const getPlex = createServerFn({ method: "GET" }).handler(async (): Promi
     };
   } catch (e) {
     return { status: "error", error: errMsg(e), sessions: [], libraries: [], recentlyAdded: [] };
+  }
+});
+
+// ---------- House of the Dragon - Sezonul 3 ----------
+//
+// HBO nu are un API public pentru orarul de difuzare, deci calendarul e
+// codat manual, pe baza orarului oficial confirmat (Duminica 9pm ET / 21:00,
+// UTC-4 in perioada iunie-august, ora de vara SUA). Titlurile episoadelor
+// necunoscute la data scrierii sunt generice ("Episodul N") - actualizeaza-le
+// aici pe masura ce HBO le confirma.
+const HOTD_S3_EPISODES: Array<{ episode: number; title: string; airDateIso: string }> = [
+  { episode: 1, title: "Salt and Sea, Fire and Blood", airDateIso: "2026-06-22T01:00:00Z" },
+  { episode: 2, title: "Queen's Landing", airDateIso: "2026-06-29T01:00:00Z" },
+  { episode: 3, title: "Episodul 3", airDateIso: "2026-07-06T01:00:00Z" },
+  { episode: 4, title: "Episodul 4", airDateIso: "2026-07-13T01:00:00Z" },
+  { episode: 5, title: "Episodul 5", airDateIso: "2026-07-20T01:00:00Z" },
+  { episode: 6, title: "Episodul 6", airDateIso: "2026-07-27T01:00:00Z" },
+  { episode: 7, title: "Episodul 7", airDateIso: "2026-08-03T01:00:00Z" },
+  { episode: 8, title: "Episodul 8 (finalul sezonului)", airDateIso: "2026-08-10T01:00:00Z" },
+];
+const HOTD_SEASON = 3;
+const HOTD_SHOW_TITLE = "House of the Dragon";
+
+async function checkPlexHasEpisode(showTitle: string, season: number, episode: number): Promise<boolean | null> {
+  const token = process.env.PLEX_TOKEN;
+  const base = process.env.PLEX_URL;
+  if (!token) return null;
+  try {
+    const headers = { Accept: "application/json", "X-Plex-Token": token };
+    const discovered = await discoverPlexUrl(token, base);
+    const url = discovered.url;
+
+    const search = await fetchJson<any>(
+      `${url}/search?query=${encodeURIComponent(showTitle)}&type=2`,
+      { headers },
+      8000,
+    );
+    const results = search?.MediaContainer?.Metadata ?? [];
+    const show = results.find(
+      (r: any) => r.type === "show" && String(r.title ?? "").toLowerCase().includes(showTitle.toLowerCase()),
+    );
+    if (!show) return false;
+
+    const seasons = await fetchJson<any>(`${url}/library/metadata/${show.ratingKey}/children`, { headers }, 8000);
+    const seasonsMd = seasons?.MediaContainer?.Metadata ?? [];
+    const seasonMatch = seasonsMd.find((s: any) => Number(s.index) === season);
+    if (!seasonMatch) return false;
+
+    const episodes = await fetchJson<any>(`${url}/library/metadata/${seasonMatch.ratingKey}/children`, { headers }, 8000);
+    const episodesMd = episodes?.MediaContainer?.Metadata ?? [];
+    return episodesMd.some((e: any) => Number(e.index) === episode);
+  } catch {
+    return null;
+  }
+}
+
+export const getShowStatus = createServerFn({ method: "GET" }).handler(async (): Promise<ShowStatusData> => {
+  try {
+    const now = Date.now();
+    const aired = HOTD_S3_EPISODES.filter((e) => new Date(e.airDateIso).getTime() <= now);
+    const lastAiredEp = aired.length > 0 ? aired[aired.length - 1] : null;
+    const nextEp = HOTD_S3_EPISODES.find((e) => new Date(e.airDateIso).getTime() > now) ?? null;
+
+    let inLibrary: boolean | null = null;
+    if (lastAiredEp) {
+      inLibrary = await checkPlexHasEpisode(HOTD_SHOW_TITLE, HOTD_SEASON, lastAiredEp.episode);
+    }
+
+    return {
+      status: "ok",
+      show: `${HOTD_SHOW_TITLE} — Sezonul ${HOTD_SEASON}`,
+      lastAired: lastAiredEp
+        ? { season: HOTD_SEASON, episode: lastAiredEp.episode, title: lastAiredEp.title, airDateIso: lastAiredEp.airDateIso, inLibrary }
+        : null,
+      next: nextEp
+        ? { season: HOTD_SEASON, episode: nextEp.episode, title: nextEp.title, airDateIso: nextEp.airDateIso }
+        : null,
+    };
+  } catch (e) {
+    return { status: "error", error: errMsg(e), show: `${HOTD_SHOW_TITLE} — Sezonul ${HOTD_SEASON}`, lastAired: null, next: null };
   }
 });
 
