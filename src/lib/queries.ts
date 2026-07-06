@@ -75,8 +75,8 @@ export const lastSpeedtestQuery = queryOptions({
 export const deployStatusQuery = queryOptions({
   queryKey: ["deployStatus"],
   queryFn: () => getDeployStatus(),
-  refetchInterval: 2 * 60_000,
-  staleTime: 60_000,
+  refetchInterval: 60_000,
+  staleTime: 30_000,
   refetchOnWindowFocus: true,
 });
 
