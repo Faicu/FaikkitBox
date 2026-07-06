@@ -504,18 +504,23 @@ export const getPlex = createServerFn({ method: "GET" }).handler(async (): Promi
   try {
     const discovered = await discoverPlexUrl(token, base);
     const url = discovered.url;
-    const [rootJson, sessionsJson, libsJson, recentJson, history] = await Promise.all([
+    const [rootJson, sessionsJson, libsJson, recentMoviesJson, recentEpisodesJson, history] = await Promise.all([
       fetchJson<any>(`${url}/`, { headers }),
       fetchJson<any>(`${url}/status/sessions`, { headers }),
       fetchJson<any>(`${url}/library/sections`, { headers }),
-      fetchJson<any>(`${url}/library/recentlyAdded?X-Plex-Container-Start=0&X-Plex-Container-Size=8`, { headers }).catch(() => ({ MediaContainer: { Metadata: [] } })),
+      fetchJson<any>(`${url}/library/recentlyAdded?X-Plex-Container-Start=0&X-Plex-Container-Size=8&type=1`, { headers }).catch(() => ({ MediaContainer: { Metadata: [] } })),
+      fetchJson<any>(`${url}/library/recentlyAdded?X-Plex-Container-Start=0&X-Plex-Container-Size=8&type=4`, { headers }).catch(() => ({ MediaContainer: { Metadata: [] } })),
       fetchPlexHistory(url, headers).catch(() => ({ topShows: [], topMovies: [], topWatchers: [], episodesToday: 0, activeUsersToday: 0, userHistory: {}, todayViews: [], activeUsersTodayList: [], recentHistory: [] })),
     ]);
 
     const mc = rootJson?.MediaContainer ?? {};
     const sessionsMd = sessionsJson?.MediaContainer?.Metadata ?? [];
     const libsMd = libsJson?.MediaContainer?.Directory ?? [];
-    const recentMd = recentJson?.MediaContainer?.Metadata ?? [];
+    // Combină filme și episoade, sortate după addedAt descrescător, primele 8
+    const recentMd = [
+      ...(recentMoviesJson?.MediaContainer?.Metadata ?? []),
+      ...(recentEpisodesJson?.MediaContainer?.Metadata ?? []),
+    ].sort((a: any, b: any) => Number(b.addedAt ?? 0) - Number(a.addedAt ?? 0)).slice(0, 8);
 
     const libraries: PlexLibrary[] = await Promise.all(
       libsMd.map(async (l: any) => {
