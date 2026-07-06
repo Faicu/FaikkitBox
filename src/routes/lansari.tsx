@@ -21,8 +21,8 @@ export const Route = createFileRoute("/lansari")({
 });
 
 function LansariPage() {
-  const { data: hotdData, isLoading: isHotdLoading } = useQuery(showStatusQuery);
-  const { data: camatariiData, isLoading: isCamatariiLoading } = useQuery(camatariiStatusQuery);
+  const { data: hotdData, isLoading: isHotdLoading } = useQuery({ ...showStatusQuery, throwOnError: false });
+  const { data: camatariiData, isLoading: isCamatariiLoading } = useQuery({ ...camatariiStatusQuery, throwOnError: false });
   const { data: adminData } = useQuery({ ...adminStatusQuery, throwOnError: false });
   const isAdmin = adminData?.isAdmin ?? false;
 
@@ -42,8 +42,7 @@ function LansariPage() {
 
       <CustomShowsSection />
       <FilelistSection isAdmin={isAdmin} />
-      {isAdmin && <FilelistLogSection />}
-    </PageShell>
+      {isAdmin && <FilelistLogSection />}    </PageShell>
   );
 }
 
@@ -540,7 +539,11 @@ function FilelistSection({ isAdmin }: { isAdmin: boolean }) {
 }
 
 function DownloadLogSection() {
-  const { data: log, isLoading } = useQuery(filelistLogQuery);
+  const { data: log, isLoading } = useQuery({
+    ...filelistLogQuery,
+    throwOnError: false,
+    enabled: typeof window !== "undefined",
+  });
   const isMovie = (catId: number) => [1, 2, 3, 4, 6, 19, 26].includes(catId);
 
   if (isLoading || !log || log.length === 0) return null;
