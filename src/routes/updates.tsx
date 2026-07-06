@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useRef, useState } from "react";
-import { RefreshCw, PlayCircle, Images, Download, Terminal, Trash2, PackageCheck, PackageOpen, ArrowUpCircle, Rocket, GitCommitHorizontal, ExternalLink } from "lucide-react";
+import { RefreshCw, PlayCircle, Images, Download, PackageCheck, ArrowUpCircle, Rocket, GitCommitHorizontal, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageShell } from "@/components/PageShell";
