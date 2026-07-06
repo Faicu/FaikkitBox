@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
@@ -37,8 +37,9 @@ export type AgentResult = {
   error?: string;
 };
 
-// Un pas e fie un argv (rulat direct, fara shell), fie o pauza intre pasi.
-type Step = { argv: string[] } | { sleepMs: number };
+// Un pas e fie un argv (rulat direct, fara shell), fie o pauza intre pasi,
+// fie un spawn detasat (pentru comenzi care restarteaza procesul curent).
+type Step = { argv: string[] } | { sleepMs: number } | { spawnDetached: string[] };
 
 // Caile compose sunt configurabile via env, cu valori implicite conform
 // instalarii curente (/root/plex si /root/immich-app).
@@ -80,7 +81,9 @@ function commandSteps(cmd: AgentCommand): Step[] {
     case "uptime":
       return [{ argv: ["uptime"] }];
     case "deploy_app":
-      return [{ argv: ["sudo", "/opt/faikkitbox/deploy.sh"] }];
+      // deploy.sh face systemctl restart care omoară procesul curent —
+      // folosim spawn detașat și returnăm imediat
+      return [{ spawnDetached: ["sudo", "/opt/faikkitbox/deploy.sh"] }];
   }
 }
 
@@ -107,9 +110,20 @@ export const runAgentCommand = createServerFn({ method: "POST" })
           stdoutParts.push(`[sleep ${step.sleepMs / 1000}s]\n`);
           continue;
         }
+        // Spawn detașat — lansează procesul și returnează imediat fără să aștepte
+        if ("spawnDetached" in step) {
+          const [dcmd, ...dargs] = step.spawnDetached;
+          stdoutParts.push(`$ ${step.spawnDetached.join(" ")} (detașat)\n`);
+          const child = spawn(dcmd, dargs, {
+            detached: true,
+            stdio: "ignore",
+          });
+          child.unref();
+          stdoutParts.push("Deploy pornit în background — aplicația va reporni în câteva minute.\n");
+          return { ok: true, exit_code: 0, stdout: stdoutParts.join(""), stderr: "" };
+        }
         const [cmd, ...args] = step.argv;
-        stdoutParts.push(`$ ${step.argv.join(" ")}\n`);
-        try {
+        stdoutParts.push(`$ ${step.argv.join(" ")}\n`);        try {
           const { stdout, stderr } = await execFileAsync(cmd, args, { timeout: 1_800_000 });
           if (stdout) stdoutParts.push(stdout);
           if (stderr) stderrParts.push(stderr);
