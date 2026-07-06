@@ -214,6 +214,12 @@ function DeploySection({ onDeploy, isDeploying, onLogUpdate }: { onDeploy: () =>
         if (active) {
           onLogUpdate(res.lines);
           setReconnecting(false);
+          // Oprește polling-ul când deploy.sh a terminat
+          const done = res.lines.includes("[deploy] gata:") || res.lines.includes("[deploy] nimic nou.");
+          if (done) {
+            setPolling(false);
+            clearInterval(id);
+          }
         }
       } catch {
         if (active) setReconnecting(true);
