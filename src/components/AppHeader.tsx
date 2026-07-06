@@ -67,11 +67,13 @@ export function AppHeader({ title, subtitle, right }: Props) {
       deployingRef.current = true;
       if (countdownRef.current) clearInterval(countdownRef.current);
 
+      const deployStartTime = Date.now();
+      const targetSha = data.remoteSha;
+
       // Lansăm deploy detașat
       const { runAgentCommand } = await import("@/lib/agent.functions");
       runAgentCommand({ data: { cmd: "deploy_app" } }).catch(() => {});
 
-      // Polling log până la final
       const toastId = toast.loading("🚀 Deploy în curs...", {
         description: `Commit: ${data.remoteShortSha} — ${data.remoteMessage}`,
         duration: Infinity,
@@ -81,56 +83,61 @@ export function AppHeader({ title, subtitle, right }: Props) {
       let restartDetected = false;
       let pollsSinceRestart = 0;
 
-      const poll = setInterval(async () => {
-        // Metoda 1: verifică deployStatusQuery — dacă e la zi, deploy reușit
-        const deployData = qc.getQueryData<typeof data>(["deployStatus"]);
-        if (deployData?.upToDate) {
-          clearInterval(poll);
-          toast.success("✅ Deploy finalizat!", {
-            id: toastId,
-            description: `Commit ${data.remoteShortSha} aplicat cu succes.`,
-            duration: 6000,
-          });
-          toastIdRef.current = null;
-          deployingRef.current = false;
-          qc.invalidateQueries({ queryKey: ["recentCommits"] });
-          return;
-        }
+      function onSuccess() {
+        clearInterval(poll);
+        clearTimeout(stop);
+        toast.success("✅ Deploy finalizat!", {
+          id: toastId,
+          description: `Commit ${data.remoteShortSha} aplicat cu succes.`,
+          duration: 6000,
+        });
+        toastIdRef.current = null;
+        deployingRef.current = false;
+        qc.invalidateQueries({ queryKey: ["recentCommits"] });
+      }
 
-        // Metoda 2: verifică log-ul
+      const poll = setInterval(async () => {
+        // Metoda 1: refetch activ deployStatus și verifică dacă localSha === targetSha
+        try {
+          const fresh = await qc.fetchQuery({ queryKey: ["deployStatus"], staleTime: 0 });
+          if ((fresh as any)?.localSha === targetSha) {
+            onSuccess();
+            return;
+          }
+        } catch {}
+
+        // Metoda 2: verifică log-ul pentru linia de final apărută după startTime
         try {
           const res = await getLogFn();
           restartDetected = false;
           pollsSinceRestart = 0;
-          const done = res.lines.includes("[deploy] gata:") || res.lines.includes("[deploy] nimic nou.");
-          if (done) {
-            clearInterval(poll);
-            // Invalideaza deployStatus ca să se actualizeze widgetul
-            await qc.invalidateQueries({ queryKey: ["deployStatus"] });
-            toast.success("✅ Deploy finalizat!", {
-              id: toastId,
-              description: `Commit ${data.remoteShortSha} aplicat cu succes.`,
-              duration: 6000,
-            });
-            toastIdRef.current = null;
-            deployingRef.current = false;
-            qc.invalidateQueries({ queryKey: ["recentCommits"] });
+
+          // Caută ultima apariție de "[deploy] gata:" sau "nimic nou" în log
+          const lines = res.lines.split("\n");
+          const deployLine = [...lines].reverse().find(
+            l => l.includes("[deploy] gata:") || l.includes("[deploy] nimic nou.")
+          );
+
+          if (deployLine) {
+            // Extrage timestamp din linie: [deploy] 2026-07-06T12:32:29+00:00
+            const match = deployLine.match(/\[deploy\] (\d{4}-\d{2}-\d{2}T[\d:+]+)/);
+            const lineTime = match ? new Date(match[1]).getTime() : 0;
+            if (lineTime >= deployStartTime - 5000) {
+              onSuccess();
+            }
           }
         } catch {
-          // Serverul repornește — așteptăm reconectarea
           if (!restartDetected) {
             restartDetected = true;
             toast.loading("⏳ Aplicația repornește...", { id: toastId, duration: Infinity });
           }
           pollsSinceRestart++;
-          // După 20 de încercări eșuate (60s), invalidăm deployStatus forțat
-          if (pollsSinceRestart === 20) {
+          if (pollsSinceRestart % 5 === 0) {
             qc.invalidateQueries({ queryKey: ["deployStatus"] });
           }
         }
-      }, 3000);
+      }, 4000);
 
-      // Oprire forțată după 15 minute
       const stop = setTimeout(() => {
         clearInterval(poll);
         if (toastIdRef.current === toastId) {
@@ -139,9 +146,6 @@ export function AppHeader({ title, subtitle, right }: Props) {
           deployingRef.current = false;
         }
       }, 15 * 60_000);
-
-      // Cleanup dacă componenta se demontează
-      return () => { clearInterval(poll); clearTimeout(stop); };
     }
 
     function startCountdown() {
