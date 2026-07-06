@@ -311,8 +311,8 @@ export const searchFilelist = createServerFn({ method: "GET" })
         times_completed: Number(t.times_completed ?? 0),
         category: Number(t.category ?? 0),
         categoryName: CATEGORY_NAMES[Number(t.category)] ?? `Cat ${t.category}`,
-        freeleech: t.freeleech === "1" || t.freeleech === true,
-        internal: t.internal === "1" || t.internal === true,
+        freeleech: !!Number(t.freeleech),
+        internal: !!Number(t.internal),
         upload_date: String(t.upload_date ?? ""),
         imdb: t.imdb || undefined,
       }));
