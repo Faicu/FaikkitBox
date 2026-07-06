@@ -78,12 +78,35 @@ export function AppHeader({ title, subtitle, right }: Props) {
       });
       toastIdRef.current = toastId;
 
+      let restartDetected = false;
+      let pollsSinceRestart = 0;
+
       const poll = setInterval(async () => {
+        // Metoda 1: verifică deployStatusQuery — dacă e la zi, deploy reușit
+        const deployData = qc.getQueryData<typeof data>(["deployStatus"]);
+        if (deployData?.upToDate) {
+          clearInterval(poll);
+          toast.success("✅ Deploy finalizat!", {
+            id: toastId,
+            description: `Commit ${data.remoteShortSha} aplicat cu succes.`,
+            duration: 6000,
+          });
+          toastIdRef.current = null;
+          deployingRef.current = false;
+          qc.invalidateQueries({ queryKey: ["recentCommits"] });
+          return;
+        }
+
+        // Metoda 2: verifică log-ul
         try {
           const res = await getLogFn();
+          restartDetected = false;
+          pollsSinceRestart = 0;
           const done = res.lines.includes("[deploy] gata:") || res.lines.includes("[deploy] nimic nou.");
           if (done) {
             clearInterval(poll);
+            // Invalideaza deployStatus ca să se actualizeze widgetul
+            await qc.invalidateQueries({ queryKey: ["deployStatus"] });
             toast.success("✅ Deploy finalizat!", {
               id: toastId,
               description: `Commit ${data.remoteShortSha} aplicat cu succes.`,
@@ -91,14 +114,34 @@ export function AppHeader({ title, subtitle, right }: Props) {
             });
             toastIdRef.current = null;
             deployingRef.current = false;
-            qc.invalidateQueries({ queryKey: ["deployStatus"] });
             qc.invalidateQueries({ queryKey: ["recentCommits"] });
           }
-        } catch {}
+        } catch {
+          // Serverul repornește — așteptăm reconectarea
+          if (!restartDetected) {
+            restartDetected = true;
+            toast.loading("⏳ Aplicația repornește...", { id: toastId, duration: Infinity });
+          }
+          pollsSinceRestart++;
+          // După 20 de încercări eșuate (60s), invalidăm deployStatus forțat
+          if (pollsSinceRestart === 20) {
+            qc.invalidateQueries({ queryKey: ["deployStatus"] });
+          }
+        }
       }, 3000);
 
       // Oprire forțată după 15 minute
-      setTimeout(() => clearInterval(poll), 15 * 60_000);
+      const stop = setTimeout(() => {
+        clearInterval(poll);
+        if (toastIdRef.current === toastId) {
+          toast.error("Deploy — timeout după 15 minute", { id: toastId, duration: 6000 });
+          toastIdRef.current = null;
+          deployingRef.current = false;
+        }
+      }, 15 * 60_000);
+
+      // Cleanup dacă componenta se demontează
+      return () => { clearInterval(poll); clearTimeout(stop); };
     }
 
     function startCountdown() {
