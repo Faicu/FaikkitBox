@@ -76,7 +76,11 @@ async function qbitLogin(url: string, user: string, pass: string): Promise<strin
   const res = await fetch(`${url}/api/v2/auth/login`, {
     method: "POST",
     body,
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      "Referer": url,
+      "Origin": url,
+    },
   });
   if (!res.ok) throw new Error(`qBit login HTTP ${res.status}`);
   const text = await res.text();
