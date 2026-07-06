@@ -33,6 +33,7 @@ function UpdatesInner() {
   const qc = useQueryClient();
   const run = useServerFn(runAgentCommand);
   const [output, setOutput] = useState<{ cmd: string; res: AgentResult } | null>(null);
+  const [deployLog, setDeployLog] = useState<string>("");
 
   const m = useMutation({
     mutationFn: (cmd: AgentCommand) => run({ data: { cmd } }),
@@ -60,7 +61,7 @@ function UpdatesInner() {
         </button>
       }
     >
-      <DeploySection onDeploy={() => m.mutate("deploy_app")} isDeploying={running === "deploy_app"} />
+      <DeploySection onDeploy={() => m.mutate("deploy_app")} isDeploying={running === "deploy_app"} onLogUpdate={setDeployLog} />
 
       <RecentCommitsSection />
 
@@ -96,35 +97,35 @@ function UpdatesInner() {
         </div>
       )}
 
-      {output && (
+      {(output || deployLog) && (
         <section className="space-y-1">
           <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Ieșire: {output.cmd}
+            Ieșire: {deployLog && !output ? "deploy_app" : output?.cmd}
           </h2>
           <div className="rounded-2xl border border-border bg-black/40 p-3">
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <div className={`text-xs ${output.res.ok ? "text-emerald-400" : "text-red-400"}`}>
-                {output.res.ok ? "✓ Succes" : "✗ Eșec"} {output.res.exit_code != null && `· exit ${output.res.exit_code}`}
-                {output.res.error && ` · ${output.res.error}`}
+            {output && (
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <div className={`text-xs ${output.res.ok ? "text-emerald-400" : "text-red-400"}`}>
+                  {output.res.ok ? "✓ Succes" : "✗ Eșec"} {output.res.exit_code != null && `· exit ${output.res.exit_code}`}
+                  {output.res.error && ` · ${output.res.error}`}
+                </div>
+                <button
+                  onClick={() => {
+                    const text = deployLog || `${output.res.stdout ?? ""}${output.res.stderr ? `\n${output.res.stderr}` : ""}`;
+                    navigator.clipboard.writeText(text).then(
+                      () => toast.success("Copiat"),
+                      () => toast.error("Nu s-a putut copia"),
+                    );
+                  }}
+                  className="rounded-md border border-border px-2 py-0.5 text-[11px] text-muted-foreground hover:text-foreground"
+                >
+                  Copiază
+                </button>
               </div>
-              <button
-                onClick={() => {
-                  const text = `${output.res.stdout ?? ""}${output.res.stderr ? `\n${output.res.stderr}` : ""}`;
-                  navigator.clipboard.writeText(text).then(
-                    () => toast.success("Copiat"),
-                    () => toast.error("Nu s-a putut copia"),
-                  );
-                }}
-                className="rounded-md border border-border px-2 py-0.5 text-[11px] text-muted-foreground hover:text-foreground"
-              >
-                Copiază
-              </button>
-            </div>
-            {(output.res.stdout || output.res.stderr) && (
-              <pre className="overflow-auto whitespace-pre-wrap break-all text-[11px] text-muted-foreground">
-{output.res.stdout ?? ""}{output.res.stderr ? `\n${output.res.stderr}` : ""}
-              </pre>
             )}
+            <pre className="max-h-96 overflow-auto whitespace-pre-wrap break-all text-[11px] text-muted-foreground">
+              {deployLog || `${output?.res.stdout ?? ""}${output?.res.stderr ? `\n${output.res.stderr}` : ""}`}
+            </pre>
           </div>
         </section>
       )}
@@ -190,15 +191,12 @@ function RecentCommitsSection() {
   );
 }
 
-function DeploySection({ onDeploy, isDeploying }: { onDeploy: () => void; isDeploying: boolean }) {
+function DeploySection({ onDeploy, isDeploying, onLogUpdate }: { onDeploy: () => void; isDeploying: boolean; onLogUpdate: (log: string) => void }) {
   const getLogFn = useServerFn(getDeployLog);
-  const [log, setLog] = useState<string>("");
   const [polling, setPolling] = useState(false);
   const [deployStarted, setDeployStarted] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
-  const logRef = useRef<HTMLPreElement>(null);
 
-  // Pornește polling-ul după ce s-a apăsat Deploy
   useEffect(() => {
     if (!deployStarted) return;
     setPolling(true);
@@ -208,19 +206,16 @@ function DeploySection({ onDeploy, isDeploying }: { onDeploy: () => void; isDepl
       try {
         const res = await getLogFn();
         if (active) {
-          setLog(res.lines);
+          onLogUpdate(res.lines);
           setReconnecting(false);
         }
       } catch {
-        // Aplicația se restartează — arată "reconnecting" și continuă
         if (active) setReconnecting(true);
       }
     }
 
     fetchLog();
     const id = setInterval(fetchLog, 2000);
-
-    // Oprește polling după 10 minute
     const stop = setTimeout(() => { clearInterval(id); setPolling(false); }, 10 * 60_000);
 
     return () => {
@@ -228,17 +223,12 @@ function DeploySection({ onDeploy, isDeploying }: { onDeploy: () => void; isDepl
       clearInterval(id);
       clearTimeout(stop);
     };
-  }, [deployStarted, getLogFn]);
-
-  // Auto-scroll la final
-  useEffect(() => {
-    if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
-  }, [log]);
+  }, [deployStarted, getLogFn, onLogUpdate]);
 
   function handleDeploy() {
     if (!confirm("Pornești deploy-ul manual? Aplicația va fi restartată — poate dura ~2-3 minute.")) return;
     setDeployStarted(true);
-    setLog("");
+    onLogUpdate("");
     onDeploy();
   }
 
@@ -247,13 +237,21 @@ function DeploySection({ onDeploy, isDeploying }: { onDeploy: () => void; isDepl
       <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
         <Rocket className="h-3.5 w-3.5 text-emerald-400" /> Deploy FaikkitBox
       </h2>
-      <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4 space-y-3">
+      <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="space-y-0.5">
             <div className="text-sm font-medium">Lansează deploy manual</div>
             <div className="text-xs text-muted-foreground">
               git pull + build + restart instant, fără să aștepți cron-ul de 5 minute.
             </div>
+            {deployStarted && (
+              <div className="flex items-center gap-1.5 pt-1 text-[11px] text-muted-foreground">
+                {(polling || reconnecting) && <RefreshCw className="h-3 w-3 animate-spin" />}
+                <span>
+                  {reconnecting ? "⏳ Aplicația repornește, reconectare..." : polling ? "Urmăresc log-ul — vezi Ieșire mai jos" : "Finalizat"}
+                </span>
+              </div>
+            )}
           </div>
           <button
             onClick={handleDeploy}
@@ -265,27 +263,6 @@ function DeploySection({ onDeploy, isDeploying }: { onDeploy: () => void; isDepl
               : <><Rocket className="h-4 w-4" /> Deploy acum</>}
           </button>
         </div>
-
-        {deployStarted && (
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-              {polling && <RefreshCw className="h-3 w-3 animate-spin" />}
-              <span>
-                {reconnecting
-                  ? "⏳ Aplicația repornește, reconectare..."
-                  : polling
-                  ? "Urmăresc log-ul în timp real..."
-                  : "Deploy finalizat"}
-              </span>
-            </div>
-            <pre
-              ref={logRef}
-              className="max-h-64 overflow-auto rounded-xl bg-black/50 p-3 text-[11px] leading-relaxed text-muted-foreground whitespace-pre-wrap break-all"
-            >
-              {log || "Se așteaptă output-ul..."}
-            </pre>
-          </div>
-        )}
       </div>
     </section>
   );
