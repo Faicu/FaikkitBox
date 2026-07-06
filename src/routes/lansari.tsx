@@ -506,19 +506,18 @@ function FilelistSection() {
 
                 {/* Buton download */}
                 <button
-                    onClick={() => handleDownload(t)}
-                    disabled={downloading === t.id}
-                    className="shrink-0 flex items-center gap-1 rounded-lg bg-blue-500/15 px-2.5 py-1.5 text-[11px] font-medium text-blue-400 hover:bg-blue-500/25 disabled:opacity-50 transition-colors"
-                    title={`Descarcă în ${isMovie(t.category) ? "Filme" : "Seriale"}`}
-                  >
-                    {downloading === t.id ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <Download className="h-3.5 w-3.5" />
-                    )}
-                    {isMovie(t.category) ? "Film" : "Serial"}
-                  </button>
-                )}
+                  onClick={() => handleDownload(t)}
+                  disabled={downloading === t.id}
+                  className="shrink-0 flex items-center gap-1 rounded-lg bg-blue-500/15 px-2.5 py-1.5 text-[11px] font-medium text-blue-400 hover:bg-blue-500/25 disabled:opacity-50 transition-colors"
+                  title={`Descarcă în ${isMovie(t.category) ? "Filme" : "Seriale"}`}
+                >
+                  {downloading === t.id ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Download className="h-3.5 w-3.5" />
+                  )}
+                  {isMovie(t.category) ? "Film" : "Serial"}
+                </button>
               </div>
             ))}
           </div>
