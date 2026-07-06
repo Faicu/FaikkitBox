@@ -584,6 +584,21 @@ function DownloadLogSection() {
                     </span>
                   )}
                 </div>
+                <div className="mt-1">
+                  {e.completedAt ? (
+                    <span className="flex items-center gap-1 text-[11px] text-emerald-400">
+                      <CheckCircle2 className="h-3 w-3" /> Complet —{" "}
+                      {new Date(e.completedAt).toLocaleString("ro-RO", {
+                        day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
+                        timeZone: "Europe/Bucharest",
+                      })}
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1 text-[11px] text-amber-400">
+                      <Loader2 className="h-3 w-3 animate-spin" /> În descărcare...
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
           ))}

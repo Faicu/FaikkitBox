@@ -47,6 +47,7 @@ export interface FilelistLogEntry {
   internal: boolean;
   savePath: string;
   downloadedAt: string;
+  completedAt: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -114,6 +115,20 @@ async function appendDownloadLog(entry: FilelistLogEntry): Promise<void> {
   }
 }
 
+async function markLogEntryComplete(torrentId: number): Promise<void> {
+  try {
+    const file = downloadLogPath();
+    const log = await readDownloadLog();
+    const entry = log.find((e) => e.id === torrentId);
+    if (entry) {
+      entry.completedAt = new Date().toISOString();
+      await writeFile(file, JSON.stringify(log, null, 2), "utf8");
+    }
+  } catch (e) {
+    console.warn("[filelist] Nu am putut actualiza log-ul la completare:", e);
+  }
+}
+
 export const getFilelistDownloadLog = createServerFn({ method: "GET" }).handler(
   async (): Promise<FilelistLogEntry[]> => {
     const { requireAdmin } = await import("./admin.server");
@@ -164,9 +179,10 @@ async function pollUntilComplete(
   torrentHash: string,
   plexType: "movie" | "show",
   torrentName: string,
+  torrentId: number,
 ): Promise<void> {
-  const MAX_WAIT_MS = 48 * 60 * 60 * 1000; // 48 ore maxim
-  const POLL_INTERVAL_MS = 30_000;           // verifică la fiecare 30s
+  const MAX_WAIT_MS = 48 * 60 * 60 * 1000;
+  const POLL_INTERVAL_MS = 30_000;
   const started = Date.now();
 
   console.log(`[filelist] Pornesc polling pentru "${torrentName}" (${torrentHash})`);
@@ -190,13 +206,13 @@ async function pollUntilComplete(
 
       console.log(`[filelist] "${torrentName}" — progress: ${(progress * 100).toFixed(1)}% state: ${state}`);
 
-      // Complet = progress 1 și state uploading/stalledUP/pausedUP
       const isDone = progress >= 1 && (
         state.includes("UP") || state === "uploading" || state === "pausedUP" || state === "stalledUP"
       );
 
       if (isDone) {
         console.log(`[filelist] "${torrentName}" complet — dau refresh Plex`);
+        await markLogEntryComplete(torrentId);
         const sectionKey = await plexFindLibraryKey(plexType);
         if (sectionKey) await plexRefreshLibrary(sectionKey);
         console.log(`[filelist] Plex refresh trimis pentru secțiunea ${sectionKey}`);
@@ -423,17 +439,7 @@ export const downloadFilelist = createServerFn({ method: "POST" })
         console.warn("[filelist] Nu am putut obține hash-ul torrentului:", e);
       }
 
-      // 6. Pornește polling background — refresh Plex DOAR la completare
-      const plexType = isMovie ? "movie" : "show";
-      if (torrentHash) {
-        pollUntilComplete(url, cookie, torrentHash, plexType, data.torrentName).catch((e) =>
-          console.error("[filelist] Eroare polling:", e),
-        );
-      } else {
-        console.warn("[filelist] Hash nedisponibil — Plex nu va fi refreshuit automat");
-      }
-
-      // 7. Loghează descărcarea (non-fatal dacă scrierea eșuează)
+      // 6. Loghează descărcarea imediat (completedAt null = în curs)
       await appendDownloadLog({
         id: data.torrentId,
         name: data.torrentName,
@@ -444,7 +450,18 @@ export const downloadFilelist = createServerFn({ method: "POST" })
         internal: data.internal ?? false,
         savePath,
         downloadedAt: new Date().toISOString(),
+        completedAt: null,
       });
+
+      // 7. Pornește polling background — refresh Plex și marchează complet DOAR la final
+      const plexType = isMovie ? "movie" : "show";
+      if (torrentHash) {
+        pollUntilComplete(url, cookie, torrentHash, plexType, data.torrentName, data.torrentId).catch((e) =>
+          console.error("[filelist] Eroare polling:", e),
+        );
+      } else {
+        console.warn("[filelist] Hash nedisponibil — Plex nu va fi refreshuit automat");
+      }
 
       return { status: "ok", torrentName: data.torrentName, savePath };
     } finally {

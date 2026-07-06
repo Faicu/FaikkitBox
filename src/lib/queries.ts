@@ -91,6 +91,7 @@ export const recentCommitsQuery = queryOptions({
 export const filelistLogQuery = queryOptions({
   queryKey: ["filelistLog"],
   queryFn: () => getFilelistDownloadLog(),
-  staleTime: 30_000,
+  staleTime: 0,
+  refetchInterval: 30_000,
   refetchOnWindowFocus: true,
 });
