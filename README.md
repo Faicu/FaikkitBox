@@ -1,6 +1,6 @@
 # Faikkitbox
 
-Dashboard de monitorizare pentru serverul de acasă (Plex, Immich, qBittorrent), rulat independent, fără Supabase.
+Dashboard de monitorizare pentru serverul de acasă (Plex, Immich, qBittorrent), rulat independent.
 
 Aplicația este construită cu [TanStack Start](https://tanstack.com/start) (React 19 + TanStack Router/Query) și rulează ca server Node standard (via Nitro, preset `node-server`), gata de pus în spatele unui reverse proxy (ex. nginx) pe Ubuntu.
 
