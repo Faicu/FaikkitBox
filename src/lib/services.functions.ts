@@ -504,12 +504,10 @@ export const getPlex = createServerFn({ method: "GET" }).handler(async (): Promi
   try {
     const discovered = await discoverPlexUrl(token, base);
     const url = discovered.url;
-    const [rootJson, sessionsJson, libsJson, recentMoviesJson, recentEpisodesJson, history] = await Promise.all([
+    const [rootJson, sessionsJson, libsJson, history] = await Promise.all([
       fetchJson<any>(`${url}/`, { headers }),
       fetchJson<any>(`${url}/status/sessions`, { headers }),
       fetchJson<any>(`${url}/library/sections`, { headers }),
-      fetchJson<any>(`${url}/library/recentlyAdded?X-Plex-Container-Start=0&X-Plex-Container-Size=8&type=1`, { headers }).catch(() => ({ MediaContainer: { Metadata: [] } })),
-      fetchJson<any>(`${url}/library/recentlyAdded?X-Plex-Container-Start=0&X-Plex-Container-Size=8&type=4`, { headers }).catch(() => ({ MediaContainer: { Metadata: [] } })),
       fetchPlexHistory(url, headers).catch(() => ({ topShows: [], topMovies: [], topWatchers: [], episodesToday: 0, activeUsersToday: 0, userHistory: {}, todayViews: [], activeUsersTodayList: [], recentHistory: [] })),
     ]);
 
@@ -517,6 +515,18 @@ export const getPlex = createServerFn({ method: "GET" }).handler(async (): Promi
     const sessionsMd = sessionsJson?.MediaContainer?.Metadata ?? [];
     const libsMd = libsJson?.MediaContainer?.Directory ?? [];
     // Combină filme și episoade, sortate după addedAt descrescător, primele 8
+    const movieLibKeys = libsMd.filter((l: any) => l.type === "movie").map((l: any) => l.key);
+    const showLibKeys = libsMd.filter((l: any) => l.type === "show").map((l: any) => l.key);
+
+    const [recentMoviesJson, recentEpisodesJson] = await Promise.all([
+      movieLibKeys.length > 0
+        ? fetchJson<any>(`${url}/library/sections/${movieLibKeys[0]}/recentlyAdded?X-Plex-Container-Start=0&X-Plex-Container-Size=8&type=1`, { headers }).catch(() => ({ MediaContainer: { Metadata: [] } }))
+        : Promise.resolve({ MediaContainer: { Metadata: [] } }),
+      showLibKeys.length > 0
+        ? fetchJson<any>(`${url}/library/sections/${showLibKeys[0]}/recentlyAdded?X-Plex-Container-Start=0&X-Plex-Container-Size=8&type=4`, { headers }).catch(() => ({ MediaContainer: { Metadata: [] } }))
+        : Promise.resolve({ MediaContainer: { Metadata: [] } }),
+    ]);
+
     const recentMd = [
       ...(recentMoviesJson?.MediaContainer?.Metadata ?? []),
       ...(recentEpisodesJson?.MediaContainer?.Metadata ?? []),
