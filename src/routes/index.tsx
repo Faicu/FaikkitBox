@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { PlayCircle, Images, Download, Cpu, ChevronRight, Users, HardDrive, ListChecks, Gauge, ArrowDown, ArrowUp, Activity } from "lucide-react";
+import { PlayCircle, Images, Download, Cpu, ChevronRight, Users, HardDrive, ListChecks, Gauge, ArrowDown, ArrowUp, Activity, Tv, Film } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -75,16 +75,63 @@ function Overview() {
       >
         {plex.data?.status === "ok" && (
           <div className="space-y-2 text-sm">
-            <div className="rounded-lg bg-muted/40 px-2.5 py-1.5">
-              <div className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                <Users className="h-3.5 w-3.5" />Se uită acum
+            {plex.data.sessions.length > 0 ? (
+              <div className="space-y-1.5">
+                {plex.data.sessions.map((s, i) => {
+                  const pct = s.durationMs > 0 ? Math.round((s.viewOffsetMs / s.durationMs) * 100) : 0;
+                  const fmt = (ms: number) => {
+                    const t = Math.floor(ms / 1000);
+                    const h = Math.floor(t / 3600);
+                    const m = Math.floor((t % 3600) / 60);
+                    const sec = t % 60;
+                    return h > 0
+                      ? `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`
+                      : `${m}:${String(sec).padStart(2, "0")}`;
+                  };
+                  const isEpisode = !!s.grandparentTitle;
+                  return (
+                    <div key={i} className="rounded-lg bg-muted/40 px-2.5 py-2 space-y-1.5">
+                      <div className="flex items-start gap-1.5">
+                        {isEpisode
+                          ? <Tv className="h-3.5 w-3.5 shrink-0 mt-0.5 text-blue-400" />
+                          : <Film className="h-3.5 w-3.5 shrink-0 mt-0.5 text-amber-400" />}
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm font-semibold leading-tight">
+                            {isEpisode ? s.grandparentTitle : s.title}
+                          </div>
+                          {isEpisode && (
+                            <div className="truncate text-[11px] text-muted-foreground">{s.title}</div>
+                          )}
+                          <div className="text-[11px] text-muted-foreground">{s.user} · {s.player}</div>
+                        </div>
+                      </div>
+                      {s.durationMs > 0 && (
+                        <div className="space-y-0.5">
+                          <div className="h-1 w-full rounded-full bg-muted overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-amber-400 transition-all"
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                          <div className="flex justify-between text-[10px] text-muted-foreground">
+                            <span>{fmt(s.viewOffsetMs)}</span>
+                            <span>{pct}%</span>
+                            <span>{fmt(s.durationMs)}</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
-              <div className="mt-0.5 truncate text-sm font-semibold">
-                {plex.data.sessions.length > 0
-                  ? plex.data.sessions.map((s) => s.user).join(", ")
-                  : "Nimeni"}
+            ) : (
+              <div className="rounded-lg bg-muted/40 px-2.5 py-1.5">
+                <div className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                  <Users className="h-3.5 w-3.5" />Se uită acum
+                </div>
+                <div className="mt-0.5 text-sm font-semibold">Nimeni</div>
               </div>
-            </div>
+            )}
             <div className="grid grid-cols-2 gap-2">
               <MetricButton
                 label="Vizionate Azi"
