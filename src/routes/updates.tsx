@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
-import { RefreshCw, PlayCircle, Images, Download, Terminal, Trash2, PackageCheck, PackageOpen, ArrowUpCircle } from "lucide-react";
+import { RefreshCw, PlayCircle, Images, Download, Terminal, Trash2, PackageCheck, PackageOpen, ArrowUpCircle, Rocket } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageShell } from "@/components/PageShell";
@@ -60,6 +60,41 @@ function UpdatesInner() {
         </button>
       }
     >
+      <section className="space-y-2">
+        <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
+          <Rocket className="h-3.5 w-3.5 text-emerald-400" /> Deploy FaikkitBox
+        </h2>
+        <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4 space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-0.5">
+              <div className="text-sm font-medium">Lansează deploy manual</div>
+              <div className="text-xs text-muted-foreground">
+                Rulează <span className="font-mono">/opt/faikkitbox/deploy.sh</span> — git pull, build și restart instant, fără să aștepți cron-ul de 5 minute.
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                if (!confirm("Pornești deploy-ul manual? Aplicația va fi restartată — poate dura ~1-2 minute.")) return;
+                m.mutate("deploy_app");
+              }}
+              disabled={running === "deploy_app"}
+              className="shrink-0 flex items-center gap-2 rounded-xl bg-emerald-500/20 border border-emerald-500/30 px-4 py-2 text-sm font-medium text-emerald-400 hover:bg-emerald-500/30 disabled:opacity-50 transition-colors"
+            >
+              {running === "deploy_app" ? (
+                <><RefreshCw className="h-4 w-4 animate-spin" /> Se deployează...</>
+              ) : (
+                <><Rocket className="h-4 w-4" /> Deploy acum</>
+              )}
+            </button>
+          </div>
+          {running === "deploy_app" && (
+            <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 text-xs text-emerald-300">
+              Deploy în curs... nu închide pagina. Aplicația va fi restartată automat la final.
+            </div>
+          )}
+        </div>
+      </section>
+
       <section className="space-y-2">
         <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Versiuni servicii</h2>
         {versions.isLoading && <div className="text-sm text-muted-foreground">Se încarcă versiunile...</div>}

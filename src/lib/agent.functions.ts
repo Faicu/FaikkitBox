@@ -13,7 +13,8 @@ export type AgentCommand =
   | "restart_qbit"
   | "update_plex"
   | "update_immich"
-  | "uptime";
+  | "uptime"
+  | "deploy_app";
 
 const ALLOWED: AgentCommand[] = [
   "apt_update",
@@ -25,6 +26,7 @@ const ALLOWED: AgentCommand[] = [
   "update_plex",
   "update_immich",
   "uptime",
+  "deploy_app",
 ];
 
 export type AgentResult = {
@@ -77,6 +79,8 @@ function commandSteps(cmd: AgentCommand): Step[] {
       ];
     case "uptime":
       return [{ argv: ["uptime"] }];
+    case "deploy_app":
+      return [{ argv: ["/opt/faikkitbox/deploy.sh"] }];
   }
 }
 
