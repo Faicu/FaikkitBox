@@ -80,7 +80,7 @@ function commandSteps(cmd: AgentCommand): Step[] {
     case "uptime":
       return [{ argv: ["uptime"] }];
     case "deploy_app":
-      return [{ argv: ["/opt/faikkitbox/deploy.sh"] }];
+      return [{ argv: ["sudo", "/opt/faikkitbox/deploy.sh"] }];
   }
 }
 
