@@ -51,15 +51,6 @@ function UpdatesInner() {
     <PageShell
       title="Actualizări"
       subtitle="Versiuni servicii și mentenanță server"
-      right={
-        <button
-          onClick={() => qc.invalidateQueries({ queryKey: ["versions"] })}
-          className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-muted-foreground hover:text-foreground"
-          aria-label="Reîmprospătează versiuni"
-        >
-          <RefreshCw className={`h-4 w-4 ${versions.isFetching ? "animate-spin" : ""}`} />
-        </button>
-      }
     >
       <DeploySection onDeploy={() => m.mutate("deploy_app")} isDeploying={running === "deploy_app"} onLogUpdate={setDeployLog} />
 
