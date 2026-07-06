@@ -65,6 +65,23 @@ function UpdatesInner() {
 
       <section className="space-y-2">
         <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Versiuni servicii</h2>
+        <button
+          onClick={() => {
+            if (!confirm("Actualizezi complet Ubuntu?\n\napt-get update + apt-get upgrade -y\n\nPoate dura câteva minute.")) return;
+            m.mutate("apt_full_upgrade");
+          }}
+          disabled={running === "apt_full_upgrade"}
+          className="flex w-full items-center justify-between gap-2 rounded-2xl border border-border bg-card px-4 py-3 text-sm hover:bg-muted disabled:opacity-50 transition-colors"
+        >
+          <span className="flex items-center gap-2.5">
+            <PackageCheck className="h-4 w-4 text-emerald-400 shrink-0" />
+            <span className="font-medium">Actualizează Ubuntu</span>
+            <span className="text-xs text-muted-foreground font-normal">apt-get update + upgrade</span>
+          </span>
+          <span className="text-xs text-muted-foreground shrink-0">
+            {running === "apt_full_upgrade" ? <><RefreshCw className="inline h-3 w-3 animate-spin mr-1" />Rulează...</> : "Rulează"}
+          </span>
+        </button>
         {versions.isLoading && <div className="text-sm text-muted-foreground">Se încarcă versiunile...</div>}
         {versions.data && (
           <div className="space-y-2">
@@ -79,16 +96,6 @@ function UpdatesInner() {
       </section>
 
       <RecentCommitsSection />
-
-      <section className="space-y-2">
-        <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
-          <Terminal className="h-3.5 w-3.5" /> Sistem Ubuntu
-        </h2>
-        <div className="grid grid-cols-1 gap-2 rounded-2xl border border-border bg-card p-3">
-          <ActionButton icon={<PackageOpen className="h-4 w-4" />} label="apt-get update" cmd="apt_update" running={running} onRun={m.mutate} />
-          <ActionButton icon={<PackageCheck className="h-4 w-4" />} label="apt-get upgrade -y" cmd="apt_upgrade" running={running} onRun={m.mutate} />
-        </div>
-      </section>
 
       {running && (
         <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">

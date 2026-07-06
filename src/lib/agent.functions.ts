@@ -7,6 +7,7 @@ const execFileAsync = promisify(execFile);
 export type AgentCommand =
   | "apt_update"
   | "apt_upgrade"
+  | "apt_full_upgrade"
   | "flush_dns"
   | "restart_plex"
   | "restart_immich"
@@ -19,6 +20,7 @@ export type AgentCommand =
 const ALLOWED: AgentCommand[] = [
   "apt_update",
   "apt_upgrade",
+  "apt_full_upgrade",
   "flush_dns",
   "restart_plex",
   "restart_immich",
@@ -52,6 +54,11 @@ function commandSteps(cmd: AgentCommand): Step[] {
       return [{ argv: ["sudo", "apt-get", "update"] }];
     case "apt_upgrade":
       return [{ argv: ["sudo", "apt-get", "-y", "upgrade"] }];
+    case "apt_full_upgrade":
+      return [
+        { argv: ["sudo", "apt-get", "update"] },
+        { argv: ["sudo", "apt-get", "-y", "upgrade"] },
+      ];
     case "flush_dns":
       return [
         { argv: ["sudo", "resolvectl", "flush-caches"] },
