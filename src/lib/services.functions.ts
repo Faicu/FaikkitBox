@@ -577,11 +577,18 @@ export const getPlex = createServerFn({ method: "GET" }).handler(async (): Promi
       platform: mc.platform,
       sessions,
       libraries,
-      recentlyAdded: recentMd.slice(0, 8).map((m: any) => ({
-        title: m.grandparentTitle ? `${m.grandparentTitle} — ${m.title}` : m.title,
-        type: m.type,
-        addedAt: Number(m.addedAt ?? 0),
-      })),
+      recentlyAdded: recentMd.slice(0, 8).map((m: any) => {
+        let title = m.title;
+        if (m.grandparentTitle) {
+          const season = m.parentIndex ? `S${String(m.parentIndex).padStart(2, "0")}` : null;
+          const episode = m.index ? `E${String(m.index).padStart(2, "0")}` : null;
+          const epCode = [season, episode].filter(Boolean).join("");
+          title = epCode
+            ? `${m.grandparentTitle} ${epCode} — ${m.title}`
+            : `${m.grandparentTitle} — ${m.title}`;
+        }
+        return { title, type: m.type, addedAt: Number(m.addedAt ?? 0) };
+      }),
       topShows: history.topShows,
       topMovies: history.topMovies,
       topWatchers: history.topWatchers,
