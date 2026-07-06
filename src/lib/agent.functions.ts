@@ -87,7 +87,16 @@ function commandSteps(cmd: AgentCommand): Step[] {
   }
 }
 
-export const runAgentCommand = createServerFn({ method: "POST" })
+export const getDeployLog = createServerFn({ method: "GET" }).handler(async (): Promise<{ lines: string; updatedAt: string }> => {
+  const { requireAdmin } = await import("./admin.server");
+  await requireAdmin();
+  try {
+    const { stdout } = await execFileAsync("tail", ["-n", "80", "/var/log/faikkitbox-deploy.log"], { timeout: 5000 });
+    return { lines: stdout, updatedAt: new Date().toISOString() };
+  } catch {
+    return { lines: "", updatedAt: new Date().toISOString() };
+  }
+});({ method: "POST" })
   .inputValidator((data: { cmd: AgentCommand }) => {
     if (!ALLOWED.includes(data.cmd)) {
       throw new Error(`Comanda nu este permisă: ${data.cmd}`);
