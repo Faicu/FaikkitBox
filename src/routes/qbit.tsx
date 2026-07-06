@@ -211,7 +211,7 @@ function QbitPage() {
               <div className="rounded-2xl border border-border bg-card p-4 text-sm text-muted-foreground">Niciun torrent.</div>
             ) : (
               <div className="space-y-2">
-                {data.torrents.map((t) => {
+                {[...data.torrents].sort((a, b) => b.addedOn - a.addedOn).map((t) => {
                   const b = stateBadge(t.state);
                   const isPaused = /paus|stop/i.test(t.state);
                   const busy = pendingHash === t.hash;
