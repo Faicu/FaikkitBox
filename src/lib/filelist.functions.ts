@@ -226,11 +226,13 @@ export const downloadFilelist = createServerFn({ method: "POST" })
     const savePath = isMovie ? moviesPath : seriesPath;
 
     // 1. Descarcă fișierul .torrent de la Filelist
-    const dlParams = new URLSearchParams({ username, passkey, action: "download-torrent", id: String(data.torrentId) });
+    // Filelist API nu are endpoint de download — se folosește download.php cu passkey
+    const dlUrl = `https://filelist.io/download.php?id=${data.torrentId}&passkey=${passkey}`;
     let torrentBuffer: ArrayBuffer;
     try {
-      const dlRes = await fetch(`https://filelist.io/api.php?${dlParams.toString()}`, {
+      const dlRes = await fetch(dlUrl, {
         signal: AbortSignal.timeout(20_000),
+        headers: { "User-Agent": "Mozilla/5.0 (compatible; FaikkitBox/1.0)" },
       });
       if (!dlRes.ok) {
         return { status: "error", error: `Eroare la descărcarea torrentului: HTTP ${dlRes.status}` };
