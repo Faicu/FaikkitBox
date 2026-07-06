@@ -1,8 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
-import { Flame, CheckCircle2, XCircle, HelpCircle, Search, Pin, PinOff, ExternalLink, Loader2 } from "lucide-react";
+import { useEffect, useRef, useState, useCallback } from "react";
+import { Flame, CheckCircle2, XCircle, HelpCircle, Search, Pin, PinOff, ExternalLink, Loader2, Download, Film, Tv, Users, Zap, HardDrive } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
+import { toast } from "sonner";
 
 import { PageShell } from "@/components/PageShell";
 import { ServicePill } from "@/components/ServicePill";
@@ -11,6 +12,8 @@ import { showStatusQuery, camatariiStatusQuery } from "@/lib/queries";
 import type { ShowStatusData } from "@/lib/services.functions";
 import { searchTvShows, getTvShowStatus } from "@/lib/tvshows.functions";
 import type { TvShowSearchResult, CustomShowStatus } from "@/lib/tvshows.functions";
+import { searchFilelist, downloadFilelist } from "@/lib/filelist.functions";
+import type { FilelistTorrent, FilelistCategory } from "@/lib/filelist.functions";
 
 export const Route = createFileRoute("/lansari")({
   head: () => ({ meta: [{ title: "Lansări — Monitor Server" }] }),
@@ -35,6 +38,7 @@ function LansariPage() {
       {camatariiData?.status === "ok" && <ShowStatusCard data={camatariiData} />}
 
       <CustomShowsSection />
+      <FilelistSection />
     </PageShell>
   );
 }
@@ -319,6 +323,194 @@ function ShowStatusCard({
               (ora României)
             </div>
           </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Secțiunea FileList Search
+// ---------------------------------------------------------------------------
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB", "TB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+}
+
+function FilelistSection() {
+  const [query, setQuery] = useState("");
+  const [category, setCategory] = useState<FilelistCategory>("all");
+  const [results, setResults] = useState<FilelistTorrent[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [downloading, setDownloading] = useState<number | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const searchFn = useServerFn(searchFilelist);
+  const downloadFn = useServerFn(downloadFilelist);
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    const q = query.trim();
+    if (q.length < 2) {
+      setResults([]);
+      setSearchError(null);
+      return;
+    }
+    debounceRef.current = setTimeout(async () => {
+      setSearching(true);
+      setSearchError(null);
+      try {
+        const res = await searchFn({ data: { query: q, category } });
+        if (res.status === "error") {
+          setSearchError(res.error ?? "Eroare necunoscută");
+          setResults([]);
+        } else {
+          setResults(res.torrents);
+        }
+      } catch (e: any) {
+        setSearchError(e?.message ?? String(e));
+        setResults([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 500);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [query, category, searchFn]);
+
+  async function handleDownload(torrent: FilelistTorrent) {
+    setDownloading(torrent.id);
+    const toastId = toast.loading(`Se descarcă: ${torrent.name}…`);
+    try {
+      const res = await downloadFn({
+        data: { torrentId: torrent.id, torrentName: torrent.name, categoryId: torrent.category },
+      });
+      if (res.status === "ok") {
+        toast.success(`Adăugat în qBittorrent!`, {
+          id: toastId,
+          description: `${torrent.name} → ${res.savePath}`,
+          duration: 6000,
+        });
+      } else {
+        toast.error("Eroare la descărcare", { id: toastId, description: res.error, duration: 8000 });
+      }
+    } catch (e: any) {
+      toast.error("Eroare neașteptată", { id: toastId, description: e?.message ?? String(e), duration: 8000 });
+    } finally {
+      setDownloading(null);
+    }
+  }
+
+  const isMovie = (catId: number) => [1, 2, 3, 4, 6, 19, 26].includes(catId);
+
+  return (
+    <section>
+      <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
+        <Download className="h-3.5 w-3.5 text-blue-400" /> Caută pe FileList.io
+      </h2>
+
+      <div className="rounded-2xl border border-border bg-card p-3 space-y-3">
+        {/* Search input + category filter */}
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Film sau serial..."
+              className="w-full rounded-xl border border-border bg-background py-2 pl-9 pr-3 text-sm outline-none focus:ring-1 focus:ring-primary"
+            />
+            {searching && (
+              <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+            )}
+          </div>
+          <select
+            value={category}
+            onChange={(e) => setCategory(e.target.value as FilelistCategory)}
+            className="rounded-xl border border-border bg-background px-2 py-2 text-sm outline-none focus:ring-1 focus:ring-primary"
+          >
+            <option value="all">Toate</option>
+            <option value="movies">Filme</option>
+            <option value="series">Seriale</option>
+          </select>
+        </div>
+
+        {/* Eroare căutare */}
+        {searchError && (
+          <div className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">{searchError}</div>
+        )}
+
+        {/* Rezultate */}
+        {results.length > 0 && (
+          <div className="space-y-2">
+            <div className="text-[11px] text-muted-foreground px-0.5">{results.length} rezultate</div>
+            {results.map((t) => (
+              <div
+                key={t.id}
+                className="flex items-start gap-2.5 rounded-xl bg-muted/50 border border-border/50 p-2.5"
+              >
+                {/* Tip */}
+                <div className="mt-0.5 shrink-0">
+                  {isMovie(t.category) ? (
+                    <Film className="h-4 w-4 text-amber-400" />
+                  ) : (
+                    <Tv className="h-4 w-4 text-blue-400" />
+                  )}
+                </div>
+
+                {/* Info */}
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="text-sm font-medium leading-tight break-words">{t.name}</div>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
+                    <span className="rounded bg-muted px-1.5 py-0.5 font-medium">{t.categoryName}</span>
+                    <span className="flex items-center gap-0.5">
+                      <HardDrive className="h-3 w-3" /> {formatBytes(t.size)}
+                    </span>
+                    <span className="flex items-center gap-0.5 text-emerald-400">
+                      <Users className="h-3 w-3" /> {t.seeders}S
+                    </span>
+                    <span className="flex items-center gap-0.5 text-orange-400">
+                      <Users className="h-3 w-3" /> {t.leechers}L
+                    </span>
+                    {t.freeleech && (
+                      <span className="flex items-center gap-0.5 text-yellow-400">
+                        <Zap className="h-3 w-3" /> FL
+                      </span>
+                    )}
+                    {t.upload_date && (
+                      <span>{new Date(t.upload_date).toLocaleDateString("ro-RO")}</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Buton download */}
+                <button
+                  onClick={() => handleDownload(t)}
+                  disabled={downloading === t.id}
+                  className="shrink-0 flex items-center gap-1 rounded-lg bg-blue-500/15 px-2.5 py-1.5 text-[11px] font-medium text-blue-400 hover:bg-blue-500/25 disabled:opacity-50 transition-colors"
+                  title={`Descarcă în ${isMovie(t.category) ? "Filme" : "Seriale"}`}
+                >
+                  {downloading === t.id ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Download className="h-3.5 w-3.5" />
+                  )}
+                  {isMovie(t.category) ? "Film" : "Serial"}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Mesaj gol */}
+        {!searching && query.trim().length >= 2 && results.length === 0 && !searchError && (
+          <div className="text-center text-sm text-muted-foreground py-4">Niciun rezultat găsit.</div>
         )}
       </div>
     </section>
