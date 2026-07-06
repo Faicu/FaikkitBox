@@ -39,7 +39,7 @@ function LansariPage() {
 
       <CustomShowsSection />
       <FilelistSection />
-      <FilelistLogSection />
+      <DownloadLogSection />
     </PageShell>
   );
 }
