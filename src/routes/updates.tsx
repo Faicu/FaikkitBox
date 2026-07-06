@@ -195,6 +195,7 @@ function DeploySection({ onDeploy, isDeploying }: { onDeploy: () => void; isDepl
   const [log, setLog] = useState<string>("");
   const [polling, setPolling] = useState(false);
   const [deployStarted, setDeployStarted] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
   const logRef = useRef<HTMLPreElement>(null);
 
   // Pornește polling-ul după ce s-a apăsat Deploy
@@ -206,8 +207,14 @@ function DeploySection({ onDeploy, isDeploying }: { onDeploy: () => void; isDepl
     async function fetchLog() {
       try {
         const res = await getLogFn();
-        if (active) setLog(res.lines);
-      } catch {}
+        if (active) {
+          setLog(res.lines);
+          setReconnecting(false);
+        }
+      } catch {
+        // Aplicația se restartează — arată "reconnecting" și continuă
+        if (active) setReconnecting(true);
+      }
     }
 
     fetchLog();
@@ -263,7 +270,13 @@ function DeploySection({ onDeploy, isDeploying }: { onDeploy: () => void; isDepl
           <div className="space-y-1.5">
             <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
               {polling && <RefreshCw className="h-3 w-3 animate-spin" />}
-              <span>{polling ? "Urmăresc log-ul în timp real..." : "Deploy finalizat"}</span>
+              <span>
+                {reconnecting
+                  ? "⏳ Aplicația repornește, reconectare..."
+                  : polling
+                  ? "Urmăresc log-ul în timp real..."
+                  : "Deploy finalizat"}
+              </span>
             </div>
             <pre
               ref={logRef}
