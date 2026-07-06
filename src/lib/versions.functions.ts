@@ -32,6 +32,11 @@ function cmp(a?: string, b?: string): boolean | undefined {
 async function fetchJson(url: string, init?: RequestInit, timeoutMs = 8000): Promise<any> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  const githubToken = process.env.GITHUB_TOKEN;
+  const extraHeaders: Record<string, string> =
+    githubToken && url.includes("api.github.com")
+      ? { Authorization: `Bearer ${githubToken}` }
+      : {};
   try {
     const res = await fetch(url, {
       ...init,
@@ -39,6 +44,7 @@ async function fetchJson(url: string, init?: RequestInit, timeoutMs = 8000): Pro
       headers: {
         accept: "application/json",
         "user-agent": "faikkitbox-monitor/1.0",
+        ...extraHeaders,
         ...(init?.headers ?? {}),
       },
     });
