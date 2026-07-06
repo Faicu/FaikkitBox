@@ -241,9 +241,6 @@ function DeploySection({ onDeploy, isDeploying, onLogUpdate }: { onDeploy: () =>
         <div className="flex items-start justify-between gap-3">
           <div className="space-y-0.5">
             <div className="text-sm font-medium">Lansează deploy manual</div>
-            <div className="text-xs text-muted-foreground">
-              git pull + build + restart instant, fără să aștepți cron-ul de 5 minute.
-            </div>
             {deployStarted && (
               <div className="flex items-center gap-1.5 pt-1 text-[11px] text-muted-foreground">
                 {(polling || reconnecting) && <RefreshCw className="h-3 w-3 animate-spin" />}
