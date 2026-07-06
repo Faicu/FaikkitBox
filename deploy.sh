@@ -6,8 +6,8 @@ cd /opt/faikkitbox
 SERVICE="${DEPLOY_SERVICE:-faikkitbox}"
 LOG_FILE="${DEPLOY_LOG:-/var/log/faikkitbox-deploy.log}"
 
-# Redirecționează tot output-ul în fișierul de log, indiferent cum e lansat scriptul
-exec >> "$LOG_FILE" 2>&1
+# Scrie atât în fișierul de log cât și în terminal (tee)
+exec > >(tee -a "$LOG_FILE") 2>&1
 
 echo ""
 echo "[deploy] $(date -Is) — verific main..."

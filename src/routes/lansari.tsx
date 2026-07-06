@@ -23,7 +23,7 @@ export const Route = createFileRoute("/lansari")({
 function LansariPage() {
   const { data: hotdData, isLoading: isHotdLoading } = useQuery(showStatusQuery);
   const { data: camatariiData, isLoading: isCamatariiLoading } = useQuery(camatariiStatusQuery);
-  const { data: adminData } = useQuery(adminStatusQuery);
+  const { data: adminData } = useQuery({ ...adminStatusQuery, throwOnError: false });
   const isAdmin = adminData?.isAdmin ?? false;
 
   const status =
