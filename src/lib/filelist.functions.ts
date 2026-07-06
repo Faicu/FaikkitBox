@@ -339,8 +339,7 @@ export const downloadFilelist = createServerFn({ method: "POST" })
       }
 
       // 5. Găsește hash-ul torrentului proaspăt adăugat
-      // qBit nu returnează hash-ul la upload, îl găsim căutând după nume
-      await new Promise((r) => setTimeout(r, 2000)); // mic delay ca qBit să proceseze
+      await new Promise((r) => setTimeout(r, 2000));
       let torrentHash: string | null = null;
       try {
         const listRes = await fetch(`${url}/api/v2/torrents/info?sort=added_on&reverse=true&limit=5`, {
@@ -349,28 +348,23 @@ export const downloadFilelist = createServerFn({ method: "POST" })
         });
         if (listRes.ok) {
           const list: any[] = await listRes.json();
-          // Caută după nume (primele 5 adăugate recent)
           const match = list.find((t) =>
             String(t.name ?? "").toLowerCase().includes(data.torrentName.slice(0, 20).toLowerCase())
-          ) ?? list[0]; // fallback: cel mai recent adăugat
+          ) ?? list[0];
           torrentHash = match?.hash ?? null;
         }
       } catch (e) {
         console.warn("[filelist] Nu am putut obține hash-ul torrentului:", e);
       }
 
-      // 6. Pornește polling background (nu blochează răspunsul)
+      // 6. Pornește polling background — refresh Plex DOAR la completare
       const plexType = isMovie ? "movie" : "show";
       if (torrentHash) {
-        // Refresh imediat pentru că fișierul poate fi deja parțial disponibil
-        plexFindLibraryKey(plexType).then((key) => { if (key) plexRefreshLibrary(key); }).catch(() => {});
-        // Polling până la completare pentru refresh final
         pollUntilComplete(url, cookie, torrentHash, plexType, data.torrentName).catch((e) =>
           console.error("[filelist] Eroare polling:", e),
         );
       } else {
-        // Fallback dacă nu am hash: refresh simplu imediat
-        plexFindLibraryKey(plexType).then((key) => { if (key) plexRefreshLibrary(key); }).catch(() => {});
+        console.warn("[filelist] Hash nedisponibil — Plex nu va fi refreshuit automat");
       }
 
       return { status: "ok", torrentName: data.torrentName, savePath };
