@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { PageShell } from "@/components/PageShell";
 import { ServicePill } from "@/components/ServicePill";
 import { ErrorCard } from "@/components/ErrorCard";
-import { showStatusQuery, camatariiStatusQuery, filelistLogQuery, adminStatusQuery } from "@/lib/queries";
+import { showStatusQuery, camatariiStatusQuery, filelistLogQuery } from "@/lib/queries";
 import type { ShowStatusData } from "@/lib/services.functions";
 import { searchTvShows, getTvShowStatus } from "@/lib/tvshows.functions";
 import type { TvShowSearchResult, CustomShowStatus } from "@/lib/tvshows.functions";
@@ -21,11 +21,8 @@ export const Route = createFileRoute("/lansari")({
 });
 
 function LansariPage() {
-  const { data: hotdData, isLoading: isHotdLoading } = useQuery({ ...showStatusQuery, throwOnError: false });
-  const { data: camatariiData, isLoading: isCamatariiLoading } = useQuery({ ...camatariiStatusQuery, throwOnError: false });
-  const { data: adminData } = useQuery({ ...adminStatusQuery, throwOnError: false });
-  const isAdmin = adminData?.isAdmin ?? false;
-
+  const { data: hotdData, isLoading: isHotdLoading } = useQuery(showStatusQuery);
+  const { data: camatariiData, isLoading: isCamatariiLoading } = useQuery(camatariiStatusQuery);
   const status =
     isHotdLoading || isCamatariiLoading
       ? "loading"
@@ -41,8 +38,9 @@ function LansariPage() {
       {camatariiData?.status === "ok" && <ShowStatusCard data={camatariiData} />}
 
       <CustomShowsSection />
-      <FilelistSection isAdmin={isAdmin} />
-      {isAdmin && <FilelistLogSection />}    </PageShell>
+      <FilelistSection />
+      <FilelistLogSection />
+    </PageShell>
   );
 }
 
@@ -344,7 +342,7 @@ function formatBytes(bytes: number): string {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
 }
 
-function FilelistSection({ isAdmin }: { isAdmin: boolean }) {
+function FilelistSection() {
   const qc = useQueryClient();
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<FilelistCategory>("all");
@@ -506,9 +504,8 @@ function FilelistSection({ isAdmin }: { isAdmin: boolean }) {
                   </div>
                 </div>
 
-                {/* Buton download — doar pentru admin */}
-                {isAdmin && (
-                  <button
+                {/* Buton download */}
+                <button
                     onClick={() => handleDownload(t)}
                     disabled={downloading === t.id}
                     className="shrink-0 flex items-center gap-1 rounded-lg bg-blue-500/15 px-2.5 py-1.5 text-[11px] font-medium text-blue-400 hover:bg-blue-500/25 disabled:opacity-50 transition-colors"
@@ -539,11 +536,7 @@ function FilelistSection({ isAdmin }: { isAdmin: boolean }) {
 }
 
 function DownloadLogSection() {
-  const { data: log, isLoading } = useQuery({
-    ...filelistLogQuery,
-    throwOnError: false,
-    enabled: typeof window !== "undefined",
-  });
+  const { data: log, isLoading } = useQuery(filelistLogQuery);
   const isMovie = (catId: number) => [1, 2, 3, 4, 6, 19, 26].includes(catId);
 
   if (isLoading || !log || log.length === 0) return null;

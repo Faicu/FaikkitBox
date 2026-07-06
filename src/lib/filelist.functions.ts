@@ -131,8 +131,6 @@ async function markLogEntryComplete(torrentId: number): Promise<void> {
 
 export const getFilelistDownloadLog = createServerFn({ method: "GET" }).handler(
   async (): Promise<FilelistLogEntry[]> => {
-    const { requireAdmin } = await import("./admin.server");
-    await requireAdmin();
     return readDownloadLog();
   },
 );
@@ -339,9 +337,6 @@ export const downloadFilelist = createServerFn({ method: "POST" })
     }) => data,
   )
   .handler(async ({ data }): Promise<FilelistDownloadResult> => {
-    const { requireAdmin } = await import("./admin.server");
-    await requireAdmin();
-
     const username = process.env.FILELIST_USERNAME;
     const passkey = process.env.FILELIST_PASSKEY;
     const qbitBase = process.env.QBIT_URL ?? "http://192.168.1.192:25556";
