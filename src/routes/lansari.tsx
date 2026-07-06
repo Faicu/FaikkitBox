@@ -1,19 +1,19 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Flame, CheckCircle2, XCircle, HelpCircle, Search, Pin, PinOff, ExternalLink, Loader2, Download, Film, Tv, Users, Zap, HardDrive } from "lucide-react";
+import { Flame, CheckCircle2, XCircle, HelpCircle, Search, Pin, PinOff, ExternalLink, Loader2, Download, Film, Tv, Users, Zap, HardDrive, ShieldCheck, History } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 
 import { PageShell } from "@/components/PageShell";
 import { ServicePill } from "@/components/ServicePill";
 import { ErrorCard } from "@/components/ErrorCard";
-import { showStatusQuery, camatariiStatusQuery } from "@/lib/queries";
+import { showStatusQuery, camatariiStatusQuery, filelistLogQuery } from "@/lib/queries";
 import type { ShowStatusData } from "@/lib/services.functions";
 import { searchTvShows, getTvShowStatus } from "@/lib/tvshows.functions";
 import type { TvShowSearchResult, CustomShowStatus } from "@/lib/tvshows.functions";
 import { searchFilelist, downloadFilelist } from "@/lib/filelist.functions";
-import type { FilelistTorrent, FilelistCategory } from "@/lib/filelist.functions";
+import type { FilelistTorrent, FilelistCategory, FilelistLogEntry } from "@/lib/filelist.functions";
 
 export const Route = createFileRoute("/lansari")({
   head: () => ({ meta: [{ title: "Lansări — Monitor Server" }] }),
@@ -342,6 +342,7 @@ function formatBytes(bytes: number): string {
 }
 
 function FilelistSection() {
+  const qc = useQueryClient();
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<FilelistCategory>("all");
   const [results, setResults] = useState<FilelistTorrent[]>([]);
@@ -389,7 +390,14 @@ function FilelistSection() {
     const toastId = toast.loading(`Se descarcă: ${torrent.name}…`);
     try {
       const res = await downloadFn({
-        data: { torrentId: torrent.id, torrentName: torrent.name, categoryId: torrent.category },
+        data: {
+          torrentId: torrent.id,
+          torrentName: torrent.name,
+          categoryId: torrent.category,
+          size: torrent.size,
+          freeleech: torrent.freeleech,
+          internal: torrent.internal,
+        },
       });
       if (res.status === "ok") {
         toast.success(`Adăugat în qBittorrent!`, {
@@ -397,6 +405,7 @@ function FilelistSection() {
           description: `${torrent.name} → ${res.savePath}`,
           duration: 6000,
         });
+        qc.invalidateQueries({ queryKey: ["filelistLog"] });
       } else {
         toast.error("Eroare la descărcare", { id: toastId, description: res.error, duration: 8000 });
       }
@@ -479,8 +488,13 @@ function FilelistSection() {
                       <Users className="h-3 w-3" /> {t.leechers}L
                     </span>
                     {t.freeleech && (
-                      <span className="flex items-center gap-0.5 text-yellow-400">
-                        <Zap className="h-3 w-3" /> FL
+                      <span className="flex items-center gap-0.5 rounded bg-yellow-500/15 px-1.5 py-0.5 font-medium text-yellow-400">
+                        <Zap className="h-3 w-3" /> Freeleech
+                      </span>
+                    )}
+                    {t.internal && (
+                      <span className="flex items-center gap-0.5 rounded bg-purple-500/15 px-1.5 py-0.5 font-medium text-purple-400">
+                        <ShieldCheck className="h-3 w-3" /> Internal
                       </span>
                     )}
                     {t.upload_date && (
@@ -513,7 +527,69 @@ function FilelistSection() {
           <div className="text-center text-sm text-muted-foreground py-4">Niciun rezultat găsit.</div>
         )}
       </div>
+
+      <DownloadLogSection />
     </section>
+  );
+}
+
+function DownloadLogSection() {
+  const { data: log, isLoading } = useQuery(filelistLogQuery);
+  const isMovie = (catId: number) => [1, 2, 3, 4, 6, 19, 26].includes(catId);
+
+  if (isLoading || !log || log.length === 0) return null;
+
+  return (
+    <div className="mt-3">
+      <h3 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
+        <History className="h-3.5 w-3.5" /> Ultimele torrente descărcate
+      </h3>
+      <div className="rounded-2xl border border-border bg-card p-3">
+        <div className="divide-y divide-border/60">
+          {log.slice(0, 10).map((e: FilelistLogEntry) => (
+            <div key={`${e.id}-${e.downloadedAt}`} className="flex items-start gap-2.5 py-2 first:pt-0 last:pb-0">
+              <div className="mt-0.5 shrink-0">
+                {isMovie(e.category) ? (
+                  <Film className="h-4 w-4 text-amber-400" />
+                ) : (
+                  <Tv className="h-4 w-4 text-blue-400" />
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-medium leading-tight break-words">{e.name}</div>
+                <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
+                  <span>
+                    {new Date(e.downloadedAt).toLocaleString("ro-RO", {
+                      day: "numeric",
+                      month: "short",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      timeZone: "Europe/Bucharest",
+                    })}
+                  </span>
+                  <span className="rounded bg-muted px-1.5 py-0.5 font-medium">{e.categoryName}</span>
+                  {e.size > 0 && (
+                    <span className="flex items-center gap-0.5">
+                      <HardDrive className="h-3 w-3" /> {formatBytes(e.size)}
+                    </span>
+                  )}
+                  {e.freeleech && (
+                    <span className="flex items-center gap-0.5 rounded bg-yellow-500/15 px-1.5 py-0.5 font-medium text-yellow-400">
+                      <Zap className="h-3 w-3" /> Freeleech
+                    </span>
+                  )}
+                  {e.internal && (
+                    <span className="flex items-center gap-0.5 rounded bg-purple-500/15 px-1.5 py-0.5 font-medium text-purple-400">
+                      <ShieldCheck className="h-3 w-3" /> Internal
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 

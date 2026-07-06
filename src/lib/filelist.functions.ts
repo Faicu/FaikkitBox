@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
-import { writeFile, unlink } from "node:fs/promises";
+import { writeFile, unlink, readFile, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
 
 // ---------------------------------------------------------------------------
 // Tipuri
@@ -37,6 +37,18 @@ export interface FilelistDownloadResult {
   savePath?: string;
 }
 
+export interface FilelistLogEntry {
+  id: number;
+  name: string;
+  size: number;
+  category: number;
+  categoryName: string;
+  freeleech: boolean;
+  internal: boolean;
+  savePath: string;
+  downloadedAt: string;
+}
+
 // ---------------------------------------------------------------------------
 // Categorii Filelist.io
 // ---------------------------------------------------------------------------
@@ -64,6 +76,51 @@ const CATEGORY_NAMES: Record<number, string> = {
 function isMovieCategory(catId: number): boolean {
   return MOVIE_CATEGORIES.includes(catId);
 }
+
+// ---------------------------------------------------------------------------
+// Log persistent al descărcărilor
+// ---------------------------------------------------------------------------
+
+const MAX_LOG_ENTRIES = 50;
+
+// Fișier untracked în repo-ul de pe server — supraviețuiește deploy-urilor
+// (git reset --hard nu atinge fișierele untracked).
+function downloadLogPath(): string {
+  return (
+    process.env.FILELIST_LOG_FILE ??
+    join(process.env.FAIKKITBOX_REPO_DIR ?? "/opt/faikkitbox", "data", "filelist-downloads.json")
+  );
+}
+
+async function readDownloadLog(): Promise<FilelistLogEntry[]> {
+  try {
+    const raw = await readFile(downloadLogPath(), "utf8");
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+async function appendDownloadLog(entry: FilelistLogEntry): Promise<void> {
+  try {
+    const file = downloadLogPath();
+    await mkdir(dirname(file), { recursive: true });
+    const log = await readDownloadLog();
+    log.unshift(entry);
+    await writeFile(file, JSON.stringify(log.slice(0, MAX_LOG_ENTRIES), null, 2), "utf8");
+  } catch (e) {
+    console.warn("[filelist] Nu am putut scrie log-ul de descărcări:", e);
+  }
+}
+
+export const getFilelistDownloadLog = createServerFn({ method: "GET" }).handler(
+  async (): Promise<FilelistLogEntry[]> => {
+    const { requireAdmin } = await import("./admin.server");
+    await requireAdmin();
+    return readDownloadLog();
+  },
+);
 
 // ---------------------------------------------------------------------------
 // Helper: autentificare qBittorrent (cookie SID)
@@ -258,7 +315,16 @@ export const searchFilelist = createServerFn({ method: "GET" })
 // ---------------------------------------------------------------------------
 
 export const downloadFilelist = createServerFn({ method: "POST" })
-  .inputValidator((data: { torrentId: number; torrentName: string; categoryId: number }) => data)
+  .inputValidator(
+    (data: {
+      torrentId: number;
+      torrentName: string;
+      categoryId: number;
+      size?: number;
+      freeleech?: boolean;
+      internal?: boolean;
+    }) => data,
+  )
   .handler(async ({ data }): Promise<FilelistDownloadResult> => {
     const { requireAdmin } = await import("./admin.server");
     await requireAdmin();
@@ -366,6 +432,19 @@ export const downloadFilelist = createServerFn({ method: "POST" })
       } else {
         console.warn("[filelist] Hash nedisponibil — Plex nu va fi refreshuit automat");
       }
+
+      // 7. Loghează descărcarea (non-fatal dacă scrierea eșuează)
+      await appendDownloadLog({
+        id: data.torrentId,
+        name: data.torrentName,
+        size: data.size ?? 0,
+        category: data.categoryId,
+        categoryName: CATEGORY_NAMES[data.categoryId] ?? `Cat ${data.categoryId}`,
+        freeleech: data.freeleech ?? false,
+        internal: data.internal ?? false,
+        savePath,
+        downloadedAt: new Date().toISOString(),
+      });
 
       return { status: "ok", torrentName: data.torrentName, savePath };
     } finally {

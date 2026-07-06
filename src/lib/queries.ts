@@ -3,7 +3,8 @@ import { getPlex, getImmich, getQbit, getHost, getShowStatus, getCamatariiStatus
 import { getAdminStatus } from "./admin.functions";
 import { getVersions } from "./versions.functions";
 import { getLastSpeedtest } from "./speedtest.functions";
-import { getDeployStatus } from "./deploy.functions";
+import { getDeployStatus, getRecentCommits } from "./deploy.functions";
+import { getFilelistDownloadLog } from "./filelist.functions";
 
 const REFRESH_MS = 1100;
 
@@ -76,5 +77,20 @@ export const deployStatusQuery = queryOptions({
   queryFn: () => getDeployStatus(),
   refetchInterval: 2 * 60_000,
   staleTime: 60_000,
+  refetchOnWindowFocus: true,
+});
+
+export const recentCommitsQuery = queryOptions({
+  queryKey: ["recentCommits"],
+  queryFn: () => getRecentCommits(),
+  refetchInterval: 5 * 60_000,
+  staleTime: 60_000,
+  refetchOnWindowFocus: true,
+});
+
+export const filelistLogQuery = queryOptions({
+  queryKey: ["filelistLog"],
+  queryFn: () => getFilelistDownloadLog(),
+  staleTime: 30_000,
   refetchOnWindowFocus: true,
 });
