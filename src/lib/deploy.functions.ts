@@ -22,6 +22,46 @@ export interface DeployStatus {
 const REPO_DIR = process.env.FAIKKITBOX_REPO_DIR ?? "/opt/faikkitbox";
 const GITHUB_REPO = process.env.GITHUB_REPO ?? "Faicu/FaikkitBox";
 
+export interface GitCommitInfo {
+  sha: string;
+  shortSha: string;
+  message: string;
+  author: string;
+  date: string;
+  url: string;
+}
+
+export interface RecentCommitsResult {
+  status: "ok" | "error";
+  error?: string;
+  commits: GitCommitInfo[];
+}
+
+export const getRecentCommits = createServerFn({ method: "GET" }).handler(async (): Promise<RecentCommitsResult> => {
+  try {
+    const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/commits?per_page=5`, {
+      headers: { Accept: "application/vnd.github+json", "User-Agent": "faikkitbox-dashboard" },
+      signal: AbortSignal.timeout(6000),
+    });
+    if (!res.ok) throw new Error(`GitHub API a raspuns ${res.status}`);
+    const raw: any[] = await res.json();
+    if (!Array.isArray(raw)) throw new Error("Raspuns neasteptat de la GitHub API");
+
+    const commits: GitCommitInfo[] = raw.map((c) => ({
+      sha: String(c.sha ?? ""),
+      shortSha: String(c.sha ?? "").slice(0, 7),
+      message: String(c.commit?.message ?? "").split("\n")[0],
+      author: c.commit?.author?.name ?? c.author?.login ?? "necunoscut",
+      date: c.commit?.author?.date ?? c.commit?.committer?.date ?? "",
+      url: c.html_url ?? `https://github.com/${GITHUB_REPO}/commit/${c.sha}`,
+    }));
+
+    return { status: "ok", commits };
+  } catch (e) {
+    return { status: "error", error: e instanceof Error ? e.message : String(e), commits: [] };
+  }
+});
+
 export const getDeployStatus = createServerFn({ method: "GET" }).handler(async (): Promise<DeployStatus> => {
   try {
     const { stdout: branchOut } = await execFileAsync("git", ["-C", REPO_DIR, "rev-parse", "--abbrev-ref", "HEAD"]);
