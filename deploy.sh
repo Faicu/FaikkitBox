@@ -28,4 +28,8 @@ npm run build
 echo "[deploy] restart serviciu systemd..."
 sudo systemctl restart "$SERVICE"
 
+# Asigură existența directorului pentru log-ul de descărcări
+mkdir -p /opt/faikkitbox/data
+chown faicu:faicu /opt/faikkitbox/data 2>/dev/null || true
+
 echo "[deploy] gata: $(git rev-parse --short HEAD)"
