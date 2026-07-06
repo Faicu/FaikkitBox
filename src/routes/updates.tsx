@@ -243,30 +243,36 @@ function DeploySection({ onDeploy, isDeploying, onLogUpdate }: { onDeploy: () =>
       <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
         <Rocket className="h-3.5 w-3.5 text-emerald-400" /> Deploy FaikkitBox
       </h2>
-      <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="space-y-0.5">
-            <div className="text-sm font-medium">Lansează deploy manual</div>
-            {deployStarted && (
-              <div className="flex items-center gap-1.5 pt-1 text-[11px] text-muted-foreground">
-                {(polling || reconnecting) && <RefreshCw className="h-3 w-3 animate-spin" />}
-                <span>
-                  {reconnecting ? "⏳ Aplicația repornește, reconectare..." : polling ? "Urmăresc log-ul — vezi Ieșire mai jos" : "Finalizat"}
-                </span>
-              </div>
-            )}
-          </div>
-          <button
-            onClick={handleDeploy}
-            disabled={isDeploying}
-            className="shrink-0 flex items-center gap-2 rounded-xl bg-emerald-500/20 border border-emerald-500/30 px-4 py-2 text-sm font-medium text-emerald-400 hover:bg-emerald-500/30 disabled:opacity-50 transition-colors"
-          >
-            {isDeploying
-              ? <><RefreshCw className="h-4 w-4 animate-spin" /> Se pornește...</>
-              : <><Rocket className="h-4 w-4" /> Deploy acum</>}
-          </button>
+      <button
+        onClick={handleDeploy}
+        disabled={isDeploying}
+        className="flex w-full items-center justify-between gap-2 rounded-2xl border border-emerald-500/25 bg-emerald-500/5 px-4 py-3 text-sm hover:bg-emerald-500/10 disabled:opacity-50 transition-colors"
+      >
+        <span className="flex items-center gap-2.5">
+          <Rocket className="h-4 w-4 text-emerald-400 shrink-0" />
+          <span className="font-medium">Deploy manual</span>
+          <span className="text-xs text-muted-foreground font-normal">git pull + build + restart</span>
+        </span>
+        <span className="text-xs shrink-0 flex items-center gap-1.5">
+          {isDeploying ? (
+            <span className="flex items-center gap-1.5 text-emerald-400"><RefreshCw className="h-3 w-3 animate-spin" />Se pornește...</span>
+          ) : deployStarted && (polling || reconnecting) ? (
+            <span className="flex items-center gap-1.5 text-emerald-400">
+              <RefreshCw className="h-3 w-3 animate-spin" />
+              {reconnecting ? "Repornire..." : "Deploy în curs"}
+            </span>
+          ) : deployStarted && !polling ? (
+            <span className="text-emerald-400">✓ Finalizat</span>
+          ) : (
+            <span className="text-muted-foreground">Rulează</span>
+          )}
+        </span>
+      </button>
+      {deployStarted && (polling || reconnecting) && (
+        <div className="px-1 text-[11px] text-muted-foreground">
+          {reconnecting ? "⏳ Aplicația repornește, reconectare..." : "Urmăresc log-ul în timp real — vezi secțiunea Ieșire de mai jos."}
         </div>
-      </div>
+      )}
     </section>
   );
 }
