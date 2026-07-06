@@ -59,8 +59,6 @@ function commandSteps(cmd: AgentCommand): Step[] {
         { argv: ["sudo", "systemctl", "restart", "qbittorrent-nox"] },
       ];
     case "restart_plex":
-      // "sudo" e necesar aici nu doar pentru docker, ci si pentru ca /root/plex
-      // e ilizibil pentru orice user in afara de root (permisiuni implicite 700).
       return [{ argv: ["sudo", "docker-compose", "-f", plexCompose, "restart"] }];
     case "restart_immich":
       return [{ argv: ["sudo", "docker-compose", "-f", immichCompose, "restart"] }];
@@ -96,7 +94,9 @@ export const getDeployLog = createServerFn({ method: "GET" }).handler(async (): 
   } catch {
     return { lines: "", updatedAt: new Date().toISOString() };
   }
-});({ method: "POST" })
+});
+
+export const runAgentCommand = createServerFn({ method: "POST" })
   .inputValidator((data: { cmd: AgentCommand }) => {
     if (!ALLOWED.includes(data.cmd)) {
       throw new Error(`Comanda nu este permisă: ${data.cmd}`);
@@ -132,7 +132,8 @@ export const getDeployLog = createServerFn({ method: "GET" }).handler(async (): 
           return { ok: true, exit_code: 0, stdout: stdoutParts.join(""), stderr: "" };
         }
         const [cmd, ...args] = step.argv;
-        stdoutParts.push(`$ ${step.argv.join(" ")}\n`);        try {
+        stdoutParts.push(`$ ${step.argv.join(" ")}\n`);
+        try {
           const { stdout, stderr } = await execFileAsync(cmd, args, { timeout: 1_800_000 });
           if (stdout) stdoutParts.push(stdout);
           if (stderr) stderrParts.push(stderr);
