@@ -63,8 +63,6 @@ function UpdatesInner() {
     >
       <DeploySection onDeploy={() => m.mutate("deploy_app")} isDeploying={running === "deploy_app"} onLogUpdate={setDeployLog} />
 
-      <RecentCommitsSection />
-
       <section className="space-y-2">
         <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Versiuni servicii</h2>
         {versions.isLoading && <div className="text-sm text-muted-foreground">Se încarcă versiunile...</div>}
@@ -75,10 +73,12 @@ function UpdatesInner() {
             <VersionCard icon={<Images className="h-5 w-5 text-purple-400" />} v={versions.data.immich}
               restartCmd="restart_immich" updateCmd="update_immich" running={running} onRun={m.mutate} />
             <VersionCard icon={<Download className="h-5 w-5 text-sky-400" />} v={versions.data.qbit}
-              restartCmd="restart_qbit" running={running} onRun={m.mutate} />
+              restartCmd="restart_qbit" flushDnsCmd="flush_dns" running={running} onRun={m.mutate} />
           </div>
         )}
       </section>
+
+      <RecentCommitsSection />
 
       <section className="space-y-2">
         <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
@@ -87,7 +87,6 @@ function UpdatesInner() {
         <div className="grid grid-cols-1 gap-2 rounded-2xl border border-border bg-card p-3">
           <ActionButton icon={<PackageOpen className="h-4 w-4" />} label="apt-get update" cmd="apt_update" running={running} onRun={m.mutate} />
           <ActionButton icon={<PackageCheck className="h-4 w-4" />} label="apt-get upgrade -y" cmd="apt_upgrade" running={running} onRun={m.mutate} />
-          <ActionButton icon={<Trash2 className="h-4 w-4" />} label="Clear DNS Cache + repornește qBittorrent" cmd="flush_dns" running={running} onRun={m.mutate} />
         </div>
       </section>
 
@@ -270,6 +269,7 @@ function VersionCard({
   v,
   restartCmd,
   updateCmd,
+  flushDnsCmd,
   running,
   onRun,
 }: {
@@ -277,6 +277,7 @@ function VersionCard({
   v: ServiceVersion;
   restartCmd: AgentCommand;
   updateCmd?: AgentCommand;
+  flushDnsCmd?: AgentCommand;
   running: AgentCommand | null;
   onRun: (c: AgentCommand) => void;
 }) {
@@ -286,6 +287,10 @@ function VersionCard({
     : up
     ? { text: "La zi", cls: "bg-emerald-500/20 text-emerald-400" }
     : { text: "Actualizare disponibilă", cls: "bg-amber-500/20 text-amber-400" };
+
+  // Dacă e qBit — butonul de restart face flush DNS + restart
+  const effectiveRestartCmd = flushDnsCmd ?? restartCmd;
+  const isRestarting = running === restartCmd || running === (flushDnsCmd ?? restartCmd);
 
   return (
     <div className="rounded-2xl border border-border bg-card p-3">
@@ -319,11 +324,19 @@ function VersionCard({
           </a>
         )}
         <button
-          onClick={() => onRun(restartCmd)}
-          disabled={running === restartCmd}
+          title={flushDnsCmd ? "Clear DNS Cache + repornește serviciul qBittorrent" : undefined}
+          onClick={() => {
+            if (flushDnsCmd) {
+              if (!confirm("Șterge DNS Cache și repornește qBittorrent?\n\nAceastă acțiune va:\n• Curăța cache-ul DNS\n• Reporni serviciul qBittorrent")) return;
+              onRun(flushDnsCmd);
+            } else {
+              onRun(restartCmd);
+            }
+          }}
+          disabled={isRestarting}
           className="rounded-lg border border-sky-500/30 bg-sky-500/15 px-2.5 py-1 text-xs font-medium text-sky-400 hover:bg-sky-500/25 disabled:opacity-50"
         >
-          {running === restartCmd ? "Se repornește..." : "Repornește serviciul"}
+          {isRestarting ? "Se repornește..." : "Repornește"}
         </button>
         {updateCmd && (
           <button
