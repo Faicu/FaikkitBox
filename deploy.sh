@@ -25,11 +25,11 @@ echo "[deploy] instalez dependinte + build..."
 npm install
 npm run build
 
+# Asigură existența directorului pentru log-ul de descărcări (înainte de restart)
+sudo mkdir -p /opt/faikkitbox/data
+sudo chown faicu:faicu /opt/faikkitbox/data 2>/dev/null || true
+
 echo "[deploy] restart serviciu systemd..."
 sudo systemctl restart "$SERVICE"
-
-# Asigură existența directorului pentru log-ul de descărcări
-mkdir -p /opt/faikkitbox/data
-chown faicu:faicu /opt/faikkitbox/data 2>/dev/null || true
 
 echo "[deploy] gata: $(git rev-parse --short HEAD)"
