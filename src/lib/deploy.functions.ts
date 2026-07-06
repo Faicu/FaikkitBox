@@ -37,10 +37,19 @@ export interface RecentCommitsResult {
   commits: GitCommitInfo[];
 }
 
+function githubHeaders(): Record<string, string> {
+  const h: Record<string, string> = {
+    Accept: "application/vnd.github+json",
+    "User-Agent": "faikkitbox-dashboard",
+  };
+  if (process.env.GITHUB_TOKEN) h["Authorization"] = `Bearer ${process.env.GITHUB_TOKEN}`;
+  return h;
+}
+
 export const getRecentCommits = createServerFn({ method: "GET" }).handler(async (): Promise<RecentCommitsResult> => {
   try {
     const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/commits?per_page=5`, {
-      headers: { Accept: "application/vnd.github+json", "User-Agent": "faikkitbox-dashboard" },
+      headers: githubHeaders(),
       signal: AbortSignal.timeout(6000),
     });
     if (!res.ok) throw new Error(`GitHub API a raspuns ${res.status}`);
@@ -79,7 +88,7 @@ export const getDeployStatus = createServerFn({ method: "GET" }).handler(async (
     // Repo public - nu e nevoie de token pentru citire (rate limit 60/ora fara autentificare,
     // suficient pentru un refresh la cateva minute).
     const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/commits/${branch}`, {
-      headers: { Accept: "application/vnd.github+json", "User-Agent": "faikkitbox-dashboard" },
+      headers: githubHeaders(),
       signal: AbortSignal.timeout(6000),
     });
     if (!res.ok) throw new Error(`GitHub API a raspuns ${res.status}`);
