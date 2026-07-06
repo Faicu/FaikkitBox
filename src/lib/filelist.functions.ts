@@ -135,6 +135,20 @@ export const getFilelistDownloadLog = createServerFn({ method: "GET" }).handler(
   },
 );
 
+export const deleteFilelistLogEntry = createServerFn({ method: "POST" })
+  .inputValidator((data: { id: number }) => data)
+  .handler(async ({ data }): Promise<{ ok: boolean }> => {
+    try {
+      const file = downloadLogPath();
+      const log = await readDownloadLog();
+      const filtered = log.filter((e) => e.id !== data.id);
+      await writeFile(file, JSON.stringify(filtered, null, 2), "utf8");
+      return { ok: true };
+    } catch {
+      return { ok: false };
+    }
+  });
+
 // ---------------------------------------------------------------------------
 // Helper: autentificare qBittorrent (cookie SID)
 // ---------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Flame, CheckCircle2, XCircle, HelpCircle, Search, Pin, PinOff, ExternalLink, Loader2, Download, Film, Tv, Users, Zap, HardDrive, ShieldCheck, History } from "lucide-react";
+import { Flame, CheckCircle2, XCircle, HelpCircle, Search, Pin, PinOff, ExternalLink, Loader2, Download, Film, Tv, Users, Zap, HardDrive, ShieldCheck, History, Trash2 } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 
@@ -12,7 +12,7 @@ import { showStatusQuery, camatariiStatusQuery, filelistLogQuery } from "@/lib/q
 import type { ShowStatusData } from "@/lib/services.functions";
 import { searchTvShows, getTvShowStatus } from "@/lib/tvshows.functions";
 import type { TvShowSearchResult, CustomShowStatus } from "@/lib/tvshows.functions";
-import { searchFilelist, downloadFilelist } from "@/lib/filelist.functions";
+import { searchFilelist, downloadFilelist, deleteFilelistLogEntry } from "@/lib/filelist.functions";
 import type { FilelistTorrent, FilelistCategory, FilelistLogEntry } from "@/lib/filelist.functions";
 
 export const Route = createFileRoute("/lansari")({
@@ -528,15 +528,20 @@ function FilelistSection() {
           <div className="text-center text-sm text-muted-foreground py-4">Niciun rezultat găsit.</div>
         )}
       </div>
-
-      <DownloadLogSection />
     </section>
   );
 }
 
 function DownloadLogSection() {
+  const queryClient = useQueryClient();
   const { data: log, isLoading } = useQuery(filelistLogQuery);
+  const deleteFn = useServerFn(deleteFilelistLogEntry);
   const isMovie = (catId: number) => [1, 2, 3, 4, 6, 19, 26].includes(catId);
+
+  async function handleDelete(id: number) {
+    await deleteFn({ data: { id } });
+    queryClient.invalidateQueries({ queryKey: ["filelistLog"] });
+  }
 
   if (isLoading || !log || log.length === 0) return null;
 
@@ -601,6 +606,13 @@ function DownloadLogSection() {
                   )}
                 </div>
               </div>
+              <button
+                onClick={() => handleDelete(e.id)}
+                className="shrink-0 mt-0.5 rounded-lg p-1.5 text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                title="Șterge din log"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
             </div>
           ))}
         </div>
