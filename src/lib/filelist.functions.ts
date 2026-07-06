@@ -260,9 +260,6 @@ async function plexFindLibraryKey(type: "movie" | "show"): Promise<string | null
 export const searchFilelist = createServerFn({ method: "GET" })
   .inputValidator((data: { query: string; category?: FilelistCategory }) => data)
   .handler(async ({ data }): Promise<FilelistSearchResult> => {
-    const { requireAdmin } = await import("./admin.server");
-    await requireAdmin();
-
     const username = process.env.FILELIST_USERNAME;
     const passkey = process.env.FILELIST_PASSKEY;
     if (!username || !passkey) {
