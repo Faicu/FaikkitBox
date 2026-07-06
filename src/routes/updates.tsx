@@ -71,7 +71,7 @@ function UpdatesInner() {
             m.mutate("apt_full_upgrade");
           }}
           disabled={running === "apt_full_upgrade"}
-          className="flex w-full items-center justify-between gap-2 rounded-2xl border border-border bg-card px-4 py-3 text-sm hover:bg-muted disabled:opacity-50 transition-colors"
+          className="group flex w-full items-center justify-between gap-2 rounded-2xl border border-border bg-card px-4 py-3 text-sm hover:bg-muted disabled:opacity-50 transition-colors"
         >
           <span className="flex items-center gap-2.5">
             <PackageCheck className="h-4 w-4 text-emerald-400 shrink-0" />
@@ -79,7 +79,7 @@ function UpdatesInner() {
             <span className="text-xs text-muted-foreground font-normal">apt-get update + upgrade</span>
           </span>
           <span className="text-xs text-muted-foreground shrink-0">
-            {running === "apt_full_upgrade" ? <><RefreshCw className="inline h-3 w-3 animate-spin mr-1" />Rulează...</> : "Rulează"}
+            {running === "apt_full_upgrade" ? <><RefreshCw className="inline h-3 w-3 animate-spin mr-1" />Rulează...</> : <span className="rounded-lg bg-muted border border-border px-2.5 py-1 text-[11px] font-medium text-muted-foreground group-hover:text-foreground">Rulează</span>}
           </span>
         </button>
         {versions.isLoading && <div className="text-sm text-muted-foreground">Se încarcă versiunile...</div>}
@@ -270,7 +270,7 @@ function DeploySection({ onDeploy, isDeploying, onLogUpdate }: { onDeploy: () =>
           ) : deployStarted && !polling ? (
             <span className="text-emerald-400">✓ Finalizat</span>
           ) : (
-            <span className="text-muted-foreground">Rulează</span>
+            <span className="rounded-lg bg-emerald-500/15 border border-emerald-500/25 px-2.5 py-1 text-[11px] font-medium text-emerald-400">Rulează</span>
           )}
         </span>
       </button>
