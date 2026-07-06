@@ -348,7 +348,7 @@ function VersionCard({
         >
           {isRestarting ? "Se repornește..." : "Repornește"}
         </button>
-        {updateCmd && (
+        {updateCmd && v.upToDate === false && (
           <button
             onClick={() => {
               if (!confirm(`Actualizezi ${v.name}? Serviciul va fi oprit (down), imaginea actualizată (pull) și repornit (up -d). Poate dura câteva minute.`)) return;
