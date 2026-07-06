@@ -98,8 +98,60 @@ async function qbitEnsureCookie(url: string, user: string, pass: string): Promis
 }
 
 // ---------------------------------------------------------------------------
-// Helper: refresh bibliotecă Plex
+// Background polling: verifică progresul torrentului și refresh Plex la final
 // ---------------------------------------------------------------------------
+
+async function pollUntilComplete(
+  qbitUrl: string,
+  cookie: string,
+  torrentHash: string,
+  plexType: "movie" | "show",
+  torrentName: string,
+): Promise<void> {
+  const MAX_WAIT_MS = 48 * 60 * 60 * 1000; // 48 ore maxim
+  const POLL_INTERVAL_MS = 30_000;           // verifică la fiecare 30s
+  const started = Date.now();
+
+  console.log(`[filelist] Pornesc polling pentru "${torrentName}" (${torrentHash})`);
+
+  while (Date.now() - started < MAX_WAIT_MS) {
+    await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+
+    try {
+      const res = await fetch(
+        `${qbitUrl}/api/v2/torrents/info?hashes=${torrentHash}`,
+        { headers: { Cookie: cookie }, signal: AbortSignal.timeout(10_000) },
+      );
+      if (!res.ok) continue;
+
+      const list: any[] = await res.json();
+      if (!list.length) continue;
+
+      const torrent = list[0];
+      const progress = Number(torrent.progress ?? 0);
+      const state: string = torrent.state ?? "";
+
+      console.log(`[filelist] "${torrentName}" — progress: ${(progress * 100).toFixed(1)}% state: ${state}`);
+
+      // Complet = progress 1 și state uploading/stalledUP/pausedUP
+      const isDone = progress >= 1 && (
+        state.includes("UP") || state === "uploading" || state === "pausedUP" || state === "stalledUP"
+      );
+
+      if (isDone) {
+        console.log(`[filelist] "${torrentName}" complet — dau refresh Plex`);
+        const sectionKey = await plexFindLibraryKey(plexType);
+        if (sectionKey) await plexRefreshLibrary(sectionKey);
+        console.log(`[filelist] Plex refresh trimis pentru secțiunea ${sectionKey}`);
+        return;
+      }
+    } catch (e) {
+      console.warn(`[filelist] Eroare polling qBit: ${e}`);
+    }
+  }
+
+  console.warn(`[filelist] Timeout polling pentru "${torrentName}" după 48h`);
+}
 
 async function plexRefreshLibrary(sectionKey: string): Promise<void> {
   const base = process.env.PLEX_URL ?? "http://127.0.0.1:32400";
@@ -282,17 +334,43 @@ export const downloadFilelist = createServerFn({ method: "POST" })
       }
 
       const uploadText = await uploadRes.text();
-      // qBit returnează "Ok." pentru succes
       if (!uploadText.includes("Ok")) {
-        // Nu tratăm ca eroare fatală — uneori returnează gol dar tot funcționează
         console.warn("qBit upload răspuns neașteptat:", uploadText);
       }
 
-      // 5. Refresh biblioteca Plex corespunzătoare
+      // 5. Găsește hash-ul torrentului proaspăt adăugat
+      // qBit nu returnează hash-ul la upload, îl găsim căutând după nume
+      await new Promise((r) => setTimeout(r, 2000)); // mic delay ca qBit să proceseze
+      let torrentHash: string | null = null;
+      try {
+        const listRes = await fetch(`${url}/api/v2/torrents/info?sort=added_on&reverse=true&limit=5`, {
+          headers: { Cookie: cookie },
+          signal: AbortSignal.timeout(10_000),
+        });
+        if (listRes.ok) {
+          const list: any[] = await listRes.json();
+          // Caută după nume (primele 5 adăugate recent)
+          const match = list.find((t) =>
+            String(t.name ?? "").toLowerCase().includes(data.torrentName.slice(0, 20).toLowerCase())
+          ) ?? list[0]; // fallback: cel mai recent adăugat
+          torrentHash = match?.hash ?? null;
+        }
+      } catch (e) {
+        console.warn("[filelist] Nu am putut obține hash-ul torrentului:", e);
+      }
+
+      // 6. Pornește polling background (nu blochează răspunsul)
       const plexType = isMovie ? "movie" : "show";
-      const sectionKey = await plexFindLibraryKey(plexType);
-      if (sectionKey) {
-        await plexRefreshLibrary(sectionKey);
+      if (torrentHash) {
+        // Refresh imediat pentru că fișierul poate fi deja parțial disponibil
+        plexFindLibraryKey(plexType).then((key) => { if (key) plexRefreshLibrary(key); }).catch(() => {});
+        // Polling până la completare pentru refresh final
+        pollUntilComplete(url, cookie, torrentHash, plexType, data.torrentName).catch((e) =>
+          console.error("[filelist] Eroare polling:", e),
+        );
+      } else {
+        // Fallback dacă nu am hash: refresh simplu imediat
+        plexFindLibraryKey(plexType).then((key) => { if (key) plexRefreshLibrary(key); }).catch(() => {});
       }
 
       return { status: "ok", torrentName: data.torrentName, savePath };
