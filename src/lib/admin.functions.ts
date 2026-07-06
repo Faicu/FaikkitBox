@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 
 export const adminLogin = createServerFn({ method: "POST" })
-  .inputValidator((data: { user: string; pass: string }) => data)
+  .validator((data: { user: string; pass: string }) => data)
   .handler(async ({ data }) => {
     const { getSession, eq } = await import("./admin.server");
     const expectedUser = process.env.ADMIN_USER ?? "";

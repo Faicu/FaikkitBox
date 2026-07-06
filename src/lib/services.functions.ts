@@ -894,7 +894,7 @@ async function qbitPost(url: string, path: string, user: string, pass: string, f
 }
 
 export const qbitAction = createServerFn({ method: "POST" })
-  .inputValidator((data: { hashes: string[] | "all"; action: "pause" | "resume" }) => data)
+  .validator((data: { hashes: string[] | "all"; action: "pause" | "resume" }) => data)
   .handler(async ({ data }): Promise<{ ok: boolean; error?: string }> => {
     const { requireAdmin } = await import("./admin.server");
     try { await requireAdmin(); } catch (e) { return { ok: false, error: (e as Error).message }; }

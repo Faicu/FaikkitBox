@@ -23,7 +23,7 @@ export interface TvShowSearchResult {
 }
 
 export const searchTvShows = createServerFn({ method: "GET" })
-  .inputValidator((data: { query: string }) => data)
+  .validator((data: { query: string }) => data)
   .handler(async ({ data }): Promise<TvShowSearchResult[]> => {
     const q = data.query.trim();
     if (!q) return [];
@@ -52,7 +52,7 @@ export interface CustomShowStatus extends ShowStatusData {
 }
 
 export const getTvShowStatus = createServerFn({ method: "GET" })
-  .inputValidator((data: { showId: number }) => data)
+  .validator((data: { showId: number }) => data)
   .handler(async ({ data }): Promise<CustomShowStatus> => {
     try {
       const res = await fetch(`${TVMAZE_BASE}/shows/${data.showId}?embed=episodes`, {

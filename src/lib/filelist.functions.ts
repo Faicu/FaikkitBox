@@ -136,7 +136,7 @@ export const getFilelistDownloadLog = createServerFn({ method: "GET" }).handler(
 );
 
 export const deleteFilelistLogEntry = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: number }) => data)
+  .validator((data: { id: number }) => data)
   .handler(async ({ data }): Promise<{ ok: boolean }> => {
     try {
       const file = downloadLogPath();
@@ -270,7 +270,7 @@ async function plexFindLibraryKey(type: "movie" | "show"): Promise<string | null
 // ---------------------------------------------------------------------------
 
 export const searchFilelist = createServerFn({ method: "GET" })
-  .inputValidator((data: { query: string; category?: FilelistCategory }) => data)
+  .validator((data: { query: string; category?: FilelistCategory }) => data)
   .handler(async ({ data }): Promise<FilelistSearchResult> => {
     const username = process.env.FILELIST_USERNAME;
     const passkey = process.env.FILELIST_PASSKEY;
@@ -340,7 +340,7 @@ export const searchFilelist = createServerFn({ method: "GET" })
 // ---------------------------------------------------------------------------
 
 export const downloadFilelist = createServerFn({ method: "POST" })
-  .inputValidator(
+  .validator(
     (data: {
       torrentId: number;
       torrentName: string;

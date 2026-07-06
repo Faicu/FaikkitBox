@@ -104,7 +104,7 @@ export const getDeployLog = createServerFn({ method: "GET" }).handler(async (): 
 });
 
 export const runAgentCommand = createServerFn({ method: "POST" })
-  .inputValidator((data: { cmd: AgentCommand }) => {
+  .validator((data: { cmd: AgentCommand }) => {
     if (!ALLOWED.includes(data.cmd)) {
       throw new Error(`Comanda nu este permisă: ${data.cmd}`);
     }
