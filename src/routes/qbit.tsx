@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowDown, ArrowUp, HardDrive, Percent, Timer, Play, Pause, ChevronDown } from "lucide-react";
+import { ArrowDown, ArrowUp, HardDrive, Percent, Timer, Play, Pause, ChevronDown, Search, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageShell } from "@/components/PageShell";
@@ -37,6 +37,7 @@ function QbitPage() {
   const queryClient = useQueryClient();
   const action = useServerFn(qbitAction);
   const [openList, setOpenList] = useState<"downloading" | "seeding" | "paused" | null>(null);
+  const [torrentSearch, setTorrentSearch] = useState("");
   const mutation = useMutation({
     mutationFn: (vars: { hashes: string[] | "all"; action: "pause" | "resume" }) =>
       action({ data: vars }),
@@ -57,6 +58,12 @@ function QbitPage() {
       ? (mutation.variables.hashes as string[])[0]
       : null;
   const pendingAll = mutation.isPending && mutation.variables?.hashes === "all";
+
+  const filteredTorrents = data?.torrents
+    ? [...data.torrents]
+        .sort((a, b) => b.addedOn - a.addedOn)
+        .filter(t => !torrentSearch || t.name.toLowerCase().includes(torrentSearch.toLowerCase()))
+    : [];
 
   return (
     <PageShell
@@ -204,14 +211,36 @@ function QbitPage() {
           )}
 
           <section>
-            <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Torrente ({data.torrents.length})
-            </h2>
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Torrente ({data.torrents.length})
+              </h2>
+            </div>
+            {/* Search bar */}
+            <div className="relative mb-2">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <input
+                value={torrentSearch}
+                onChange={e => setTorrentSearch(e.target.value)}
+                placeholder="Caută în torrente..."
+                className="w-full rounded-xl border border-border bg-background py-2 pl-9 pr-9 text-sm outline-none focus:ring-1 focus:ring-primary"
+              />
+              {torrentSearch && (
+                <button
+                  onClick={() => setTorrentSearch("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
             {data.torrents.length === 0 ? (
               <div className="rounded-2xl border border-border bg-card p-4 text-sm text-muted-foreground">Niciun torrent.</div>
+            ) : filteredTorrents.length === 0 ? (
+              <div className="rounded-2xl border border-border bg-card p-4 text-sm text-muted-foreground">Niciun rezultat pentru „{torrentSearch}".</div>
             ) : (
               <div className="space-y-2">
-                {[...data.torrents].sort((a, b) => b.addedOn - a.addedOn).map((t) => {
+                {filteredTorrents.map((t) => {
                   const b = stateBadge(t.state);
                   const isPaused = /paus|stop/i.test(t.state);
                   const busy = pendingHash === t.hash;
