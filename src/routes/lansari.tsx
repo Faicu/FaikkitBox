@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { PageShell } from "@/components/PageShell";
 import { ServicePill } from "@/components/ServicePill";
 import { ErrorCard } from "@/components/ErrorCard";
-import { showStatusQuery, camatariiStatusQuery, filelistLogQuery } from "@/lib/queries";
+import { showStatusQuery, filelistLogQuery } from "@/lib/queries";
 import type { ShowStatusData } from "@/lib/services.functions";
 import { searchTvShows, getTvShowStatus } from "@/lib/tvshows.functions";
 import type { TvShowSearchResult } from "@/lib/tvshows.functions";
@@ -22,20 +22,12 @@ export const Route = createFileRoute("/lansari")({
 
 function LansariPage() {
   const { data: hotdData, isLoading: isHotdLoading } = useQuery(showStatusQuery);
-  const { data: camatariiData, isLoading: isCamatariiLoading } = useQuery(camatariiStatusQuery);
-  const status =
-    isHotdLoading || isCamatariiLoading
-      ? "loading"
-      : hotdData?.status === "error" || camatariiData?.status === "error"
-        ? "error"
-        : "ok";
+  const status = isHotdLoading ? "loading" : hotdData?.status === "error" ? "error" : "ok";
 
   return (
     <PageShell title="Lansări" subtitle="Calendar seriale" right={<ServicePill status={status} />}>
       {hotdData?.status === "error" && <ErrorCard title="House of the Dragon indisponibil" message={hotdData.error ?? "Eroare necunoscută"} />}
       {hotdData?.status === "ok" && <ShowStatusCard data={hotdData} />}
-      {camatariiData?.status === "error" && <ErrorCard title="Camatarii indisponibil" message={camatariiData.error ?? "Eroare necunoscută"} />}
-      {camatariiData?.status === "ok" && <ShowStatusCard data={camatariiData} />}
 
       <CustomShowsSection />
       <FilelistSection />
