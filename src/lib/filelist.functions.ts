@@ -326,8 +326,12 @@ export const searchFilelist = createServerFn({ method: "GET" })
         imdb: t.imdb || undefined,
       }));
 
-      // Sortează: mai întâi seeders descrescător
-      torrents.sort((a, b) => b.seeders - a.seeders);
+      // Sortează după data postării, cel mai recent primul
+      torrents.sort((a, b) => {
+        const da = a.upload_date ? new Date(a.upload_date).getTime() : 0;
+        const db = b.upload_date ? new Date(b.upload_date).getTime() : 0;
+        return db - da;
+      });
 
       return { status: "ok", torrents };
     } catch (e: any) {

@@ -446,25 +446,28 @@ function FilelistSection() {
 
         {/* Filtre calitate */}
         <div className="flex gap-2">
-          {(["1080p", "4K"] as const).map((q) => {
-            const active = qualityFilters.has(q);
+          {([
+            { label: "1080p", color: "blue" },
+            { label: "4K",    color: "purple" },
+          ] as const).map(({ label, color }) => {
+            const active = qualityFilters.has(label);
+            const styles = {
+              blue:   active ? "border-blue-500/60 bg-blue-500/25 text-blue-300 shadow-sm shadow-blue-500/20" : "border-border bg-muted/40 text-muted-foreground hover:border-blue-500/40 hover:text-blue-300",
+              purple: active ? "border-purple-500/60 bg-purple-500/25 text-purple-300 shadow-sm shadow-purple-500/20" : "border-border bg-muted/40 text-muted-foreground hover:border-purple-500/40 hover:text-purple-300",
+            };
             return (
               <button
-                key={q}
+                key={label}
                 onClick={() => {
                   setQualityFilters(prev => {
                     const next = new Set(prev);
-                    if (next.has(q)) next.delete(q); else next.add(q);
+                    if (next.has(label)) next.delete(label); else next.add(label);
                     return next;
                   });
                 }}
-                className={`rounded-lg border px-3 py-1 text-xs font-medium transition-colors ${
-                  active
-                    ? "border-blue-500/50 bg-blue-500/20 text-blue-300"
-                    : "border-border bg-muted/40 text-muted-foreground hover:text-foreground"
-                }`}
+                className={`rounded-lg border px-3 py-1 text-xs font-semibold tracking-wide transition-all ${styles[color]}`}
               >
-                {q}
+                {label}
               </button>
             );
           })}
