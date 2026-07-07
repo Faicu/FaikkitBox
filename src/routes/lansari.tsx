@@ -342,6 +342,7 @@ function FilelistSection() {
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState<number | null>(null);
+  const [qualityFilters, setQualityFilters] = useState<Set<string>>(new Set());
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const searchFn = useServerFn(searchFilelist);
@@ -443,16 +444,56 @@ function FilelistSection() {
           </select>
         </div>
 
+        {/* Filtre calitate */}
+        <div className="flex gap-2">
+          {(["1080p", "4K"] as const).map((q) => {
+            const active = qualityFilters.has(q);
+            return (
+              <button
+                key={q}
+                onClick={() => {
+                  setQualityFilters(prev => {
+                    const next = new Set(prev);
+                    if (next.has(q)) next.delete(q); else next.add(q);
+                    return next;
+                  });
+                }}
+                className={`rounded-lg border px-3 py-1 text-xs font-medium transition-colors ${
+                  active
+                    ? "border-blue-500/50 bg-blue-500/20 text-blue-300"
+                    : "border-border bg-muted/40 text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {q}
+              </button>
+            );
+          })}
+          {qualityFilters.size > 0 && (
+            <span className="self-center text-[11px] text-muted-foreground ml-1">
+              {qualityFilters.size === 2 ? "Afișez 1080p + 4K" : `Afișez doar ${[...qualityFilters][0]}`}
+            </span>
+          )}
+        </div>
+
         {/* Eroare căutare */}
         {searchError && (
           <div className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">{searchError}</div>
         )}
 
         {/* Rezultate */}
-        {results.length > 0 && (
+        {results.length > 0 && (() => {
+          const displayed = qualityFilters.size === 0 ? results : results.filter(t => {
+            const name = t.name.toLowerCase();
+            return [...qualityFilters].some(f =>
+              f === "4K" ? name.includes("2160p") || name.includes("4k") : name.includes("1080p")
+            );
+          });
+          return (
           <div className="space-y-2">
-            <div className="text-[11px] text-muted-foreground px-0.5">{results.length} rezultate</div>
-            {results.map((t) => (
+            <div className="text-[11px] text-muted-foreground px-0.5">
+              {displayed.length} {qualityFilters.size > 0 ? `din ${results.length}` : ""} rezultate
+            </div>
+            {displayed.map((t) => (
               <div
                 key={t.id}
                 className="flex items-start gap-2.5 rounded-xl bg-muted/50 border border-border/50 p-2.5"
@@ -513,7 +554,8 @@ function FilelistSection() {
               </div>
             ))}
           </div>
-        )}
+          );
+        })()}
 
         {/* Mesaj gol */}
         {!searching && query.trim().length >= 2 && results.length === 0 && !searchError && (
