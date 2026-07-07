@@ -388,6 +388,7 @@ function FilelistSection() {
           torrentId: torrent.id,
           torrentName: torrent.name,
           categoryId: torrent.category,
+          categoryName: torrent.categoryName,
           size: torrent.size,
           freeleech: torrent.freeleech,
           internal: torrent.internal,

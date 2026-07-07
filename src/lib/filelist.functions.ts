@@ -349,6 +349,7 @@ export const downloadFilelist = createServerFn({ method: "POST" })
       torrentId: number;
       torrentName: string;
       categoryId: number;
+      categoryName?: string;
       size?: number;
       freeleech?: boolean;
       internal?: boolean;
@@ -456,13 +457,13 @@ export const downloadFilelist = createServerFn({ method: "POST" })
 
       // 6. Loghează descărcarea imediat (completedAt null = în curs)
       const catId = Number(data.categoryId);
-      console.log("[filelist] categoryId raw:", data.categoryId, "-> Number:", catId, "-> name:", CATEGORY_NAMES[catId]);
+      const catName = data.categoryName || CATEGORY_NAMES[catId] || `Cat ${catId}`;
       await appendDownloadLog({
         id: data.torrentId,
         name: data.torrentName,
         size: data.size ?? 0,
-        category: Number(data.categoryId),
-        categoryName: CATEGORY_NAMES[Number(data.categoryId)] ?? `Cat ${data.categoryId}`,
+        category: catId,
+        categoryName: catName,
         freeleech: data.freeleech ?? false,
         internal: data.internal ?? false,
         savePath,
