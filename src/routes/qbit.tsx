@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowDown, ArrowUp, HardDrive, Percent, Timer, Play, Pause, ChevronDown, Search, X } from "lucide-react";
+import { ArrowDown, ArrowUp, HardDrive, Percent, Timer, Play, Pause, ChevronDown, Search, X, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageShell } from "@/components/PageShell";
@@ -263,6 +263,17 @@ function QbitPage() {
                             }`}
                           >
                             {isPaused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
+                          </button>}
+                          {isAdmin && <button
+                            onClick={() => {
+                              if (!confirm(`Ștergi torrentul și fișierele de pe disk?\n\n${t.name}`)) return;
+                              mutation.mutate({ hashes: [t.hash], action: "delete" });
+                            }}
+                            disabled={busy}
+                            title="Șterge torrent + fișiere"
+                            className="rounded-md border border-red-500/30 bg-red-500/10 p-1 text-red-400 hover:bg-red-500/20 transition disabled:opacity-50"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
                           </button>}
                         </div>
                       </div>

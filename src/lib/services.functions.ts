@@ -894,7 +894,7 @@ async function qbitPost(url: string, path: string, user: string, pass: string, f
 }
 
 export const qbitAction = createServerFn({ method: "POST" })
-  .validator((data: { hashes: string[] | "all"; action: "pause" | "resume" }) => data)
+  .validator((data: { hashes: string[] | "all"; action: "pause" | "resume" | "delete" }) => data)
   .handler(async ({ data }): Promise<{ ok: boolean; error?: string }> => {
     const { requireAdmin } = await import("./admin.server");
     try { await requireAdmin(); } catch (e) { return { ok: false, error: (e as Error).message }; }
@@ -904,10 +904,13 @@ export const qbitAction = createServerFn({ method: "POST" })
     if (!base || !user || !pass) return { ok: false, error: "qBittorrent not configured" };
     const url = stripSlash(base);
     const hashesStr = data.hashes === "all" ? "all" : data.hashes.join("|");
-    // qBit 4.x: pause/resume. 5.x also accepts stop/start. Try primary then fallback.
-    const primary = data.action === "pause" ? "/api/v2/torrents/pause" : "/api/v2/torrents/resume";
-    const fallback = data.action === "pause" ? "/api/v2/torrents/stop" : "/api/v2/torrents/start";
     try {
+      if (data.action === "delete") {
+        const res = await qbitPost(url, "/api/v2/torrents/delete", user, pass, { hashes: hashesStr, deleteFiles: "true" });
+        return { ok: res.ok };
+      }
+      const primary = data.action === "pause" ? "/api/v2/torrents/pause" : "/api/v2/torrents/resume";
+      const fallback = data.action === "pause" ? "/api/v2/torrents/stop" : "/api/v2/torrents/start";
       let res = await qbitPost(url, primary, user, pass, { hashes: hashesStr });
       if (!res.ok) {
         res = await qbitPost(url, fallback, user, pass, { hashes: hashesStr });
