@@ -61,7 +61,7 @@ export function AppHeader({ title, subtitle, right }: Props) {
     if (deployingRef.current) return;
     if (toastIdRef.current) return;
 
-    let seconds = 10;
+    let seconds = 5;
 
     async function triggerDeploy() {
       deployingRef.current = true;
@@ -95,7 +95,7 @@ export function AppHeader({ title, subtitle, right }: Props) {
         deployingRef.current = false;
         qc.invalidateQueries({ queryKey: ["recentCommits"] });
         // Reload după 3 secunde ca userul să vadă toast-ul
-        setTimeout(() => window.location.reload(), 3000);
+        setTimeout(() => window.location.reload(), 5000);
       }
 
       const poll = setInterval(async () => {
