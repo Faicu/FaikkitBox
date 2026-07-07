@@ -348,7 +348,12 @@ export const downloadFilelist = createServerFn({ method: "POST" })
       size?: number;
       freeleech?: boolean;
       internal?: boolean;
-    }) => data,
+    }) => ({
+      ...data,
+      torrentId: Number(data.torrentId),
+      categoryId: Number(data.categoryId),
+      size: data.size !== undefined ? Number(data.size) : undefined,
+    }),
   )
   .handler(async ({ data }): Promise<FilelistDownloadResult> => {
     const username = process.env.FILELIST_USERNAME;
