@@ -80,8 +80,6 @@ function UpdatesInner() {
               restartCmd="restart_plex" updateCmd="update_plex" running={running} onRun={m.mutate} />
             <VersionCard icon={<Images className="h-5 w-5 text-purple-400" />} v={versions.data.immich}
               restartCmd="restart_immich" updateCmd="update_immich" running={running} onRun={m.mutate} />
-            <VersionCard icon={<Download className="h-5 w-5 text-sky-400" />} v={versions.data.qbit}
-              restartCmd="restart_qbit" flushDnsCmd="flush_dns" running={running} onRun={m.mutate} />
           </div>
         )}
       </section>
