@@ -451,6 +451,8 @@ export const downloadFilelist = createServerFn({ method: "POST" })
       }
 
       // 6. Loghează descărcarea imediat (completedAt null = în curs)
+      const catId = Number(data.categoryId);
+      console.log("[filelist] categoryId raw:", data.categoryId, "-> Number:", catId, "-> name:", CATEGORY_NAMES[catId]);
       await appendDownloadLog({
         id: data.torrentId,
         name: data.torrentName,
