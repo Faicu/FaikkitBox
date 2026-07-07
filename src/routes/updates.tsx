@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useRef, useState } from "react";
-import { RefreshCw, PlayCircle, Images, Download, PackageCheck, ArrowUpCircle, Rocket, GitCommitHorizontal, ExternalLink } from "lucide-react";
+import { RefreshCw, PlayCircle, Images, PackageCheck, ArrowUpCircle, Rocket, GitCommitHorizontal, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageShell } from "@/components/PageShell";
@@ -277,7 +277,6 @@ function VersionCard({
   v,
   restartCmd,
   updateCmd,
-  flushDnsCmd,
   running,
   onRun,
 }: {
@@ -285,7 +284,6 @@ function VersionCard({
   v: ServiceVersion;
   restartCmd: AgentCommand;
   updateCmd?: AgentCommand;
-  flushDnsCmd?: AgentCommand;
   running: AgentCommand | null;
   onRun: (c: AgentCommand) => void;
 }) {
@@ -296,9 +294,7 @@ function VersionCard({
     ? { text: "La zi", cls: "bg-emerald-500/20 text-emerald-400" }
     : { text: "Actualizare disponibilă", cls: "bg-amber-500/20 text-amber-400" };
 
-  // Dacă e qBit — butonul de restart face flush DNS + restart
-  const effectiveRestartCmd = flushDnsCmd ?? restartCmd;
-  const isRestarting = running === restartCmd || running === (flushDnsCmd ?? restartCmd);
+  const isRestarting = running === restartCmd;
 
   return (
     <div className="rounded-2xl border border-border bg-card p-3">
@@ -332,15 +328,7 @@ function VersionCard({
           </a>
         )}
         <button
-          title={flushDnsCmd ? "Clear DNS Cache + repornește serviciul qBittorrent" : undefined}
-          onClick={() => {
-            if (flushDnsCmd) {
-              if (!confirm("Șterge DNS Cache și repornește qBittorrent?\n\nAceastă acțiune va:\n• Curăța cache-ul DNS\n• Reporni serviciul qBittorrent")) return;
-              onRun(flushDnsCmd);
-            } else {
-              onRun(restartCmd);
-            }
-          }}
+          onClick={() => onRun(restartCmd)}
           disabled={isRestarting}
           className="rounded-lg border border-sky-500/30 bg-sky-500/15 px-2.5 py-1 text-xs font-medium text-sky-400 hover:bg-sky-500/25 disabled:opacity-50"
         >

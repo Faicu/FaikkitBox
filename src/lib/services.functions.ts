@@ -635,19 +635,6 @@ const HOTD_SHOW_TITLE = "House of the Dragon";
 // ATENTIE: numarul total de episoade (8) si data finalului nu au putut fi
 // confirmate dintr-o sursa oficiala la data scrierii - verificat manual pe
 // VOYO/Plex daca sezonul chiar se termina la Ep8, altfel ajusteaza mai jos.
-const CAMATARII_S1_EPISODES: Array<{ episode: number; title: string; airDateIso: string }> = [
-  { episode: 1, title: "Episodul 1", airDateIso: "2026-05-25T20:30:00Z" },
-  { episode: 2, title: "Episodul 2", airDateIso: "2026-05-25T20:30:00Z" },
-  { episode: 3, title: "Episodul 3", airDateIso: "2026-06-01T20:30:00Z" },
-  { episode: 4, title: "Episodul 4", airDateIso: "2026-06-08T20:30:00Z" },
-  { episode: 5, title: "Episodul 5", airDateIso: "2026-06-15T20:30:00Z" },
-  { episode: 6, title: "Episodul 6", airDateIso: "2026-06-22T20:30:00Z" },
-  { episode: 7, title: "Episodul 7", airDateIso: "2026-06-29T20:30:00Z" },
-  { episode: 8, title: "Episodul 8 (finalul sezonului)", airDateIso: "2026-07-06T20:30:00Z" },
-];
-const CAMATARII_SEASON = 1;
-const CAMATARII_SHOW_TITLE = "Cămătarii";
-
 export async function checkPlexHasEpisode(showTitle: string, season: number, episode: number): Promise<boolean | null> {
   const token = process.env.PLEX_TOKEN;
   const base = process.env.PLEX_URL;
@@ -692,10 +679,6 @@ export async function checkPlexHasEpisode(showTitle: string, season: number, epi
 
 export const getShowStatus = createServerFn({ method: "GET" }).handler(async (): Promise<ShowStatusData> => {
   return await buildShowStatus(HOTD_SHOW_TITLE, HOTD_SEASON, HOTD_S3_EPISODES);
-});
-
-export const getCamatariiStatus = createServerFn({ method: "GET" }).handler(async (): Promise<ShowStatusData> => {
-  return await buildShowStatus(CAMATARII_SHOW_TITLE, CAMATARII_SEASON, CAMATARII_S1_EPISODES);
 });
 
 async function buildShowStatus(

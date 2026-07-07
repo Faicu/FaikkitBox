@@ -1,5 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
-import { getPlex, getImmich, getQbit, getHost, getShowStatus, getCamatariiStatus } from "./services.functions";
+import { getPlex, getImmich, getQbit, getHost, getShowStatus } from "./services.functions";
 import { getAdminStatus } from "./admin.functions";
 import { getVersions } from "./versions.functions";
 import { getLastSpeedtest } from "./speedtest.functions";
@@ -40,13 +40,6 @@ export const hostQuery = queryOptions({
 export const showStatusQuery = queryOptions({
   queryKey: ["showStatus"],
   queryFn: () => getShowStatus(),
-  refetchInterval: 60_000,
-  staleTime: 30_000,
-});
-
-export const camatariiStatusQuery = queryOptions({
-  queryKey: ["camatariiStatus"],
-  queryFn: () => getCamatariiStatus(),
   refetchInterval: 60_000,
   staleTime: 30_000,
 });

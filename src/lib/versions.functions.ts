@@ -101,28 +101,9 @@ async function immichVersion(): Promise<ServiceVersion> {
   return v;
 }
 
-async function qbitVersion(): Promise<ServiceVersion> {
-  const v: ServiceVersion = { name: "qBittorrent", changelog: "https://github.com/qbittorrent/qBittorrent/releases" };
-  try {
-    const { getQbit } = await import("./services.functions");
-    const data = await getQbit();
-    if (data.status === "ok") v.current = (data as any).version;
-  } catch (e) {
-    v.error = `qBit curent: ${(e as Error).message}`;
-  }
-  try {
-    const j = await fetchJson("https://api.github.com/repos/qbittorrent/qBittorrent/releases/latest");
-    v.latest = j?.tag_name?.replace(/^release-/, "");
-  } catch (e) {
-    v.error = v.error ?? `qBit ultima: ${(e as Error).message}`;
-  }
-  v.upToDate = cmp(v.current, v.latest);
-  return v;
-}
-
 export const getVersions = createServerFn({ method: "GET" }).handler(async () => {
   const { requireAdmin } = await import("./admin.server");
   await requireAdmin();
-  const [plex, immich, qbit] = await Promise.all([plexVersion(), immichVersion(), qbitVersion()]);
-  return { plex, immich, qbit, fetchedAt: new Date().toISOString() };
+  const [plex, immich] = await Promise.all([plexVersion(), immichVersion()]);
+  return { plex, immich, fetchedAt: new Date().toISOString() };
 });

@@ -48,6 +48,7 @@ export interface FilelistLogEntry {
   savePath: string;
   downloadedAt: string;
   completedAt: string | null;
+  torrentHash?: string; // pentru resume polling după restart server
 }
 
 // ---------------------------------------------------------------------------
@@ -266,6 +267,52 @@ async function plexFindLibraryKey(type: "movie" | "show"): Promise<string | null
 }
 
 // ---------------------------------------------------------------------------
+// Resume polling pentru descărcări întrerupte de restart server
+// ---------------------------------------------------------------------------
+
+let resumeDone = false;
+
+async function resumeOrphanedPolls(): Promise<void> {
+  if (resumeDone) return;
+  resumeDone = true;
+
+  try {
+    const log = await readDownloadLog();
+    const orphaned = log.filter((e) => e.completedAt === null && e.torrentHash);
+    if (orphaned.length === 0) return;
+
+    const qbitBase = process.env.QBIT_URL;
+    const qbitUser = process.env.QBIT_USERNAME;
+    const qbitPass = process.env.QBIT_PASSWORD;
+    if (!qbitBase || !qbitUser || !qbitPass) return;
+
+    const url = qbitBase.replace(/\/$/, "");
+    let cookie: string;
+    try {
+      cookie = await qbitLogin(url, qbitUser, qbitPass);
+    } catch (e) {
+      console.warn("[filelist] Resume: login qBit eșuat:", e);
+      return;
+    }
+
+    console.log(`[filelist] Reiau polling pentru ${orphaned.length} descărcări întrerupte de restart`);
+    for (const entry of orphaned) {
+      const plexType = isMovieCategory(entry.category) ? "movie" : "show";
+      pollUntilComplete(url, cookie, entry.torrentHash!, plexType, entry.name, entry.id).catch((e) =>
+        console.error("[filelist] Eroare resume polling:", e),
+      );
+    }
+  } catch (e) {
+    console.warn("[filelist] resumeOrphanedPolls eșuat:", e);
+  }
+}
+
+// Rulează la 15s după încărcarea modulului (serverul e pornit complet)
+if (typeof process !== "undefined" && process.env) {
+  setTimeout(() => { resumeOrphanedPolls(); }, 15_000);
+}
+
+// ---------------------------------------------------------------------------
 // Server function: căutare pe Filelist.io
 // ---------------------------------------------------------------------------
 
@@ -469,6 +516,7 @@ export const downloadFilelist = createServerFn({ method: "POST" })
         savePath,
         downloadedAt: new Date().toISOString(),
         completedAt: null,
+        torrentHash: torrentHash ?? undefined,
       });
 
       // 7. Pornește polling background — refresh Plex și marchează complet DOAR la final
