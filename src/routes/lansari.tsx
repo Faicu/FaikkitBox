@@ -452,8 +452,12 @@ function FilelistSection() {
           ] as const).map(({ label, color }) => {
             const active = qualityFilters.has(label);
             const styles = {
-              blue:   active ? "border-blue-500/60 bg-blue-500/25 text-blue-300 shadow-sm shadow-blue-500/20" : "border-border bg-muted/40 text-muted-foreground hover:border-blue-500/40 hover:text-blue-300",
-              purple: active ? "border-purple-500/60 bg-purple-500/25 text-purple-300 shadow-sm shadow-purple-500/20" : "border-border bg-muted/40 text-muted-foreground hover:border-purple-500/40 hover:text-purple-300",
+              blue:   active
+                ? "border-blue-400/70 bg-blue-500/30 text-blue-200 shadow-sm shadow-blue-500/30"
+                : "border-blue-500/40 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 hover:text-blue-300",
+              purple: active
+                ? "border-purple-400/70 bg-purple-500/30 text-purple-200 shadow-sm shadow-purple-500/30"
+                : "border-purple-500/40 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 hover:text-purple-300",
             };
             return (
               <button
