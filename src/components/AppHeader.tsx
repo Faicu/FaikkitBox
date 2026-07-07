@@ -86,14 +86,16 @@ export function AppHeader({ title, subtitle, right }: Props) {
       function onSuccess() {
         clearInterval(poll);
         clearTimeout(stop);
-        toast.success("✅ Deploy finalizat!", {
+        toast.success("✅ Deploy finalizat! Se reîmprospătează...", {
           id: toastId,
           description: `Commit ${data.remoteShortSha} aplicat cu succes.`,
-          duration: 6000,
+          duration: 3000,
         });
         toastIdRef.current = null;
         deployingRef.current = false;
         qc.invalidateQueries({ queryKey: ["recentCommits"] });
+        // Reload după 3 secunde ca userul să vadă toast-ul
+        setTimeout(() => window.location.reload(), 3000);
       }
 
       const poll = setInterval(async () => {
