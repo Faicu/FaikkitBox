@@ -34,7 +34,9 @@ export const hostQuery = queryOptions({
   queryKey: ["host"],
   queryFn: () => getHost(),
   refetchInterval: REFRESH_MS,
+  refetchIntervalInBackground: true,
   staleTime: 0,
+  placeholderData: (prev: any) => prev,
 });
 
 export const showStatusQuery = queryOptions({

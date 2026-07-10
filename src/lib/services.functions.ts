@@ -1029,20 +1029,29 @@ export const getQbit = createServerFn({ method: "GET" }).handler(async (): Promi
 
 // ---------- Host (systeminformation, local — nu mai trece prin Glances) ----------
 
+// Cache pentru date statice care nu se schimbă
+let staticHostCache: { osInfo: any; cpu: any } | null = null;
+
 export const getHost = createServerFn({ method: "GET" }).handler(async (): Promise<HostData> => {
   try {
     const si = await import("systeminformation");
     const os = await import("node:os");
 
-    const [osInfo, currentLoad, mem, fsSize, netStats, cpuTemp, cpu, processes, dockerContainers] =
+    // Date statice — preluate o singură dată și cachate în memorie
+    if (!staticHostCache) {
+      const [osInfo, cpu] = await Promise.all([si.osInfo(), si.cpu()]);
+      staticHostCache = { osInfo, cpu };
+    }
+    const { osInfo, cpu } = staticHostCache;
+
+    // Date dinamice — preluate la fiecare refresh
+    const [currentLoad, mem, fsSize, netStats, cpuTemp, processes, dockerContainers] =
       await Promise.all([
-        si.osInfo(),
         si.currentLoad(),
         si.mem(),
         si.fsSize(),
         si.networkStats(),
         si.cpuTemperature().catch(() => null),
-        si.cpu(),
         si.processes(),
         si.dockerContainers().catch(() => [] as Awaited<ReturnType<typeof si.dockerContainers>>),
       ]);
