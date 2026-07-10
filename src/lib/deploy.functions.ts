@@ -99,8 +99,8 @@ export const getDeployStatus = createServerFn({ method: "GET" }).handler(async (
     const remoteMessage: string = (remote.commit?.message ?? "").split("\n")[0];
     const remoteDate: string = remote.commit?.author?.date ?? remote.commit?.committer?.date ?? "";
 
-    return {
-      status: "ok",
+    const result = {
+      status: "ok" as const,
       branch,
       localSha,
       localShortSha,
@@ -112,6 +112,13 @@ export const getDeployStatus = createServerFn({ method: "GET" }).handler(async (
       remoteDate,
       upToDate: localSha === remoteSha,
     };
+
+    // Tracking deploy (detectează când SHA local se schimbă)
+    import("./activity-log").then(({ trackDeploy }) =>
+      trackDeploy(localSha, localMessage)
+    ).catch(() => {});
+
+    return result;
   } catch (e) {
     return { status: "error", error: e instanceof Error ? e.message : String(e) };
   }

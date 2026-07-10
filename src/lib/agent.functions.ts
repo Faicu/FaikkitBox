@@ -162,3 +162,28 @@ export const runAgentCommand = createServerFn({ method: "POST" })
       return { ok: false, error: (e as Error).message };
     }
   });
+
+// Logging activitate agenți (fire and forget, după execuție)
+export async function logAgentActivity(cmd: AgentCommand, ok: boolean): Promise<void> {
+  const { logActivity } = await import("./activity-log");
+  const messages: Partial<Record<AgentCommand, string>> = {
+    restart_plex: "Plex a fost repornit",
+    restart_immich: "Immich a fost repornit",
+    restart_qbit: "qBittorrent a fost repornit",
+    update_plex: "Plex a fost actualizat (docker pull + up)",
+    update_immich: "Immich a fost actualizat (docker pull + up)",
+    apt_update: "Ubuntu: apt-get update rulat",
+    apt_upgrade: "Ubuntu: apt-get upgrade rulat",
+    apt_full_upgrade: "Ubuntu actualizat complet (update + upgrade)",
+    flush_dns: "Cache DNS curățat + qBittorrent repornit",
+    deploy_app: "Deploy FaikkitBox declanșat manual",
+    uptime: undefined, // nu logăm uptime
+  };
+  const msg = messages[cmd];
+  if (!msg) return;
+  const type = cmd.startsWith("update_") ? "service_update"
+    : cmd.startsWith("restart_") ? "service_restart"
+    : cmd.startsWith("apt_") ? "ubuntu_update"
+    : "deploy";
+  await logActivity(type as any, ok ? msg : `${msg} — EȘUAT`, { cmd, ok });
+}

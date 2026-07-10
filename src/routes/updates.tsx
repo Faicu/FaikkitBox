@@ -7,7 +7,7 @@ import { toast } from "sonner";
 
 import { PageShell } from "@/components/PageShell";
 import { adminStatusQuery, versionsQuery, recentCommitsQuery } from "@/lib/queries";
-import { runAgentCommand, getDeployLog, type AgentCommand, type AgentResult } from "@/lib/agent.functions";
+import { runAgentCommand, getDeployLog, logAgentActivity, type AgentCommand, type AgentResult } from "@/lib/agent.functions";
 import type { ServiceVersion } from "@/lib/versions.functions";
 
 export const Route = createFileRoute("/updates")({
@@ -39,6 +39,7 @@ function UpdatesInner() {
     mutationFn: (cmd: AgentCommand) => run({ data: { cmd } }),
     onSuccess: (res, cmd) => {
       setOutput({ cmd, res });
+      logAgentActivity(cmd, res.ok).catch(() => {});
       if (res.ok) toast.success(`Comanda ${cmd} a rulat cu succes`);
       else toast.error(`Comanda ${cmd} a eșuat: ${res.error ?? `exit ${res.exit_code}`}`);
     },

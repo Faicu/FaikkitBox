@@ -226,6 +226,10 @@ async function pollUntilComplete(
       if (isDone) {
         console.log(`[filelist] "${torrentName}" complet — dau refresh Plex`);
         await markLogEntryComplete(torrentId);
+        // Log activitate completare
+        import("./activity-log").then(({ logActivity }) =>
+          logActivity("torrent_complete", `Torrent descărcat complet: ${torrentName}`, { torrentId })
+        ).catch(() => {});
         const sectionKey = await plexFindLibraryKey(plexType);
         if (sectionKey) await plexRefreshLibrary(sectionKey);
         console.log(`[filelist] Plex refresh trimis pentru secțiunea ${sectionKey}`);
@@ -505,6 +509,13 @@ export const downloadFilelist = createServerFn({ method: "POST" })
       // 6. Loghează descărcarea imediat (completedAt null = în curs)
       const catId = Number(data.categoryId);
       const catName = data.categoryName || CATEGORY_NAMES[catId] || `Cat ${catId}`;
+
+      // Log activitate
+      import("./activity-log").then(({ logActivity }) =>
+        logActivity("torrent_added", `Torrent adăugat: ${data.torrentName}`, {
+          category: catName, savePath, size: data.size,
+        })
+      ).catch(() => {});
       await appendDownloadLog({
         id: data.torrentId,
         name: data.torrentName,

@@ -4,7 +4,14 @@ import { getAdminStatus } from "./admin.functions";
 import { getVersions } from "./versions.functions";
 import { getLastSpeedtest } from "./speedtest.functions";
 import { getDeployStatus, getRecentCommits } from "./deploy.functions";
-import { getFilelistDownloadLog } from "./filelist.functions";
+import { getActivityLog } from "./activity-log";
+
+export const activityLogQuery = queryOptions({
+  queryKey: ["activityLog"],
+  queryFn: () => getActivityLog(),
+  refetchInterval: 10_000,
+  staleTime: 5_000,
+});
 
 const REFRESH_MS = 1100;
 

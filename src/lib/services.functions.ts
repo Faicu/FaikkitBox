@@ -570,9 +570,16 @@ export const getPlex = createServerFn({ method: "GET" }).handler(async (): Promi
       };
     });
 
+    // Tracking activitate Plex
+    const { trackPlexSessions } = await import("./activity-log");
+    trackPlexSessions(sessions.map(s => ({
+      user: s.user,
+      title: s.title,
+      grandparentTitle: s.grandparentTitle,
+      player: s.player,
+    }))).catch(() => {});
+
     return {
-      status: "ok",
-      serverName: mc.friendlyName,
       version: mc.version ? `${mc.version} · ${discovered.source}` : discovered.source,
       platform: mc.platform,
       sessions,
@@ -810,6 +817,23 @@ export const getImmich = createServerFn({ method: "GET" }).handler(async (): Pro
       totalAssets: Number(stats?.photos ?? 0) + Number(stats?.videos ?? 0),
       photos: Number(stats?.photos ?? 0),
       videos: Number(stats?.videos ?? 0),
+      usageBytes: Number(stats?.usage ?? 0),
+      usageByUser,
+      activeJobs,
+      topUploaders,
+      jobQueueDepth,
+      uploadsToday,
+      uploadsThisWeek,
+    };
+
+    // Tracking activitate Immich (fire and forget)
+    import("./activity-log").then(({ trackImmichUploads }) =>
+      trackImmichUploads(uploadsToday ?? 0, uploadsThisWeek ?? 0)
+    ).catch(() => {});
+
+    return {
+      status: "ok" as const,
+      version: versionStr,
       usageBytes: Number(stats?.usage ?? 0),
       usageByUser,
       activeJobs,

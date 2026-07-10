@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { PlayCircle, Images, Download, Cpu, ChevronRight, Users, HardDrive, ListChecks, Gauge, ArrowDown, ArrowUp, Activity, Tv, Film } from "lucide-react";
+import { PlayCircle, Images, Download, Cpu, ChevronRight, Users, HardDrive, ListChecks, Gauge, ArrowDown, ArrowUp, Activity, Tv, Film, ScrollText, Rocket, RefreshCw, CheckCircle2, Server, Package } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -9,7 +9,8 @@ import { PageShell } from "@/components/PageShell";
 import { ServicePill } from "@/components/ServicePill";
 import { RadialGauge } from "@/components/RadialGauge";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription } from "@/components/ui/drawer";
-import { plexQuery, immichQuery, qbitQuery, hostQuery, adminStatusQuery, lastSpeedtestQuery } from "@/lib/queries";
+import { plexQuery, immichQuery, qbitQuery, hostQuery, adminStatusQuery, lastSpeedtestQuery, activityLogQuery } from "@/lib/queries";
+import type { ActivityEntry } from "@/lib/activity-log";
 import type { HostData } from "@/lib/services.functions";
 import { runSpeedtest } from "@/lib/speedtest.functions";
 import { formatBytes, formatSpeed } from "@/lib/format";
@@ -353,6 +354,7 @@ function Overview() {
           </div>
         </DrawerContent>
       </Drawer>
+      <ActivityLogSection />
     </PageShell>
   );
 }
@@ -451,5 +453,64 @@ function MetricButton({
       </div>
       <div className="text-sm font-semibold tabular-nums">{value}</div>
     </button>
+  );
+}
+
+function ActivityLogSection() {
+  const { data: log, isLoading } = useQuery(activityLogQuery);
+
+  const iconMap: Record<string, React.ReactNode> = {
+    server_start:     <Server className="h-3.5 w-3.5 text-emerald-400" />,
+    deploy:           <Rocket className="h-3.5 w-3.5 text-indigo-400" />,
+    plex_watch_start: <PlayCircle className="h-3.5 w-3.5 text-amber-400" />,
+    plex_watch_stop:  <PlayCircle className="h-3.5 w-3.5 text-muted-foreground" />,
+    torrent_added:    <Download className="h-3.5 w-3.5 text-blue-400" />,
+    torrent_complete: <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />,
+    immich_upload:    <Images className="h-3.5 w-3.5 text-purple-400" />,
+    service_restart:  <RefreshCw className="h-3.5 w-3.5 text-sky-400" />,
+    service_update:   <Package className="h-3.5 w-3.5 text-amber-400" />,
+    ubuntu_update:    <Package className="h-3.5 w-3.5 text-orange-400" />,
+    qbit_action:      <Download className="h-3.5 w-3.5 text-sky-400" />,
+  };
+
+  function relativeTime(iso: string): string {
+    const diff = Date.now() - new Date(iso).getTime();
+    const s = Math.floor(diff / 1000);
+    if (s < 60) return "acum";
+    const m = Math.floor(s / 60);
+    if (m < 60) return `acum ${m} min`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `acum ${h}h`;
+    const d = Math.floor(h / 24);
+    return `acum ${d}z`;
+  }
+
+  return (
+    <section className="space-y-2">
+      <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+        <ScrollText className="h-3.5 w-3.5" /> Jurnal activitate
+      </h2>
+      <div className="rounded-2xl border border-border bg-card divide-y divide-border/50">
+        {isLoading && (
+          <div className="px-3 py-4 text-xs text-muted-foreground text-center">Se încarcă...</div>
+        )}
+        {!isLoading && (!log || log.length === 0) && (
+          <div className="px-3 py-4 text-xs text-muted-foreground text-center">Nicio activitate înregistrată încă.</div>
+        )}
+        {log?.map((entry: ActivityEntry) => (
+          <div key={entry.id} className="flex items-start gap-2.5 px-3 py-2.5">
+            <div className="mt-0.5 shrink-0">
+              {iconMap[entry.type] ?? <Activity className="h-3.5 w-3.5 text-muted-foreground" />}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm leading-tight">{entry.message}</div>
+            </div>
+            <div className="shrink-0 text-[11px] text-muted-foreground whitespace-nowrap">
+              {relativeTime(entry.timestamp)}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
