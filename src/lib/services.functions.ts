@@ -580,6 +580,8 @@ export const getPlex = createServerFn({ method: "GET" }).handler(async (): Promi
     }))).catch(() => {});
 
     return {
+      status: "ok" as const,
+      serverName: mc.friendlyName,
       version: mc.version ? `${mc.version} · ${discovered.source}` : discovered.source,
       platform: mc.platform,
       sessions,
