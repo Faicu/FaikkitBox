@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Film, Tv, Music, Image as ImageIcon, User, Trophy, ChevronRight, History } from "lucide-react";
+import { Film, Tv, Music, Image as ImageIcon, User, Trophy, ChevronRight, History, Monitor, Activity } from "lucide-react";
 import { useState } from "react";
 
 import { PageShell } from "@/components/PageShell";
@@ -53,42 +53,80 @@ function PlexPage() {
               </div>
             ) : (
               <div className="space-y-2">
-                {data.sessions.map((s, i) => (
-                  <div key={i} className="rounded-2xl border border-border bg-card p-3">
+                {data.sessions.map((s, i) => {
+                  const pct = s.durationMs > 0 ? (s.viewOffsetMs / s.durationMs) * 100 : 0;
+                  const remaining = s.durationMs - s.viewOffsetMs;
+                  const isPaused = s.playerState === "paused";
+
+                  return (
+                  <div key={i} className={`rounded-2xl border bg-card p-3 space-y-3 ${isPaused ? "border-amber-500/20" : "border-emerald-500/20"}`}>
+
+                    {/* Header: titlu + badge stare */}
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <div className="truncate font-medium">
-                          {s.grandparentTitle ? `${s.grandparentTitle} — ` : ""}
-                          {s.title}
-                        </div>
-                        <div className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
-                          <User className="h-3 w-3" /> {s.user} · {s.player}
-                        </div>
+                        {s.grandparentTitle && (
+                          <div className="text-[11px] text-muted-foreground font-medium truncate">{s.grandparentTitle}</div>
+                        )}
+                        <div className="truncate font-semibold text-sm leading-tight">{s.title}</div>
                       </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        {s.playerState === "paused"
-                          ? <span className="rounded bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-amber-400">⏸ Pauză</span>
-                          : <span className="rounded bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-400">▶ Redare</span>
-                        }
-                        <span className="rounded bg-muted px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-                          {s.videoDecision ?? s.type}
-                        </span>
+                      {isPaused
+                        ? <span className="shrink-0 rounded-lg bg-amber-500/15 border border-amber-500/20 px-2.5 py-1 text-[11px] font-medium text-amber-400">⏸ Pauză</span>
+                        : <span className="shrink-0 rounded-lg bg-emerald-500/15 border border-emerald-500/20 px-2.5 py-1 text-[11px] font-medium text-emerald-400">▶ Redare</span>
+                      }
+                    </div>
+
+                    {/* Progress bar mare */}
+                    <div className="space-y-1.5">
+                      <div className="relative h-2 w-full rounded-full bg-muted overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all duration-700 ${isPaused ? "bg-amber-400/70" : "bg-emerald-400"}`}
+                          style={{ width: `${pct.toFixed(2)}%` }}
+                        />
+                      </div>
+                      {/* Timeline */}
+                      <div className="flex items-center justify-between text-[11px] tabular-nums">
+                        <span className="text-foreground font-medium">{formatMs(s.viewOffsetMs)}</span>
+                        <span className="text-muted-foreground">−{formatMs(remaining)}</span>
+                        <span className="text-muted-foreground">{formatMs(s.durationMs)}</span>
                       </div>
                     </div>
-                    <div className="mt-2">
-                      <Meter
-                        value={s.progress * 100}
-                        right={`${formatMs(s.viewOffsetMs)} / ${formatMs(s.durationMs)}`}
-                        tone="default"
-                      />
-                    </div>
-                    {s.bitrateKbps && (
-                      <div className="mt-1 text-[11px] text-muted-foreground tabular-nums">
-                        {(s.bitrateKbps / 1000).toFixed(1)} Mbps
+
+                    {/* Detalii sesiune */}
+                    <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
+                      <div className="flex items-center gap-1.5 text-muted-foreground">
+                        <User className="h-3 w-3 shrink-0" />
+                        <span className="truncate">{s.user}</span>
                       </div>
-                    )}
+                      <div className="flex items-center gap-1.5 text-muted-foreground">
+                        <Monitor className="h-3 w-3 shrink-0" />
+                        <span className="truncate">{s.player}</span>
+                      </div>
+                      {s.videoDecision && (
+                        <div className="flex items-center gap-1.5 text-muted-foreground">
+                          <span className="font-mono uppercase text-[10px] rounded bg-muted px-1.5 py-0.5">{s.videoDecision}</span>
+                          <span>Video</span>
+                        </div>
+                      )}
+                      {s.audioDecision && (
+                        <div className="flex items-center gap-1.5 text-muted-foreground">
+                          <span className="font-mono uppercase text-[10px] rounded bg-muted px-1.5 py-0.5">{s.audioDecision}</span>
+                          <span>Audio</span>
+                        </div>
+                      )}
+                      {s.bitrateKbps ? (
+                        <div className="flex items-center gap-1.5 text-muted-foreground col-span-2">
+                          <Activity className="h-3 w-3 shrink-0" />
+                          <span>{(s.bitrateKbps / 1000).toFixed(1)} Mbps</span>
+                          <span className="text-muted-foreground/50">·</span>
+                          <span>{Math.round(pct)}% vizionat</span>
+                        </div>
+                      ) : (
+                        <div className="text-muted-foreground">{Math.round(pct)}% vizionat</div>
+                      )}
+                    </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </section>
