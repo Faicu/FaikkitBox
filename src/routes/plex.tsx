@@ -6,11 +6,10 @@ import { useState } from "react";
 import { PageShell } from "@/components/PageShell";
 import { ServicePill } from "@/components/ServicePill";
 import { StatCard } from "@/components/StatCard";
-import { Meter } from "@/components/Meter";
 import { ErrorCard } from "@/components/ErrorCard";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription } from "@/components/ui/drawer";
 import { plexQuery } from "@/lib/queries";
-import { formatMs, formatMsWithSeconds } from "@/lib/format";
+import { formatMsWithSeconds } from "@/lib/format";
 import type { PlexHistoryEntry } from "@/lib/services.functions";
 
 export const Route = createFileRoute("/plex")({

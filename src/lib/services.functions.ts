@@ -728,6 +728,9 @@ async function buildShowStatus(
 
 // ---------- Immich ----------
 
+// Cache pentru upload counts Immich (costisitoare — search paginat)
+let immichUploadsCache: { today: number | undefined; week: number | undefined; expiresAt: number } | null = null;
+
 export const getImmich = createServerFn({ method: "GET" }).handler(async (): Promise<ImmichData> => {
   const base = process.env.IMMICH_URL;
   const key = process.env.IMMICH_API_KEY;
@@ -783,13 +786,29 @@ export const getImmich = createServerFn({ method: "GET" }).handler(async (): Pro
       }
     }
 
-    const [version, stats, jobs, uploadsToday, uploadsThisWeek] = await Promise.all([
-      fetchJson<any>(`${url}/api/server/version`, { headers }).catch(() => null),
-      fetchJson<any>(`${url}/api/server/statistics`, { headers }),
-      fetchJson<any>(`${url}/api/jobs`, { headers }).catch(() => null),
-      countSince(startOfDayIso),
-      countSince(weekAgoIso),
-    ]);
+    // Upload counts sunt costisitoare (search paginat) — cache 30s
+    let uploadsToday: number | undefined;
+    let uploadsThisWeek: number | undefined;
+    if (immichUploadsCache && immichUploadsCache.expiresAt > Date.now()) {
+      uploadsToday = immichUploadsCache.today;
+      uploadsThisWeek = immichUploadsCache.week;
+      var [version, stats, jobs] = await Promise.all([
+        fetchJson<any>(`${url}/api/server/version`, { headers }).catch(() => null),
+        fetchJson<any>(`${url}/api/server/statistics`, { headers }),
+        fetchJson<any>(`${url}/api/jobs`, { headers }).catch(() => null),
+      ]);
+    } else {
+      var [version, stats, jobs, freshToday, freshWeek] = await Promise.all([
+        fetchJson<any>(`${url}/api/server/version`, { headers }).catch(() => null),
+        fetchJson<any>(`${url}/api/server/statistics`, { headers }),
+        fetchJson<any>(`${url}/api/jobs`, { headers }).catch(() => null),
+        countSince(startOfDayIso),
+        countSince(weekAgoIso),
+      ]);
+      uploadsToday = freshToday;
+      uploadsThisWeek = freshWeek;
+      immichUploadsCache = { today: uploadsToday, week: uploadsThisWeek, expiresAt: Date.now() + 30_000 };
+    }
 
     type UsageRow = { userName: string; usage: number; photos: number; videos: number };
     const usageByUser: UsageRow[] = Array.isArray(stats?.usageByUser)

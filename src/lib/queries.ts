@@ -5,15 +5,13 @@ import { getVersions } from "./versions.functions";
 import { getLastSpeedtest } from "./speedtest.functions";
 import { getDeployStatus, getRecentCommits } from "./deploy.functions";
 import { getActivityLog } from "./activity-log";
+import { getFilelistDownloadLog } from "./filelist.functions";
 
-export const activityLogQuery = queryOptions({
-  queryKey: ["activityLog"],
-  queryFn: () => getActivityLog(),
-  refetchInterval: 10_000,
-  staleTime: 5_000,
-});
+// Interval de bază pentru statistici live (Plex/Immich/qBit/Host)
+const REFRESH_MS = 1000;
 
-const REFRESH_MS = 1100;
+// Păstrează datele vechi afișate în timp ce se încarcă cele noi (fără flicker)
+const keepPrev = { placeholderData: (prev: any) => prev };
 
 export const plexQuery = queryOptions({
   queryKey: ["plex"],
@@ -21,6 +19,7 @@ export const plexQuery = queryOptions({
   refetchInterval: REFRESH_MS,
   refetchIntervalInBackground: false,
   staleTime: 0,
+  ...keepPrev,
 });
 
 export const immichQuery = queryOptions({
@@ -28,6 +27,7 @@ export const immichQuery = queryOptions({
   queryFn: () => getImmich(),
   refetchInterval: REFRESH_MS,
   staleTime: 0,
+  ...keepPrev,
 });
 
 export const qbitQuery = queryOptions({
@@ -35,6 +35,7 @@ export const qbitQuery = queryOptions({
   queryFn: () => getQbit(),
   refetchInterval: REFRESH_MS,
   staleTime: 0,
+  ...keepPrev,
 });
 
 export const hostQuery = queryOptions({
@@ -43,7 +44,24 @@ export const hostQuery = queryOptions({
   refetchInterval: REFRESH_MS,
   refetchIntervalInBackground: true,
   staleTime: 0,
-  placeholderData: (prev: any) => prev,
+  ...keepPrev,
+});
+
+export const activityLogQuery = queryOptions({
+  queryKey: ["activityLog"],
+  queryFn: () => getActivityLog(),
+  refetchInterval: 5_000,
+  staleTime: 2_000,
+  ...keepPrev,
+});
+
+export const filelistLogQuery = queryOptions({
+  queryKey: ["filelistLog"],
+  queryFn: () => getFilelistDownloadLog(),
+  refetchInterval: 10_000,
+  staleTime: 5_000,
+  refetchOnWindowFocus: true,
+  ...keepPrev,
 });
 
 export const showStatusQuery = queryOptions({
@@ -77,8 +95,8 @@ export const lastSpeedtestQuery = queryOptions({
 export const deployStatusQuery = queryOptions({
   queryKey: ["deployStatus"],
   queryFn: () => getDeployStatus(),
-  refetchInterval: 2 * 60_000,
-  staleTime: 60_000,
+  refetchInterval: 60_000,
+  staleTime: 30_000,
   refetchOnWindowFocus: true,
 });
 
@@ -87,13 +105,5 @@ export const recentCommitsQuery = queryOptions({
   queryFn: () => getRecentCommits(),
   refetchInterval: 5 * 60_000,
   staleTime: 60_000,
-  refetchOnWindowFocus: true,
-});
-
-export const filelistLogQuery = queryOptions({
-  queryKey: ["filelistLog"],
-  queryFn: () => getFilelistDownloadLog(),
-  staleTime: 0,
-  refetchInterval: 30_000,
   refetchOnWindowFocus: true,
 });
