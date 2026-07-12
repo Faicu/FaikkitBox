@@ -139,7 +139,7 @@ function PlexPage() {
                   key={lib.key}
                   label={lib.title}
                   value={lib.count != null ? lib.count.toLocaleString() : "—"}
-                  sub={lib.type}
+                  sub={undefined}
                   icon={libIcon(lib.type)}
                   accent="text-amber-400"
                 />
