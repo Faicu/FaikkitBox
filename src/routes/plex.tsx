@@ -10,7 +10,7 @@ import { Meter } from "@/components/Meter";
 import { ErrorCard } from "@/components/ErrorCard";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription } from "@/components/ui/drawer";
 import { plexQuery } from "@/lib/queries";
-import { formatMs } from "@/lib/format";
+import { formatMs, formatMsWithSeconds } from "@/lib/format";
 import type { PlexHistoryEntry } from "@/lib/services.functions";
 
 export const Route = createFileRoute("/plex")({
@@ -85,9 +85,9 @@ function PlexPage() {
                       </div>
                       {/* Timeline */}
                       <div className="flex items-center justify-between text-[11px] tabular-nums">
-                        <span className="text-foreground font-medium">{formatMs(s.viewOffsetMs)}</span>
-                        <span className="text-muted-foreground">−{formatMs(remaining)}</span>
-                        <span className="text-muted-foreground">{formatMs(s.durationMs)}</span>
+                        <span className="text-foreground font-medium">{formatMsWithSeconds(s.viewOffsetMs)}</span>
+                        <span className="text-muted-foreground">−{formatMsWithSeconds(remaining)}</span>
+                        <span className="text-muted-foreground">{formatMsWithSeconds(s.durationMs)}</span>
                       </div>
                     </div>
 

@@ -53,3 +53,14 @@ export function formatDurationHMS(sec: number): string {
 export function formatMs(ms: number): string {
   return formatDuration(Math.floor(ms / 1000));
 }
+
+export function formatMsWithSeconds(ms: number): string {
+  const total = Math.floor(ms / 1000);
+  if (total <= 0) return "0:00";
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = Math.floor(total % 60);
+  const mm = String(m).padStart(h > 0 ? 2 : 1, "0");
+  const ss = String(s).padStart(2, "0");
+  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+}
