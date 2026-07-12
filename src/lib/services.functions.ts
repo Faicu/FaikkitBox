@@ -11,6 +11,7 @@ export interface PlexSession {
   user: string;
   device: string;
   player: string;
+  playerState: "playing" | "paused" | "buffering" | string;
   progress: number; // 0-1
   viewOffsetMs: number;
   durationMs: number;
@@ -560,6 +561,7 @@ export const getPlex = createServerFn({ method: "GET" }).handler(async (): Promi
         user: s?.User?.title ?? "?",
         device: s?.Player?.device ?? s?.Player?.product ?? "?",
         player: s?.Player?.title ?? "?",
+        playerState: s?.Player?.state ?? "playing",
         progress: dur > 0 ? off / dur : 0,
         viewOffsetMs: off,
         durationMs: dur,

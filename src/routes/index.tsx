@@ -97,8 +97,14 @@ function Overview() {
                           ? <Tv className="h-3.5 w-3.5 shrink-0 mt-0.5 text-blue-400" />
                           : <Film className="h-3.5 w-3.5 shrink-0 mt-0.5 text-amber-400" />}
                         <div className="min-w-0 flex-1">
-                          <div className="truncate text-sm font-semibold leading-tight">
-                            {isEpisode ? s.grandparentTitle : s.title}
+                          <div className="flex items-center gap-1.5">
+                            <div className="truncate text-sm font-semibold leading-tight">
+                              {isEpisode ? s.grandparentTitle : s.title}
+                            </div>
+                            {s.playerState === "paused"
+                              ? <span className="shrink-0 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-400">⏸ Pauză</span>
+                              : <span className="shrink-0 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400">▶ Redare</span>
+                            }
                           </div>
                           {isEpisode && (
                             <div className="truncate text-[11px] text-muted-foreground">{s.title}</div>

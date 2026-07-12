@@ -65,9 +65,15 @@ function PlexPage() {
                           <User className="h-3 w-3" /> {s.user} · {s.player}
                         </div>
                       </div>
-                      <span className="shrink-0 rounded bg-muted px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-                        {s.videoDecision ?? s.type}
-                      </span>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {s.playerState === "paused"
+                          ? <span className="rounded bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-amber-400">⏸ Pauză</span>
+                          : <span className="rounded bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-400">▶ Redare</span>
+                        }
+                        <span className="rounded bg-muted px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                          {s.videoDecision ?? s.type}
+                        </span>
+                      </div>
                     </div>
                     <div className="mt-2">
                       <Meter
