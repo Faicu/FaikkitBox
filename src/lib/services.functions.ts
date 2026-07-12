@@ -553,7 +553,10 @@ export const getPlex = createServerFn({ method: "GET" }).handler(async (): Promi
       const video = stream.find((x: any) => x.streamType === 1);
       const audio = stream.find((x: any) => x.streamType === 2);
       const dur = Number(s.duration ?? 0);
-      const off = Number(s.viewOffset ?? 0);
+      const rawOff = Number(s.viewOffset ?? 0);
+      // Plex returnează viewOffset în ms, dar dur e tot în ms
+      // Dacă dur > 1000 și off < 1000 și off > 0, probabil off e în secunde
+      const off = (dur > 1000 && rawOff > 0 && rawOff < 1000) ? rawOff * 1000 : rawOff;
       return {
         title: s.title ?? "Unknown",
         grandparentTitle: s.grandparentTitle,
