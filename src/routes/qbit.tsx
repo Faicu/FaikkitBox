@@ -22,7 +22,7 @@ export const Route = createFileRoute("/qbit")({
 function stateBadge(state: string) {
   const s = state.toLowerCase();
   if (s.includes("download")) return { text: "Descarcă", cls: "bg-sky-500/20 text-sky-400" };
-  if (s.includes("up") || s === "uploading" || s === "stalledup") return { text: "Seed", cls: "bg-emerald-500/20 text-emerald-400" };
+  if ((s.includes("up") || s === "uploading" || s === "stalledup") && !s.includes("paus") && !s.includes("stop")) return { text: "Seed", cls: "bg-emerald-500/20 text-emerald-400" };
   if (s.includes("paus") || s.includes("stop")) return { text: "Oprit", cls: "bg-muted text-muted-foreground" };
   if (s.includes("error")) return { text: "Eroare", cls: "bg-red-500/20 text-red-400" };
   if (s.includes("stall")) return { text: "Blocat", cls: "bg-amber-500/20 text-amber-400" };
@@ -135,7 +135,7 @@ function QbitPage() {
               .filter((t) => {
                 const s = t.state.toLowerCase();
                 if (openList === "downloading") return s.includes("download");
-                if (openList === "seeding") return s.includes("up") || s === "uploading" || s === "stalledup";
+                if (openList === "seeding") return (s.includes("up") || s === "uploading" || s === "stalledup") && !s.includes("paus") && !s.includes("stop");
                 return s.includes("paus") || s.includes("stop");
               })
               .sort((a, b) => {
