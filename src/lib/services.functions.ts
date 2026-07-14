@@ -141,7 +141,7 @@ export interface HostData {
   memUsedBytes?: number;
   memTotalBytes?: number;
   swapPercent?: number;
-  disks?: Array<{ mount: string; percent: number; usedBytes: number; totalBytes: number }>;
+  disks?: Array<{ mount: string; percent: number; usedBytes: number; totalBytes: number; readBps?: number; writeBps?: number }>;
   net?: Array<{ name: string; rxSec: number; txSec: number }>;
   sensors?: Array<{ label: string; value: number; unit: string }>;
   topProcesses?: Array<{ name: string; cpu: number; mem: number }>;
@@ -1082,6 +1082,9 @@ export const getQbit = createServerFn({ method: "GET" }).handler(async (): Promi
 // Cache pentru date statice care nu se schimbă
 let staticHostCache: { osInfo: any; cpu: any } | null = null;
 
+// Cache pentru calculul vitezei disk I/O (comparăm cumulative între apeluri)
+let prevFsStats: { rx: number; wx: number; ts: number } | null = null;
+
 export const getHost = createServerFn({ method: "GET" }).handler(async (): Promise<HostData> => {
   try {
     const si = await import("systeminformation");
@@ -1095,7 +1098,7 @@ export const getHost = createServerFn({ method: "GET" }).handler(async (): Promi
     const { osInfo, cpu } = staticHostCache;
 
     // Date dinamice — preluate la fiecare refresh
-    const [currentLoad, mem, fsSize, netStats, cpuTemp, processes, dockerContainers] =
+    const [currentLoad, mem, fsSize, netStats, cpuTemp, processes, dockerContainers, fsStatsRaw] =
       await Promise.all([
         si.currentLoad(),
         si.mem(),
@@ -1104,9 +1107,25 @@ export const getHost = createServerFn({ method: "GET" }).handler(async (): Promi
         si.cpuTemperature().catch(() => null),
         si.processes(),
         si.dockerContainers().catch(() => [] as Awaited<ReturnType<typeof si.dockerContainers>>),
+        si.fsStats().catch(() => null),
       ]);
 
     const loadAvg = os.loadavg() as [number, number, number];
+
+    // Calculez viteza globală disk I/O din fsStats cumulative
+    let globalReadBps: number | undefined;
+    let globalWriteBps: number | undefined;
+    if (fsStatsRaw) {
+      const now = Date.now();
+      const rx = Number(fsStatsRaw.rx ?? 0);
+      const wx = Number(fsStatsRaw.wx ?? 0);
+      if (prevFsStats && now - prevFsStats.ts > 200) {
+        const dt = (now - prevFsStats.ts) / 1000;
+        globalReadBps = Math.max(0, (rx - prevFsStats.rx) / dt);
+        globalWriteBps = Math.max(0, (wx - prevFsStats.wx) / dt);
+      }
+      prevFsStats = { rx, wx, ts: now };
+    }
 
     const disks = fsSize
       .filter((f) => f.size > 0)
@@ -1115,6 +1134,8 @@ export const getHost = createServerFn({ method: "GET" }).handler(async (): Promi
         percent: Number(f.use ?? 0),
         usedBytes: Number(f.used ?? 0),
         totalBytes: Number(f.size ?? 0),
+        readBps: globalReadBps,
+        writeBps: globalWriteBps,
       }));
 
     const net = netStats

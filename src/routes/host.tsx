@@ -87,13 +87,21 @@ function HostPage() {
                     "/media/ssd2tb": "M.2 2TB",
                     "/media/hddextern": "HDD Extern",
                   };
+                  const hasIO = d.readBps != null || d.writeBps != null;
                   return (
-                    <Meter
-                      key={i}
-                      label={labels[d.mount] ?? d.mount}
-                      value={d.percent}
-                      right={`${formatBytes(d.usedBytes)} / ${formatBytes(d.totalBytes)}`}
-                    />
+                    <div key={i} className="space-y-1">
+                      <Meter
+                        label={labels[d.mount] ?? d.mount}
+                        value={d.percent}
+                        right={`${formatBytes(d.usedBytes)} / ${formatBytes(d.totalBytes)}`}
+                      />
+                      {hasIO && (
+                        <div className="flex gap-3 pl-0 text-[11px] tabular-nums">
+                          <span className="text-sky-400">↓ {formatSpeed(d.readBps ?? 0)}</span>
+                          <span className="text-emerald-400">↑ {formatSpeed(d.writeBps ?? 0)}</span>
+                        </div>
+                      )}
+                    </div>
                   );
                 })}
             </div>
