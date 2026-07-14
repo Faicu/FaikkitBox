@@ -75,15 +75,27 @@ function HostPage() {
               <HardDrive className="h-3.5 w-3.5" /> Discuri
             </h2>
             <div className="rounded-2xl border border-border bg-card p-3 space-y-3">
-              {(data.disks ?? []).map((d, i) => (
-                <Meter
-                  key={i}
-                  label={d.mount}
-                  value={d.percent}
-                  right={`${formatBytes(d.usedBytes)} / ${formatBytes(d.totalBytes)}`}
-                />
-              ))}
-              {(!data.disks || data.disks.length === 0) && <div className="text-sm text-muted-foreground">Niciun disc raportat.</div>}
+              {(data.disks ?? [])
+                .filter(d => ["/", "/media/ssd2tb", "/media/hddextern"].includes(d.mount))
+                .sort((a, b) => {
+                  const order = ["/", "/media/ssd2tb", "/media/hddextern"];
+                  return order.indexOf(a.mount) - order.indexOf(b.mount);
+                })
+                .map((d, i) => {
+                  const labels: Record<string, string> = {
+                    "/": "M.2 Bază",
+                    "/media/ssd2tb": "M.2 2TB",
+                    "/media/hddextern": "HDD Extern",
+                  };
+                  return (
+                    <Meter
+                      key={i}
+                      label={labels[d.mount] ?? d.mount}
+                      value={d.percent}
+                      right={`${formatBytes(d.usedBytes)} / ${formatBytes(d.totalBytes)}`}
+                    />
+                  );
+                })}
             </div>
           </section>
 
