@@ -1082,9 +1082,8 @@ export const getQbit = createServerFn({ method: "GET" }).handler(async (): Promi
 // Cache pentru date statice care nu se schimbă
 let staticHostCache: { osInfo: any; cpu: any } | null = null;
 
-// Cache pentru calculul vitezei disk I/O per disc (comparăm cumulative între apeluri)
-interface DiskIOSnapshot { [device: string]: { r: number; w: number; ts: number } }
-let prevDiskIO: DiskIOSnapshot = {};
+// Cache pentru calculul vitezei disk I/O (comparăm cumulative între apeluri)
+let prevFsStats: { rx: number; wx: number; ts: number } | null = null;
 
 export const getHost = createServerFn({ method: "GET" }).handler(async (): Promise<HostData> => {
   try {
@@ -1099,7 +1098,7 @@ export const getHost = createServerFn({ method: "GET" }).handler(async (): Promi
     const { osInfo, cpu } = staticHostCache;
 
     // Date dinamice — preluate la fiecare refresh
-    const [currentLoad, mem, fsSize, netStats, cpuTemp, processes, dockerContainers, disksIORaw] =
+    const [currentLoad, mem, fsSize, netStats, cpuTemp, processes, dockerContainers, fsStatsRaw] =
       await Promise.all([
         si.currentLoad(),
         si.mem(),
@@ -1108,56 +1107,36 @@ export const getHost = createServerFn({ method: "GET" }).handler(async (): Promi
         si.cpuTemperature().catch(() => null),
         si.processes(),
         si.dockerContainers().catch(() => [] as Awaited<ReturnType<typeof si.dockerContainers>>),
-        si.disksIO().catch(() => null),
+        si.fsStats().catch(() => null),
       ]);
 
     const loadAvg = os.loadavg() as [number, number, number];
 
-    // Mapping mount → device name (specific serverului faikkitbox)
-    const MOUNT_TO_DEVICE: Record<string, string> = {
-      "/":                  "nvme1n1",
-      "/media/ssd2tb":      "nvme0n1",
-      "/media/hddextern":   "sda",
-    };
-
-    // Calculez viteze per disc din disksIO cumulative
-    const diskSpeeds: Record<string, { readBps: number; writeBps: number }> = {};
-    if (disksIORaw && Array.isArray(disksIORaw)) {
+    // Calculez viteza globală disk I/O din fsStats cumulative
+    let globalReadBps: number | undefined;
+    let globalWriteBps: number | undefined;
+    if (fsStatsRaw) {
       const now = Date.now();
-      for (const d of disksIORaw as Array<{ name: string; rIO: number; wIO: number; rIO_sec?: number; wIO_sec?: number }>) {
-        const name = d.name;
-        // disksIO returnează rIO_sec/wIO_sec dacă are date suficiente (al 2-lea apel+)
-        if (d.rIO_sec != null && d.wIO_sec != null) {
-          // systeminformation calculează deja viteza — folosim direct (bytes/s)
-          diskSpeeds[name] = { readBps: d.rIO_sec * 512, writeBps: d.wIO_sec * 512 };
-        } else if (prevDiskIO[name]) {
-          // Fallback: calculăm manual din cumulative
-          const dt = (now - prevDiskIO[name].ts) / 1000;
-          if (dt > 0) {
-            diskSpeeds[name] = {
-              readBps: Math.max(0, ((d.rIO ?? 0) - prevDiskIO[name].r) * 512 / dt),
-              writeBps: Math.max(0, ((d.wIO ?? 0) - prevDiskIO[name].w) * 512 / dt),
-            };
-          }
-        }
-        prevDiskIO[name] = { r: d.rIO ?? 0, w: d.wIO ?? 0, ts: now };
+      const rx = Number(fsStatsRaw.rx ?? 0);
+      const wx = Number(fsStatsRaw.wx ?? 0);
+      if (prevFsStats && now - prevFsStats.ts > 200) {
+        const dt = (now - prevFsStats.ts) / 1000;
+        globalReadBps = Math.max(0, (rx - prevFsStats.rx) / dt);
+        globalWriteBps = Math.max(0, (wx - prevFsStats.wx) / dt);
       }
+      prevFsStats = { rx, wx, ts: now };
     }
 
     const disks = fsSize
       .filter((f) => f.size > 0)
-      .map((f) => {
-        const device = MOUNT_TO_DEVICE[f.mount];
-        const io = device ? diskSpeeds[device] : undefined;
-        return {
-          mount: f.mount,
-          percent: Number(f.use ?? 0),
-          usedBytes: Number(f.used ?? 0),
-          totalBytes: Number(f.size ?? 0),
-          readBps: io?.readBps,
-          writeBps: io?.writeBps,
-        };
-      });
+      .map((f) => ({
+        mount: f.mount,
+        percent: Number(f.use ?? 0),
+        usedBytes: Number(f.used ?? 0),
+        totalBytes: Number(f.size ?? 0),
+        readBps: globalReadBps,
+        writeBps: globalWriteBps,
+      }));
 
     const net = netStats
       .filter((n) => n.iface && !n.iface.startsWith("lo"))
