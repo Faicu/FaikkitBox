@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 
 export type ActivityType =
   | "server_start"
+  | "server_stop"
   | "deploy"
   | "plex_watch_start"
   | "plex_watch_stop"
@@ -176,10 +177,46 @@ export async function trackDeploy(localSha: string, message: string): Promise<vo
 }
 
 // ---------------------------------------------------------------------------
-// Log pornire server
+// Log pornire + oprire server
 // ---------------------------------------------------------------------------
 
-if (typeof process !== "undefined" && process.env) {
-  // La pornirea modulului = server pornit
-  logActivity("server_start", "Serverul FaikkitBox a pornit").catch(() => {});
+// Referință pre-încărcată la DB pentru shutdown handler (ESM nu are require sincron)
+let dbModuleRef: typeof import("./db") | null = null;
+let cryptoRef: typeof import("node:crypto") | null = null;
+
+async function logServerStartOnce(): Promise<void> {
+  try {
+    const dbModule = await import("./db");
+    dbModuleRef = dbModule;
+    cryptoRef = await import("node:crypto");
+    const db = dbModule.getDb();
+    // Deduplicare: modulul poate fi încărcat în mai multe chunk-uri de build.
+    // Dacă există deja un server_start în ultimele 30 secunde, nu logăm din nou.
+    const recent = db.prepare(
+      "SELECT COUNT(*) as c FROM activity WHERE type = 'server_start' AND timestamp > ?"
+    ).get(new Date(Date.now() - 30_000).toISOString()) as { c: number };
+    if (recent.c > 0) return;
+    await logActivity("server_start", "Serverul FaikkitBox a pornit");
+  } catch {}
+}
+
+function logServerStopSync(): void {
+  try {
+    if (!dbModuleRef || !cryptoRef) return;
+    const db = dbModuleRef.getDb();
+    db.prepare("INSERT INTO activity (id, timestamp, type, message, meta) VALUES (?, ?, ?, ?, ?)")
+      .run(cryptoRef.randomUUID(), new Date().toISOString(), "server_stop", "Serverul FaikkitBox s-a oprit", null);
+  } catch {}
+}
+
+declare global {
+  // Guard global împotriva înregistrării duplicate a handler-elor
+  var __faikkitboxActivityInit: boolean | undefined;
+}
+
+if (typeof process !== "undefined" && process.env && !globalThis.__faikkitboxActivityInit) {
+  globalThis.__faikkitboxActivityInit = true;
+  logServerStartOnce();
+  process.once("SIGTERM", () => { logServerStopSync(); process.exit(0); });
+  process.once("SIGINT",  () => { logServerStopSync(); process.exit(0); });
 }
