@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
-import { writeFile, unlink, readFile, mkdir } from "node:fs/promises";
+import { writeFile, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, dirname } from "node:path";
+import { join } from "node:path";
 
 // ---------------------------------------------------------------------------
 // Tipuri
@@ -83,22 +83,31 @@ function isMovieCategory(catId: number): boolean {
 // Log persistent al descărcărilor
 // ---------------------------------------------------------------------------
 
-const MAX_LOG_ENTRIES = 50;
+// Persistență SQLite (node:sqlite nativ) — vezi src/lib/db.ts
 
-// Fișier untracked în repo-ul de pe server — supraviețuiește deploy-urilor
-// (git reset --hard nu atinge fișierele untracked).
-function downloadLogPath(): string {
-  return (
-    process.env.FILELIST_LOG_FILE ??
-    join(process.env.FAIKKITBOX_REPO_DIR ?? "/opt/faikkitbox", "data", "filelist-downloads.json")
-  );
+function rowToEntry(r: any): FilelistLogEntry {
+  return {
+    id: Number(r.id),
+    name: r.name,
+    size: Number(r.size ?? 0),
+    category: Number(r.category ?? 0),
+    categoryName: r.category_name ?? "",
+    freeleech: !!r.freeleech,
+    internal: !!r.internal,
+    savePath: r.save_path ?? "",
+    downloadedAt: r.downloaded_at,
+    completedAt: r.completed_at ?? null,
+    torrentHash: r.torrent_hash ?? undefined,
+  };
 }
 
 async function readDownloadLog(): Promise<FilelistLogEntry[]> {
   try {
-    const raw = await readFile(downloadLogPath(), "utf8");
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    const { getDb } = await import("./db");
+    const rows = getDb().prepare(
+      "SELECT * FROM downloads ORDER BY downloaded_at DESC LIMIT 100"
+    ).all();
+    return rows.map(rowToEntry);
   } catch {
     return [];
   }
@@ -106,11 +115,16 @@ async function readDownloadLog(): Promise<FilelistLogEntry[]> {
 
 async function appendDownloadLog(entry: FilelistLogEntry): Promise<void> {
   try {
-    const file = downloadLogPath();
-    await mkdir(dirname(file), { recursive: true });
-    const log = await readDownloadLog();
-    log.unshift(entry);
-    await writeFile(file, JSON.stringify(log.slice(0, MAX_LOG_ENTRIES), null, 2), "utf8");
+    const { getDb } = await import("./db");
+    getDb().prepare(
+      `INSERT OR REPLACE INTO downloads
+       (id, name, size, category, category_name, freeleech, internal, save_path, downloaded_at, completed_at, torrent_hash)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      entry.id, entry.name, entry.size, entry.category, entry.categoryName,
+      entry.freeleech ? 1 : 0, entry.internal ? 1 : 0, entry.savePath,
+      entry.downloadedAt, entry.completedAt, entry.torrentHash ?? null,
+    );
   } catch (e) {
     console.warn("[filelist] Nu am putut scrie log-ul de descărcări:", e);
   }
@@ -118,13 +132,9 @@ async function appendDownloadLog(entry: FilelistLogEntry): Promise<void> {
 
 async function markLogEntryComplete(torrentId: number): Promise<void> {
   try {
-    const file = downloadLogPath();
-    const log = await readDownloadLog();
-    const entry = log.find((e) => e.id === torrentId);
-    if (entry) {
-      entry.completedAt = new Date().toISOString();
-      await writeFile(file, JSON.stringify(log, null, 2), "utf8");
-    }
+    const { getDb } = await import("./db");
+    getDb().prepare("UPDATE downloads SET completed_at = ? WHERE id = ?")
+      .run(new Date().toISOString(), torrentId);
   } catch (e) {
     console.warn("[filelist] Nu am putut actualiza log-ul la completare:", e);
   }
@@ -140,10 +150,8 @@ export const deleteFilelistLogEntry = createServerFn({ method: "POST" })
   .validator((data: { id: number }) => data)
   .handler(async ({ data }): Promise<{ ok: boolean }> => {
     try {
-      const file = downloadLogPath();
-      const log = await readDownloadLog();
-      const filtered = log.filter((e) => e.id !== data.id);
-      await writeFile(file, JSON.stringify(filtered, null, 2), "utf8");
+      const { getDb } = await import("./db");
+      getDb().prepare("DELETE FROM downloads WHERE id = ?").run(data.id);
       return { ok: true };
     } catch {
       return { ok: false };

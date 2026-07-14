@@ -1,6 +1,4 @@
 import { createServerFn } from "@tanstack/react-start";
-import { readFile, writeFile, mkdir } from "node:fs/promises";
-import { dirname } from "node:path";
 import { randomUUID } from "node:crypto";
 
 // ---------------------------------------------------------------------------
@@ -29,34 +27,7 @@ export interface ActivityEntry {
 }
 
 // ---------------------------------------------------------------------------
-// Fișier log
-// ---------------------------------------------------------------------------
-
-function logPath(): string {
-  return process.env.ACTIVITY_LOG_PATH ?? "/opt/faikkitbox/data/activity-log.json";
-}
-
-async function readLog(): Promise<ActivityEntry[]> {
-  try {
-    const raw = await readFile(logPath(), "utf8");
-    return JSON.parse(raw) as ActivityEntry[];
-  } catch {
-    return [];
-  }
-}
-
-async function writeLog(entries: ActivityEntry[]): Promise<void> {
-  try {
-    const file = logPath();
-    await mkdir(dirname(file), { recursive: true });
-    await writeFile(file, JSON.stringify(entries, null, 2), "utf8");
-  } catch (e) {
-    console.warn("[activity-log] Eroare la scriere:", e);
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Funcție publică: adaugă eveniment în log
+// Persistență: SQLite (node:sqlite nativ)
 // ---------------------------------------------------------------------------
 
 export async function logActivity(
@@ -65,17 +36,10 @@ export async function logActivity(
   meta?: Record<string, unknown>,
 ): Promise<void> {
   try {
-    const entries = await readLog();
-    const entry: ActivityEntry = {
-      id: randomUUID(),
-      timestamp: new Date().toISOString(),
-      type,
-      message,
-      ...(meta ? { meta } : {}),
-    };
-    // Cel mai recent primul
-    entries.unshift(entry);
-    await writeLog(entries);
+    const { getDb } = await import("./db");
+    const db = getDb();
+    db.prepare("INSERT INTO activity (id, timestamp, type, message, meta) VALUES (?, ?, ?, ?, ?)")
+      .run(randomUUID(), new Date().toISOString(), type, message, meta ? JSON.stringify(meta) : null);
   } catch (e) {
     console.warn("[activity-log] Eroare la logActivity:", e);
   }
@@ -87,7 +51,23 @@ export async function logActivity(
 
 export const getActivityLog = createServerFn({ method: "GET" }).handler(
   async (): Promise<ActivityEntry[]> => {
-    return readLog();
+    try {
+      const { getDb } = await import("./db");
+      const db = getDb();
+      const rows = db.prepare(
+        "SELECT id, timestamp, type, message, meta FROM activity ORDER BY timestamp DESC LIMIT 500"
+      ).all() as Array<{ id: string; timestamp: string; type: string; message: string; meta: string | null }>;
+      return rows.map((r) => ({
+        id: r.id,
+        timestamp: r.timestamp,
+        type: r.type as ActivityType,
+        message: r.message,
+        ...(r.meta ? { meta: JSON.parse(r.meta) } : {}),
+      }));
+    } catch (e) {
+      console.warn("[activity-log] Eroare la citire:", e);
+      return [];
+    }
   },
 );
 
