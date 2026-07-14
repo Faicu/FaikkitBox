@@ -33,3 +33,7 @@ dist-ssr
 
 # Date persistente runtime (log descarcari filelist etc.)
 /data/
+
+# Bun artifacts (proiect standardizat pe npm)
+bun.lockb
+bunfig.toml
