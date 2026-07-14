@@ -217,6 +217,13 @@ declare global {
 if (typeof process !== "undefined" && process.env && !globalThis.__faikkitboxActivityInit) {
   globalThis.__faikkitboxActivityInit = true;
   logServerStartOnce();
-  process.once("SIGTERM", () => { logServerStopSync(); process.exit(0); });
-  process.once("SIGINT",  () => { logServerStopSync(); process.exit(0); });
+  // "exit" rulează la orice ieșire normală — doar cod sincron (node:sqlite poate).
+  let stopLogged = false;
+  const logOnce = () => { if (!stopLogged) { stopLogged = true; logServerStopSync(); } };
+  process.on("exit", logOnce);
+  // Backup: dacă SIGTERM nu duce la exit normal (proces omorât direct),
+  // logăm imediat la semnal. NU facem process.exit() — lăsăm Nitro să-și
+  // termine graceful shutdown-ul.
+  process.on("SIGTERM", logOnce);
+  process.on("SIGINT", logOnce);
 }

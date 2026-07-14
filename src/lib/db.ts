@@ -55,7 +55,34 @@ export function getDb(): DatabaseSync {
   // Migrare din JSON (o singură dată, la prima pornire cu SQLite)
   migrateFromJson(db).catch((e) => console.warn("[db] Migrare JSON eșuată:", e));
 
+  // Curățări one-time, versionate cu PRAGMA user_version
+  runCleanups(db);
+
   return db;
+}
+
+function runCleanups(database: DatabaseSync): void {
+  try {
+    const row = database.prepare("PRAGMA user_version").get() as { user_version: number };
+    const version = row?.user_version ?? 0;
+
+    if (version < 1) {
+      // v1: elimină duplicatele server_start (păstrează unul per minut)
+      const result = database.prepare(`
+        DELETE FROM activity
+        WHERE type = 'server_start'
+          AND id NOT IN (
+            SELECT MIN(id) FROM activity
+            WHERE type = 'server_start'
+            GROUP BY substr(timestamp, 1, 16)
+          )
+      `).run();
+      console.log(`[db] Curățare v1: eliminate ${result.changes} duplicate server_start`);
+      database.exec("PRAGMA user_version = 1");
+    }
+  } catch (e) {
+    console.warn("[db] Curățare eșuată:", e);
+  }
 }
 
 async function migrateFromJson(database: DatabaseSync): Promise<void> {
