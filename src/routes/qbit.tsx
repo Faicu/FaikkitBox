@@ -210,6 +210,7 @@ function QbitPage() {
             </section>
           )}
 
+          {!openList && (
           <section>
             <div className="mb-2 flex items-center justify-between gap-2">
               <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -294,6 +295,7 @@ function QbitPage() {
               </div>
             )}
           </section>
+          )}
         </>
       )}
     </PageShell>
