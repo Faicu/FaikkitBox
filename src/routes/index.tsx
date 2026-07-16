@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { PlayCircle, Images, Download, Cpu, ChevronRight, Users, HardDrive, ListChecks, Gauge, ArrowDown, ArrowUp, Activity, Tv, Film, ScrollText, RefreshCw, CheckCircle2, Server, Package, GitCommitHorizontal, ExternalLink } from "lucide-react";
+import { PlayCircle, Images, Download, Cpu, ChevronRight, Users, HardDrive, ListChecks, Gauge, ArrowDown, ArrowUp, Activity, Tv, Film, ScrollText, RefreshCw, CheckCircle2, Server, Package, GitCommitHorizontal, ExternalLink, Plus, Minus } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -11,7 +11,8 @@ import { RadialGauge } from "@/components/RadialGauge";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription } from "@/components/ui/drawer";
 import { plexQuery, immichQuery, qbitQuery, hostQuery, adminStatusQuery, lastSpeedtestQuery, activityLogQuery, recentCommitsQuery } from "@/lib/queries";
 import type { ActivityEntry } from "@/lib/activity-log";
-import type { GitHubCommit } from "@/lib/github.functions";
+import type { GitHubCommit, GitHubCommitDetail } from "@/lib/github.functions";
+import { getCommitDetail } from "@/lib/github.functions";
 import type { HostData } from "@/lib/services.functions";
 import { runSpeedtest } from "@/lib/speedtest.functions";
 import { formatBytes, formatSpeed } from "@/lib/format";
@@ -467,10 +468,121 @@ type TimelineItem =
   | { kind: "activity"; ts: number; entry: ActivityEntry }
   | { kind: "commit"; ts: number; commit: GitHubCommit };
 
+function relativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const s = Math.floor(diff / 1000);
+  if (s < 60) return "acum";
+  const m = Math.floor(s / 60);
+  if (m < 60) return `acum ${m} min`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `acum ${h}h`;
+  const d = Math.floor(h / 24);
+  return `acum ${d}z`;
+}
+
+function CommitDrawer({ commit, onClose }: { commit: GitHubCommit; onClose: () => void }) {
+  const getDetail = useServerFn(getCommitDetail);
+  const { data, isLoading } = useQuery({
+    queryKey: ["commitDetail", commit.sha],
+    queryFn: () => getDetail({ data: { sha: commit.sha } }),
+    staleTime: 5 * 60_000,
+  });
+
+  const fmtDate = (iso: string) =>
+    new Date(iso).toLocaleString("ro-RO", {
+      day: "numeric", month: "long", year: "numeric",
+      hour: "2-digit", minute: "2-digit",
+      timeZone: "Europe/Bucharest",
+    });
+
+  const statusColor = (s: string) =>
+    s === "added" ? "text-emerald-400" : s === "removed" ? "text-red-400" : "text-amber-400";
+  const statusLabel = (s: string) =>
+    s === "added" ? "A" : s === "removed" ? "D" : "M";
+
+  const lines = (data?.status === "ok" ? data.message : commit.message).split("\n").filter(Boolean);
+  const title = lines[0] ?? "";
+  const body = lines.slice(1);
+
+  return (
+    <Drawer open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DrawerContent>
+        <DrawerHeader className="pb-2">
+          <DrawerTitle className="flex items-center gap-2 text-base">
+            <GitCommitHorizontal className="h-4 w-4 text-sky-400 shrink-0" />
+            <span className="font-mono text-sky-400 text-sm">{commit.shortSha}</span>
+          </DrawerTitle>
+          <DrawerDescription className="text-left text-sm font-medium text-foreground leading-snug mt-1">
+            {title}
+          </DrawerDescription>
+        </DrawerHeader>
+
+        <div className="px-4 pb-6 space-y-4 overflow-y-auto max-h-[60vh]">
+          {/* Meta */}
+          <div className="text-xs text-muted-foreground">
+            {commit.author} · {commit.date ? fmtDate(commit.date) : ""}
+          </div>
+
+          {/* Corp mesaj */}
+          {body.length > 0 && (
+            <div className="rounded-xl bg-muted/40 border border-border px-3 py-2.5 text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
+              {body.join("\n")}
+            </div>
+          )}
+
+          {/* Stats */}
+          {isLoading && (
+            <div className="text-xs text-muted-foreground animate-pulse">Se încarcă detaliile...</div>
+          )}
+          {data?.status === "ok" && (
+            <>
+              <div className="flex items-center gap-4 text-xs">
+                <span className="text-muted-foreground">{data.filesChanged} fișier{data.filesChanged !== 1 ? "e" : ""} modificat{data.filesChanged !== 1 ? "e" : ""}</span>
+                <span className="flex items-center gap-1 text-emerald-400"><Plus className="h-3 w-3" />{data.additions}</span>
+                <span className="flex items-center gap-1 text-red-400"><Minus className="h-3 w-3" />{data.deletions}</span>
+              </div>
+
+              {/* Lista fișiere */}
+              <div className="rounded-xl border border-border divide-y divide-border/50 overflow-hidden">
+                {data.files.map((f) => (
+                  <div key={f.filename} className="flex items-center gap-2 px-3 py-1.5 text-xs">
+                    <span className={`font-mono font-bold w-4 text-center shrink-0 ${statusColor(f.status)}`}>
+                      {statusLabel(f.status)}
+                    </span>
+                    <span className="font-mono min-w-0 truncate text-muted-foreground flex-1">{f.filename}</span>
+                    <span className="shrink-0 flex items-center gap-1.5 text-[11px]">
+                      {f.additions > 0 && <span className="text-emerald-400">+{f.additions}</span>}
+                      {f.deletions > 0 && <span className="text-red-400">−{f.deletions}</span>}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+          {data?.status === "error" && (
+            <div className="text-xs text-red-400">Nu s-au putut încărca detaliile: {data.error}</div>
+          )}
+
+          {/* Link GitHub */}
+          <a
+            href={commit.url}
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ExternalLink className="h-3 w-3" /> Vezi pe GitHub
+          </a>
+        </div>
+      </DrawerContent>
+    </Drawer>
+  );
+}
+
 function ActivityLogSection() {
   const { data: log, isLoading: logLoading } = useQuery(activityLogQuery);
   const { data: commitsData, isLoading: commitsLoading } = useQuery(recentCommitsQuery);
   const [visible, setVisible] = useState(10);
+  const [selectedCommit, setSelectedCommit] = useState<GitHubCommit | null>(null);
 
   const iconMap: Record<string, React.ReactNode> = {
     server_start:     <Server className="h-3.5 w-3.5 text-emerald-400" />,
@@ -486,18 +598,6 @@ function ActivityLogSection() {
     qbit_action:      <Download className="h-3.5 w-3.5 text-sky-400" />,
   };
 
-  function relativeTime(iso: string): string {
-    const diff = Date.now() - new Date(iso).getTime();
-    const s = Math.floor(diff / 1000);
-    if (s < 60) return "acum";
-    const m = Math.floor(s / 60);
-    if (m < 60) return `acum ${m} min`;
-    const h = Math.floor(m / 60);
-    if (h < 24) return `acum ${h}h`;
-    const d = Math.floor(h / 24);
-    return `acum ${d}z`;
-  }
-
   const timeline: TimelineItem[] = [
     ...(log ?? []).map((entry): TimelineItem => ({
       kind: "activity", ts: new Date(entry.timestamp).getTime(), entry,
@@ -512,70 +612,71 @@ function ActivityLogSection() {
   const hasMore = timeline.length > visible;
 
   return (
-    <section className="space-y-2">
-      <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
-        <ScrollText className="h-3.5 w-3.5" /> Jurnal activitate
-      </h2>
-      <div className="rounded-2xl border border-border bg-card divide-y divide-border/50">
-        {isLoading && (
-          <div className="px-3 py-4 text-xs text-muted-foreground text-center">Se încarcă...</div>
-        )}
-        {!isLoading && timeline.length === 0 && (
-          <div className="px-3 py-4 text-xs text-muted-foreground text-center">Nicio activitate înregistrată încă.</div>
-        )}
-        {shown.map((item) => {
-          if (item.kind === "activity") {
-            const entry = item.entry;
+    <>
+      <section className="space-y-2">
+        <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+          <ScrollText className="h-3.5 w-3.5" /> Jurnal activitate
+        </h2>
+        <div className="rounded-2xl border border-border bg-card divide-y divide-border/50">
+          {isLoading && (
+            <div className="px-3 py-4 text-xs text-muted-foreground text-center">Se încarcă...</div>
+          )}
+          {!isLoading && timeline.length === 0 && (
+            <div className="px-3 py-4 text-xs text-muted-foreground text-center">Nicio activitate înregistrată încă.</div>
+          )}
+          {shown.map((item) => {
+            if (item.kind === "activity") {
+              const entry = item.entry;
+              return (
+                <div key={entry.id} className="flex items-start gap-2.5 px-3 py-2.5">
+                  <div className="mt-0.5 shrink-0">
+                    {iconMap[entry.type] ?? <Activity className="h-3.5 w-3.5 text-muted-foreground" />}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm leading-tight">{entry.message}</div>
+                  </div>
+                  <div className="shrink-0 text-[11px] text-muted-foreground whitespace-nowrap">
+                    {relativeTime(entry.timestamp)}
+                  </div>
+                </div>
+              );
+            }
+            const c = item.commit;
             return (
-              <div key={entry.id} className="flex items-start gap-2.5 px-3 py-2.5">
+              <button
+                key={c.sha}
+                onClick={() => setSelectedCommit(c)}
+                className="w-full flex items-start gap-2.5 px-3 py-2.5 hover:bg-muted/40 transition-colors group text-left"
+              >
                 <div className="mt-0.5 shrink-0">
-                  {iconMap[entry.type] ?? <Activity className="h-3.5 w-3.5 text-muted-foreground" />}
+                  <GitCommitHorizontal className="h-3.5 w-3.5 text-sky-400" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-sm leading-tight">{entry.message}</div>
+                  <div className="text-sm leading-tight group-hover:text-sky-400 transition-colors">{c.message}</div>
+                  <div className="mt-0.5 text-[11px] text-muted-foreground">
+                    {c.author} · <span className="font-mono">{c.shortSha}</span>
+                  </div>
                 </div>
                 <div className="shrink-0 text-[11px] text-muted-foreground whitespace-nowrap">
-                  {relativeTime(entry.timestamp)}
-                </div>
-              </div>
-            );
-          }
-          const c = item.commit;
-          return (
-            <a
-              key={c.sha}
-              href={c.url}
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-start gap-2.5 px-3 py-2.5 hover:bg-muted/40 transition-colors group"
-            >
-              <div className="mt-0.5 shrink-0">
-                <GitCommitHorizontal className="h-3.5 w-3.5 text-sky-400" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="text-sm leading-tight group-hover:text-sky-400 transition-colors">{c.message}</div>
-                <div className="mt-0.5 text-[11px] text-muted-foreground">
-                  {c.author} · <span className="font-mono">{c.shortSha}</span>
-                </div>
-              </div>
-              <div className="flex items-center gap-1.5 shrink-0">
-                <span className="text-[11px] text-muted-foreground whitespace-nowrap">
                   {relativeTime(c.date)}
-                </span>
-                <ExternalLink className="h-3 w-3 text-muted-foreground/50 group-hover:text-sky-400 transition-colors" />
-              </div>
-            </a>
-          );
-        })}
-        {hasMore && (
-          <button
-            onClick={() => setVisible(v => v + 10)}
-            className="w-full px-3 py-2.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/30 transition-colors text-center"
-          >
-            Afișează încă 10 ({timeline.length - visible} rămase)
-          </button>
-        )}
-      </div>
-    </section>
+                </div>
+              </button>
+            );
+          })}
+          {hasMore && (
+            <button
+              onClick={() => setVisible(v => v + 10)}
+              className="w-full px-3 py-2.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/30 transition-colors text-center"
+            >
+              Afișează încă 10 ({timeline.length - visible} rămase)
+            </button>
+          )}
+        </div>
+      </section>
+
+      {selectedCommit && (
+        <CommitDrawer commit={selectedCommit} onClose={() => setSelectedCommit(null)} />
+      )}
+    </>
   );
 }
