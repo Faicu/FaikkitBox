@@ -36,7 +36,7 @@ export default defineConfig(({ command }) => ({
       server: { entry: "server" },
     }),
     // Only needed at build time; targets a plain Node server instead of Cloudflare Workers.
-    ...(command === "build" ? [nitro({ preset: "node-server" })] : []),
+    ...(command === "build" ? [nitro({ preset: "node-server", scanDirs: ["server"] })] : []),
     viteReact(),
   ],
 }));
