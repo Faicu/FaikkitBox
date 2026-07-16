@@ -1,37 +1,41 @@
 import { useEffect, useRef } from "react";
-import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { getDeployedSha } from "@/lib/github.functions";
 
 export function useAutoReload() {
   const deployedShaRef = useRef<string | null>(null);
-  const getsha = useServerFn(getDeployedSha);
+  const reloadingRef = useRef(false);
 
   useEffect(() => {
-    let active = true;
+    let es: EventSource | null = null;
 
-    async function check() {
-      try {
-        const { sha } = await getsha();
-        if (!sha || !active) return;
+    function connect() {
+      if (reloadingRef.current) return;
+      es = new EventSource("/api/deploy-sha");
+
+      es.onmessage = (ev) => {
+        const sha = ev.data.trim();
+        if (!sha) return;
 
         if (deployedShaRef.current === null) {
           deployedShaRef.current = sha;
           return;
         }
 
-        if (deployedShaRef.current !== sha) {
-          toast.info("Versiune nouă disponibilă — reîncărcare...", { duration: 3000 });
-          setTimeout(() => window.location.reload(), 3000);
-          active = false;
+        if (deployedShaRef.current !== sha && !reloadingRef.current) {
+          reloadingRef.current = true;
+          toast.info("Versiune nouă — reîncărcare...", { duration: 2000 });
+          setTimeout(() => window.location.reload(), 2000);
         }
-      } catch {
-        // rețea indisponibilă temporar
-      }
+      };
+
+      es.onerror = () => {
+        es?.close();
+        // Reconectare după 2s — dacă serverul a restartat, SHA-ul va fi nou
+        setTimeout(connect, 2000);
+      };
     }
 
-    check();
-    const id = setInterval(() => { if (active) check(); }, 30_000);
-    return () => { active = false; clearInterval(id); };
+    connect();
+    return () => { es?.close(); };
   }, []);
 }

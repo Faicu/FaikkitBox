@@ -174,17 +174,6 @@ export interface GitHubSyncStatus {
   commitsBehind: number;
 }
 
-export const getDeployedSha = createServerFn({ method: "GET" }).handler(
-  async (): Promise<{ sha: string }> => {
-    try {
-      const sha = execSync("git rev-parse HEAD", { encoding: "utf8" }).trim();
-      return { sha };
-    } catch {
-      return { sha: "" };
-    }
-  },
-);
-
 export const getGitHubSyncStatus = createServerFn({ method: "GET" }).handler(
   async (): Promise<{ status: "ok"; data: GitHubSyncStatus } | { status: "error"; error: string }> => {
     try {
