@@ -9,7 +9,7 @@ import { PageShell } from "@/components/PageShell";
 import { ServicePill } from "@/components/ServicePill";
 import { RadialGauge } from "@/components/RadialGauge";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription } from "@/components/ui/drawer";
-import { plexQuery, immichQuery, qbitQuery, hostQuery, adminStatusQuery, lastSpeedtestQuery, activityLogQuery, recentCommitsQuery } from "@/lib/queries";
+import { plexQuery, immichQuery, qbitQuery, hostQuery, adminStatusQuery, lastSpeedtestQuery, activityLogQuery, recentCommitsQuery, commitsFromDbQuery } from "@/lib/queries";
 import type { ActivityEntry } from "@/lib/activity-log";
 import type { GitHubCommit, GitHubCommitDetail } from "@/lib/github.functions";
 import { getCommitDetail } from "@/lib/github.functions";
@@ -580,7 +580,8 @@ function CommitDrawer({ commit, onClose }: { commit: GitHubCommit; onClose: () =
 
 function ActivityLogSection() {
   const { data: log, isLoading: logLoading } = useQuery(activityLogQuery);
-  const { data: commitsData, isLoading: commitsLoading } = useQuery(recentCommitsQuery);
+  useQuery(recentCommitsQuery); // fetch periodic GitHub → upsert DB
+  const { data: commitsData, isLoading: commitsLoading } = useQuery(commitsFromDbQuery);
   const [visible, setVisible] = useState(10);
   const [selectedCommit, setSelectedCommit] = useState<GitHubCommit | null>(null);
 

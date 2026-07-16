@@ -48,6 +48,24 @@ function githubHeaders(): Record<string, string> {
   return h;
 }
 
+async function upsertCommits(commits: GitHubCommit[]): Promise<void> {
+  try {
+    const { getDb } = await import("./db");
+    const db = getDb();
+    const stmt = db.prepare(
+      `INSERT OR REPLACE INTO commits (sha, short_sha, message, author, date, url, fetched_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    );
+    const now = new Date().toISOString();
+    for (const c of commits) {
+      stmt.run(c.sha, c.shortSha, c.message, c.author, c.date, c.url, now);
+    }
+  } catch (e) {
+    console.warn("[github] Upsert commits eșuat:", e);
+  }
+}
+
+// Fetch GitHub + upsert în DB (rulat periodic din React Query)
 export const getRecentCommits = createServerFn({ method: "GET" }).handler(
   async (): Promise<GitHubCommitsResult> => {
     try {
@@ -68,6 +86,9 @@ export const getRecentCommits = createServerFn({ method: "GET" }).handler(
         url: c.html_url ?? `https://github.com/${GITHUB_REPO}/commit/${c.sha}`,
       }));
 
+      // Salvează în DB — acumulează istoric nelimitat
+      await upsertCommits(commits);
+
       return { status: "ok", commits };
     } catch (e) {
       return { status: "error", error: e instanceof Error ? e.message : String(e), commits: [] };
@@ -75,6 +96,34 @@ export const getRecentCommits = createServerFn({ method: "GET" }).handler(
   },
 );
 
+// Citește commits din DB — sursa principală pentru timeline
+export const getCommitsFromDb = createServerFn({ method: "GET" }).handler(
+  async (): Promise<GitHubCommitsResult> => {
+    try {
+      const { getDb } = await import("./db");
+      const db = getDb();
+      const rows = db.prepare(
+        `SELECT sha, short_sha, message, author, date, url
+         FROM commits ORDER BY date DESC LIMIT 500`
+      ).all() as Array<{ sha: string; short_sha: string; message: string; author: string; date: string; url: string }>;
+
+      const commits: GitHubCommit[] = rows.map((r) => ({
+        sha: r.sha,
+        shortSha: r.short_sha,
+        message: r.message,
+        author: r.author,
+        date: r.date,
+        url: r.url,
+      }));
+
+      return { status: "ok", commits };
+    } catch (e) {
+      return { status: "error", error: e instanceof Error ? e.message : String(e), commits: [] };
+    }
+  },
+);
+
+// Detalii complete pentru un commit — live de pe GitHub, la cerere
 export const getCommitDetail = createServerFn({ method: "GET" })
   .validator((data: { sha: string }) => data)
   .handler(async ({ data }): Promise<GitHubCommitDetail> => {
@@ -108,8 +157,7 @@ export const getCommitDetail = createServerFn({ method: "GET" })
       return {
         status: "error",
         error: e instanceof Error ? e.message : String(e),
-        sha: data.sha,
-        shortSha: data.sha.slice(0, 7),
+        sha: data.sha, shortSha: data.sha.slice(0, 7),
         message: "", author: "", date: "", url: "",
         filesChanged: 0, additions: 0, deletions: 0, files: [],
       };

@@ -50,6 +50,17 @@ export function getDb(): DatabaseSync {
       torrent_hash TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_downloads_downloaded_at ON downloads(downloaded_at DESC);
+
+    CREATE TABLE IF NOT EXISTS commits (
+      sha TEXT PRIMARY KEY,
+      short_sha TEXT NOT NULL,
+      message TEXT NOT NULL,
+      author TEXT NOT NULL,
+      date TEXT NOT NULL,
+      url TEXT NOT NULL,
+      fetched_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_commits_date ON commits(date DESC);
   `);
 
   // Migrare din JSON (o singură dată, la prima pornire cu SQLite)
