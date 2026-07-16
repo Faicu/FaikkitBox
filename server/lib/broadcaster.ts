@@ -8,6 +8,10 @@ export function addDeployListener(fn: Listener) {
   return () => clients.delete(fn);
 }
 
+export function hasActiveClients() {
+  return clients.size > 0;
+}
+
 export function broadcastDeploy(event: string, data: string) {
   const msg: DeployEvent = { event, data };
   for (const fn of clients) {

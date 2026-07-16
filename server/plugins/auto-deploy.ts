@@ -1,5 +1,5 @@
 import { execSync, spawn } from "child_process";
-import { broadcastDeploy } from "../lib/broadcaster";
+import { broadcastDeploy, hasActiveClients } from "../lib/broadcaster";
 
 const GITHUB_REPO = process.env.GITHUB_REPO ?? "Faicu/FaikkitBox";
 const REPO_DIR = process.env.FAIKKITBOX_REPO_DIR ?? "/opt/faikkitbox";
@@ -51,7 +51,7 @@ async function deploy(latestSha: string) {
 }
 
 async function checkGitHub() {
-  if (deploying) return;
+  if (deploying || !hasActiveClients()) return;
   try {
     const headers: Record<string, string> = {
       "User-Agent": "faikkitbox",
