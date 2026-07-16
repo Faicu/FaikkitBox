@@ -35,6 +35,7 @@ async function deploy(latestSha: string) {
     if (pullCode !== 0) { broadcast("error", "git pull a eșuat — deploy anulat"); return; }
 
     broadcast("step", "🔨 npm run build");
+    await runCommand("sudo", ["chown", "-R", "faicu", `${REPO_DIR}/.output`]);
     const buildCode = await runCommand("npm", ["--prefix", REPO_DIR, "run", "build"]);
     if (buildCode !== 0) { broadcast("error", "build a eșuat — deploy anulat"); return; }
 
