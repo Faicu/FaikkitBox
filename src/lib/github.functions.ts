@@ -55,7 +55,7 @@ async function upsertCommits(commits: GitHubCommit[]): Promise<void> {
     const db = getDb();
     const stmt = db.prepare(
       `INSERT OR REPLACE INTO commits (sha, short_sha, message, author, date, url, fetched_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
     );
     const now = new Date().toISOString();
     for (const c of commits) {
@@ -70,10 +70,10 @@ async function upsertCommits(commits: GitHubCommit[]): Promise<void> {
 export const getRecentCommits = createServerFn({ method: "GET" }).handler(
   async (): Promise<GitHubCommitsResult> => {
     try {
-      const res = await fetch(
-        `https://api.github.com/repos/${GITHUB_REPO}/commits?per_page=20`,
-        { headers: githubHeaders(), signal: AbortSignal.timeout(8000) },
-      );
+      const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/commits?per_page=20`, {
+        headers: githubHeaders(),
+        signal: AbortSignal.timeout(8000),
+      });
       if (!res.ok) throw new Error(`GitHub API a răspuns ${res.status}`);
       const raw: any[] = await res.json();
       if (!Array.isArray(raw)) throw new Error("Răspuns neașteptat de la GitHub API");
@@ -103,10 +103,19 @@ export const getCommitsFromDb = createServerFn({ method: "GET" }).handler(
     try {
       const { getDb } = await import("./db");
       const db = getDb();
-      const rows = db.prepare(
-        `SELECT sha, short_sha, message, author, date, url
-         FROM commits ORDER BY date DESC LIMIT 500`
-      ).all() as Array<{ sha: string; short_sha: string; message: string; author: string; date: string; url: string }>;
+      const rows = db
+        .prepare(
+          `SELECT sha, short_sha, message, author, date, url
+         FROM commits ORDER BY date DESC LIMIT 500`,
+        )
+        .all() as Array<{
+        sha: string;
+        short_sha: string;
+        message: string;
+        author: string;
+        date: string;
+        url: string;
+      }>;
 
       const commits: GitHubCommit[] = rows.map((r) => ({
         sha: r.sha,
@@ -129,10 +138,10 @@ export const getCommitDetail = createServerFn({ method: "GET" })
   .validator((data: { sha: string }) => data)
   .handler(async ({ data }): Promise<GitHubCommitDetail> => {
     try {
-      const res = await fetch(
-        `https://api.github.com/repos/${GITHUB_REPO}/commits/${data.sha}`,
-        { headers: githubHeaders(), signal: AbortSignal.timeout(8000) },
-      );
+      const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/commits/${data.sha}`, {
+        headers: githubHeaders(),
+        signal: AbortSignal.timeout(8000),
+      });
       if (!res.ok) throw new Error(`GitHub API a răspuns ${res.status}`);
       const c: any = await res.json();
 
@@ -158,9 +167,16 @@ export const getCommitDetail = createServerFn({ method: "GET" })
       return {
         status: "error",
         error: e instanceof Error ? e.message : String(e),
-        sha: data.sha, shortSha: data.sha.slice(0, 7),
-        message: "", author: "", date: "", url: "",
-        filesChanged: 0, additions: 0, deletions: 0, files: [],
+        sha: data.sha,
+        shortSha: data.sha.slice(0, 7),
+        message: "",
+        author: "",
+        date: "",
+        url: "",
+        filesChanged: 0,
+        additions: 0,
+        deletions: 0,
+        files: [],
       };
     }
   });
@@ -175,14 +191,16 @@ export interface GitHubSyncStatus {
 }
 
 export const getGitHubSyncStatus = createServerFn({ method: "GET" }).handler(
-  async (): Promise<{ status: "ok"; data: GitHubSyncStatus } | { status: "error"; error: string }> => {
+  async (): Promise<
+    { status: "ok"; data: GitHubSyncStatus } | { status: "error"; error: string }
+  > => {
     try {
       const deployedSha = execSync("git rev-parse HEAD", { encoding: "utf8" }).trim();
 
-      const res = await fetch(
-        `https://api.github.com/repos/${GITHUB_REPO}/commits?per_page=30`,
-        { headers: githubHeaders(), signal: AbortSignal.timeout(8000) },
-      );
+      const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/commits?per_page=30`, {
+        headers: githubHeaders(),
+        signal: AbortSignal.timeout(8000),
+      });
       if (!res.ok) throw new Error(`GitHub API ${res.status}`);
       const commits: any[] = await res.json();
 

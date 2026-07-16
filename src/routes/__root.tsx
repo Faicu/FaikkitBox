@@ -80,19 +80,36 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
       { title: "FaikkitBox - Status Monitor" },
-      { name: "description", content: "Statistici Live despre Plex, Immich, qBittorrent și Server" },
+      {
+        name: "description",
+        content: "Statistici Live despre Plex, Immich, qBittorrent și Server",
+      },
       { name: "theme-color", content: "#0b0f19" },
       { name: "apple-mobile-web-app-capable", content: "yes" },
       { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
       { name: "apple-mobile-web-app-title", content: "Server Monitor" },
       { property: "og:title", content: "FaikkitBox - Status Monitor" },
-      { property: "og:description", content: "Statistici Live despre Plex, Immich, qBittorrent și Server" },
+      {
+        property: "og:description",
+        content: "Statistici Live despre Plex, Immich, qBittorrent și Server",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:title", content: "FaikkitBox - Status Monitor" },
-      { name: "twitter:description", content: "Statistici Live despre Plex, Immich, qBittorrent și Server" },
-      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/6b2e1074-6ee2-441f-9618-a3f8c71142f9" },
-      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/6b2e1074-6ee2-441f-9618-a3f8c71142f9" },
+      {
+        name: "twitter:description",
+        content: "Statistici Live despre Plex, Immich, qBittorrent și Server",
+      },
+      {
+        property: "og:image",
+        content:
+          "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/6b2e1074-6ee2-441f-9618-a3f8c71142f9",
+      },
+      {
+        name: "twitter:image",
+        content:
+          "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/6b2e1074-6ee2-441f-9618-a3f8c71142f9",
+      },
     ],
     links: [
       {
@@ -129,7 +146,7 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <AutoReloadWatcher />
       <Outlet />
-<BottomNav />
+      <BottomNav />
       <Toaster richColors closeButton position="top-center" />
     </QueryClientProvider>
   );
@@ -146,7 +163,9 @@ function AutoReloadWatcher() {
         return (
           <div className="flex flex-col gap-2">
             <span className="text-base font-semibold leading-tight">Actualizare disponibilă</span>
-            <span className="text-sm opacity-80">Reîncărcare automată în <span className="font-mono font-bold">{s}s</span></span>
+            <span className="text-sm opacity-80">
+              Reîncărcare automată în <span className="font-mono font-bold">{s}s</span>
+            </span>
             <button
               onClick={() => window.location.reload()}
               className="mt-1 w-full rounded-lg bg-amber-500/20 px-3 py-1.5 text-sm font-semibold text-amber-300 hover:bg-amber-500/30 active:scale-95 transition-all"

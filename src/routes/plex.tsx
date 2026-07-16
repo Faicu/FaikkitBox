@@ -1,6 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Film, Tv, Music, Image as ImageIcon, User, Trophy, ChevronRight, History, Monitor, Activity } from "lucide-react";
+import {
+  Film,
+  Tv,
+  Music,
+  Image as ImageIcon,
+  User,
+  Trophy,
+  ChevronRight,
+  History,
+  Monitor,
+  Activity,
+} from "lucide-react";
 import { useState } from "react";
 
 import { PageShell } from "@/components/PageShell";
@@ -8,7 +19,13 @@ import { StatCard } from "@/components/StatCard";
 import { ErrorCard } from "@/components/ErrorCard";
 import { ServiceHeaderActions, CommandOutput } from "@/components/ServiceHeaderActions";
 import { useServiceRecovery } from "@/components/useServiceRecovery";
-import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription } from "@/components/ui/drawer";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerDescription,
+} from "@/components/ui/drawer";
 import { plexQuery } from "@/lib/queries";
 import { formatMsWithSeconds } from "@/lib/format";
 import type { PlexHistoryEntry } from "@/lib/services.functions";
@@ -29,17 +46,23 @@ function libIcon(type: string) {
 
 function PlexPage() {
   const { data, isLoading } = useQuery(plexQuery);
-  const status = isLoading ? "loading" : data?.status ?? "error";
+  const status = isLoading ? "loading" : (data?.status ?? "error");
   const { recovering, startRecovery } = useServiceRecovery(data?.status);
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
-  const [lastCmd, setLastCmd] = useState<{ command: AgentCommand; result: AgentResult } | null>(null);
+  const [lastCmd, setLastCmd] = useState<{ command: AgentCommand; result: AgentResult } | null>(
+    null,
+  );
   const userEntries: PlexHistoryEntry[] =
-    selectedUser && data?.status === "ok" ? data.userHistory?.[selectedUser] ?? [] : [];
+    selectedUser && data?.status === "ok" ? (data.userHistory?.[selectedUser] ?? []) : [];
 
   return (
     <PageShell
       title="Plex"
-      subtitle={data?.status === "ok" ? `${data.serverName ?? "Server"} · v${data.version ?? ""}` : "Server media"}
+      subtitle={
+        data?.status === "ok"
+          ? `${data.serverName ?? "Server"} · v${data.version ?? ""}`
+          : "Server media"
+      }
       right={
         <ServiceHeaderActions
           service="plex"
@@ -49,11 +72,12 @@ function PlexPage() {
         />
       }
     >
-      {data?.status === "error" && (
-        recovering
-          ? <RecoveryNotice service="Plex" />
-          : <ErrorCard title="Plex indisponibil" message={data.error ?? "Eroare necunoscută"} />
-      )}
+      {data?.status === "error" &&
+        (recovering ? (
+          <RecoveryNotice service="Plex" />
+        ) : (
+          <ErrorCard title="Plex indisponibil" message={data.error ?? "Eroare necunoscută"} />
+        ))}
 
       {data?.status === "ok" && (
         <>
@@ -73,72 +97,93 @@ function PlexPage() {
                   const isPaused = s.playerState === "paused";
 
                   return (
-                  <div key={i} className={`rounded-2xl border bg-card p-3 space-y-3 ${isPaused ? "border-amber-500/20" : "border-emerald-500/20"}`}>
-
-                    {/* Header: titlu + badge stare */}
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        {s.grandparentTitle && (
-                          <div className="text-[11px] text-muted-foreground font-medium truncate">{s.grandparentTitle}</div>
+                    <div
+                      key={i}
+                      className={`rounded-2xl border bg-card p-3 space-y-3 ${isPaused ? "border-amber-500/20" : "border-emerald-500/20"}`}
+                    >
+                      {/* Header: titlu + badge stare */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          {s.grandparentTitle && (
+                            <div className="text-[11px] text-muted-foreground font-medium truncate">
+                              {s.grandparentTitle}
+                            </div>
+                          )}
+                          <div className="truncate font-semibold text-sm leading-tight">
+                            {s.title}
+                          </div>
+                        </div>
+                        {isPaused ? (
+                          <span className="shrink-0 rounded-lg bg-amber-500/15 border border-amber-500/20 px-2.5 py-1 text-[11px] font-medium text-amber-400">
+                            ⏸ Pauză
+                          </span>
+                        ) : (
+                          <span className="shrink-0 rounded-lg bg-emerald-500/15 border border-emerald-500/20 px-2.5 py-1 text-[11px] font-medium text-emerald-400">
+                            ▶ Redare
+                          </span>
                         )}
-                        <div className="truncate font-semibold text-sm leading-tight">{s.title}</div>
                       </div>
-                      {isPaused
-                        ? <span className="shrink-0 rounded-lg bg-amber-500/15 border border-amber-500/20 px-2.5 py-1 text-[11px] font-medium text-amber-400">⏸ Pauză</span>
-                        : <span className="shrink-0 rounded-lg bg-emerald-500/15 border border-emerald-500/20 px-2.5 py-1 text-[11px] font-medium text-emerald-400">▶ Redare</span>
-                      }
-                    </div>
 
-                    {/* Progress bar mare */}
-                    <div className="space-y-1.5">
-                      <div className="relative h-2 w-full rounded-full bg-muted overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all duration-700 ${isPaused ? "bg-amber-400/70" : "bg-emerald-400"}`}
-                          style={{ width: `${pct.toFixed(2)}%` }}
-                        />
+                      {/* Progress bar mare */}
+                      <div className="space-y-1.5">
+                        <div className="relative h-2 w-full rounded-full bg-muted overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-700 ${isPaused ? "bg-amber-400/70" : "bg-emerald-400"}`}
+                            style={{ width: `${pct.toFixed(2)}%` }}
+                          />
+                        </div>
+                        {/* Timeline */}
+                        <div className="flex items-center justify-between text-[11px] tabular-nums">
+                          <span className="text-foreground font-medium">
+                            {formatMsWithSeconds(s.viewOffsetMs)}
+                          </span>
+                          <span className="text-muted-foreground">
+                            −{formatMsWithSeconds(remaining)}
+                          </span>
+                          <span className="text-muted-foreground">
+                            {formatMsWithSeconds(s.durationMs)}
+                          </span>
+                        </div>
                       </div>
-                      {/* Timeline */}
-                      <div className="flex items-center justify-between text-[11px] tabular-nums">
-                        <span className="text-foreground font-medium">{formatMsWithSeconds(s.viewOffsetMs)}</span>
-                        <span className="text-muted-foreground">−{formatMsWithSeconds(remaining)}</span>
-                        <span className="text-muted-foreground">{formatMsWithSeconds(s.durationMs)}</span>
-                      </div>
-                    </div>
 
-                    {/* Detalii sesiune */}
-                    <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
-                      <div className="flex items-center gap-1.5 text-muted-foreground">
-                        <User className="h-3 w-3 shrink-0" />
-                        <span className="truncate">{s.user}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5 text-muted-foreground">
-                        <Monitor className="h-3 w-3 shrink-0" />
-                        <span className="truncate">{s.player}</span>
-                      </div>
-                      {s.videoDecision && (
+                      {/* Detalii sesiune */}
+                      <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
                         <div className="flex items-center gap-1.5 text-muted-foreground">
-                          <span className="font-mono uppercase text-[10px] rounded bg-muted px-1.5 py-0.5">{s.videoDecision}</span>
-                          <span>Video</span>
+                          <User className="h-3 w-3 shrink-0" />
+                          <span className="truncate">{s.user}</span>
                         </div>
-                      )}
-                      {s.audioDecision && (
                         <div className="flex items-center gap-1.5 text-muted-foreground">
-                          <span className="font-mono uppercase text-[10px] rounded bg-muted px-1.5 py-0.5">{s.audioDecision}</span>
-                          <span>Audio</span>
+                          <Monitor className="h-3 w-3 shrink-0" />
+                          <span className="truncate">{s.player}</span>
                         </div>
-                      )}
-                      {s.bitrateKbps ? (
-                        <div className="flex items-center gap-1.5 text-muted-foreground col-span-2">
-                          <Activity className="h-3 w-3 shrink-0" />
-                          <span>{(s.bitrateKbps / 1000).toFixed(1)} Mbps</span>
-                          <span className="text-muted-foreground/50">·</span>
-                          <span>{Math.round(pct)}% vizionat</span>
-                        </div>
-                      ) : (
-                        <div className="text-muted-foreground">{Math.round(pct)}% vizionat</div>
-                      )}
+                        {s.videoDecision && (
+                          <div className="flex items-center gap-1.5 text-muted-foreground">
+                            <span className="font-mono uppercase text-[10px] rounded bg-muted px-1.5 py-0.5">
+                              {s.videoDecision}
+                            </span>
+                            <span>Video</span>
+                          </div>
+                        )}
+                        {s.audioDecision && (
+                          <div className="flex items-center gap-1.5 text-muted-foreground">
+                            <span className="font-mono uppercase text-[10px] rounded bg-muted px-1.5 py-0.5">
+                              {s.audioDecision}
+                            </span>
+                            <span>Audio</span>
+                          </div>
+                        )}
+                        {s.bitrateKbps ? (
+                          <div className="flex items-center gap-1.5 text-muted-foreground col-span-2">
+                            <Activity className="h-3 w-3 shrink-0" />
+                            <span>{(s.bitrateKbps / 1000).toFixed(1)} Mbps</span>
+                            <span className="text-muted-foreground/50">·</span>
+                            <span>{Math.round(pct)}% vizionat</span>
+                          </div>
+                        ) : (
+                          <div className="text-muted-foreground">{Math.round(pct)}% vizionat</div>
+                        )}
+                      </div>
                     </div>
-                  </div>
                   );
                 })}
               </div>
@@ -146,7 +191,9 @@ function PlexPage() {
           </section>
 
           <section>
-            <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Biblioteci</h2>
+            <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Biblioteci
+            </h2>
             <div className="grid grid-cols-2 gap-2">
               {data.libraries.map((lib) => (
                 <StatCard
@@ -163,7 +210,9 @@ function PlexPage() {
 
           {data.recentlyAdded.length > 0 && (
             <section>
-              <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Adăugate recent</h2>
+              <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Adăugate recent
+              </h2>
               <ul className="rounded-2xl border border-border bg-card divide-y divide-border">
                 {data.recentlyAdded.map((r, i) => (
                   <li key={i} className="flex items-center justify-between px-3 py-2 text-sm">
@@ -181,7 +230,11 @@ function PlexPage() {
             <RankedList
               title="Top seriale"
               icon={<Tv className="h-3.5 w-3.5" />}
-              rows={data.topShows.map((r) => ({ label: r.title, sub: `${r.plays} vizionări`, date: r.lastViewedAt }))}
+              rows={data.topShows.map((r) => ({
+                label: r.title,
+                sub: `${r.plays} vizionări`,
+                date: r.lastViewedAt,
+              }))}
             />
           )}
 
@@ -189,7 +242,11 @@ function PlexPage() {
             <RankedList
               title="Top filme"
               icon={<Film className="h-3.5 w-3.5" />}
-              rows={data.topMovies.map((r) => ({ label: r.title, sub: `${r.plays} vizionări`, date: r.lastViewedAt }))}
+              rows={data.topMovies.map((r) => ({
+                label: r.title,
+                sub: `${r.plays} vizionări`,
+                date: r.lastViewedAt,
+              }))}
             />
           )}
 
@@ -197,7 +254,11 @@ function PlexPage() {
             <RankedList
               title="Top spectatori"
               icon={<Trophy className="h-3.5 w-3.5" />}
-              rows={data.topWatchers.map((r) => ({ label: r.user, sub: `${r.plays} vizionări`, date: r.lastViewedAt }))}
+              rows={data.topWatchers.map((r) => ({
+                label: r.user,
+                sub: `${r.plays} vizionări`,
+                date: r.lastViewedAt,
+              }))}
               onSelect={(i) => setSelectedUser(data.topWatchers![i].user)}
             />
           )}
@@ -221,7 +282,8 @@ function PlexPage() {
                       <div className="truncate">{heading}</div>
                       <div className="mt-0.5 flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
                         <span className="truncate">
-                          {e.user ?? "—"}{e.player ? ` · ${e.player}` : ""}
+                          {e.user ?? "—"}
+                          {e.player ? ` · ${e.player}` : ""}
                         </span>
                         <span className="shrink-0 tabular-nums">
                           {e.viewedAt > 0 ? new Date(e.viewedAt * 1000).toLocaleString() : "—"}
@@ -264,7 +326,10 @@ function PlexPage() {
                     ? `${e.show}${seasonEp ? ` — ${seasonEp}` : ""}${e.title ? ` · ${e.title}` : ""}`
                     : e.title;
                   return (
-                    <li key={i} className="flex items-start justify-between gap-2 px-3 py-2 text-sm">
+                    <li
+                      key={i}
+                      className="flex items-start justify-between gap-2 px-3 py-2 text-sm"
+                    >
                       <div className="min-w-0">
                         <div className="truncate">{heading}</div>
                         <div className="mt-0.5 text-[11px] text-muted-foreground">
@@ -334,7 +399,6 @@ function RankedList({
     </section>
   );
 }
-
 
 function RankedRowContent({
   index,

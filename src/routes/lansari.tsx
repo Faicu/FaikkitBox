@@ -1,7 +1,26 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { Flame, CheckCircle2, XCircle, HelpCircle, Search, Pin, PinOff, ExternalLink, Loader2, Download, Film, Tv, Users, Zap, HardDrive, ShieldCheck, History, Trash2 } from "lucide-react";
+import {
+  Flame,
+  CheckCircle2,
+  XCircle,
+  HelpCircle,
+  Search,
+  Pin,
+  PinOff,
+  ExternalLink,
+  Loader2,
+  Download,
+  Film,
+  Tv,
+  Users,
+  Zap,
+  HardDrive,
+  ShieldCheck,
+  History,
+  Trash2,
+} from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 
@@ -26,7 +45,12 @@ function LansariPage() {
 
   return (
     <PageShell title="Lansări" subtitle="Calendar seriale" right={<ServicePill status={status} />}>
-      {hotdData?.status === "error" && <ErrorCard title="House of the Dragon indisponibil" message={hotdData.error ?? "Eroare necunoscută"} />}
+      {hotdData?.status === "error" && (
+        <ErrorCard
+          title="House of the Dragon indisponibil"
+          message={hotdData.error ?? "Eroare necunoscută"}
+        />
+      )}
       {hotdData?.status === "ok" && <ShowStatusCard data={hotdData} />}
 
       <CustomShowsSection />
@@ -124,7 +148,9 @@ function CustomShowsSection() {
             placeholder="Numele serialului..."
             className="w-full rounded-xl border border-border bg-background py-2 pl-9 pr-3 text-sm outline-none focus:ring-1 focus:ring-primary"
           />
-          {searching && <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />}
+          {searching && (
+            <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+          )}
         </div>
 
         {results.length > 0 && (
@@ -252,7 +278,11 @@ function ShowStatusCard({
           </a>
         )}
         {onUnpin && (
-          <button onClick={onUnpin} className="ml-2 text-muted-foreground hover:text-foreground" title="Scoate din listă">
+          <button
+            onClick={onUnpin}
+            className="ml-2 text-muted-foreground hover:text-foreground"
+            title="Scoate din listă"
+          >
             <PinOff className="h-3.5 w-3.5" />
           </button>
         )}
@@ -260,7 +290,9 @@ function ShowStatusCard({
       <div className="rounded-2xl border border-border bg-card p-4 space-y-4">
         {data.lastAired ? (
           <div>
-            <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Ultimul episod lansat</div>
+            <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+              Ultimul episod lansat
+            </div>
             <div className="mt-1 flex items-start justify-between gap-2">
               <div className="min-w-0">
                 <div className="truncate font-medium">
@@ -288,7 +320,9 @@ function ShowStatusCard({
               Următorul episod — E{data.next.episode}
             </div>
             {past ? (
-              <div className="mt-1 text-sm font-medium text-emerald-400">Ar trebui să fi apărut deja</div>
+              <div className="mt-1 text-sm font-medium text-emerald-400">
+                Ar trebui să fi apărut deja
+              </div>
             ) : (
               <div className="mt-1.5 flex items-center gap-2 tabular-nums">
                 {[
@@ -298,8 +332,12 @@ function ShowStatusCard({
                   { v: seconds, l: "sec" },
                 ].map((u) => (
                   <div key={u.l} className="flex-1 rounded-xl bg-muted px-2 py-1.5 text-center">
-                    <div className="text-lg font-semibold leading-none">{String(u.v).padStart(2, "0")}</div>
-                    <div className="mt-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">{u.l}</div>
+                    <div className="text-lg font-semibold leading-none">
+                      {String(u.v).padStart(2, "0")}
+                    </div>
+                    <div className="mt-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                      {u.l}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -402,10 +440,18 @@ function FilelistSection() {
         });
         qc.invalidateQueries({ queryKey: ["filelistLog"] });
       } else {
-        toast.error("Eroare la descărcare", { id: toastId, description: res.error, duration: 8000 });
+        toast.error("Eroare la descărcare", {
+          id: toastId,
+          description: res.error,
+          duration: 8000,
+        });
       }
     } catch (e: any) {
-      toast.error("Eroare neașteptată", { id: toastId, description: e?.message ?? String(e), duration: 8000 });
+      toast.error("Eroare neașteptată", {
+        id: toastId,
+        description: e?.message ?? String(e),
+        duration: 8000,
+      });
     } finally {
       setDownloading(null);
     }
@@ -447,13 +493,15 @@ function FilelistSection() {
 
         {/* Filtre calitate */}
         <div className="flex gap-2">
-          {([
-            { label: "1080p", color: "blue" },
-            { label: "4K",    color: "purple" },
-          ] as const).map(({ label, color }) => {
+          {(
+            [
+              { label: "1080p", color: "blue" },
+              { label: "4K", color: "purple" },
+            ] as const
+          ).map(({ label, color }) => {
             const active = qualityFilters.has(label);
             const styles = {
-              blue:   active
+              blue: active
                 ? "border-blue-400/70 bg-blue-500/30 text-blue-200 shadow-sm shadow-blue-500/30"
                 : "border-blue-500/40 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 hover:text-blue-300",
               purple: active
@@ -464,9 +512,10 @@ function FilelistSection() {
               <button
                 key={label}
                 onClick={() => {
-                  setQualityFilters(prev => {
+                  setQualityFilters((prev) => {
                     const next = new Set(prev);
-                    if (next.has(label)) next.delete(label); else next.add(label);
+                    if (next.has(label)) next.delete(label);
+                    else next.add(label);
                     return next;
                   });
                 }}
@@ -478,96 +527,111 @@ function FilelistSection() {
           })}
           {qualityFilters.size > 0 && (
             <span className="self-center text-[11px] text-muted-foreground ml-1">
-              {qualityFilters.size === 2 ? "Afișez 1080p + 4K" : `Afișez doar ${[...qualityFilters][0]}`}
+              {qualityFilters.size === 2
+                ? "Afișez 1080p + 4K"
+                : `Afișez doar ${[...qualityFilters][0]}`}
             </span>
           )}
         </div>
 
         {/* Eroare căutare */}
         {searchError && (
-          <div className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">{searchError}</div>
+          <div className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">
+            {searchError}
+          </div>
         )}
 
         {/* Rezultate */}
-        {results.length > 0 && (() => {
-          const displayed = qualityFilters.size === 0 ? results : results.filter(t => {
-            const name = t.name.toLowerCase();
-            return [...qualityFilters].some(f =>
-              f === "4K" ? name.includes("2160p") || name.includes("4k") : name.includes("1080p")
-            );
-          });
-          return (
-          <div className="space-y-2">
-            <div className="text-[11px] text-muted-foreground px-0.5">
-              {displayed.length} {qualityFilters.size > 0 ? `din ${results.length}` : ""} rezultate
-            </div>
-            {displayed.map((t) => (
-              <div
-                key={t.id}
-                className="flex items-start gap-2.5 rounded-xl bg-muted/50 border border-border/50 p-2.5"
-              >
-                {/* Tip */}
-                <div className="mt-0.5 shrink-0">
-                  {isMovie(t.category) ? (
-                    <Film className="h-4 w-4 text-amber-400" />
-                  ) : (
-                    <Tv className="h-4 w-4 text-blue-400" />
-                  )}
+        {results.length > 0 &&
+          (() => {
+            const displayed =
+              qualityFilters.size === 0
+                ? results
+                : results.filter((t) => {
+                    const name = t.name.toLowerCase();
+                    return [...qualityFilters].some((f) =>
+                      f === "4K"
+                        ? name.includes("2160p") || name.includes("4k")
+                        : name.includes("1080p"),
+                    );
+                  });
+            return (
+              <div className="space-y-2">
+                <div className="text-[11px] text-muted-foreground px-0.5">
+                  {displayed.length} {qualityFilters.size > 0 ? `din ${results.length}` : ""}{" "}
+                  rezultate
                 </div>
+                {displayed.map((t) => (
+                  <div
+                    key={t.id}
+                    className="flex items-start gap-2.5 rounded-xl bg-muted/50 border border-border/50 p-2.5"
+                  >
+                    {/* Tip */}
+                    <div className="mt-0.5 shrink-0">
+                      {isMovie(t.category) ? (
+                        <Film className="h-4 w-4 text-amber-400" />
+                      ) : (
+                        <Tv className="h-4 w-4 text-blue-400" />
+                      )}
+                    </div>
 
-                {/* Info */}
-                <div className="min-w-0 flex-1 space-y-1">
-                  <div className="text-sm font-medium leading-tight break-words">{t.name}</div>
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
-                    <span className="rounded bg-muted px-1.5 py-0.5 font-medium">{t.categoryName}</span>
-                    <span className="flex items-center gap-0.5">
-                      <HardDrive className="h-3 w-3" /> {formatBytes(t.size)}
-                    </span>
-                    <span className="flex items-center gap-0.5 text-emerald-400">
-                      <Users className="h-3 w-3" /> {t.seeders}S
-                    </span>
-                    <span className="flex items-center gap-0.5 text-orange-400">
-                      <Users className="h-3 w-3" /> {t.leechers}L
-                    </span>
-                    {t.freeleech && (
-                      <span className="flex items-center gap-0.5 rounded bg-yellow-500/15 px-1.5 py-0.5 font-medium text-yellow-400">
-                        <Zap className="h-3 w-3" /> Freeleech
-                      </span>
-                    )}
-                    {t.internal && (
-                      <span className="flex items-center gap-0.5 rounded bg-purple-500/15 px-1.5 py-0.5 font-medium text-purple-400">
-                        <ShieldCheck className="h-3 w-3" /> Internal
-                      </span>
-                    )}
-                    {t.upload_date && (
-                      <span>{new Date(t.upload_date).toLocaleDateString("ro-RO")}</span>
-                    )}
+                    {/* Info */}
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <div className="text-sm font-medium leading-tight break-words">{t.name}</div>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
+                        <span className="rounded bg-muted px-1.5 py-0.5 font-medium">
+                          {t.categoryName}
+                        </span>
+                        <span className="flex items-center gap-0.5">
+                          <HardDrive className="h-3 w-3" /> {formatBytes(t.size)}
+                        </span>
+                        <span className="flex items-center gap-0.5 text-emerald-400">
+                          <Users className="h-3 w-3" /> {t.seeders}S
+                        </span>
+                        <span className="flex items-center gap-0.5 text-orange-400">
+                          <Users className="h-3 w-3" /> {t.leechers}L
+                        </span>
+                        {t.freeleech && (
+                          <span className="flex items-center gap-0.5 rounded bg-yellow-500/15 px-1.5 py-0.5 font-medium text-yellow-400">
+                            <Zap className="h-3 w-3" /> Freeleech
+                          </span>
+                        )}
+                        {t.internal && (
+                          <span className="flex items-center gap-0.5 rounded bg-purple-500/15 px-1.5 py-0.5 font-medium text-purple-400">
+                            <ShieldCheck className="h-3 w-3" /> Internal
+                          </span>
+                        )}
+                        {t.upload_date && (
+                          <span>{new Date(t.upload_date).toLocaleDateString("ro-RO")}</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Buton download */}
+                    <button
+                      onClick={() => handleDownload(t)}
+                      disabled={downloading === t.id}
+                      className="shrink-0 flex items-center gap-1 rounded-lg bg-blue-500/15 px-2.5 py-1.5 text-[11px] font-medium text-blue-400 hover:bg-blue-500/25 disabled:opacity-50 transition-colors"
+                      title={`Descarcă în ${isMovie(t.category) ? "Filme" : "Seriale"}`}
+                    >
+                      {downloading === t.id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Download className="h-3.5 w-3.5" />
+                      )}
+                      {isMovie(t.category) ? "Film" : "Serial"}
+                    </button>
                   </div>
-                </div>
-
-                {/* Buton download */}
-                <button
-                  onClick={() => handleDownload(t)}
-                  disabled={downloading === t.id}
-                  className="shrink-0 flex items-center gap-1 rounded-lg bg-blue-500/15 px-2.5 py-1.5 text-[11px] font-medium text-blue-400 hover:bg-blue-500/25 disabled:opacity-50 transition-colors"
-                  title={`Descarcă în ${isMovie(t.category) ? "Filme" : "Seriale"}`}
-                >
-                  {downloading === t.id ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Download className="h-3.5 w-3.5" />
-                  )}
-                  {isMovie(t.category) ? "Film" : "Serial"}
-                </button>
+                ))}
               </div>
-            ))}
-          </div>
-          );
-        })()}
+            );
+          })()}
 
         {/* Mesaj gol */}
         {!searching && query.trim().length >= 2 && results.length === 0 && !searchError && (
-          <div className="text-center text-sm text-muted-foreground py-4">Niciun rezultat găsit.</div>
+          <div className="text-center text-sm text-muted-foreground py-4">
+            Niciun rezultat găsit.
+          </div>
         )}
       </div>
     </section>
@@ -595,7 +659,10 @@ function DownloadLogSection() {
       <div className="rounded-2xl border border-border bg-card p-3">
         <div className="divide-y divide-border/60">
           {log.slice(0, 10).map((e: FilelistLogEntry) => (
-            <div key={`${e.id}-${e.downloadedAt}`} className="flex items-start gap-2.5 py-2 first:pt-0 last:pb-0">
+            <div
+              key={`${e.id}-${e.downloadedAt}`}
+              className="flex items-start gap-2.5 py-2 first:pt-0 last:pb-0"
+            >
               <div className="mt-0.5 shrink-0">
                 {isMovie(e.category) ? (
                   <Film className="h-4 w-4 text-amber-400" />
@@ -615,7 +682,9 @@ function DownloadLogSection() {
                       timeZone: "Europe/Bucharest",
                     })}
                   </span>
-                  <span className="rounded bg-muted px-1.5 py-0.5 font-medium">{e.categoryName}</span>
+                  <span className="rounded bg-muted px-1.5 py-0.5 font-medium">
+                    {e.categoryName}
+                  </span>
                   {e.size > 0 && (
                     <span className="flex items-center gap-0.5">
                       <HardDrive className="h-3 w-3" /> {formatBytes(e.size)}
@@ -637,7 +706,10 @@ function DownloadLogSection() {
                     <span className="flex items-center gap-1 text-[11px] text-emerald-400">
                       <CheckCircle2 className="h-3 w-3" /> Complet —{" "}
                       {new Date(e.completedAt).toLocaleString("ro-RO", {
-                        day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
+                        day: "numeric",
+                        month: "short",
+                        hour: "2-digit",
+                        minute: "2-digit",
                         timeZone: "Europe/Bucharest",
                       })}
                     </span>

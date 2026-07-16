@@ -2,7 +2,16 @@ import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Cpu, MemoryStick, HardDrive, Network, Terminal, Boxes, HardDriveDownload, PackageCheck } from "lucide-react";
+import {
+  Cpu,
+  MemoryStick,
+  HardDrive,
+  Network,
+  Terminal,
+  Boxes,
+  HardDriveDownload,
+  PackageCheck,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { PageShell } from "@/components/PageShell";
@@ -25,7 +34,7 @@ function HostPage() {
   const { data, isLoading } = useQuery(hostQuery);
   const { data: adminData } = useQuery(adminStatusQuery);
   const isAdmin = adminData?.isAdmin ?? false;
-  const status = isLoading ? "loading" : data?.status ?? "error";
+  const status = isLoading ? "loading" : (data?.status ?? "error");
 
   const runCmd = useServerFn(runAgentCommand);
   const [lastCmd, setLastCmd] = useState<{ output: string; ok: boolean } | null>(null);
@@ -44,14 +53,23 @@ function HostPage() {
   });
 
   function handleUpgrade() {
-    if (!confirm("Actualizezi complet Ubuntu?\n\napt-get update + apt-get upgrade -y\n\nPoate dura câteva minute.")) return;
+    if (
+      !confirm(
+        "Actualizezi complet Ubuntu?\n\napt-get update + apt-get upgrade -y\n\nPoate dura câteva minute.",
+      )
+    )
+      return;
     upgrade.mutate();
   }
 
   return (
     <PageShell
       title="Sistem"
-      subtitle={data?.status === "ok" ? `${data.hostname ?? "mini-pc"} · ${data.os ?? ""}` : "Metrici sistem"}
+      subtitle={
+        data?.status === "ok"
+          ? `${data.hostname ?? "mini-pc"} · ${data.os ?? ""}`
+          : "Metrici sistem"
+      }
       right={
         <div className="flex items-center gap-2">
           {isAdmin && (
@@ -77,15 +95,36 @@ function HostPage() {
       {data?.status === "ok" && (
         <>
           <div className="grid grid-cols-2 gap-2">
-            <StatCard label="Procesor" value={`${(data.cpuPercent ?? 0).toFixed(0)}%`} sub={`${data.cpuCores ?? "?"} nuclee · încărcare ${data.loadAvg?.[0].toFixed(2)}`} icon={<Cpu className="h-4 w-4" />} accent="text-emerald-400" />
-            <StatCard label="Memorie" value={`${(data.memPercent ?? 0).toFixed(0)}%`} sub={`${formatBytes(data.memUsedBytes ?? 0)} / ${formatBytes(data.memTotalBytes ?? 0)}`} icon={<MemoryStick className="h-4 w-4" />} accent="text-emerald-400" />
             <StatCard
-              label="Temperatură CPU"
-              value={data.sensors?.[0] ? `${data.sensors[0].value.toFixed(0)}${data.sensors[0].unit || "°C"}` : "—"}
+              label="Procesor"
+              value={`${(data.cpuPercent ?? 0).toFixed(0)}%`}
+              sub={`${data.cpuCores ?? "?"} nuclee · încărcare ${data.loadAvg?.[0].toFixed(2)}`}
               icon={<Cpu className="h-4 w-4" />}
               accent="text-emerald-400"
             />
-            <StatCard label="Timp funcționare" value={formatDurationHMS(data.uptimeSec ?? 0)} icon={<Cpu className="h-4 w-4" />} accent="text-emerald-400" />
+            <StatCard
+              label="Memorie"
+              value={`${(data.memPercent ?? 0).toFixed(0)}%`}
+              sub={`${formatBytes(data.memUsedBytes ?? 0)} / ${formatBytes(data.memTotalBytes ?? 0)}`}
+              icon={<MemoryStick className="h-4 w-4" />}
+              accent="text-emerald-400"
+            />
+            <StatCard
+              label="Temperatură CPU"
+              value={
+                data.sensors?.[0]
+                  ? `${data.sensors[0].value.toFixed(0)}${data.sensors[0].unit || "°C"}`
+                  : "—"
+              }
+              icon={<Cpu className="h-4 w-4" />}
+              accent="text-emerald-400"
+            />
+            <StatCard
+              label="Timp funcționare"
+              value={formatDurationHMS(data.uptimeSec ?? 0)}
+              icon={<Cpu className="h-4 w-4" />}
+              accent="text-emerald-400"
+            />
           </div>
 
           {data.apps && data.apps.length > 0 && (
@@ -104,12 +143,14 @@ function HostPage() {
                     </div>
                     <div className="shrink-0 text-right text-xs tabular-nums">
                       <div>
-                        <span className="text-emerald-400">CPU {a.cpu.toFixed(1)}%</span>{" · "}
+                        <span className="text-emerald-400">CPU {a.cpu.toFixed(1)}%</span>
+                        {" · "}
                         <span className="text-emerald-400">MEM {a.mem.toFixed(1)}%</span>
                       </div>
                       {(a.netRx != null || a.netTx != null) && (
                         <div className="text-[10px] text-muted-foreground">
-                          <span className="text-sky-400">↓ {formatSpeed(a.netRx ?? 0)}</span>{" · "}
+                          <span className="text-sky-400">↓ {formatSpeed(a.netRx ?? 0)}</span>
+                          {" · "}
                           <span className="text-emerald-400">↑ {formatSpeed(a.netTx ?? 0)}</span>
                         </div>
                       )}
@@ -126,7 +167,7 @@ function HostPage() {
             </h2>
             <div className="rounded-2xl border border-border bg-card p-3 space-y-3">
               {(data.disks ?? [])
-                .filter(d => ["/", "/media/ssd2tb", "/media/hddextern"].includes(d.mount))
+                .filter((d) => ["/", "/media/ssd2tb", "/media/hddextern"].includes(d.mount))
                 .sort((a, b) => {
                   const order = ["/", "/media/ssd2tb", "/media/hddextern"];
                   return order.indexOf(a.mount) - order.indexOf(b.mount);
@@ -167,18 +208,28 @@ function HostPage() {
                   <li key={n.name} className="rounded-2xl border border-border bg-card p-3">
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
-                        <span className="font-medium">{n.name.startsWith("en") ? "Ethernet" : "Rețea"}</span>
-                        <span className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">{n.name}</span>
+                        <span className="font-medium">
+                          {n.name.startsWith("en") ? "Ethernet" : "Rețea"}
+                        </span>
+                        <span className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                          {n.name}
+                        </span>
                       </div>
-                      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Trafic live</span>
+                      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                        Trafic live
+                      </span>
                     </div>
                     <div className="mt-2 grid grid-cols-2 gap-2 text-xs tabular-nums">
                       <div className="rounded-lg bg-sky-500/10 px-2.5 py-1.5 text-sky-400">
-                        <div className="text-[10px] uppercase tracking-wide text-sky-300/70">Download</div>
+                        <div className="text-[10px] uppercase tracking-wide text-sky-300/70">
+                          Download
+                        </div>
                         <div className="font-medium">↓ {formatSpeed(n.rxSec)}</div>
                       </div>
                       <div className="rounded-lg bg-emerald-500/10 px-2.5 py-1.5 text-emerald-400">
-                        <div className="text-[10px] uppercase tracking-wide text-emerald-300/70">Upload</div>
+                        <div className="text-[10px] uppercase tracking-wide text-emerald-300/70">
+                          Upload
+                        </div>
                         <div className="font-medium">↑ {formatSpeed(n.txSec)}</div>
                       </div>
                     </div>
@@ -223,7 +274,6 @@ function HostPage() {
               </ul>
             </section>
           )}
-
         </>
       )}
     </PageShell>

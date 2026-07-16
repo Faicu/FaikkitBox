@@ -34,9 +34,7 @@ async function fetchJson(url: string, init?: RequestInit, timeoutMs = 8000): Pro
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
   const githubToken = process.env.GITHUB_TOKEN;
   const extraHeaders: Record<string, string> =
-    githubToken && url.includes("api.github.com")
-      ? { Authorization: `Bearer ${githubToken}` }
-      : {};
+    githubToken && url.includes("api.github.com") ? { Authorization: `Bearer ${githubToken}` } : {};
   try {
     const res = await fetch(url, {
       ...init,
@@ -58,7 +56,10 @@ async function fetchJson(url: string, init?: RequestInit, timeoutMs = 8000): Pro
 async function plexVersion(): Promise<ServiceVersion> {
   const base = process.env.PLEX_URL;
   const token = process.env.PLEX_TOKEN;
-  const v: ServiceVersion = { name: "Plex", changelog: "https://forums.plex.tv/c/plex-media-server/12" };
+  const v: ServiceVersion = {
+    name: "Plex",
+    changelog: "https://forums.plex.tv/c/plex-media-server/12",
+  };
   try {
     if (base && token) {
       const j = await fetchJson(`${base.replace(/\/$/, "")}/identity?X-Plex-Token=${token}`);
@@ -80,7 +81,10 @@ async function plexVersion(): Promise<ServiceVersion> {
 async function immichVersion(): Promise<ServiceVersion> {
   const base = process.env.IMMICH_URL;
   const key = process.env.IMMICH_API_KEY;
-  const v: ServiceVersion = { name: "Immich", changelog: "https://github.com/immich-app/immich/releases" };
+  const v: ServiceVersion = {
+    name: "Immich",
+    changelog: "https://github.com/immich-app/immich/releases",
+  };
   try {
     if (base && key) {
       const j = await fetchJson(`${base.replace(/\/$/, "")}/api/server/version`, {

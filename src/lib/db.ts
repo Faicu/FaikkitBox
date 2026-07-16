@@ -79,7 +79,9 @@ function runCleanups(database: DatabaseSync): void {
 
     if (version < 1) {
       // v1: elimină duplicatele server_start (păstrează unul per minut)
-      const result = database.prepare(`
+      const result = database
+        .prepare(
+          `
         DELETE FROM activity
         WHERE type = 'server_start'
           AND id NOT IN (
@@ -87,7 +89,9 @@ function runCleanups(database: DatabaseSync): void {
             WHERE type = 'server_start'
             GROUP BY substr(timestamp, 1, 16)
           )
-      `).run();
+      `,
+        )
+        .run();
       console.log(`[db] Curățare v1: eliminate ${result.changes} duplicate server_start`);
       database.exec("PRAGMA user_version = 1");
     }
@@ -103,10 +107,14 @@ async function migrateFromJson(database: DatabaseSync): Promise<void> {
     try {
       const raw = await readFile(activityJson, "utf8");
       const entries = JSON.parse(raw) as Array<{
-        id: string; timestamp: string; type: string; message: string; meta?: unknown;
+        id: string;
+        timestamp: string;
+        type: string;
+        message: string;
+        meta?: unknown;
       }>;
       const insert = database.prepare(
-        "INSERT OR IGNORE INTO activity (id, timestamp, type, message, meta) VALUES (?, ?, ?, ?, ?)"
+        "INSERT OR IGNORE INTO activity (id, timestamp, type, message, meta) VALUES (?, ?, ?, ?, ?)",
       );
       let count = 0;
       for (const e of entries) {
@@ -121,26 +129,43 @@ async function migrateFromJson(database: DatabaseSync): Promise<void> {
   }
 
   // Filelist downloads
-  const downloadsJson = process.env.FILELIST_LOG_PATH ?? "/opt/faikkitbox/data/filelist-downloads.json";
+  const downloadsJson =
+    process.env.FILELIST_LOG_PATH ?? "/opt/faikkitbox/data/filelist-downloads.json";
   if (existsSync(downloadsJson)) {
     try {
       const raw = await readFile(downloadsJson, "utf8");
       const entries = JSON.parse(raw) as Array<{
-        id: number; name: string; size: number; category: number; categoryName: string;
-        freeleech: boolean; internal: boolean; savePath: string;
-        downloadedAt: string; completedAt: string | null; torrentHash?: string;
+        id: number;
+        name: string;
+        size: number;
+        category: number;
+        categoryName: string;
+        freeleech: boolean;
+        internal: boolean;
+        savePath: string;
+        downloadedAt: string;
+        completedAt: string | null;
+        torrentHash?: string;
       }>;
       const insert = database.prepare(
         `INSERT OR IGNORE INTO downloads
          (id, name, size, category, category_name, freeleech, internal, save_path, downloaded_at, completed_at, torrent_hash)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       );
       let count = 0;
       for (const e of entries) {
         insert.run(
-          e.id, e.name, e.size ?? 0, e.category ?? 0, e.categoryName ?? "",
-          e.freeleech ? 1 : 0, e.internal ? 1 : 0, e.savePath ?? "",
-          e.downloadedAt, e.completedAt ?? null, e.torrentHash ?? null,
+          e.id,
+          e.name,
+          e.size ?? 0,
+          e.category ?? 0,
+          e.categoryName ?? "",
+          e.freeleech ? 1 : 0,
+          e.internal ? 1 : 0,
+          e.savePath ?? "",
+          e.downloadedAt,
+          e.completedAt ?? null,
+          e.torrentHash ?? null,
         );
         count++;
       }

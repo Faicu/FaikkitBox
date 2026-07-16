@@ -3,7 +3,12 @@ import { useServerFn } from "@tanstack/react-start";
 import { ArrowUpCircle, ExternalLink, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 
-import { logAgentActivity, runAgentCommand, type AgentCommand, type AgentResult } from "@/lib/agent.functions";
+import {
+  logAgentActivity,
+  runAgentCommand,
+  type AgentCommand,
+  type AgentResult,
+} from "@/lib/agent.functions";
 import { adminStatusQuery, versionsQuery } from "@/lib/queries";
 import { ServicePill } from "@/components/ServicePill";
 
@@ -11,7 +16,10 @@ type Service = "plex" | "immich" | "qbit";
 
 const serviceConfig = {
   plex: { restartCmd: "restart_plex" as AgentCommand, updateCmd: "update_plex" as AgentCommand },
-  immich: { restartCmd: "restart_immich" as AgentCommand, updateCmd: "update_immich" as AgentCommand },
+  immich: {
+    restartCmd: "restart_immich" as AgentCommand,
+    updateCmd: "update_immich" as AgentCommand,
+  },
   qbit: { restartCmd: "flush_dns" as AgentCommand, updateCmd: null },
 };
 
@@ -69,7 +77,9 @@ export function ServiceHeaderActions({ service, status, onRestart, onCommandResu
           title={running === config.restartCmd ? "Se repornește..." : "Repornește"}
           aria-label="Repornește"
         >
-          <RotateCcw className={`h-3.5 w-3.5 ${running === config.restartCmd ? "animate-spin" : ""}`} />
+          <RotateCcw
+            className={`h-3.5 w-3.5 ${running === config.restartCmd ? "animate-spin" : ""}`}
+          />
           {running === config.restartCmd ? "..." : "Restart"}
         </button>
       )}
@@ -77,7 +87,11 @@ export function ServiceHeaderActions({ service, status, onRestart, onCommandResu
         <button
           type="button"
           onClick={() => {
-            if (confirm(`Actualizezi ${version!.name}? Serviciul va fi oprit, actualizat și repornit.`)) {
+            if (
+              confirm(
+                `Actualizezi ${version!.name}? Serviciul va fi oprit, actualizat și repornit.`,
+              )
+            ) {
               mutation.mutate(config.updateCmd!);
             }
           }}
@@ -98,7 +112,8 @@ export function CommandOutput({ command, result }: { command: AgentCommand; resu
   return (
     <div className="rounded-2xl border border-border bg-black/40 p-3">
       <div className={`mb-2 text-xs ${result.ok ? "text-emerald-400" : "text-red-400"}`}>
-        {result.ok ? "✓ Succes" : "✗ Eșec"} {result.exit_code != null && `· exit ${result.exit_code}`}
+        {result.ok ? "✓ Succes" : "✗ Eșec"}{" "}
+        {result.exit_code != null && `· exit ${result.exit_code}`}
         {result.error && ` · ${result.error}`}
       </div>
       <pre className="max-h-96 overflow-auto whitespace-pre-wrap break-all text-[11px] text-muted-foreground">

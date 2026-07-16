@@ -97,7 +97,12 @@ export const getTvShowStatus = createServerFn({ method: "GET" })
             }
           : null,
         next: nextEp
-          ? { season: nextEp.season, episode: nextEp.episode, title: nextEp.title, airDateIso: nextEp.airDateIso }
+          ? {
+              season: nextEp.season,
+              episode: nextEp.episode,
+              title: nextEp.title,
+              airDateIso: nextEp.airDateIso,
+            }
           : null,
       };
     } catch (e) {

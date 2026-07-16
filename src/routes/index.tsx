@@ -1,15 +1,55 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { PlayCircle, Images, Download, Cpu, ChevronRight, Users, HardDrive, ListChecks, Gauge, ArrowDown, ArrowUp, Activity, Tv, Film, ScrollText, RefreshCw, CheckCircle2, Server, Package, GitCommitHorizontal, ExternalLink, Plus, Minus } from "lucide-react";
+import {
+  PlayCircle,
+  Images,
+  Download,
+  Cpu,
+  ChevronRight,
+  Users,
+  HardDrive,
+  ListChecks,
+  Gauge,
+  ArrowDown,
+  ArrowUp,
+  Activity,
+  Tv,
+  Film,
+  ScrollText,
+  RefreshCw,
+  CheckCircle2,
+  Server,
+  Package,
+  GitCommitHorizontal,
+  ExternalLink,
+  Plus,
+  Minus,
+} from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
 import { PageShell } from "@/components/PageShell";
 import { ServicePill } from "@/components/ServicePill";
 import { RadialGauge } from "@/components/RadialGauge";
-import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription } from "@/components/ui/drawer";
-import { plexQuery, immichQuery, qbitQuery, hostQuery, adminStatusQuery, lastSpeedtestQuery, activityLogQuery, recentCommitsQuery, commitsFromDbQuery } from "@/lib/queries";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerDescription,
+} from "@/components/ui/drawer";
+import {
+  plexQuery,
+  immichQuery,
+  qbitQuery,
+  hostQuery,
+  adminStatusQuery,
+  lastSpeedtestQuery,
+  activityLogQuery,
+  recentCommitsQuery,
+  commitsFromDbQuery,
+} from "@/lib/queries";
 import type { ActivityEntry } from "@/lib/activity-log";
 import type { GitHubCommit, GitHubCommitDetail } from "@/lib/github.functions";
 import { getCommitDetail } from "@/lib/github.functions";
@@ -21,7 +61,10 @@ export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
       { title: "Prezentare generală — Monitor Server" },
-      { name: "description", content: "Stare în timp real pentru Plex, Immich, qBittorrent și gazdă." },
+      {
+        name: "description",
+        content: "Stare în timp real pentru Plex, Immich, qBittorrent și gazdă.",
+      },
     ],
   }),
   component: Overview,
@@ -73,7 +116,7 @@ function Overview() {
         title="Plex"
         icon={<PlayCircle className="h-5 w-5" />}
         accent="text-amber-400"
-        status={plex.isLoading ? "loading" : plex.data?.status ?? "error"}
+        status={plex.isLoading ? "loading" : (plex.data?.status ?? "error")}
         error={plex.data?.error}
       >
         {plex.data?.status === "ok" && (
@@ -81,7 +124,8 @@ function Overview() {
             {plex.data.sessions.length > 0 ? (
               <div className="space-y-1.5">
                 {plex.data.sessions.map((s, i) => {
-                  const pct = s.durationMs > 0 ? Math.round((s.viewOffsetMs / s.durationMs) * 100) : 0;
+                  const pct =
+                    s.durationMs > 0 ? Math.round((s.viewOffsetMs / s.durationMs) * 100) : 0;
                   const fmt = (ms: number) => {
                     const t = Math.floor(ms / 1000);
                     const h = Math.floor(t / 3600);
@@ -95,23 +139,34 @@ function Overview() {
                   return (
                     <div key={i} className="rounded-lg bg-muted/40 px-2.5 py-2 space-y-1.5">
                       <div className="flex items-start gap-1.5">
-                        {isEpisode
-                          ? <Tv className="h-3.5 w-3.5 shrink-0 mt-0.5 text-blue-400" />
-                          : <Film className="h-3.5 w-3.5 shrink-0 mt-0.5 text-amber-400" />}
+                        {isEpisode ? (
+                          <Tv className="h-3.5 w-3.5 shrink-0 mt-0.5 text-blue-400" />
+                        ) : (
+                          <Film className="h-3.5 w-3.5 shrink-0 mt-0.5 text-amber-400" />
+                        )}
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5">
                             <div className="truncate text-sm font-semibold leading-tight">
                               {isEpisode ? s.grandparentTitle : s.title}
                             </div>
-                            {s.playerState === "paused"
-                              ? <span className="shrink-0 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-400">⏸ Pauză</span>
-                              : <span className="shrink-0 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400">▶ Redare</span>
-                            }
+                            {s.playerState === "paused" ? (
+                              <span className="shrink-0 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-400">
+                                ⏸ Pauză
+                              </span>
+                            ) : (
+                              <span className="shrink-0 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400">
+                                ▶ Redare
+                              </span>
+                            )}
                           </div>
                           {isEpisode && (
-                            <div className="truncate text-[11px] text-muted-foreground">{s.title}</div>
+                            <div className="truncate text-[11px] text-muted-foreground">
+                              {s.title}
+                            </div>
                           )}
-                          <div className="text-[11px] text-muted-foreground">{s.user} · {s.player}</div>
+                          <div className="text-[11px] text-muted-foreground">
+                            {s.user} · {s.player}
+                          </div>
                         </div>
                       </div>
                       {s.durationMs > 0 && (
@@ -136,7 +191,8 @@ function Overview() {
             ) : (
               <div className="rounded-lg bg-muted/40 px-2.5 py-1.5">
                 <div className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                  <Users className="h-3.5 w-3.5" />Se uită acum
+                  <Users className="h-3.5 w-3.5" />
+                  Se uită acum
                 </div>
                 <div className="mt-0.5 text-sm font-semibold">Nimeni</div>
               </div>
@@ -162,14 +218,22 @@ function Overview() {
         title="Immich"
         icon={<Images className="h-5 w-5" />}
         accent="text-purple-400"
-        status={immich.isLoading ? "loading" : immich.data?.status ?? "error"}
+        status={immich.isLoading ? "loading" : (immich.data?.status ?? "error")}
         error={immich.data?.error}
       >
         {immich.data?.status === "ok" && (
           <div className="grid grid-cols-3 gap-2 text-sm">
             <Metric label="Fișiere" value={(immich.data.totalAssets ?? 0).toLocaleString()} />
-            <Metric icon={<HardDrive className="h-3.5 w-3.5" />} label="Spațiu" value={formatBytes(immich.data.usageBytes ?? 0)} />
-            <Metric icon={<ListChecks className="h-3.5 w-3.5" />} label="Sarcini în curs" value={(immich.data.jobQueueDepth ?? 0).toLocaleString()} />
+            <Metric
+              icon={<HardDrive className="h-3.5 w-3.5" />}
+              label="Spațiu"
+              value={formatBytes(immich.data.usageBytes ?? 0)}
+            />
+            <Metric
+              icon={<ListChecks className="h-3.5 w-3.5" />}
+              label="Sarcini în curs"
+              value={(immich.data.jobQueueDepth ?? 0).toLocaleString()}
+            />
           </div>
         )}
       </ServiceRow>
@@ -179,14 +243,17 @@ function Overview() {
         title="qBittorrent"
         icon={<Download className="h-5 w-5" />}
         accent="text-sky-400"
-        status={qbit.isLoading ? "loading" : qbit.data?.status ?? "error"}
+        status={qbit.isLoading ? "loading" : (qbit.data?.status ?? "error")}
         error={qbit.data?.error}
       >
         {qbit.data?.status === "ok" && (
           <div className="grid grid-cols-3 gap-2 text-sm">
             <Metric label="↓" value={formatSpeed(qbit.data.dlSpeed)} />
             <Metric label="↑" value={formatSpeed(qbit.data.upSpeed)} />
-            <Metric label="Active" value={`${qbit.data.counts.downloading + qbit.data.counts.seeding} / ${qbit.data.counts.total}`} />
+            <Metric
+              label="Active"
+              value={`${qbit.data.counts.downloading + qbit.data.counts.seeding} / ${qbit.data.counts.total}`}
+            />
           </div>
         )}
       </ServiceRow>
@@ -196,12 +263,10 @@ function Overview() {
         title="Sistem"
         icon={<Cpu className="h-5 w-5" />}
         accent="text-emerald-400"
-        status={host.isLoading ? "loading" : host.data?.status ?? "error"}
+        status={host.isLoading ? "loading" : (host.data?.status ?? "error")}
         error={host.data?.error}
       >
-        {host.data?.status === "ok" && (
-          <HostGauges data={host.data} />
-        )}
+        {host.data?.status === "ok" && <HostGauges data={host.data} />}
       </ServiceRow>
 
       <button
@@ -211,16 +276,30 @@ function Overview() {
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <span className="text-rose-400"><Gauge className="h-5 w-5" /></span>
+            <span className="text-rose-400">
+              <Gauge className="h-5 w-5" />
+            </span>
             <span className="font-semibold">Speedtest</span>
           </div>
           <ChevronRight className="h-4 w-4 text-muted-foreground" />
         </div>
         {speedtest.data ? (
           <div className="mt-3 grid grid-cols-3 gap-2 text-sm">
-            <Metric icon={<ArrowDown className="h-3.5 w-3.5" />} label="Download" value={formatSpeed(speedtest.data.download)} />
-            <Metric icon={<ArrowUp className="h-3.5 w-3.5" />} label="Upload" value={formatSpeed(speedtest.data.upload)} />
-            <Metric icon={<Activity className="h-3.5 w-3.5" />} label="Ping" value={`${speedtest.data.ping.latency.toFixed(0)} ms`} />
+            <Metric
+              icon={<ArrowDown className="h-3.5 w-3.5" />}
+              label="Download"
+              value={formatSpeed(speedtest.data.download)}
+            />
+            <Metric
+              icon={<ArrowUp className="h-3.5 w-3.5" />}
+              label="Upload"
+              value={formatSpeed(speedtest.data.upload)}
+            />
+            <Metric
+              icon={<Activity className="h-3.5 w-3.5" />}
+              label="Ping"
+              value={`${speedtest.data.ping.latency.toFixed(0)} ms`}
+            />
           </div>
         ) : (
           <p className="mt-2 text-xs text-muted-foreground">
@@ -280,7 +359,9 @@ function Overview() {
           <DrawerHeader className="text-left">
             <DrawerTitle>Utilizatori activi azi</DrawerTitle>
             <DrawerDescription>
-              {plex.data?.status === "ok" ? `${plex.data.activeUsersTodayList?.length ?? 0} utilizatori` : ""}
+              {plex.data?.status === "ok"
+                ? `${plex.data.activeUsersTodayList?.length ?? 0} utilizatori`
+                : ""}
             </DrawerDescription>
           </DrawerHeader>
           <div className="overflow-y-auto px-4 pb-6">
@@ -317,18 +398,40 @@ function Overview() {
           <div className="space-y-4 px-4 pb-6">
             {speedtest.data && (
               <div className="grid grid-cols-3 gap-2 text-sm">
-                <Metric icon={<ArrowDown className="h-3.5 w-3.5" />} label="Download" value={formatSpeed(speedtest.data.download)} />
-                <Metric icon={<ArrowUp className="h-3.5 w-3.5" />} label="Upload" value={formatSpeed(speedtest.data.upload)} />
-                <Metric icon={<Activity className="h-3.5 w-3.5" />} label="Ping" value={`${speedtest.data.ping.latency.toFixed(0)} ms`} />
+                <Metric
+                  icon={<ArrowDown className="h-3.5 w-3.5" />}
+                  label="Download"
+                  value={formatSpeed(speedtest.data.download)}
+                />
+                <Metric
+                  icon={<ArrowUp className="h-3.5 w-3.5" />}
+                  label="Upload"
+                  value={formatSpeed(speedtest.data.upload)}
+                />
+                <Metric
+                  icon={<Activity className="h-3.5 w-3.5" />}
+                  label="Ping"
+                  value={`${speedtest.data.ping.latency.toFixed(0)} ms`}
+                />
               </div>
             )}
             {speedtest.data?.server && (
               <div className="rounded-xl border border-border bg-card p-3 text-xs text-muted-foreground">
-                <div>Server: {speedtest.data.server.name ?? "—"} {speedtest.data.server.location ? `(${speedtest.data.server.location})` : ""}</div>
+                <div>
+                  Server: {speedtest.data.server.name ?? "—"}{" "}
+                  {speedtest.data.server.location ? `(${speedtest.data.server.location})` : ""}
+                </div>
                 {speedtest.data.isp && <div>ISP: {speedtest.data.isp}</div>}
-                {speedtest.data.packetLoss != null && <div>Pierdere pachete: {speedtest.data.packetLoss}%</div>}
+                {speedtest.data.packetLoss != null && (
+                  <div>Pierdere pachete: {speedtest.data.packetLoss}%</div>
+                )}
                 {speedtest.data.resultUrl && (
-                  <a href={speedtest.data.resultUrl} target="_blank" rel="noreferrer" className="mt-1 inline-block text-primary underline">
+                  <a
+                    href={speedtest.data.resultUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-1 inline-block text-primary underline"
+                  >
                     Raport complet Ookla
                   </a>
                 )}
@@ -342,7 +445,9 @@ function Overview() {
                 disabled={speedtestMutation.isPending}
                 className="w-full rounded-xl border border-rose-500/30 bg-rose-500/15 px-3 py-2.5 text-sm font-medium text-rose-400 hover:bg-rose-500/25 disabled:opacity-50"
               >
-                {speedtestMutation.isPending ? "Se rulează testul... (poate dura 30-60s)" : "Rulează test nou"}
+                {speedtestMutation.isPending
+                  ? "Se rulează testul... (poate dura 30-60s)"
+                  : "Rulează test nou"}
               </button>
             ) : (
               <div className="rounded-xl border border-border bg-muted/30 p-3 text-center text-xs text-muted-foreground">
@@ -356,7 +461,9 @@ function Overview() {
             {speedtestError && (
               <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-400">
                 <div className="font-semibold">Testul a eșuat</div>
-                <pre className="mt-1 overflow-auto whitespace-pre-wrap break-all">{speedtestError}</pre>
+                <pre className="mt-1 overflow-auto whitespace-pre-wrap break-all">
+                  {speedtestError}
+                </pre>
               </div>
             )}
           </div>
@@ -372,7 +479,7 @@ function HostGauges({ data }: { data: HostData }) {
   const mem = data.memPercent ?? 0;
   const netTotal = (data.net ?? []).reduce((sum, n) => sum + (n.rxSec ?? 0) + (n.txSec ?? 0), 0);
   // Scale network to a rough 100 Mbit/s = 100% reference
-  const netRef = 100 * 1024 * 1024 / 8; // bytes/s
+  const netRef = (100 * 1024 * 1024) / 8; // bytes/s
   const netPct = Math.min(100, (netTotal / netRef) * 100);
   return (
     <div className="grid grid-cols-3 gap-2">
@@ -386,7 +493,11 @@ function HostGauges({ data }: { data: HostData }) {
         label="Memorie"
         value={mem}
         centerText={`${mem.toFixed(0)}%`}
-        sub={data.memUsedBytes != null && data.memTotalBytes != null ? `${formatBytes(data.memUsedBytes)}` : undefined}
+        sub={
+          data.memUsedBytes != null && data.memTotalBytes != null
+            ? `${formatBytes(data.memUsedBytes)}`
+            : undefined
+        }
         colorClass="text-primary"
       />
       <RadialGauge
@@ -400,7 +511,13 @@ function HostGauges({ data }: { data: HostData }) {
 }
 
 function ServiceRow({
-  to, title, icon, accent, status, error, children,
+  to,
+  title,
+  icon,
+  accent,
+  status,
+  error,
+  children,
 }: {
   to: "/plex" | "/immich" | "/qbit" | "/sistem";
   title: string;
@@ -411,7 +528,10 @@ function ServiceRow({
   children?: React.ReactNode;
 }) {
   return (
-    <Link to={to} className="block rounded-2xl border border-border bg-card p-4 active:scale-[0.99] transition-transform">
+    <Link
+      to={to}
+      className="block rounded-2xl border border-border bg-card p-4 active:scale-[0.99] transition-transform"
+    >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <span className={`${accent}`}>{icon}</span>
@@ -432,7 +552,8 @@ function Metric({ label, value, icon }: { label: string; value: string; icon?: R
   return (
     <div className="rounded-lg bg-muted/40 px-2.5 py-1.5">
       <div className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-        {icon}{label}
+        {icon}
+        {label}
       </div>
       <div className="text-sm font-semibold tabular-nums">{value}</div>
     </div>
@@ -457,7 +578,8 @@ function MetricButton({
       className="rounded-lg bg-muted/40 px-2.5 py-1.5 text-left transition-colors hover:bg-muted/60 active:bg-muted"
     >
       <div className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-        {icon}{label}
+        {icon}
+        {label}
       </div>
       <div className="text-sm font-semibold tabular-nums">{value}</div>
     </button>
@@ -490,22 +612,29 @@ function CommitDrawer({ commit, onClose }: { commit: GitHubCommit; onClose: () =
 
   const fmtDate = (iso: string) =>
     new Date(iso).toLocaleString("ro-RO", {
-      day: "numeric", month: "long", year: "numeric",
-      hour: "2-digit", minute: "2-digit",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
       timeZone: "Europe/Bucharest",
     });
 
   const statusColor = (s: string) =>
     s === "added" ? "text-emerald-400" : s === "removed" ? "text-red-400" : "text-amber-400";
-  const statusLabel = (s: string) =>
-    s === "added" ? "A" : s === "removed" ? "D" : "M";
+  const statusLabel = (s: string) => (s === "added" ? "A" : s === "removed" ? "D" : "M");
 
   const lines = (data?.status === "ok" ? data.message : commit.message).split("\n").filter(Boolean);
   const title = lines[0] ?? "";
   const body = lines.slice(1);
 
   return (
-    <Drawer open onOpenChange={(o) => { if (!o) onClose(); }}>
+    <Drawer
+      open
+      onOpenChange={(o) => {
+        if (!o) onClose();
+      }}
+    >
       <DrawerContent>
         <DrawerHeader className="pb-2">
           <DrawerTitle className="flex items-center gap-2 text-base">
@@ -532,24 +661,39 @@ function CommitDrawer({ commit, onClose }: { commit: GitHubCommit; onClose: () =
 
           {/* Stats */}
           {isLoading && (
-            <div className="text-xs text-muted-foreground animate-pulse">Se încarcă detaliile...</div>
+            <div className="text-xs text-muted-foreground animate-pulse">
+              Se încarcă detaliile...
+            </div>
           )}
           {data?.status === "ok" && (
             <>
               <div className="flex items-center gap-4 text-xs">
-                <span className="text-muted-foreground">{data.filesChanged} fișier{data.filesChanged !== 1 ? "e" : ""} modificat{data.filesChanged !== 1 ? "e" : ""}</span>
-                <span className="flex items-center gap-1 text-emerald-400"><Plus className="h-3 w-3" />{data.additions}</span>
-                <span className="flex items-center gap-1 text-red-400"><Minus className="h-3 w-3" />{data.deletions}</span>
+                <span className="text-muted-foreground">
+                  {data.filesChanged} fișier{data.filesChanged !== 1 ? "e" : ""} modificat
+                  {data.filesChanged !== 1 ? "e" : ""}
+                </span>
+                <span className="flex items-center gap-1 text-emerald-400">
+                  <Plus className="h-3 w-3" />
+                  {data.additions}
+                </span>
+                <span className="flex items-center gap-1 text-red-400">
+                  <Minus className="h-3 w-3" />
+                  {data.deletions}
+                </span>
               </div>
 
               {/* Lista fișiere */}
               <div className="rounded-xl border border-border divide-y divide-border/50 overflow-hidden">
                 {data.files.map((f) => (
                   <div key={f.filename} className="flex items-center gap-2 px-3 py-1.5 text-xs">
-                    <span className={`font-mono font-bold w-4 text-center shrink-0 ${statusColor(f.status)}`}>
+                    <span
+                      className={`font-mono font-bold w-4 text-center shrink-0 ${statusColor(f.status)}`}
+                    >
                       {statusLabel(f.status)}
                     </span>
-                    <span className="font-mono min-w-0 truncate text-muted-foreground flex-1">{f.filename}</span>
+                    <span className="font-mono min-w-0 truncate text-muted-foreground flex-1">
+                      {f.filename}
+                    </span>
                     <span className="shrink-0 flex items-center gap-1.5 text-[11px]">
                       {f.additions > 0 && <span className="text-emerald-400">+{f.additions}</span>}
                       {f.deletions > 0 && <span className="text-red-400">−{f.deletions}</span>}
@@ -560,7 +704,9 @@ function CommitDrawer({ commit, onClose }: { commit: GitHubCommit; onClose: () =
             </>
           )}
           {data?.status === "error" && (
-            <div className="text-xs text-red-400">Nu s-au putut încărca detaliile: {data.error}</div>
+            <div className="text-xs text-red-400">
+              Nu s-au putut încărca detaliile: {data.error}
+            </div>
           )}
 
           {/* Link GitHub */}
@@ -586,25 +732,29 @@ function ActivityLogSection() {
   const [selectedCommit, setSelectedCommit] = useState<GitHubCommit | null>(null);
 
   const iconMap: Record<string, React.ReactNode> = {
-    server_start:     <Server className="h-3.5 w-3.5 text-emerald-400" />,
-    server_stop:      <Server className="h-3.5 w-3.5 text-red-400" />,
+    server_start: <Server className="h-3.5 w-3.5 text-emerald-400" />,
+    server_stop: <Server className="h-3.5 w-3.5 text-red-400" />,
     plex_watch_start: <PlayCircle className="h-3.5 w-3.5 text-amber-400" />,
-    plex_watch_stop:  <PlayCircle className="h-3.5 w-3.5 text-muted-foreground" />,
-    torrent_added:    <Download className="h-3.5 w-3.5 text-blue-400" />,
+    plex_watch_stop: <PlayCircle className="h-3.5 w-3.5 text-muted-foreground" />,
+    torrent_added: <Download className="h-3.5 w-3.5 text-blue-400" />,
     torrent_complete: <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />,
-    immich_upload:    <Images className="h-3.5 w-3.5 text-purple-400" />,
-    service_restart:  <RefreshCw className="h-3.5 w-3.5 text-sky-400" />,
-    service_update:   <Package className="h-3.5 w-3.5 text-amber-400" />,
-    ubuntu_update:    <Package className="h-3.5 w-3.5 text-orange-400" />,
-    qbit_action:      <Download className="h-3.5 w-3.5 text-sky-400" />,
+    immich_upload: <Images className="h-3.5 w-3.5 text-purple-400" />,
+    service_restart: <RefreshCw className="h-3.5 w-3.5 text-sky-400" />,
+    service_update: <Package className="h-3.5 w-3.5 text-amber-400" />,
+    ubuntu_update: <Package className="h-3.5 w-3.5 text-orange-400" />,
+    qbit_action: <Download className="h-3.5 w-3.5 text-sky-400" />,
   };
 
   const timeline: TimelineItem[] = [
     ...(log ?? []).map((entry): TimelineItem => ({
-      kind: "activity", ts: new Date(entry.timestamp).getTime(), entry,
+      kind: "activity",
+      ts: new Date(entry.timestamp).getTime(),
+      entry,
     })),
     ...(commitsData?.status === "ok" ? commitsData.commits : []).map((commit): TimelineItem => ({
-      kind: "commit", ts: new Date(commit.date).getTime(), commit,
+      kind: "commit",
+      ts: new Date(commit.date).getTime(),
+      commit,
     })),
   ].sort((a, b) => b.ts - a.ts);
 
@@ -623,7 +773,9 @@ function ActivityLogSection() {
             <div className="px-3 py-4 text-xs text-muted-foreground text-center">Se încarcă...</div>
           )}
           {!isLoading && timeline.length === 0 && (
-            <div className="px-3 py-4 text-xs text-muted-foreground text-center">Nicio activitate înregistrată încă.</div>
+            <div className="px-3 py-4 text-xs text-muted-foreground text-center">
+              Nicio activitate înregistrată încă.
+            </div>
           )}
           {shown.map((item) => {
             if (item.kind === "activity") {
@@ -631,7 +783,9 @@ function ActivityLogSection() {
               return (
                 <div key={entry.id} className="flex items-start gap-2.5 px-3 py-2.5">
                   <div className="mt-0.5 shrink-0">
-                    {iconMap[entry.type] ?? <Activity className="h-3.5 w-3.5 text-muted-foreground" />}
+                    {iconMap[entry.type] ?? (
+                      <Activity className="h-3.5 w-3.5 text-muted-foreground" />
+                    )}
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="text-sm leading-tight">{entry.message}</div>
@@ -653,7 +807,9 @@ function ActivityLogSection() {
                   <GitCommitHorizontal className="h-3.5 w-3.5 text-sky-400" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-sm leading-tight group-hover:text-sky-400 transition-colors">{c.message}</div>
+                  <div className="text-sm leading-tight group-hover:text-sky-400 transition-colors">
+                    {c.message}
+                  </div>
                   <div className="mt-0.5 text-[11px] text-muted-foreground">
                     {c.author} · <span className="font-mono">{c.shortSha}</span>
                   </div>
@@ -666,7 +822,7 @@ function ActivityLogSection() {
           })}
           {hasMore && (
             <button
-              onClick={() => setVisible(v => v + 10)}
+              onClick={() => setVisible((v) => v + 10)}
               className="w-full px-3 py-2.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/30 transition-colors text-center"
             >
               Afișează încă 10 ({timeline.length - visible} rămase)

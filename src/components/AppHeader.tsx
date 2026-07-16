@@ -69,33 +69,48 @@ export function AppHeader({ title, subtitle, right }: Props) {
         </div>
         <div className="flex items-center gap-2">
           {right}
-          {sync.data?.status === "ok" && (() => {
-            const s = sync.data.data;
-            const orange = updateAvailable || !s.isSynced;
-            return (
-              <button
-                type="button"
-                onClick={() => toast(
-                  updateAvailable
-                    ? "Actualizare detectată — reîncărcare în curs..."
-                    : s.isSynced ? "GitHub: sincronizat" : `GitHub: ${s.commitsBehind} commit${s.commitsBehind !== 1 ? "s" : ""} în urmă`,
-                  {
-                    description: `deployed ${s.deployedShortSha} · github ${s.latestShortSha}`,
-                    icon: <GitBranch className={`h-4 w-4 ${orange ? "text-amber-400" : "text-emerald-400"}`} />,
-                    duration: 4000,
+          {sync.data?.status === "ok" &&
+            (() => {
+              const s = sync.data.data;
+              const orange = updateAvailable || !s.isSynced;
+              return (
+                <button
+                  type="button"
+                  onClick={() =>
+                    toast(
+                      updateAvailable
+                        ? "Actualizare detectată — reîncărcare în curs..."
+                        : s.isSynced
+                          ? "GitHub: sincronizat"
+                          : `GitHub: ${s.commitsBehind} commit${s.commitsBehind !== 1 ? "s" : ""} în urmă`,
+                      {
+                        description: `deployed ${s.deployedShortSha} · github ${s.latestShortSha}`,
+                        icon: (
+                          <GitBranch
+                            className={`h-4 w-4 ${orange ? "text-amber-400" : "text-emerald-400"}`}
+                          />
+                        ),
+                        duration: 4000,
+                      },
+                    )
                   }
-                )}
-                className={`flex h-7 w-7 items-center justify-center rounded-full border transition-colors ${
-                  orange
-                    ? "border-amber-500/30 bg-amber-500/15 text-amber-400"
-                    : "border-emerald-500/30 bg-emerald-500/15 text-emerald-400"
-                }`}
-                title={updateAvailable ? "Actualizare disponibilă" : s.isSynced ? "Sincronizat cu GitHub" : `${s.commitsBehind} commits în urmă`}
-              >
-                <GitBranch className="h-3.5 w-3.5" />
-              </button>
-            );
-          })()}
+                  className={`flex h-7 w-7 items-center justify-center rounded-full border transition-colors ${
+                    orange
+                      ? "border-amber-500/30 bg-amber-500/15 text-amber-400"
+                      : "border-emerald-500/30 bg-emerald-500/15 text-emerald-400"
+                  }`}
+                  title={
+                    updateAvailable
+                      ? "Actualizare disponibilă"
+                      : s.isSynced
+                        ? "Sincronizat cu GitHub"
+                        : `${s.commitsBehind} commits în urmă`
+                  }
+                >
+                  <GitBranch className="h-3.5 w-3.5" />
+                </button>
+              );
+            })()}
           {!admin.data?.isAdmin && (
             <Link
               to="/login"

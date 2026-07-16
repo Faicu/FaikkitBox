@@ -21,7 +21,10 @@ export function Meter({ value, label, right, tone }: Props) {
       <div className="relative h-2 w-full overflow-hidden rounded-full bg-muted/60">
         <div
           className={`relative h-full ${color} overflow-hidden transition-[width] duration-700 ease-out`}
-          style={{ width: `${pct}%`, boxShadow: "0 0 12px color-mix(in oklab, currentColor 60%, transparent)" }}
+          style={{
+            width: `${pct}%`,
+            boxShadow: "0 0 12px color-mix(in oklab, currentColor 60%, transparent)",
+          }}
         >
           <span className="shimmer-sweep" />
         </div>

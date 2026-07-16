@@ -38,8 +38,15 @@ export async function logActivity(
   try {
     const { getDb } = await import("./db");
     const db = getDb();
-    db.prepare("INSERT INTO activity (id, timestamp, type, message, meta) VALUES (?, ?, ?, ?, ?)")
-      .run(randomUUID(), new Date().toISOString(), type, message, meta ? JSON.stringify(meta) : null);
+    db.prepare(
+      "INSERT INTO activity (id, timestamp, type, message, meta) VALUES (?, ?, ?, ?, ?)",
+    ).run(
+      randomUUID(),
+      new Date().toISOString(),
+      type,
+      message,
+      meta ? JSON.stringify(meta) : null,
+    );
   } catch (e) {
     console.warn("[activity-log] Eroare la logActivity:", e);
   }
@@ -54,9 +61,17 @@ export const getActivityLog = createServerFn({ method: "GET" }).handler(
     try {
       const { getDb } = await import("./db");
       const db = getDb();
-      const rows = db.prepare(
-        "SELECT id, timestamp, type, message, meta FROM activity ORDER BY timestamp DESC LIMIT 500"
-      ).all() as Array<{ id: string; timestamp: string; type: string; message: string; meta: string | null }>;
+      const rows = db
+        .prepare(
+          "SELECT id, timestamp, type, message, meta FROM activity ORDER BY timestamp DESC LIMIT 500",
+        )
+        .all() as Array<{
+        id: string;
+        timestamp: string;
+        type: string;
+        message: string;
+        meta: string | null;
+      }>;
       return rows.map((r) => ({
         id: r.id,
         timestamp: r.timestamp,
@@ -94,14 +109,13 @@ export async function trackPlexSessions(
     if (!activePlexSessions.has(key)) {
       // Sesiune nouă — loghez start
       activePlexSessions.set(key, new Date().toISOString());
-      const what = s.grandparentTitle
-        ? `${s.grandparentTitle} — ${s.title}`
-        : s.title;
-      await logActivity(
-        "plex_watch_start",
-        `${s.user} a început vizionarea: ${what}`,
-        { user: s.user, title: s.title, grandparentTitle: s.grandparentTitle, player: s.player },
-      );
+      const what = s.grandparentTitle ? `${s.grandparentTitle} — ${s.title}` : s.title;
+      await logActivity("plex_watch_start", `${s.user} a început vizionarea: ${what}`, {
+        user: s.user,
+        title: s.title,
+        grandparentTitle: s.grandparentTitle,
+        player: s.player,
+      });
     }
   }
 
@@ -170,9 +184,9 @@ async function logServerStartOnce(): Promise<void> {
     const db = dbModule.getDb();
     // Deduplicare: modulul poate fi încărcat în mai multe chunk-uri de build.
     // Dacă există deja un server_start în ultimele 30 secunde, nu logăm din nou.
-    const recent = db.prepare(
-      "SELECT COUNT(*) as c FROM activity WHERE type = 'server_start' AND timestamp > ?"
-    ).get(new Date(Date.now() - 30_000).toISOString()) as { c: number };
+    const recent = db
+      .prepare("SELECT COUNT(*) as c FROM activity WHERE type = 'server_start' AND timestamp > ?")
+      .get(new Date(Date.now() - 30_000).toISOString()) as { c: number };
     if (recent.c > 0) return;
     await logActivity("server_start", "Serverul FaikkitBox a pornit");
   } catch {}
@@ -182,8 +196,15 @@ function logServerStopSync(): void {
   try {
     if (!dbModuleRef || !cryptoRef) return;
     const db = dbModuleRef.getDb();
-    db.prepare("INSERT INTO activity (id, timestamp, type, message, meta) VALUES (?, ?, ?, ?, ?)")
-      .run(cryptoRef.randomUUID(), new Date().toISOString(), "server_stop", "Serverul FaikkitBox s-a oprit", null);
+    db.prepare(
+      "INSERT INTO activity (id, timestamp, type, message, meta) VALUES (?, ?, ?, ?, ?)",
+    ).run(
+      cryptoRef.randomUUID(),
+      new Date().toISOString(),
+      "server_stop",
+      "Serverul FaikkitBox s-a oprit",
+      null,
+    );
   } catch {}
 }
 
@@ -197,7 +218,12 @@ if (typeof process !== "undefined" && process.env && !globalThis.__faikkitboxAct
   logServerStartOnce();
   // "exit" rulează la orice ieșire normală — doar cod sincron (node:sqlite poate).
   let stopLogged = false;
-  const logOnce = () => { if (!stopLogged) { stopLogged = true; logServerStopSync(); } };
+  const logOnce = () => {
+    if (!stopLogged) {
+      stopLogged = true;
+      logServerStopSync();
+    }
+  };
   process.on("exit", logOnce);
   // Backup: dacă SIGTERM nu duce la exit normal (proces omorât direct),
   // logăm imediat la semnal. NU facem process.exit() — lăsăm Nitro să-și

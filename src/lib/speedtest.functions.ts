@@ -19,9 +19,7 @@ export type SpeedtestResult = {
   resultUrl?: string;
 };
 
-export type SpeedtestRunResponse =
-  | ({ ok: true } & SpeedtestResult)
-  | { ok: false; error: string };
+export type SpeedtestRunResponse = ({ ok: true } & SpeedtestResult) | { ok: false; error: string };
 
 function cacheFilePath() {
   return process.env.SPEEDTEST_CACHE_FILE ?? path.join(tmpdir(), "faikkitbox-speedtest.json");
@@ -111,56 +109,61 @@ export const getLastSpeedtest = createServerFn({ method: "GET" }).handler(async 
   return await readCache();
 });
 
-export const runSpeedtest = createServerFn({ method: "POST" }).handler(async (): Promise<SpeedtestRunResponse> => {
-  const { requireAdmin } = await import("./admin.server");
-  await requireAdmin();
+export const runSpeedtest = createServerFn({ method: "POST" }).handler(
+  async (): Promise<SpeedtestRunResponse> => {
+    const { requireAdmin } = await import("./admin.server");
+    await requireAdmin();
 
-  let lastError: string | null = null;
-  let hasSnapCgroupError = false;
-  let hasAnyBinary = false;
+    let lastError: string | null = null;
+    let hasSnapCgroupError = false;
+    let hasAnyBinary = false;
 
-  for (const { path: bin, args, parser } of speedtestConfigs()) {
-    try {
-      const { stdout } = await execFileAsync(bin, args, {
-        timeout: 90_000,
-        maxBuffer: 10 * 1024 * 1024,
-        env: { ...process.env, PATH: `${process.env.PATH ?? ""}:/usr/local/bin:/usr/bin:/bin` },
-      });
-      const result = parser(stdout);
-      await writeCache(result);
-      return { ok: true, ...result };
-    } catch (e: any) {
-      if (e?.code === "ENOENT") {
-        continue;
-      }
-      hasAnyBinary = true;
-      const message = e?.stderr || e?.stdout || e?.message || String(e);
-      if (typeof message === "string" && message.includes("is not a snap cgroup for tag snap.speedtest.speedtest")) {
-        hasSnapCgroupError = true;
+    for (const { path: bin, args, parser } of speedtestConfigs()) {
+      try {
+        const { stdout } = await execFileAsync(bin, args, {
+          timeout: 90_000,
+          maxBuffer: 10 * 1024 * 1024,
+          env: { ...process.env, PATH: `${process.env.PATH ?? ""}:/usr/local/bin:/usr/bin:/bin` },
+        });
+        const result = parser(stdout);
+        await writeCache(result);
+        return { ok: true, ...result };
+      } catch (e: any) {
+        if (e?.code === "ENOENT") {
+          continue;
+        }
+        hasAnyBinary = true;
+        const message = e?.stderr || e?.stdout || e?.message || String(e);
+        if (
+          typeof message === "string" &&
+          message.includes("is not a snap cgroup for tag snap.speedtest.speedtest")
+        ) {
+          hasSnapCgroupError = true;
+          lastError = message;
+          continue;
+        }
         lastError = message;
+        // Continuăm cu următoarea configurație (ex: Ookla a eșuat, încercăm speedtest-cli Python)
         continue;
       }
-      lastError = message;
-      // Continuăm cu următoarea configurație (ex: Ookla a eșuat, încercăm speedtest-cli Python)
-      continue;
     }
-  }
 
-  if (hasSnapCgroupError) {
-    return {
-      ok: false,
-      error:
-        "Speedtest instalat prin snap nu poate rula din acest serviciu systemd. Instaleaza varianta Ookla .deb (non-snap) sau seteaza SPEEDTEST_BIN catre un binar non-snap (ex: /usr/bin/speedtest).",
-    };
-  }
+    if (hasSnapCgroupError) {
+      return {
+        ok: false,
+        error:
+          "Speedtest instalat prin snap nu poate rula din acest serviciu systemd. Instaleaza varianta Ookla .deb (non-snap) sau seteaza SPEEDTEST_BIN catre un binar non-snap (ex: /usr/bin/speedtest).",
+      };
+    }
 
-  if (!hasAnyBinary) {
-    return {
-      ok: false,
-      error:
-        "Comanda speedtest nu a fost gasita pe server. Verifica instalarea Speedtest by Ookla si/sau seteaza SPEEDTEST_BIN in .env.",
-    };
-  }
+    if (!hasAnyBinary) {
+      return {
+        ok: false,
+        error:
+          "Comanda speedtest nu a fost gasita pe server. Verifica instalarea Speedtest by Ookla si/sau seteaza SPEEDTEST_BIN in .env.",
+      };
+    }
 
-  return { ok: false, error: lastError ?? "Speedtest a esuat dintr-un motiv necunoscut." };
-});
+    return { ok: false, error: lastError ?? "Speedtest a esuat dintr-un motiv necunoscut." };
+  },
+);

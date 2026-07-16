@@ -14,9 +14,12 @@ export function useServiceRecovery(status: "ok" | "error" | "loading" | undefine
     if (status === "ok" && sawUnavailableRef.current) setRecovering(false);
   }, [recovering, status]);
 
-  useEffect(() => () => {
-    timersRef.current.forEach(window.clearTimeout);
-  }, []);
+  useEffect(
+    () => () => {
+      timersRef.current.forEach(window.clearTimeout);
+    },
+    [],
+  );
 
   const startRecovery = () => {
     timersRef.current.forEach(window.clearTimeout);

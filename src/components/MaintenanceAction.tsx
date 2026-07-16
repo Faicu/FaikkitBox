@@ -3,7 +3,12 @@ import { useServerFn } from "@tanstack/react-start";
 import { RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
-import { logAgentActivity, runAgentCommand, type AgentCommand, type AgentResult } from "@/lib/agent.functions";
+import {
+  logAgentActivity,
+  runAgentCommand,
+  type AgentCommand,
+  type AgentResult,
+} from "@/lib/agent.functions";
 import { adminStatusQuery } from "@/lib/queries";
 import { useQuery } from "@tanstack/react-query";
 
@@ -54,9 +59,14 @@ export function MaintenanceAction({
         </span>
         <span className="text-xs text-muted-foreground shrink-0">
           {mutation.isPending ? (
-            <><RefreshCw className="mr-1 inline h-3 w-3 animate-spin" />Rulează...</>
+            <>
+              <RefreshCw className="mr-1 inline h-3 w-3 animate-spin" />
+              Rulează...
+            </>
           ) : (
-            <span className="rounded-lg border border-border bg-muted px-2.5 py-1 text-[11px] font-medium group-hover:text-foreground">Rulează</span>
+            <span className="rounded-lg border border-border bg-muted px-2.5 py-1 text-[11px] font-medium group-hover:text-foreground">
+              Rulează
+            </span>
           )}
         </span>
       </button>
@@ -70,7 +80,8 @@ function CommandOutput({ command, result }: { command: AgentCommand; result: Age
   return (
     <div className="rounded-2xl border border-border bg-black/40 p-3">
       <div className={`mb-2 text-xs ${result.ok ? "text-emerald-400" : "text-red-400"}`}>
-        {result.ok ? "✓ Succes" : "✗ Eșec"} {result.exit_code != null && `· exit ${result.exit_code}`}
+        {result.ok ? "✓ Succes" : "✗ Eșec"}{" "}
+        {result.exit_code != null && `· exit ${result.exit_code}`}
         {result.error && ` · ${result.error}`}
       </div>
       <pre className="max-h-96 overflow-auto whitespace-pre-wrap break-all text-[11px] text-muted-foreground">

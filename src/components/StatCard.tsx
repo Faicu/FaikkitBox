@@ -14,7 +14,10 @@ export function StatCard({ label, value, sub, icon, accent }: Props) {
   const first = useRef(true);
   const [flash, setFlash] = useState(false);
   useEffect(() => {
-    if (first.current) { first.current = false; return; }
+    if (first.current) {
+      first.current = false;
+      return;
+    }
     setFlash(true);
     const t = setTimeout(() => setFlash(false), 700);
     return () => clearTimeout(t);
@@ -30,7 +33,9 @@ export function StatCard({ label, value, sub, icon, accent }: Props) {
       >
         {value}
       </div>
-      {sub && <div className="relative z-10 mt-0.5 text-xs text-muted-foreground tabular-nums">{sub}</div>}
+      {sub && (
+        <div className="relative z-10 mt-0.5 text-xs text-muted-foreground tabular-nums">{sub}</div>
+      )}
     </div>
   );
 }

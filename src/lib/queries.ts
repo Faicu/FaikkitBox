@@ -117,4 +117,3 @@ export const githubSyncQuery = queryOptions({
   staleTime: 30_000,
   refetchOnWindowFocus: true,
 });
-

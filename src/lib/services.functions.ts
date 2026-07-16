@@ -84,7 +84,13 @@ export interface ImmichData {
   usageBytes?: number;
   usageByUser?: Array<{ userName: string; usage: number; photos: number; videos: number }>;
   activeJobs?: Array<{ name: string; active: number; waiting: number }>;
-  topUploaders?: Array<{ userName: string; total: number; photos: number; videos: number; usage: number }>;
+  topUploaders?: Array<{
+    userName: string;
+    total: number;
+    photos: number;
+    videos: number;
+    usage: number;
+  }>;
   jobQueueDepth?: number;
   uploadsToday?: number;
   uploadsThisWeek?: number;
@@ -141,11 +147,25 @@ export interface HostData {
   memUsedBytes?: number;
   memTotalBytes?: number;
   swapPercent?: number;
-  disks?: Array<{ mount: string; percent: number; usedBytes: number; totalBytes: number; readBps?: number; writeBps?: number }>;
+  disks?: Array<{
+    mount: string;
+    percent: number;
+    usedBytes: number;
+    totalBytes: number;
+    readBps?: number;
+    writeBps?: number;
+  }>;
   net?: Array<{ name: string; rxSec: number; txSec: number }>;
   sensors?: Array<{ label: string; value: number; unit: string }>;
   topProcesses?: Array<{ name: string; cpu: number; mem: number }>;
-  apps?: Array<{ name: string; cpu: number; mem: number; netRx?: number; netTx?: number; source: "process" | "container" }>;
+  apps?: Array<{
+    name: string;
+    cpu: number;
+    mem: number;
+    netRx?: number;
+    netTx?: number;
+    source: "process" | "container";
+  }>;
   diskIO?: Array<{ name: string; ioRead: number; ioWrite: number }>;
 }
 
@@ -170,7 +190,9 @@ async function fetchText(url: string, init?: RequestInit, timeoutMs = 8000): Pro
     const res = await fetch(url, { ...init, signal: ctrl.signal });
     if (!res.ok) {
       const body = await res.text().catch(() => "");
-      throw new Error(`HTTP ${res.status} ${res.statusText}${body ? ` — ${body.slice(0, 160)}` : ""}`);
+      throw new Error(
+        `HTTP ${res.status} ${res.statusText}${body ? ` — ${body.slice(0, 160)}` : ""}`,
+      );
     }
     return await res.text();
   } catch (e) {
@@ -187,7 +209,9 @@ async function fetchJson<T>(url: string, init?: RequestInit, timeoutMs = 8000): 
     const res = await fetch(url, { ...init, signal: ctrl.signal });
     if (!res.ok) {
       const body = await res.text().catch(() => "");
-      throw new Error(`HTTP ${res.status} ${res.statusText}${body ? ` — ${body.slice(0, 160)}` : ""}`);
+      throw new Error(
+        `HTTP ${res.status} ${res.statusText}${body ? ` — ${body.slice(0, 160)}` : ""}`,
+      );
     }
     return (await res.json()) as T;
   } catch (e) {
@@ -238,7 +262,10 @@ let plexHistoryCache: {
   expiresAt: number;
 } | null = null;
 
-async function fetchPlexHistory(url: string, headers: Record<string, string>): Promise<{
+async function fetchPlexHistory(
+  url: string,
+  headers: Record<string, string>,
+): Promise<{
   topShows: PlexData["topShows"];
   topMovies: PlexData["topMovies"];
   topWatchers: PlexData["topWatchers"];
@@ -291,13 +318,27 @@ async function fetchPlexHistory(url: string, headers: Record<string, string>): P
     const now = new Date();
     const parts = new Intl.DateTimeFormat("en-CA", {
       timeZone: "Europe/Bucharest",
-      year: "numeric", month: "2-digit", day: "2-digit",
-      hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
-    }).formatToParts(now).reduce<Record<string, string>>((acc, p) => {
-      if (p.type !== "literal") acc[p.type] = p.value;
-      return acc;
-    }, {});
-    const localMs = Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour, +parts.minute, +parts.second);
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    })
+      .formatToParts(now)
+      .reduce<Record<string, string>>((acc, p) => {
+        if (p.type !== "literal") acc[p.type] = p.value;
+        return acc;
+      }, {});
+    const localMs = Date.UTC(
+      +parts.year,
+      +parts.month - 1,
+      +parts.day,
+      +parts.hour,
+      +parts.minute,
+      +parts.second,
+    );
     const offsetMs = localMs - now.getTime();
     const utcMidnight = Date.UTC(+parts.year, +parts.month - 1, +parts.day);
     return Math.floor((utcMidnight - offsetMs) / 1000);
@@ -313,22 +354,29 @@ async function fetchPlexHistory(url: string, headers: Record<string, string>): P
     if (e.type === "episode" || e.grandparentTitle) {
       const key = String(e.grandparentTitle ?? e.title ?? "Unknown");
       const prev = showMap.get(key) ?? { plays: 0, lastViewedAt: 0 };
-      showMap.set(key, { plays: prev.plays + 1, lastViewedAt: Math.max(prev.lastViewedAt, viewedAt) });
+      showMap.set(key, {
+        plays: prev.plays + 1,
+        lastViewedAt: Math.max(prev.lastViewedAt, viewedAt),
+      });
     } else if (e.type === "movie") {
       const key = String(e.title ?? "Unknown");
       const prev = movieMap.get(key) ?? { plays: 0, lastViewedAt: 0 };
-      movieMap.set(key, { plays: prev.plays + 1, lastViewedAt: Math.max(prev.lastViewedAt, viewedAt) });
+      movieMap.set(key, {
+        plays: prev.plays + 1,
+        lastViewedAt: Math.max(prev.lastViewedAt, viewedAt),
+      });
     }
     const accountId = e?.accountID != null ? Number(e.accountID) : null;
     const fromMap = accountId != null ? accountMap.get(accountId) : undefined;
     const fromInline = typeof e?.User?.title === "string" ? e.User.title : undefined;
     const user =
-      fromMap ??
-      fromInline ??
-      (accountId != null ? `Utilizator #${accountId}` : "Necunoscut");
+      fromMap ?? fromInline ?? (accountId != null ? `Utilizator #${accountId}` : "Necunoscut");
     const wkey = user;
     const wprev = watcherMap.get(wkey) ?? { plays: 0, lastViewedAt: 0 };
-    watcherMap.set(wkey, { plays: wprev.plays + 1, lastViewedAt: Math.max(wprev.lastViewedAt, viewedAt) });
+    watcherMap.set(wkey, {
+      plays: wprev.plays + 1,
+      lastViewedAt: Math.max(wprev.lastViewedAt, viewedAt),
+    });
     const list = historyByUser.get(wkey) ?? [];
     if (list.length < 100) {
       list.push({
@@ -361,7 +409,10 @@ async function fetchPlexHistory(url: string, headers: Record<string, string>): P
     }
   }
 
-  const toRanked = <T extends { plays: number; lastViewedAt: number }>(m: Map<string, T>, keyField: string) =>
+  const toRanked = <T extends { plays: number; lastViewedAt: number }>(
+    m: Map<string, T>,
+    keyField: string,
+  ) =>
     Array.from(m.entries())
       .map(([k, v]) => ({ [keyField]: k, ...v }))
       .sort((a: any, b: any) => b.plays - a.plays)
@@ -420,7 +471,11 @@ function parsePlexResources(payload: string): PlexConnectionCandidate[] {
     for (const device of deviceList) {
       const provides = String(device?.provides ?? "");
       if (!provides.includes("server")) continue;
-      const connections = Array.isArray(device?.Connection) ? device.Connection : Array.isArray(device?.connections) ? device.connections : [];
+      const connections = Array.isArray(device?.Connection)
+        ? device.Connection
+        : Array.isArray(device?.connections)
+          ? device.connections
+          : [];
       for (const conn of connections) {
         const uri = String(conn?.uri ?? "");
         if (!uri) continue;
@@ -430,7 +485,14 @@ function parsePlexResources(payload: string): PlexConnectionCandidate[] {
         candidates.push({
           uri,
           source: isRelay ? "Plex Relay" : isPlexDirect ? "Plex Direct" : "Plex resource",
-          priority: protocol === "https" && isPlexDirect && !isRelay ? 0 : protocol === "https" && !isRelay ? 1 : protocol === "http" && !isRelay ? 2 : 3,
+          priority:
+            protocol === "https" && isPlexDirect && !isRelay
+              ? 0
+              : protocol === "https" && !isRelay
+                ? 1
+                : protocol === "http" && !isRelay
+                  ? 2
+                  : 3,
         });
       }
     }
@@ -444,7 +506,9 @@ function parsePlexResources(payload: string): PlexConnectionCandidate[] {
     const deviceAttrs = parseAttributes(deviceMatch[1]);
     if (!String(deviceAttrs.provides ?? "").includes("server")) continue;
 
-    const connectionMatches = deviceMatch[2].matchAll(/<Connection\b([^>]*)(?:\/>|>[\s\S]*?<\/Connection>)/g);
+    const connectionMatches = deviceMatch[2].matchAll(
+      /<Connection\b([^>]*)(?:\/>|>[\s\S]*?<\/Connection>)/g,
+    );
     for (const connectionMatch of connectionMatches) {
       const conn = parseAttributes(connectionMatch[1]);
       const uri = conn.uri;
@@ -455,7 +519,14 @@ function parsePlexResources(payload: string): PlexConnectionCandidate[] {
       candidates.push({
         uri,
         source: isRelay ? "Plex Relay" : isPlexDirect ? "Plex Direct" : "Plex resource",
-        priority: protocol === "https" && isPlexDirect && !isRelay ? 0 : protocol === "https" && !isRelay ? 1 : protocol === "http" && !isRelay ? 2 : 3,
+        priority:
+          protocol === "https" && isPlexDirect && !isRelay
+            ? 0
+            : protocol === "https" && !isRelay
+              ? 1
+              : protocol === "http" && !isRelay
+                ? 2
+                : 3,
       });
     }
   }
@@ -463,18 +534,32 @@ function parsePlexResources(payload: string): PlexConnectionCandidate[] {
   return uniqueCandidates(candidates);
 }
 
-async function discoverPlexUrl(token: string, fallbackBase?: string): Promise<{ url: string; source: string; attempts: string[] }> {
+async function discoverPlexUrl(
+  token: string,
+  fallbackBase?: string,
+): Promise<{ url: string; source: string; attempts: string[] }> {
   if (plexDiscoveryCache && plexDiscoveryCache.expiresAt > Date.now()) {
     return { url: plexDiscoveryCache.url, source: plexDiscoveryCache.source, attempts: [] };
   }
 
-  const headers = { Accept: "application/json, application/xml;q=0.9, text/xml;q=0.8", "X-Plex-Token": token };
+  const headers = {
+    Accept: "application/json, application/xml;q=0.9, text/xml;q=0.8",
+    "X-Plex-Token": token,
+  };
   const attempts: string[] = [];
-  const resourcesText = await fetchText("https://plex.tv/api/resources?includeHttps=1&includeRelay=1", { headers }, 10000);
+  const resourcesText = await fetchText(
+    "https://plex.tv/api/resources?includeHttps=1&includeRelay=1",
+    { headers },
+    10000,
+  );
   const candidates = parsePlexResources(resourcesText);
 
   if (fallbackBase) {
-    candidates.push({ uri: stripSlash(fallbackBase), source: "Manual PLEX_URL fallback", priority: 10 });
+    candidates.push({
+      uri: stripSlash(fallbackBase),
+      source: "Manual PLEX_URL fallback",
+      priority: 10,
+    });
   }
 
   if (candidates.length === 0) {
@@ -484,7 +569,11 @@ async function discoverPlexUrl(token: string, fallbackBase?: string): Promise<{ 
   for (const candidate of uniqueCandidates(candidates)) {
     try {
       await fetchJson<any>(`${candidate.uri}/`, { headers }, 5000);
-      plexDiscoveryCache = { url: candidate.uri, source: candidate.source, expiresAt: Date.now() + 5 * 60 * 1000 };
+      plexDiscoveryCache = {
+        url: candidate.uri,
+        source: candidate.source,
+        expiresAt: Date.now() + 5 * 60 * 1000,
+      };
       return { url: candidate.uri, source: candidate.source, attempts };
     } catch (e) {
       attempts.push(`${candidate.source} ${candidate.uri}: ${errMsg(e)}`);
@@ -498,7 +587,13 @@ export const getPlex = createServerFn({ method: "GET" }).handler(async (): Promi
   const base = process.env.PLEX_URL;
   const token = process.env.PLEX_TOKEN;
   if (!token) {
-    return { status: "error", error: "PLEX_TOKEN not configured", sessions: [], libraries: [], recentlyAdded: [] };
+    return {
+      status: "error",
+      error: "PLEX_TOKEN not configured",
+      sessions: [],
+      libraries: [],
+      recentlyAdded: [],
+    };
   }
   const headers = { Accept: "application/json", "X-Plex-Token": token };
 
@@ -509,7 +604,17 @@ export const getPlex = createServerFn({ method: "GET" }).handler(async (): Promi
       fetchJson<any>(`${url}/`, { headers }),
       fetchJson<any>(`${url}/status/sessions`, { headers }),
       fetchJson<any>(`${url}/library/sections`, { headers }),
-      fetchPlexHistory(url, headers).catch(() => ({ topShows: [], topMovies: [], topWatchers: [], episodesToday: 0, activeUsersToday: 0, userHistory: {}, todayViews: [], activeUsersTodayList: [], recentHistory: [] })),
+      fetchPlexHistory(url, headers).catch(() => ({
+        topShows: [],
+        topMovies: [],
+        topWatchers: [],
+        episodesToday: 0,
+        activeUsersToday: 0,
+        userHistory: {},
+        todayViews: [],
+        activeUsersTodayList: [],
+        recentHistory: [],
+      })),
     ]);
 
     const mc = rootJson?.MediaContainer ?? {};
@@ -521,23 +626,34 @@ export const getPlex = createServerFn({ method: "GET" }).handler(async (): Promi
 
     const [recentMoviesJson, recentEpisodesJson] = await Promise.all([
       movieLibKeys.length > 0
-        ? fetchJson<any>(`${url}/library/sections/${movieLibKeys[0]}/recentlyAdded?X-Plex-Container-Start=0&X-Plex-Container-Size=8&type=1`, { headers }).catch(() => ({ MediaContainer: { Metadata: [] } }))
+        ? fetchJson<any>(
+            `${url}/library/sections/${movieLibKeys[0]}/recentlyAdded?X-Plex-Container-Start=0&X-Plex-Container-Size=8&type=1`,
+            { headers },
+          ).catch(() => ({ MediaContainer: { Metadata: [] } }))
         : Promise.resolve({ MediaContainer: { Metadata: [] } }),
       showLibKeys.length > 0
-        ? fetchJson<any>(`${url}/library/sections/${showLibKeys[0]}/recentlyAdded?X-Plex-Container-Start=0&X-Plex-Container-Size=8&type=4`, { headers }).catch(() => ({ MediaContainer: { Metadata: [] } }))
+        ? fetchJson<any>(
+            `${url}/library/sections/${showLibKeys[0]}/recentlyAdded?X-Plex-Container-Start=0&X-Plex-Container-Size=8&type=4`,
+            { headers },
+          ).catch(() => ({ MediaContainer: { Metadata: [] } }))
         : Promise.resolve({ MediaContainer: { Metadata: [] } }),
     ]);
 
     const recentMd = [
       ...(recentMoviesJson?.MediaContainer?.Metadata ?? []),
       ...(recentEpisodesJson?.MediaContainer?.Metadata ?? []),
-    ].sort((a: any, b: any) => Number(b.addedAt ?? 0) - Number(a.addedAt ?? 0)).slice(0, 8);
+    ]
+      .sort((a: any, b: any) => Number(b.addedAt ?? 0) - Number(a.addedAt ?? 0))
+      .slice(0, 8);
 
     const libraries: PlexLibrary[] = await Promise.all(
       libsMd.map(async (l: any) => {
         let count: number | null = null;
         try {
-          const r = await fetchJson<any>(`${url}/library/sections/${l.key}/all?X-Plex-Container-Start=0&X-Plex-Container-Size=0`, { headers });
+          const r = await fetchJson<any>(
+            `${url}/library/sections/${l.key}/all?X-Plex-Container-Start=0&X-Plex-Container-Size=0`,
+            { headers },
+          );
           count = r?.MediaContainer?.totalSize ?? null;
         } catch {
           count = null;
@@ -556,7 +672,7 @@ export const getPlex = createServerFn({ method: "GET" }).handler(async (): Promi
       const rawOff = Number(s.viewOffset ?? 0);
       // Plex returnează viewOffset în ms, dar dur e tot în ms
       // Dacă dur > 1000 și off < 1000 și off > 0, probabil off e în secunde
-      const off = (dur > 1000 && rawOff > 0 && rawOff < 1000) ? rawOff * 1000 : rawOff;
+      const off = dur > 1000 && rawOff > 0 && rawOff < 1000 ? rawOff * 1000 : rawOff;
       return {
         title: s.title ?? "Unknown",
         grandparentTitle: s.grandparentTitle,
@@ -577,12 +693,14 @@ export const getPlex = createServerFn({ method: "GET" }).handler(async (): Promi
 
     // Tracking activitate Plex
     const { trackPlexSessions } = await import("./activity-log");
-    trackPlexSessions(sessions.map(s => ({
-      user: s.user,
-      title: s.title,
-      grandparentTitle: s.grandparentTitle,
-      player: s.player,
-    }))).catch(() => {});
+    trackPlexSessions(
+      sessions.map((s) => ({
+        user: s.user,
+        title: s.title,
+        grandparentTitle: s.grandparentTitle,
+        player: s.player,
+      })),
+    ).catch(() => {});
 
     return {
       status: "ok" as const,
@@ -649,7 +767,11 @@ const HOTD_SHOW_TITLE = "House of the Dragon";
 // ATENTIE: numarul total de episoade (8) si data finalului nu au putut fi
 // confirmate dintr-o sursa oficiala la data scrierii - verificat manual pe
 // VOYO/Plex daca sezonul chiar se termina la Ep8, altfel ajusteaza mai jos.
-export async function checkPlexHasEpisode(showTitle: string, season: number, episode: number): Promise<boolean | null> {
+export async function checkPlexHasEpisode(
+  showTitle: string,
+  season: number,
+  episode: number,
+): Promise<boolean | null> {
   const token = process.env.PLEX_TOKEN;
   const base = process.env.PLEX_URL;
   if (!token) return null;
@@ -673,17 +795,29 @@ export async function checkPlexHasEpisode(showTitle: string, season: number, epi
     const normalizedTargetTitle = normalizeShowTitle(showTitle);
     const show =
       shows.find((r: any) => normalizeShowTitle(String(r.title ?? "")) === normalizedTargetTitle) ??
-      shows.find((r: any) => normalizeShowTitle(String(r.title ?? "")).includes(normalizedTargetTitle)) ??
-      shows.find((r: any) => normalizedTargetTitle.includes(normalizeShowTitle(String(r.title ?? "")))) ??
+      shows.find((r: any) =>
+        normalizeShowTitle(String(r.title ?? "")).includes(normalizedTargetTitle),
+      ) ??
+      shows.find((r: any) =>
+        normalizedTargetTitle.includes(normalizeShowTitle(String(r.title ?? ""))),
+      ) ??
       shows[0];
     if (!show) return false;
 
-    const seasons = await fetchJson<any>(`${url}/library/metadata/${show.ratingKey}/children`, { headers }, 8000);
+    const seasons = await fetchJson<any>(
+      `${url}/library/metadata/${show.ratingKey}/children`,
+      { headers },
+      8000,
+    );
     const seasonsMd = seasons?.MediaContainer?.Metadata ?? [];
     const seasonMatch = seasonsMd.find((s: any) => Number(s.index) === season);
     if (!seasonMatch) return false;
 
-    const episodes = await fetchJson<any>(`${url}/library/metadata/${seasonMatch.ratingKey}/children`, { headers }, 8000);
+    const episodes = await fetchJson<any>(
+      `${url}/library/metadata/${seasonMatch.ratingKey}/children`,
+      { headers },
+      8000,
+    );
     const episodesMd = episodes?.MediaContainer?.Metadata ?? [];
     return episodesMd.some((e: any) => Number(e.index) === episode);
   } catch {
@@ -691,9 +825,11 @@ export async function checkPlexHasEpisode(showTitle: string, season: number, epi
   }
 }
 
-export const getShowStatus = createServerFn({ method: "GET" }).handler(async (): Promise<ShowStatusData> => {
-  return await buildShowStatus(HOTD_SHOW_TITLE, HOTD_SEASON, HOTD_S3_EPISODES);
-});
+export const getShowStatus = createServerFn({ method: "GET" }).handler(
+  async (): Promise<ShowStatusData> => {
+    return await buildShowStatus(HOTD_SHOW_TITLE, HOTD_SEASON, HOTD_S3_EPISODES);
+  },
+);
 
 async function buildShowStatus(
   showTitle: string,
@@ -715,163 +851,205 @@ async function buildShowStatus(
       status: "ok",
       show: `${showTitle} — Sezonul ${season}`,
       lastAired: lastAiredEp
-        ? { season, episode: lastAiredEp.episode, title: lastAiredEp.title, airDateIso: lastAiredEp.airDateIso, inLibrary }
+        ? {
+            season,
+            episode: lastAiredEp.episode,
+            title: lastAiredEp.title,
+            airDateIso: lastAiredEp.airDateIso,
+            inLibrary,
+          }
         : null,
       next: nextEp
         ? { season, episode: nextEp.episode, title: nextEp.title, airDateIso: nextEp.airDateIso }
         : null,
     };
   } catch (e) {
-    return { status: "error", error: errMsg(e), show: `${showTitle} — Sezonul ${season}`, lastAired: null, next: null };
+    return {
+      status: "error",
+      error: errMsg(e),
+      show: `${showTitle} — Sezonul ${season}`,
+      lastAired: null,
+      next: null,
+    };
   }
 }
 
 // ---------- Immich ----------
 
 // Cache pentru upload counts Immich (costisitoare — search paginat)
-let immichUploadsCache: { today: number | undefined; week: number | undefined; expiresAt: number } | null = null;
+let immichUploadsCache: {
+  today: number | undefined;
+  week: number | undefined;
+  expiresAt: number;
+} | null = null;
 
-export const getImmich = createServerFn({ method: "GET" }).handler(async (): Promise<ImmichData> => {
-  const base = process.env.IMMICH_URL;
-  const key = process.env.IMMICH_API_KEY;
-  if (!base || !key) return { status: "error", error: "IMMICH_URL / IMMICH_API_KEY not configured" };
-  const url = stripSlash(base);
-  const headers = { "x-api-key": key, Accept: "application/json" };
+export const getImmich = createServerFn({ method: "GET" }).handler(
+  async (): Promise<ImmichData> => {
+    const base = process.env.IMMICH_URL;
+    const key = process.env.IMMICH_API_KEY;
+    if (!base || !key)
+      return { status: "error", error: "IMMICH_URL / IMMICH_API_KEY not configured" };
+    const url = stripSlash(base);
+    const headers = { "x-api-key": key, Accept: "application/json" };
 
-  try {
-    const nowIso = new Date().toISOString();
-    const startOfDayIso = new Date(new Date().setHours(0, 0, 0, 0)).toISOString();
-    const weekAgoIso = new Date(Date.now() - 7 * 86400_000).toISOString();
+    try {
+      const nowIso = new Date().toISOString();
+      const startOfDayIso = new Date(new Date().setHours(0, 0, 0, 0)).toISOString();
+      const weekAgoIso = new Date(Date.now() - 7 * 86400_000).toISOString();
 
-    async function countSince(iso: string): Promise<number | undefined> {
-      try {
-        // createdAfter/createdBefore = data la care a fost creata inregistrarea in Immich
-        // (adica momentul incarcarii). takenAfter/takenBefore ar filtra dupa data EXIF
-        // (cand a fost facuta poza), ceea ce da rezultate gresite la import de biblioteci
-        // vechi - fotografii incarcate azi, dar facute cu ani in urma, nu ar aparea deloc.
-        //
-        // NU ne bazam pe campul 'total' din raspuns - pe unele versiuni Immich acesta
-        // reflecta doar numarul de elemente din pagina curenta (limitat de 'size'), nu
-        // adevaratul total de potriviri (bug cunoscut). Numaram efectiv itemii primiti,
-        // parcurgand paginile daca e nevoie.
-        let items: any[] = [];
-        let page: number | null = 1;
-        let guard = 0;
-        while (page != null && guard < 20) {
-          guard++;
-          const res = await fetchJson<any>(`${url}/api/search/metadata`, {
-            method: "POST",
-            headers: { ...headers, "Content-Type": "application/json" },
-            body: JSON.stringify({ createdAfter: iso, createdBefore: nowIso, size: 1000, page }),
-          }, 10000);
-          const pageItems = res?.assets?.items ?? res?.items ?? [];
-          items = items.concat(pageItems);
-          page = res?.assets?.nextPage ?? res?.nextPage ?? null;
+      async function countSince(iso: string): Promise<number | undefined> {
+        try {
+          // createdAfter/createdBefore = data la care a fost creata inregistrarea in Immich
+          // (adica momentul incarcarii). takenAfter/takenBefore ar filtra dupa data EXIF
+          // (cand a fost facuta poza), ceea ce da rezultate gresite la import de biblioteci
+          // vechi - fotografii incarcate azi, dar facute cu ani in urma, nu ar aparea deloc.
+          //
+          // NU ne bazam pe campul 'total' din raspuns - pe unele versiuni Immich acesta
+          // reflecta doar numarul de elemente din pagina curenta (limitat de 'size'), nu
+          // adevaratul total de potriviri (bug cunoscut). Numaram efectiv itemii primiti,
+          // parcurgand paginile daca e nevoie.
+          let items: any[] = [];
+          let page: number | null = 1;
+          let guard = 0;
+          while (page != null && guard < 20) {
+            guard++;
+            const res = await fetchJson<any>(
+              `${url}/api/search/metadata`,
+              {
+                method: "POST",
+                headers: { ...headers, "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  createdAfter: iso,
+                  createdBefore: nowIso,
+                  size: 1000,
+                  page,
+                }),
+              },
+              10000,
+            );
+            const pageItems = res?.assets?.items ?? res?.items ?? [];
+            items = items.concat(pageItems);
+            page = res?.assets?.nextPage ?? res?.nextPage ?? null;
+          }
+
+          // Live Photos (ex. MVIMG_*.jpg de pe telefoane Android/iPhone) sunt stocate
+          // in Immich ca 2 elemente separate: o poza (IMAGE) si un videoclip-pereche
+          // (VIDEO), legate prin campul 'livePhotoVideoId' de pe poza. In aplicatia
+          // Immich, cele doua se vad ca UN singur element in galerie. Excludem
+          // video-ul-pereche din numaratoare, ca sa reflectam ce vede userul, nu
+          // numarul brut de asset-uri din baza de date.
+          const pairedVideoIds = new Set(
+            items.filter((it) => it?.livePhotoVideoId).map((it) => it.livePhotoVideoId),
+          );
+          const visibleItems = items.filter(
+            (it) => !(it?.type === "VIDEO" && pairedVideoIds.has(it?.id)),
+          );
+
+          return visibleItems.length;
+        } catch {
+          return undefined;
         }
-
-        // Live Photos (ex. MVIMG_*.jpg de pe telefoane Android/iPhone) sunt stocate
-        // in Immich ca 2 elemente separate: o poza (IMAGE) si un videoclip-pereche
-        // (VIDEO), legate prin campul 'livePhotoVideoId' de pe poza. In aplicatia
-        // Immich, cele doua se vad ca UN singur element in galerie. Excludem
-        // video-ul-pereche din numaratoare, ca sa reflectam ce vede userul, nu
-        // numarul brut de asset-uri din baza de date.
-        const pairedVideoIds = new Set(
-          items.filter((it) => it?.livePhotoVideoId).map((it) => it.livePhotoVideoId),
-        );
-        const visibleItems = items.filter((it) => !(it?.type === "VIDEO" && pairedVideoIds.has(it?.id)));
-
-        return visibleItems.length;
-      } catch {
-        return undefined;
       }
-    }
 
-    // Upload counts sunt costisitoare (search paginat) — cache 30s
-    let uploadsToday: number | undefined;
-    let uploadsThisWeek: number | undefined;
-    if (immichUploadsCache && immichUploadsCache.expiresAt > Date.now()) {
-      uploadsToday = immichUploadsCache.today;
-      uploadsThisWeek = immichUploadsCache.week;
-      var [version, stats, jobs] = await Promise.all([
-        fetchJson<any>(`${url}/api/server/version`, { headers }).catch(() => null),
-        fetchJson<any>(`${url}/api/server/statistics`, { headers }),
-        fetchJson<any>(`${url}/api/jobs`, { headers }).catch(() => null),
-      ]);
-    } else {
-      var [version, stats, jobs, freshToday, freshWeek] = await Promise.all([
-        fetchJson<any>(`${url}/api/server/version`, { headers }).catch(() => null),
-        fetchJson<any>(`${url}/api/server/statistics`, { headers }),
-        fetchJson<any>(`${url}/api/jobs`, { headers }).catch(() => null),
-        countSince(startOfDayIso),
-        countSince(weekAgoIso),
-      ]);
-      uploadsToday = freshToday;
-      uploadsThisWeek = freshWeek;
-      immichUploadsCache = { today: uploadsToday, week: uploadsThisWeek, expiresAt: Date.now() + 30_000 };
-    }
+      // Upload counts sunt costisitoare (search paginat) — cache 30s
+      let uploadsToday: number | undefined;
+      let uploadsThisWeek: number | undefined;
+      if (immichUploadsCache && immichUploadsCache.expiresAt > Date.now()) {
+        uploadsToday = immichUploadsCache.today;
+        uploadsThisWeek = immichUploadsCache.week;
+        var [version, stats, jobs] = await Promise.all([
+          fetchJson<any>(`${url}/api/server/version`, { headers }).catch(() => null),
+          fetchJson<any>(`${url}/api/server/statistics`, { headers }),
+          fetchJson<any>(`${url}/api/jobs`, { headers }).catch(() => null),
+        ]);
+      } else {
+        var [version, stats, jobs, freshToday, freshWeek] = await Promise.all([
+          fetchJson<any>(`${url}/api/server/version`, { headers }).catch(() => null),
+          fetchJson<any>(`${url}/api/server/statistics`, { headers }),
+          fetchJson<any>(`${url}/api/jobs`, { headers }).catch(() => null),
+          countSince(startOfDayIso),
+          countSince(weekAgoIso),
+        ]);
+        uploadsToday = freshToday;
+        uploadsThisWeek = freshWeek;
+        immichUploadsCache = {
+          today: uploadsToday,
+          week: uploadsThisWeek,
+          expiresAt: Date.now() + 30_000,
+        };
+      }
 
-    type UsageRow = { userName: string; usage: number; photos: number; videos: number };
-    const usageByUser: UsageRow[] = Array.isArray(stats?.usageByUser)
-      ? stats.usageByUser.map((u: any) => ({
-          userName: u.userName ?? u.userId ?? "user",
-          usage: Number(u.usage ?? 0),
-          photos: Number(u.photos ?? 0),
-          videos: Number(u.videos ?? 0),
-        }))
-      : [];
-
-    const activeJobs = jobs
-      ? Object.entries(jobs)
-          .map(([name, v]: [string, any]) => ({
-            name,
-            active: Number(v?.jobCounts?.active ?? 0),
-            waiting: Number(v?.jobCounts?.waiting ?? 0),
+      type UsageRow = { userName: string; usage: number; photos: number; videos: number };
+      const usageByUser: UsageRow[] = Array.isArray(stats?.usageByUser)
+        ? stats.usageByUser.map((u: any) => ({
+            userName: u.userName ?? u.userId ?? "user",
+            usage: Number(u.usage ?? 0),
+            photos: Number(u.photos ?? 0),
+            videos: Number(u.videos ?? 0),
           }))
-          .filter((j) => j.active > 0 || j.waiting > 0)
-      : [];
+        : [];
 
-    const topUploaders = usageByUser
-      .map((u) => ({ userName: u.userName, total: u.photos + u.videos, photos: u.photos, videos: u.videos, usage: u.usage }))
-      .sort((a, b) => b.total - a.total)
-      .slice(0, 5);
+      const activeJobs = jobs
+        ? Object.entries(jobs)
+            .map(([name, v]: [string, any]) => ({
+              name,
+              active: Number(v?.jobCounts?.active ?? 0),
+              waiting: Number(v?.jobCounts?.waiting ?? 0),
+            }))
+            .filter((j) => j.active > 0 || j.waiting > 0)
+        : [];
 
-    const jobQueueDepth = activeJobs.reduce((sum, j) => sum + j.active + j.waiting, 0);
+      const topUploaders = usageByUser
+        .map((u) => ({
+          userName: u.userName,
+          total: u.photos + u.videos,
+          photos: u.photos,
+          videos: u.videos,
+          usage: u.usage,
+        }))
+        .sort((a, b) => b.total - a.total)
+        .slice(0, 5);
 
-    return {
-      status: "ok",
-      version: version ? `${version.major}.${version.minor}.${version.patch}` : undefined,
-      totalAssets: Number(stats?.photos ?? 0) + Number(stats?.videos ?? 0),
-      photos: Number(stats?.photos ?? 0),
-      videos: Number(stats?.videos ?? 0),
-      usageBytes: Number(stats?.usage ?? 0),
-      usageByUser,
-      activeJobs,
-      topUploaders,
-      jobQueueDepth,
-      uploadsToday,
-      uploadsThisWeek,
-    };
+      const jobQueueDepth = activeJobs.reduce((sum, j) => sum + j.active + j.waiting, 0);
 
-    // Tracking activitate Immich (fire and forget)
-    import("./activity-log").then(({ trackImmichUploads }) =>
-      trackImmichUploads(uploadsToday ?? 0, uploadsThisWeek ?? 0)
-    ).catch(() => {});
+      return {
+        status: "ok",
+        version: version ? `${version.major}.${version.minor}.${version.patch}` : undefined,
+        totalAssets: Number(stats?.photos ?? 0) + Number(stats?.videos ?? 0),
+        photos: Number(stats?.photos ?? 0),
+        videos: Number(stats?.videos ?? 0),
+        usageBytes: Number(stats?.usage ?? 0),
+        usageByUser,
+        activeJobs,
+        topUploaders,
+        jobQueueDepth,
+        uploadsToday,
+        uploadsThisWeek,
+      };
 
-    return {
-      status: "ok" as const,
-      version: versionStr,
-      usageBytes: Number(stats?.usage ?? 0),
-      usageByUser,
-      activeJobs,
-      topUploaders,
-      jobQueueDepth,
-      uploadsToday,
-      uploadsThisWeek,
-    };
-  } catch (e) {
-    return { status: "error", error: errMsg(e) };
-  }
-});
+      // Tracking activitate Immich (fire and forget)
+      import("./activity-log")
+        .then(({ trackImmichUploads }) =>
+          trackImmichUploads(uploadsToday ?? 0, uploadsThisWeek ?? 0),
+        )
+        .catch(() => {});
+
+      return {
+        status: "ok" as const,
+        version: versionStr,
+        usageBytes: Number(stats?.usage ?? 0),
+        usageByUser,
+        activeJobs,
+        topUploaders,
+        jobQueueDepth,
+        uploadsToday,
+        uploadsThisWeek,
+      };
+    } catch (e) {
+      return { status: "error", error: errMsg(e) };
+    }
+  },
+);
 
 // ---------- qBittorrent ----------
 
@@ -905,7 +1083,13 @@ async function qbitFetch(url: string, path: string, user: string, pass: string):
   return res;
 }
 
-async function qbitPost(url: string, path: string, user: string, pass: string, form: Record<string, string>): Promise<Response> {
+async function qbitPost(
+  url: string,
+  path: string,
+  user: string,
+  pass: string,
+  form: Record<string, string>,
+): Promise<Response> {
   if (!qbitCookie) qbitCookie = await qbitLogin(url, user, pass);
   const body = new URLSearchParams(form);
   const doFetch = () =>
@@ -930,7 +1114,11 @@ export const qbitAction = createServerFn({ method: "POST" })
   .validator((data: { hashes: string[] | "all"; action: "pause" | "resume" | "delete" }) => data)
   .handler(async ({ data }): Promise<{ ok: boolean; error?: string }> => {
     const { requireAdmin } = await import("./admin.server");
-    try { await requireAdmin(); } catch (e) { return { ok: false, error: (e as Error).message }; }
+    try {
+      await requireAdmin();
+    } catch (e) {
+      return { ok: false, error: (e as Error).message };
+    }
     const base = process.env.QBIT_URL;
     const user = process.env.QBIT_USERNAME;
     const pass = process.env.QBIT_PASSWORD;
@@ -939,10 +1127,14 @@ export const qbitAction = createServerFn({ method: "POST" })
     const hashesStr = data.hashes === "all" ? "all" : data.hashes.join("|");
     try {
       if (data.action === "delete") {
-        const res = await qbitPost(url, "/api/v2/torrents/delete", user, pass, { hashes: hashesStr, deleteFiles: "true" });
+        const res = await qbitPost(url, "/api/v2/torrents/delete", user, pass, {
+          hashes: hashesStr,
+          deleteFiles: "true",
+        });
         return { ok: res.ok };
       }
-      const primary = data.action === "pause" ? "/api/v2/torrents/pause" : "/api/v2/torrents/resume";
+      const primary =
+        data.action === "pause" ? "/api/v2/torrents/pause" : "/api/v2/torrents/resume";
       const fallback = data.action === "pause" ? "/api/v2/torrents/stop" : "/api/v2/torrents/start";
       let res = await qbitPost(url, primary, user, pass, { hashes: hashesStr });
       if (!res.ok) {
@@ -967,10 +1159,18 @@ export const getQbit = createServerFn({ method: "GET" }).handler(async (): Promi
     return {
       status: "error",
       error: "QBIT_URL / QBIT_USERNAME / QBIT_PASSWORD not configured",
-      dlSpeed: 0, upSpeed: 0, dlSpeedLimit: 0, upSpeedLimit: 0,
-      totalDl: 0, totalUp: 0, freeSpaceOnDisk: 0, globalRatio: 0,
-      torrents: [], counts: { downloading: 0, seeding: 0, paused: 0, total: 0 },
-      sessionDl: 0, sessionUp: 0,
+      dlSpeed: 0,
+      upSpeed: 0,
+      dlSpeedLimit: 0,
+      upSpeedLimit: 0,
+      totalDl: 0,
+      totalUp: 0,
+      freeSpaceOnDisk: 0,
+      globalRatio: 0,
+      torrents: [],
+      counts: { downloading: 0, seeding: 0, paused: 0, total: 0 },
+      sessionDl: 0,
+      sessionUp: 0,
     };
   }
   const url = stripSlash(base);
@@ -1011,10 +1211,13 @@ export const getQbit = createServerFn({ method: "GET" }).handler(async (): Promi
       addedOn: Number(t.added_on ?? 0),
     }));
 
-    let downloading = 0, seeding = 0, paused = 0;
+    let downloading = 0,
+      seeding = 0,
+      paused = 0;
     for (const t of torrentsRaw) {
       if (t.state?.includes("paused") || t.state === "pausedDL" || t.state === "pausedUP") paused++;
-      else if (t.state?.includes("UP") || t.state === "uploading" || t.state === "stalledUP") seeding++;
+      else if (t.state?.includes("UP") || t.state === "uploading" || t.state === "stalledUP")
+        seeding++;
       else downloading++;
     }
 
@@ -1067,15 +1270,23 @@ export const getQbit = createServerFn({ method: "GET" }).handler(async (): Promi
   } catch (e) {
     qbitCookie = null;
     return {
-      status: "error", error: errMsg(e),
-      dlSpeed: 0, upSpeed: 0, dlSpeedLimit: 0, upSpeedLimit: 0,
-      totalDl: 0, totalUp: 0, freeSpaceOnDisk: 0, globalRatio: 0,
-      torrents: [], counts: { downloading: 0, seeding: 0, paused: 0, total: 0 },
-      sessionDl: 0, sessionUp: 0,
+      status: "error",
+      error: errMsg(e),
+      dlSpeed: 0,
+      upSpeed: 0,
+      dlSpeedLimit: 0,
+      upSpeedLimit: 0,
+      totalDl: 0,
+      totalUp: 0,
+      freeSpaceOnDisk: 0,
+      globalRatio: 0,
+      torrents: [],
+      counts: { downloading: 0, seeding: 0, paused: 0, total: 0 },
+      sessionDl: 0,
+      sessionUp: 0,
     };
   }
 });
-
 
 // ---------- Host (systeminformation, local — nu mai trece prin Glances) ----------
 
@@ -1083,10 +1294,16 @@ export const getQbit = createServerFn({ method: "GET" }).handler(async (): Promi
 let staticHostCache: { osInfo: any; cpu: any } | null = null;
 
 // Cache pentru calculul vitezei disk I/O per disc din /proc/diskstats
-interface DiskSnapshot { rSec: number; wSec: number; ts: number }
-let prevDiskStats: Record<string, DiskSnapshot> = {};
+interface DiskSnapshot {
+  rSec: number;
+  wSec: number;
+  ts: number;
+}
+const prevDiskStats: Record<string, DiskSnapshot> = {};
 
-async function readProcDiskstats(devices: string[]): Promise<Record<string, { rSec: number; wSec: number }>> {
+async function readProcDiskstats(
+  devices: string[],
+): Promise<Record<string, { rSec: number; wSec: number }>> {
   try {
     const { readFile } = await import("node:fs/promises");
     const raw = await readFile("/proc/diskstats", "utf8");
@@ -1096,8 +1313,8 @@ async function readProcDiskstats(devices: string[]): Promise<Record<string, { rS
       const name = parts[2];
       if (!devices.includes(name)) continue;
       result[name] = {
-        rSec: Number(parts[5]),  // sectoare citite cumulative (1 sector = 512 bytes)
-        wSec: Number(parts[9]),  // sectoare scrise cumulative
+        rSec: Number(parts[5]), // sectoare citite cumulative (1 sector = 512 bytes)
+        wSec: Number(parts[9]), // sectoare scrise cumulative
       };
     }
     return result;
@@ -1135,9 +1352,9 @@ export const getHost = createServerFn({ method: "GET" }).handler(async (): Promi
 
     // Mapping mount → device pentru serverul faikkitbox
     const MOUNT_TO_DEV: Record<string, string> = {
-      "/":               "nvme1n1",
-      "/media/ssd2tb":   "nvme0n1",
-      "/media/hddextern":"sda",
+      "/": "nvme1n1",
+      "/media/ssd2tb": "nvme0n1",
+      "/media/hddextern": "sda",
     };
 
     // Calculez viteze per disc din /proc/diskstats cumulative
@@ -1148,8 +1365,8 @@ export const getHost = createServerFn({ method: "GET" }).handler(async (): Promi
       if (prev && now - prev.ts > 100) {
         const dt = (now - prev.ts) / 1000;
         diskSpeeds[dev] = {
-          readBps:  Math.max(0, (cur.rSec - prev.rSec) * 512 / dt),
-          writeBps: Math.max(0, (cur.wSec - prev.wSec) * 512 / dt),
+          readBps: Math.max(0, ((cur.rSec - prev.rSec) * 512) / dt),
+          writeBps: Math.max(0, ((cur.wSec - prev.wSec) * 512) / dt),
         };
       }
       prevDiskStats[dev] = { rSec: cur.rSec, wSec: cur.wSec, ts: now };
@@ -1178,9 +1395,10 @@ export const getHost = createServerFn({ method: "GET" }).handler(async (): Promi
         txSec: Number(n.tx_sec ?? 0),
       }));
 
-    const sensors = cpuTemp && typeof cpuTemp.main === "number" && cpuTemp.main > 0
-      ? [{ label: "CPU", value: cpuTemp.main, unit: "°C" }]
-      : [];
+    const sensors =
+      cpuTemp && typeof cpuTemp.main === "number" && cpuTemp.main > 0
+        ? [{ label: "CPU", value: cpuTemp.main, unit: "°C" }]
+        : [];
 
     const topProcesses = (processes.list ?? [])
       .slice()
@@ -1223,9 +1441,18 @@ export const getHost = createServerFn({ method: "GET" }).handler(async (): Promi
           rxSum += Number(stats.netIO?.rx ?? 0);
           txSum += Number(stats.netIO?.wx ?? 0);
         }
-        return { name, cpu: cpuSum, mem: memSum, netRx: rxSum, netTx: txSum, source: "container" as const };
+        return {
+          name,
+          cpu: cpuSum,
+          mem: memSum,
+          netRx: rxSum,
+          netTx: txSum,
+          source: "container" as const,
+        };
       }
-      const matchedProcs = (processes.list ?? []).filter((p) => match.test(p.name ?? p.command ?? ""));
+      const matchedProcs = (processes.list ?? []).filter((p) =>
+        match.test(p.name ?? p.command ?? ""),
+      );
       if (matchedProcs.length === 0) return null;
       const cpuSum = matchedProcs.reduce((s, p) => s + Number(p.cpu ?? 0), 0);
       const memSum = matchedProcs.reduce((s, p) => s + Number(p.mem ?? 0), 0);

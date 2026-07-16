@@ -9,7 +9,14 @@ interface Props {
   size?: number;
 }
 
-export function RadialGauge({ value, label, centerText, sub, colorClass = "text-primary", size = 96 }: Props) {
+export function RadialGauge({
+  value,
+  label,
+  centerText,
+  sub,
+  colorClass = "text-primary",
+  size = 96,
+}: Props) {
   const pct = Math.min(100, Math.max(0, value));
   const r = 42;
   const c = 2 * Math.PI * r;
@@ -18,7 +25,10 @@ export function RadialGauge({ value, label, centerText, sub, colorClass = "text-
   const first = useRef(true);
   const [flash, setFlash] = useState(false);
   useEffect(() => {
-    if (first.current) { first.current = false; return; }
+    if (first.current) {
+      first.current = false;
+      return;
+    }
     setFlash(true);
     const t = setTimeout(() => setFlash(false), 700);
     return () => clearTimeout(t);
@@ -65,7 +75,9 @@ export function RadialGauge({ value, label, centerText, sub, colorClass = "text-
           />
         </div>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className={`text-sm font-semibold tabular-nums ${flash ? "tick-flash" : ""}`}>{centerText}</span>
+          <span className={`text-sm font-semibold tabular-nums ${flash ? "tick-flash" : ""}`}>
+            {centerText}
+          </span>
           {sub && <span className="text-[9px] text-muted-foreground tabular-nums">{sub}</span>}
         </div>
       </div>

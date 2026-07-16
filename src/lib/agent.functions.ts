@@ -171,9 +171,13 @@ export async function logAgentActivity(cmd: AgentCommand, ok: boolean): Promise<
   };
   const msg = messages[cmd];
   if (!msg) return;
-  const type = cmd === "deploy_app" ? "service_update"
-    : cmd.startsWith("update_") ? "service_update"
-    : cmd.startsWith("restart_") ? "service_restart"
-    : "ubuntu_update";
+  const type =
+    cmd === "deploy_app"
+      ? "service_update"
+      : cmd.startsWith("update_")
+        ? "service_update"
+        : cmd.startsWith("restart_")
+          ? "service_restart"
+          : "ubuntu_update";
   await logActivity(type as any, ok ? msg : `${msg} — EȘUAT`, { cmd, ok });
 }

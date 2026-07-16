@@ -35,6 +35,8 @@ export function useAutoReload() {
     }
 
     connect();
-    return () => { es?.close(); };
+    return () => {
+      es?.close();
+    };
   }, []);
 }

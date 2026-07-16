@@ -32,12 +32,21 @@ export function BottomNav() {
                 {active && (
                   <span
                     className="pointer-events-none absolute inset-x-3 top-0 h-[2px] rounded-full bg-primary"
-                    style={{ boxShadow: "0 0 10px color-mix(in oklab, var(--primary) 80%, transparent)" }}
+                    style={{
+                      boxShadow: "0 0 10px color-mix(in oklab, var(--primary) 80%, transparent)",
+                    }}
                   />
                 )}
                 <Icon
                   className={`h-5 w-5 transition-all duration-300 ${active ? "scale-110" : "opacity-80"}`}
-                  style={active ? { filter: "drop-shadow(0 0 6px color-mix(in oklab, var(--primary) 70%, transparent))" } : undefined}
+                  style={
+                    active
+                      ? {
+                          filter:
+                            "drop-shadow(0 0 6px color-mix(in oklab, var(--primary) 70%, transparent))",
+                        }
+                      : undefined
+                  }
                 />
                 <span className="font-medium">{item.label}</span>
               </Link>

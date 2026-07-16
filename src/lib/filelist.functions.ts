@@ -10,7 +10,7 @@ import { join } from "node:path";
 export interface FilelistTorrent {
   id: number;
   name: string;
-  size: number;        // bytes
+  size: number; // bytes
   seeders: number;
   leechers: number;
   times_completed: number;
@@ -104,9 +104,9 @@ function rowToEntry(r: any): FilelistLogEntry {
 async function readDownloadLog(): Promise<FilelistLogEntry[]> {
   try {
     const { getDb } = await import("./db");
-    const rows = getDb().prepare(
-      "SELECT * FROM downloads ORDER BY downloaded_at DESC LIMIT 100"
-    ).all();
+    const rows = getDb()
+      .prepare("SELECT * FROM downloads ORDER BY downloaded_at DESC LIMIT 100")
+      .all();
     return rows.map(rowToEntry);
   } catch {
     return [];
@@ -116,15 +116,25 @@ async function readDownloadLog(): Promise<FilelistLogEntry[]> {
 async function appendDownloadLog(entry: FilelistLogEntry): Promise<void> {
   try {
     const { getDb } = await import("./db");
-    getDb().prepare(
-      `INSERT OR REPLACE INTO downloads
+    getDb()
+      .prepare(
+        `INSERT OR REPLACE INTO downloads
        (id, name, size, category, category_name, freeleech, internal, save_path, downloaded_at, completed_at, torrent_hash)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(
-      entry.id, entry.name, entry.size, entry.category, entry.categoryName,
-      entry.freeleech ? 1 : 0, entry.internal ? 1 : 0, entry.savePath,
-      entry.downloadedAt, entry.completedAt, entry.torrentHash ?? null,
-    );
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        entry.id,
+        entry.name,
+        entry.size,
+        entry.category,
+        entry.categoryName,
+        entry.freeleech ? 1 : 0,
+        entry.internal ? 1 : 0,
+        entry.savePath,
+        entry.downloadedAt,
+        entry.completedAt,
+        entry.torrentHash ?? null,
+      );
   } catch (e) {
     console.warn("[filelist] Nu am putut scrie log-ul de descărcări:", e);
   }
@@ -133,7 +143,8 @@ async function appendDownloadLog(entry: FilelistLogEntry): Promise<void> {
 async function markLogEntryComplete(torrentId: number): Promise<void> {
   try {
     const { getDb } = await import("./db");
-    getDb().prepare("UPDATE downloads SET completed_at = ? WHERE id = ?")
+    getDb()
+      .prepare("UPDATE downloads SET completed_at = ? WHERE id = ?")
       .run(new Date().toISOString(), torrentId);
   } catch (e) {
     console.warn("[filelist] Nu am putut actualiza log-ul la completare:", e);
@@ -149,11 +160,14 @@ export const getFilelistDownloadLog = createServerFn({ method: "GET" }).handler(
 export const deleteFilelistLogEntry = createServerFn({ method: "POST" })
   .validator((data: { id: number }) => data)
   .handler(async ({ data }): Promise<{ ok: boolean }> => {
+    const { requireAdmin } = await import("./admin.server");
+    await requireAdmin();
     try {
       const { getDb } = await import("./db");
       getDb().prepare("DELETE FROM downloads WHERE id = ?").run(data.id);
       return { ok: true };
-    } catch {
+    } catch (e) {
+      console.error("[filelist] Nu am putut șterge intrarea din log:", e);
       return { ok: false };
     }
   });
@@ -171,8 +185,8 @@ async function qbitLogin(url: string, user: string, pass: string): Promise<strin
     body,
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
-      "Referer": url,
-      "Origin": url,
+      Referer: url,
+      Origin: url,
     },
   });
   if (!res.ok) throw new Error(`qBit login HTTP ${res.status}`);
@@ -212,10 +226,10 @@ async function pollUntilComplete(
     await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
 
     try {
-      const res = await fetch(
-        `${qbitUrl}/api/v2/torrents/info?hashes=${torrentHash}`,
-        { headers: { Cookie: cookie }, signal: AbortSignal.timeout(10_000) },
-      );
+      const res = await fetch(`${qbitUrl}/api/v2/torrents/info?hashes=${torrentHash}`, {
+        headers: { Cookie: cookie },
+        signal: AbortSignal.timeout(10_000),
+      });
       if (!res.ok) continue;
 
       const list: any[] = await res.json();
@@ -225,19 +239,24 @@ async function pollUntilComplete(
       const progress = Number(torrent.progress ?? 0);
       const state: string = torrent.state ?? "";
 
-      console.log(`[filelist] "${torrentName}" — progress: ${(progress * 100).toFixed(1)}% state: ${state}`);
-
-      const isDone = progress >= 1 && (
-        state.includes("UP") || state === "uploading" || state === "pausedUP" || state === "stalledUP"
-      );
+      const isDone =
+        progress >= 1 &&
+        (state.includes("UP") ||
+          state === "uploading" ||
+          state === "pausedUP" ||
+          state === "stalledUP");
 
       if (isDone) {
         console.log(`[filelist] "${torrentName}" complet — dau refresh Plex`);
         await markLogEntryComplete(torrentId);
         // Log activitate completare
-        import("./activity-log").then(({ logActivity }) =>
-          logActivity("torrent_complete", `Torrent descărcat complet: ${torrentName}`, { torrentId })
-        ).catch(() => {});
+        import("./activity-log")
+          .then(({ logActivity }) =>
+            logActivity("torrent_complete", `Torrent descărcat complet: ${torrentName}`, {
+              torrentId,
+            }),
+          )
+          .catch(() => {});
         const sectionKey = await plexFindLibraryKey(plexType);
         if (sectionKey) await plexRefreshLibrary(sectionKey);
         console.log(`[filelist] Plex refresh trimis pentru secțiunea ${sectionKey}`);
@@ -307,11 +326,13 @@ async function resumeOrphanedPolls(): Promise<void> {
       return;
     }
 
-    console.log(`[filelist] Reiau polling pentru ${orphaned.length} descărcări întrerupte de restart`);
+    console.log(
+      `[filelist] Reiau polling pentru ${orphaned.length} descărcări întrerupte de restart`,
+    );
     for (const entry of orphaned) {
       const plexType = isMovieCategory(entry.category) ? "movie" : "show";
-      pollUntilComplete(url, cookie, entry.torrentHash!, plexType, entry.name, entry.id).catch((e) =>
-        console.error("[filelist] Eroare resume polling:", e),
+      pollUntilComplete(url, cookie, entry.torrentHash!, plexType, entry.name, entry.id).catch(
+        (e) => console.error("[filelist] Eroare resume polling:", e),
       );
     }
   } catch (e) {
@@ -321,7 +342,9 @@ async function resumeOrphanedPolls(): Promise<void> {
 
 // Rulează la 15s după încărcarea modulului (serverul e pornit complet)
 if (typeof process !== "undefined" && process.env) {
-  setTimeout(() => { resumeOrphanedPolls(); }, 15_000);
+  setTimeout(() => {
+    resumeOrphanedPolls();
+  }, 15_000);
 }
 
 // ---------------------------------------------------------------------------
@@ -331,10 +354,16 @@ if (typeof process !== "undefined" && process.env) {
 export const searchFilelist = createServerFn({ method: "GET" })
   .validator((data: { query: string; category?: FilelistCategory }) => data)
   .handler(async ({ data }): Promise<FilelistSearchResult> => {
+    const { requireAdmin } = await import("./admin.server");
+    await requireAdmin();
     const username = process.env.FILELIST_USERNAME;
     const passkey = process.env.FILELIST_PASSKEY;
     if (!username || !passkey) {
-      return { status: "error", error: "FILELIST_USERNAME / FILELIST_PASSKEY nu sunt configurate în .env", torrents: [] };
+      return {
+        status: "error",
+        error: "FILELIST_USERNAME / FILELIST_PASSKEY nu sunt configurate în .env",
+        torrents: [],
+      };
     }
 
     const category = data.category ?? "all";
@@ -420,6 +449,8 @@ export const downloadFilelist = createServerFn({ method: "POST" })
     }),
   )
   .handler(async ({ data }): Promise<FilelistDownloadResult> => {
+    const { requireAdmin } = await import("./admin.server");
+    await requireAdmin();
     const username = process.env.FILELIST_USERNAME;
     const passkey = process.env.FILELIST_PASSKEY;
     const qbitBase = process.env.QBIT_URL ?? "http://192.168.1.192:25556";
@@ -448,7 +479,10 @@ export const downloadFilelist = createServerFn({ method: "POST" })
         headers: { "User-Agent": "Mozilla/5.0 (compatible; FaikkitBox/1.0)" },
       });
       if (!dlRes.ok) {
-        return { status: "error", error: `Eroare la descărcarea torrentului: HTTP ${dlRes.status}` };
+        return {
+          status: "error",
+          error: `Eroare la descărcarea torrentului: HTTP ${dlRes.status}`,
+        };
       }
       torrentBuffer = await dlRes.arrayBuffer();
     } catch (e: any) {
@@ -474,7 +508,11 @@ export const downloadFilelist = createServerFn({ method: "POST" })
       // 4. Trimite torrentul la qBittorrent cu save path corect
       const form = new FormData();
       const fileBytes = await import("node:fs/promises").then((m) => m.readFile(tmpPath));
-      form.append("torrents", new Blob([fileBytes], { type: "application/x-bittorrent" }), `${safeName}.torrent`);
+      form.append(
+        "torrents",
+        new Blob([fileBytes], { type: "application/x-bittorrent" }),
+        `${safeName}.torrent`,
+      );
       form.append("savepath", savePath);
       form.append("category", isMovie ? "filme" : "seriale");
 
@@ -487,7 +525,10 @@ export const downloadFilelist = createServerFn({ method: "POST" })
 
       if (!uploadRes.ok) {
         const txt = await uploadRes.text().catch(() => "");
-        return { status: "error", error: `qBittorrent upload eșuat: HTTP ${uploadRes.status} ${txt.slice(0, 120)}` };
+        return {
+          status: "error",
+          error: `qBittorrent upload eșuat: HTTP ${uploadRes.status} ${txt.slice(0, 120)}`,
+        };
       }
 
       const uploadText = await uploadRes.text();
@@ -499,15 +540,21 @@ export const downloadFilelist = createServerFn({ method: "POST" })
       await new Promise((r) => setTimeout(r, 2000));
       let torrentHash: string | null = null;
       try {
-        const listRes = await fetch(`${url}/api/v2/torrents/info?sort=added_on&reverse=true&limit=5`, {
-          headers: { Cookie: cookie },
-          signal: AbortSignal.timeout(10_000),
-        });
+        const listRes = await fetch(
+          `${url}/api/v2/torrents/info?sort=added_on&reverse=true&limit=5`,
+          {
+            headers: { Cookie: cookie },
+            signal: AbortSignal.timeout(10_000),
+          },
+        );
         if (listRes.ok) {
           const list: any[] = await listRes.json();
-          const match = list.find((t) =>
-            String(t.name ?? "").toLowerCase().includes(data.torrentName.slice(0, 20).toLowerCase())
-          ) ?? list[0];
+          const match =
+            list.find((t) =>
+              String(t.name ?? "")
+                .toLowerCase()
+                .includes(data.torrentName.slice(0, 20).toLowerCase()),
+            ) ?? list[0];
           torrentHash = match?.hash ?? null;
         }
       } catch (e) {
@@ -519,11 +566,15 @@ export const downloadFilelist = createServerFn({ method: "POST" })
       const catName = data.categoryName || CATEGORY_NAMES[catId] || `Cat ${catId}`;
 
       // Log activitate
-      import("./activity-log").then(({ logActivity }) =>
-        logActivity("torrent_added", `Torrent adăugat: ${data.torrentName}`, {
-          category: catName, savePath, size: data.size,
-        })
-      ).catch(() => {});
+      import("./activity-log")
+        .then(({ logActivity }) =>
+          logActivity("torrent_added", `Torrent adăugat: ${data.torrentName}`, {
+            category: catName,
+            savePath,
+            size: data.size,
+          }),
+        )
+        .catch(() => {});
       await appendDownloadLog({
         id: data.torrentId,
         name: data.torrentName,
@@ -541,9 +592,14 @@ export const downloadFilelist = createServerFn({ method: "POST" })
       // 7. Pornește polling background — refresh Plex și marchează complet DOAR la final
       const plexType = isMovie ? "movie" : "show";
       if (torrentHash) {
-        pollUntilComplete(url, cookie, torrentHash, plexType, data.torrentName, data.torrentId).catch((e) =>
-          console.error("[filelist] Eroare polling:", e),
-        );
+        pollUntilComplete(
+          url,
+          cookie,
+          torrentHash,
+          plexType,
+          data.torrentName,
+          data.torrentId,
+        ).catch((e) => console.error("[filelist] Eroare polling:", e));
       } else {
         console.warn("[filelist] Hash nedisponibil — Plex nu va fi refreshuit automat");
       }
