@@ -68,7 +68,7 @@ function Overview() {
   };
 
   return (
-    <PageShell title="Monitor Server" subtitle="Statistici în timp real">
+    <PageShell title="FaikkitBox Dashboard" subtitle="Totul în timp real">
       <ServiceRow
         to="/plex"
         title="Plex"
