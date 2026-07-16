@@ -1029,9 +1029,7 @@ export const getImmich = createServerFn({ method: "GET" }).handler(
 
       // Tracking activitate Immich (fire and forget)
       import("./activity-log")
-        .then(({ trackImmichUploads }) =>
-          trackImmichUploads(uploadsToday ?? 0, uploadsThisWeek ?? 0),
-        )
+        .then(({ trackImmichUploads }) => trackImmichUploads(usageByUser))
         .catch(() => {});
 
       return {

@@ -148,34 +148,49 @@ export async function trackPlexSessions(
 }
 
 // ---------------------------------------------------------------------------
-// Tracking uploads Immich (in-memory)
+// Tracking uploads Immich (in-memory, per user)
 // ---------------------------------------------------------------------------
 
-let lastImmichUploadsToday = -1;
-let lastImmichUploadsThisWeek = -1;
+type ImmichUserSnapshot = { photos: number; videos: number };
+const lastImmichByUser = new Map<string, ImmichUserSnapshot>();
+let immichInitialized = false;
 
 export async function trackImmichUploads(
-  uploadsToday: number,
-  uploadsThisWeek: number,
+  usageByUser: Array<{ userName: string; photos: number; videos: number }>,
 ): Promise<void> {
-  if (lastImmichUploadsToday === -1) {
-    // Prima citire — doar salvăm baseline, nu logăm
-    lastImmichUploadsToday = uploadsToday;
-    lastImmichUploadsThisWeek = uploadsThisWeek;
+  if (!immichInitialized) {
+    // Prima citire — salvăm baseline fără a loga
+    for (const u of usageByUser) {
+      lastImmichByUser.set(u.userName, { photos: u.photos, videos: u.videos });
+    }
+    immichInitialized = true;
     return;
   }
 
-  if (uploadsToday > lastImmichUploadsToday) {
-    const diff = uploadsToday - lastImmichUploadsToday;
-    await logActivity(
-      "immich_upload",
-      `${diff} fișier${diff === 1 ? "" : "e"} noi încărcate pe Immich astăzi (total: ${uploadsToday})`,
-      { count: diff, totalToday: uploadsToday },
-    );
-    lastImmichUploadsToday = uploadsToday;
-  }
-  if (uploadsThisWeek > lastImmichUploadsThisWeek) {
-    lastImmichUploadsThisWeek = uploadsThisWeek;
+  for (const u of usageByUser) {
+    const prev = lastImmichByUser.get(u.userName) ?? { photos: 0, videos: 0 };
+    const newPhotos = Math.max(0, u.photos - prev.photos);
+    const newVideos = Math.max(0, u.videos - prev.videos);
+
+    if (newPhotos > 0 || newVideos > 0) {
+      lastImmichByUser.set(u.userName, { photos: u.photos, videos: u.videos });
+
+      const parts: string[] = [];
+      if (newPhotos > 0) parts.push(`${newPhotos} ${newPhotos === 1 ? "fotografie" : "fotografii"}`);
+      if (newVideos > 0) parts.push(`${newVideos} ${newVideos === 1 ? "videoclip" : "videoclipuri"}`);
+      const ora = new Date().toLocaleTimeString("ro-RO", { hour: "2-digit", minute: "2-digit" });
+      const msg = `${u.userName} a încărcat ${parts.join(" și ")} la ora ${ora}`;
+
+      await logActivity("immich_upload", msg, {
+        user: u.userName,
+        newPhotos,
+        newVideos,
+      });
+    }
+
+    if (!lastImmichByUser.has(u.userName)) {
+      lastImmichByUser.set(u.userName, { photos: u.photos, videos: u.videos });
+    }
   }
 }
 
