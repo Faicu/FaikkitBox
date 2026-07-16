@@ -92,6 +92,7 @@ export const getActivityLog = createServerFn({ method: "GET" }).handler(
 
 // Cheie: "user|title|grandparentTitle" → timestamp start
 const activePlexSessions = new Map<string, string>();
+let plexSessionsInitialized = false;
 
 function sessionKey(user: string, title: string, grandparent?: string): string {
   return `${user}|${grandparent ?? ""}|${title}`;
@@ -100,6 +101,16 @@ function sessionKey(user: string, title: string, grandparent?: string): string {
 export async function trackPlexSessions(
   sessions: Array<{ user: string; title: string; grandparentTitle?: string; player?: string }>,
 ): Promise<void> {
+  if (!plexSessionsInitialized) {
+    // Prima citire după restart — salvăm baseline fără a loga
+    for (const s of sessions) {
+      const key = sessionKey(s.user, s.title, s.grandparentTitle);
+      activePlexSessions.set(key, new Date().toISOString());
+    }
+    plexSessionsInitialized = true;
+    return;
+  }
+
   const currentKeys = new Set<string>();
 
   for (const s of sessions) {
