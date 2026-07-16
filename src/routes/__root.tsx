@@ -9,10 +9,13 @@ import {
 } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
+import { useEffect } from "react";
 import appCss from "../styles.css?url";
 import { BottomNav } from "../components/BottomNav";
 import { Toaster } from "../components/ui/sonner";
 import { useAutoReload } from "../hooks/use-auto-reload";
+import { onUpdateDetected } from "../lib/update-signal";
+import { toast } from "sonner";
 
 function NotFoundComponent() {
   return (
@@ -134,5 +137,31 @@ function RootComponent() {
 
 function AutoReloadWatcher() {
   useAutoReload();
+
+  useEffect(() => {
+    return onUpdateDetected(() => {
+      let seconds = 5;
+      const toastId = toast.warning(`Actualizare disponibilă — refresh în ${seconds}s`, {
+        duration: Infinity,
+        dismissible: false,
+      });
+
+      const interval = setInterval(() => {
+        seconds -= 1;
+        if (seconds <= 0) {
+          clearInterval(interval);
+          toast.dismiss(toastId);
+          window.location.reload();
+        } else {
+          toast.warning(`Actualizare disponibilă — refresh în ${seconds}s`, {
+            id: toastId,
+            duration: Infinity,
+            dismissible: false,
+          });
+        }
+      }, 1000);
+    });
+  }, []);
+
   return null;
 }

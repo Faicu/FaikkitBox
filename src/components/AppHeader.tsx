@@ -2,9 +2,11 @@ import { RefreshCw, Lock, LogOut, ShieldCheck, GitBranch } from "lucide-react";
 import { useIsFetching, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { adminStatusQuery, githubSyncQuery } from "@/lib/queries";
 import { adminLogout } from "@/lib/admin.functions";
+import { onUpdateDetected } from "@/lib/update-signal";
 
 interface Props {
   title: string;
@@ -17,6 +19,9 @@ export function AppHeader({ title, subtitle, right }: Props) {
   const isFetching = useIsFetching() > 0;
   const admin = useQuery(adminStatusQuery);
   const sync = useQuery(githubSyncQuery);
+  const [updateAvailable, setUpdateAvailable] = useState(false);
+
+  useEffect(() => onUpdateDetected(() => setUpdateAvailable(true)), []);
   const logoutFn = useServerFn(adminLogout);
   const logout = useMutation({
     mutationFn: () => logoutFn(),
@@ -47,24 +52,26 @@ export function AppHeader({ title, subtitle, right }: Props) {
           {right}
           {sync.data?.status === "ok" && (() => {
             const s = sync.data.data;
-            const synced = s.isSynced;
+            const orange = updateAvailable || !s.isSynced;
             return (
               <button
                 type="button"
                 onClick={() => toast(
-                  synced ? "GitHub: sincronizat" : `GitHub: ${s.commitsBehind} commit${s.commitsBehind !== 1 ? "s" : ""} în urmă`,
+                  updateAvailable
+                    ? "Actualizare detectată — reîncărcare în curs..."
+                    : s.isSynced ? "GitHub: sincronizat" : `GitHub: ${s.commitsBehind} commit${s.commitsBehind !== 1 ? "s" : ""} în urmă`,
                   {
                     description: `deployed ${s.deployedShortSha} · github ${s.latestShortSha}`,
-                    icon: <GitBranch className={`h-4 w-4 ${synced ? "text-emerald-400" : "text-amber-400"}`} />,
+                    icon: <GitBranch className={`h-4 w-4 ${orange ? "text-amber-400" : "text-emerald-400"}`} />,
                     duration: 4000,
                   }
                 )}
-                className={`flex h-7 w-7 items-center justify-center rounded-full border ${
-                  synced
-                    ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-400"
-                    : "border-amber-500/30 bg-amber-500/15 text-amber-400"
+                className={`flex h-7 w-7 items-center justify-center rounded-full border transition-colors ${
+                  orange
+                    ? "border-amber-500/30 bg-amber-500/15 text-amber-400"
+                    : "border-emerald-500/30 bg-emerald-500/15 text-emerald-400"
                 }`}
-                title={synced ? "Sincronizat cu GitHub" : `${s.commitsBehind} commits în urmă`}
+                title={updateAvailable ? "Actualizare disponibilă" : s.isSynced ? "Sincronizat cu GitHub" : `${s.commitsBehind} commits în urmă`}
               >
                 <GitBranch className="h-3.5 w-3.5" />
               </button>
