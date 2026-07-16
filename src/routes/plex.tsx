@@ -4,15 +4,15 @@ import { Film, Tv, Music, Image as ImageIcon, User, Trophy, ChevronRight, Histor
 import { useState } from "react";
 
 import { PageShell } from "@/components/PageShell";
-import { ServicePill } from "@/components/ServicePill";
 import { StatCard } from "@/components/StatCard";
 import { ErrorCard } from "@/components/ErrorCard";
-import { ServiceVersionWidget } from "@/components/ServiceVersionWidget";
+import { ServiceHeaderActions, CommandOutput } from "@/components/ServiceHeaderActions";
 import { useServiceRecovery } from "@/components/useServiceRecovery";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription } from "@/components/ui/drawer";
 import { plexQuery } from "@/lib/queries";
 import { formatMsWithSeconds } from "@/lib/format";
 import type { PlexHistoryEntry } from "@/lib/services.functions";
+import type { AgentCommand, AgentResult } from "@/lib/agent.functions";
 
 export const Route = createFileRoute("/plex")({
   head: () => ({ meta: [{ title: "Plex — Monitor Server" }] }),
@@ -32,6 +32,7 @@ function PlexPage() {
   const status = isLoading ? "loading" : data?.status ?? "error";
   const { recovering, startRecovery } = useServiceRecovery(data?.status);
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
+  const [lastCmd, setLastCmd] = useState<{ command: AgentCommand; result: AgentResult } | null>(null);
   const userEntries: PlexHistoryEntry[] =
     selectedUser && data?.status === "ok" ? data.userHistory?.[selectedUser] ?? [] : [];
 
@@ -39,7 +40,14 @@ function PlexPage() {
     <PageShell
       title="Plex"
       subtitle={data?.status === "ok" ? `${data.serverName ?? "Server"} · v${data.version ?? ""}` : "Server media"}
-      right={<ServicePill status={status} />}
+      right={
+        <ServiceHeaderActions
+          service="plex"
+          status={status}
+          onRestart={startRecovery}
+          onCommandResult={(command, result) => setLastCmd({ command, result })}
+        />
+      }
     >
       {data?.status === "error" && (
         recovering
@@ -226,7 +234,7 @@ function PlexPage() {
             </section>
           )}
 
-          <ServiceVersionWidget service="plex" onRestart={startRecovery} />
+          {lastCmd && <CommandOutput command={lastCmd.command} result={lastCmd.result} />}
         </>
       )}
 

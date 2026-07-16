@@ -1,15 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { Images, Film, HardDrive, Activity, Upload, Trophy, ListChecks } from "lucide-react";
 
 import { PageShell } from "@/components/PageShell";
-import { ServicePill } from "@/components/ServicePill";
 import { StatCard } from "@/components/StatCard";
 import { ErrorCard } from "@/components/ErrorCard";
-import { ServiceVersionWidget } from "@/components/ServiceVersionWidget";
+import { ServiceHeaderActions, CommandOutput } from "@/components/ServiceHeaderActions";
 import { useServiceRecovery } from "@/components/useServiceRecovery";
 import { immichQuery } from "@/lib/queries";
 import { formatBytes } from "@/lib/format";
+import type { AgentCommand, AgentResult } from "@/lib/agent.functions";
 
 export const Route = createFileRoute("/immich")({
   head: () => ({ meta: [{ title: "Immich — Monitor Server" }] }),
@@ -20,12 +21,20 @@ function ImmichPage() {
   const { data, isLoading } = useQuery(immichQuery);
   const status = isLoading ? "loading" : data?.status ?? "error";
   const { recovering, startRecovery } = useServiceRecovery(data?.status);
+  const [lastCmd, setLastCmd] = useState<{ command: AgentCommand; result: AgentResult } | null>(null);
 
   return (
     <PageShell
       title="Immich"
       subtitle={data?.status === "ok" ? `Fotografii & videoclipuri · v${data.version ?? ""}` : "Bibliotecă foto"}
-      right={<ServicePill status={status} />}
+      right={
+        <ServiceHeaderActions
+          service="immich"
+          status={status}
+          onRestart={startRecovery}
+          onCommandResult={(command, result) => setLastCmd({ command, result })}
+        />
+      }
     >
       {data?.status === "error" && (
         recovering
@@ -129,7 +138,7 @@ function ImmichPage() {
             </div>
           )}
 
-          <ServiceVersionWidget service="immich" onRestart={startRecovery} />
+          {lastCmd && <CommandOutput command={lastCmd.command} result={lastCmd.result} />}
         </>
       )}
     </PageShell>
