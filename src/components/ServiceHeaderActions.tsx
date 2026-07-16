@@ -64,7 +64,7 @@ export function ServiceHeaderActions({ service, status, onRestart, onCommandResu
           type="button"
           onClick={() => mutation.mutate(config.restartCmd)}
           disabled={running === config.restartCmd}
-          className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-muted-foreground hover:text-foreground disabled:opacity-50"
+          className="flex h-9 w-9 items-center justify-center rounded-full border border-sky-500/30 bg-sky-500/15 text-sky-400 hover:bg-sky-500/25 disabled:opacity-50"
           title={running === config.restartCmd ? "Se repornește..." : "Repornește"}
           aria-label="Repornește"
         >
