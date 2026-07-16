@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "sdk_version": "0.22.2",
+  "path": "/mcp",
+  "auth": {
+    "type": "none"
+  },
+  "mcp": {
+    "server": {
+      "name": "faicu-status-mcp",
+      "version": "0.1.0",
+      "title": "Faicu Server Status"
+    },
+    "tools": [
+      {
+        "name": "host_status",
+        "title": "Server host status",
+        "description": "Read the current status of the Ubuntu host running the stack: hostname, OS, uptime, CPU %, memory %, load average, and per-disk usage. No personal data.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {}
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "service_versions",
+        "title": "Media stack service versions",
+        "description": "List the current and latest available versions of the tracked self-hosted services (Plex, Immich, qBittorrent), and whether each is up to date.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": true
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {}
+        },
+        "outputSchema": null
+      }
+    ]
+  }
+}
