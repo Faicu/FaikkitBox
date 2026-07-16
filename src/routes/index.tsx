@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { PlayCircle, Images, Download, Cpu, ChevronRight, Users, HardDrive, ListChecks, Gauge, ArrowDown, ArrowUp, Activity, Tv, Film, ScrollText, RefreshCw, CheckCircle2, Server, Package, GitCommitHorizontal, ExternalLink, Plus, Minus, GitBranch, AlertCircle } from "lucide-react";
+import { PlayCircle, Images, Download, Cpu, ChevronRight, Users, HardDrive, ListChecks, Gauge, ArrowDown, ArrowUp, Activity, Tv, Film, ScrollText, RefreshCw, CheckCircle2, Server, Package, GitCommitHorizontal, ExternalLink, Plus, Minus } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -10,9 +10,9 @@ import { MaintenanceAction } from "@/components/MaintenanceAction";
 import { ServicePill } from "@/components/ServicePill";
 import { RadialGauge } from "@/components/RadialGauge";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription } from "@/components/ui/drawer";
-import { plexQuery, immichQuery, qbitQuery, hostQuery, adminStatusQuery, lastSpeedtestQuery, activityLogQuery, recentCommitsQuery, commitsFromDbQuery, githubSyncQuery } from "@/lib/queries";
+import { plexQuery, immichQuery, qbitQuery, hostQuery, adminStatusQuery, lastSpeedtestQuery, activityLogQuery, recentCommitsQuery, commitsFromDbQuery } from "@/lib/queries";
 import type { ActivityEntry } from "@/lib/activity-log";
-import type { GitHubCommit, GitHubCommitDetail, GitHubSyncStatus } from "@/lib/github.functions";
+import type { GitHubCommit, GitHubCommitDetail } from "@/lib/github.functions";
 import { getCommitDetail } from "@/lib/github.functions";
 import type { HostData } from "@/lib/services.functions";
 import { runSpeedtest } from "@/lib/speedtest.functions";
@@ -363,7 +363,6 @@ function Overview() {
           </div>
         </DrawerContent>
       </Drawer>
-      <GitHubSyncCard />
       <ActivityLogSection />
       <section>
         <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Sistem</h2>
@@ -587,41 +586,6 @@ function CommitDrawer({ commit, onClose }: { commit: GitHubCommit; onClose: () =
         </div>
       </DrawerContent>
     </Drawer>
-  );
-}
-
-function GitHubSyncCard() {
-  const { data, isLoading } = useQuery(githubSyncQuery);
-  const sync = data?.status === "ok" ? data.data : null;
-
-  if (isLoading || !sync) return null;
-
-  return (
-    <a
-      href={`https://github.com/Faicu/FaikkitBox/commit/${sync.latestSha}`}
-      target="_blank"
-      rel="noreferrer"
-      className={`flex items-center gap-3 rounded-2xl border px-3 py-2.5 transition-colors ${
-        sync.isSynced
-          ? "border-emerald-500/20 bg-emerald-500/5 hover:bg-emerald-500/10"
-          : "border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/15"
-      }`}
-    >
-      <GitBranch className={`h-4 w-4 shrink-0 ${sync.isSynced ? "text-emerald-400" : "text-amber-400"}`} />
-      <div className="min-w-0 flex-1">
-        {sync.isSynced ? (
-          <span className="text-sm text-emerald-400">Sincronizat cu GitHub</span>
-        ) : (
-          <span className="text-sm text-amber-400">
-            {sync.commitsBehind > 1 ? `${sync.commitsBehind} commits` : "1 commit"} în urmă față de GitHub
-          </span>
-        )}
-        <div className="mt-0.5 font-mono text-[11px] text-muted-foreground">
-          deployed: {sync.deployedShortSha} · github: {sync.latestShortSha}
-        </div>
-      </div>
-      {!sync.isSynced && <AlertCircle className="h-4 w-4 shrink-0 text-amber-400" />}
-    </a>
   );
 }
 
