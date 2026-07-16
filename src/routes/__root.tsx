@@ -15,7 +15,6 @@ import { BottomNav } from "../components/BottomNav";
 import { Toaster } from "../components/ui/sonner";
 import { useAutoReload } from "../hooks/use-auto-reload";
 import { onUpdateDetected } from "../lib/update-signal";
-import { DeployProgressPanel } from "../components/DeployProgressPanel";
 import { toast } from "sonner";
 
 function NotFoundComponent() {
@@ -130,8 +129,7 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <AutoReloadWatcher />
       <Outlet />
-      <DeployProgressPanel />
-      <BottomNav />
+<BottomNav />
       <Toaster richColors closeButton position="top-center" />
     </QueryClientProvider>
   );
