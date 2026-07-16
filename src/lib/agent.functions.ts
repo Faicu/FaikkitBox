@@ -63,7 +63,7 @@ function commandSteps(cmd: AgentCommand): Step[] {
       return [
         { argv: ["git", "-C", appRepoDir, "pull", "--ff-only"] },
         { argv: ["npm", "--prefix", appRepoDir, "run", "build"] },
-        { argv: ["sudo", "systemctl", "restart", appService] },
+        { argv: ["sudo", "systemctl", "restart", "--no-block", appService] },
       ];
     case "flush_dns":
       return [
