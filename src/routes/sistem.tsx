@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Cpu, MemoryStick, HardDrive, Network, Thermometer, Terminal, Boxes, HardDriveDownload, PackageCheck } from "lucide-react";
+import { Cpu, MemoryStick, HardDrive, Network, Terminal, Boxes, HardDriveDownload, PackageCheck } from "lucide-react";
 
 import { PageShell } from "@/components/PageShell";
 import { ServicePill } from "@/components/ServicePill";
@@ -35,7 +35,12 @@ function HostPage() {
           <div className="grid grid-cols-2 gap-2">
             <StatCard label="Procesor" value={`${(data.cpuPercent ?? 0).toFixed(0)}%`} sub={`${data.cpuCores ?? "?"} nuclee · încărcare ${data.loadAvg?.[0].toFixed(2)}`} icon={<Cpu className="h-4 w-4" />} accent="text-emerald-400" />
             <StatCard label="Memorie" value={`${(data.memPercent ?? 0).toFixed(0)}%`} sub={`${formatBytes(data.memUsedBytes ?? 0)} / ${formatBytes(data.memTotalBytes ?? 0)}`} icon={<MemoryStick className="h-4 w-4" />} accent="text-emerald-400" />
-            <StatCard label="Swap" value={`${(data.swapPercent ?? 0).toFixed(0)}%`} icon={<MemoryStick className="h-4 w-4" />} accent="text-emerald-400" />
+            <StatCard
+              label="Temperatură CPU"
+              value={data.sensors?.[0] ? `${data.sensors[0].value.toFixed(0)}${data.sensors[0].unit || "°C"}` : "—"}
+              icon={<Cpu className="h-4 w-4" />}
+              accent="text-emerald-400"
+            />
             <StatCard label="Timp funcționare" value={formatDurationHMS(data.uptimeSec ?? 0)} icon={<Cpu className="h-4 w-4" />} accent="text-emerald-400" />
           </div>
 
@@ -124,19 +129,6 @@ function HostPage() {
                   </li>
                 ))}
               </ul>
-            </section>
-          )}
-
-          {data.sensors && data.sensors.length > 0 && (
-            <section>
-              <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
-                <Thermometer className="h-3.5 w-3.5" /> Senzori
-              </h2>
-              <div className="grid grid-cols-2 gap-2">
-                {data.sensors.map((s, i) => (
-                  <StatCard key={i} label={s.label} value={`${s.value.toFixed(0)}${s.unit || "°"}`} />
-                ))}
-              </div>
             </section>
           )}
 
