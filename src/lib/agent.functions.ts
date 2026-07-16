@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { execFile, spawn } from "node:child_process";
+import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
@@ -14,8 +14,7 @@ export type AgentCommand =
   | "restart_qbit"
   | "update_plex"
   | "update_immich"
-  | "uptime"
-  | "deploy_app";
+  | "uptime";
 
 const ALLOWED: AgentCommand[] = [
   "apt_update",
@@ -28,7 +27,6 @@ const ALLOWED: AgentCommand[] = [
   "update_plex",
   "update_immich",
   "uptime",
-  "deploy_app",
 ];
 
 export type AgentResult = {
@@ -39,9 +37,7 @@ export type AgentResult = {
   error?: string;
 };
 
-// Un pas e fie un argv (rulat direct, fara shell), fie o pauza intre pasi,
-// fie un spawn detasat (pentru comenzi care restarteaza procesul curent).
-type Step = { argv: string[] } | { sleepMs: number } | { spawnDetached: string[] };
+type Step = { argv: string[] } | { sleepMs: number };
 
 // Caile compose sunt configurabile via env, cu valori implicite conform
 // instalarii curente (/root/plex si /root/immich-app).
@@ -85,23 +81,8 @@ function commandSteps(cmd: AgentCommand): Step[] {
       ];
     case "uptime":
       return [{ argv: ["uptime"] }];
-    case "deploy_app":
-      // deploy.sh face systemctl restart care omoară procesul curent —
-      // folosim spawn detașat și returnăm imediat
-      return [{ spawnDetached: ["sudo", "/opt/faikkitbox/deploy.sh"] }];
   }
 }
-
-export const getDeployLog = createServerFn({ method: "GET" }).handler(async (): Promise<{ lines: string; updatedAt: string }> => {
-  const { requireAdmin } = await import("./admin.server");
-  await requireAdmin();
-  try {
-    const { stdout } = await execFileAsync("tail", ["-n", "80", "/var/log/faikkitbox-deploy.log"], { timeout: 5000 });
-    return { lines: stdout, updatedAt: new Date().toISOString() };
-  } catch {
-    return { lines: "", updatedAt: new Date().toISOString() };
-  }
-});
 
 export const runAgentCommand = createServerFn({ method: "POST" })
   .validator((data: { cmd: AgentCommand }) => {
@@ -125,18 +106,6 @@ export const runAgentCommand = createServerFn({ method: "POST" })
           await new Promise((r) => setTimeout(r, step.sleepMs));
           stdoutParts.push(`[sleep ${step.sleepMs / 1000}s]\n`);
           continue;
-        }
-        // Spawn detașat — lansează procesul și returnează imediat fără să aștepte
-        if ("spawnDetached" in step) {
-          const [dcmd, ...dargs] = step.spawnDetached;
-          stdoutParts.push(`$ ${step.spawnDetached.join(" ")} (detașat)\n`);
-          const child = spawn(dcmd, dargs, {
-            detached: true,
-            stdio: "ignore",
-          });
-          child.unref();
-          stdoutParts.push("Deploy pornit în background — aplicația va reporni în câteva minute.\n");
-          return { ok: true, exit_code: 0, stdout: stdoutParts.join(""), stderr: "" };
         }
         const [cmd, ...args] = step.argv;
         stdoutParts.push(`$ ${step.argv.join(" ")}\n`);
@@ -176,14 +145,12 @@ export async function logAgentActivity(cmd: AgentCommand, ok: boolean): Promise<
     apt_upgrade: "Ubuntu: apt-get upgrade rulat",
     apt_full_upgrade: "Ubuntu actualizat complet (update + upgrade)",
     flush_dns: "Cache DNS curățat + qBittorrent repornit",
-    deploy_app: "Deploy FaikkitBox declanșat manual",
-    uptime: undefined, // nu logăm uptime
+    uptime: undefined,
   };
   const msg = messages[cmd];
   if (!msg) return;
   const type = cmd.startsWith("update_") ? "service_update"
     : cmd.startsWith("restart_") ? "service_restart"
-    : cmd.startsWith("apt_") ? "ubuntu_update"
-    : "deploy";
+    : "ubuntu_update";
   await logActivity(type as any, ok ? msg : `${msg} — EȘUAT`, { cmd, ok });
 }

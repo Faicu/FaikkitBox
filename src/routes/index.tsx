@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { PlayCircle, Images, Download, Cpu, ChevronRight, Users, HardDrive, ListChecks, Gauge, ArrowDown, ArrowUp, Activity, Tv, Film, ScrollText, Rocket, RefreshCw, CheckCircle2, Server, Package } from "lucide-react";
+import { PlayCircle, Images, Download, Cpu, ChevronRight, Users, HardDrive, ListChecks, Gauge, ArrowDown, ArrowUp, Activity, Tv, Film, ScrollText, RefreshCw, CheckCircle2, Server, Package } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -469,7 +469,6 @@ function ActivityLogSection() {
   const iconMap: Record<string, React.ReactNode> = {
     server_start:     <Server className="h-3.5 w-3.5 text-emerald-400" />,
     server_stop:      <Server className="h-3.5 w-3.5 text-red-400" />,
-    deploy:           <Rocket className="h-3.5 w-3.5 text-indigo-400" />,
     plex_watch_start: <PlayCircle className="h-3.5 w-3.5 text-amber-400" />,
     plex_watch_stop:  <PlayCircle className="h-3.5 w-3.5 text-muted-foreground" />,
     torrent_added:    <Download className="h-3.5 w-3.5 text-blue-400" />,

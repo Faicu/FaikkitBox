@@ -1,13 +1,10 @@
-import { RefreshCw, Lock, LogOut, ShieldCheck, GitBranch, Rocket } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { RefreshCw, Lock, LogOut, ShieldCheck } from "lucide-react";
 import { useIsFetching, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { adminStatusQuery, deployStatusQuery } from "@/lib/queries";
+import { adminStatusQuery } from "@/lib/queries";
 import { adminLogout } from "@/lib/admin.functions";
-import { getDeployLog } from "@/lib/agent.functions";
-import type { DeployStatus } from "@/lib/deploy.functions";
 
 interface Props {
   title: string;
@@ -19,9 +16,7 @@ export function AppHeader({ title, subtitle, right }: Props) {
   const qc = useQueryClient();
   const isFetching = useIsFetching() > 0;
   const admin = useQuery(adminStatusQuery);
-  const deploy = useQuery(deployStatusQuery);
   const logoutFn = useServerFn(adminLogout);
-  const getLogFn = useServerFn(getDeployLog);
   const logout = useMutation({
     mutationFn: () => logoutFn(),
     onSuccess: async () => {
@@ -29,184 +24,6 @@ export function AppHeader({ title, subtitle, right }: Props) {
       await qc.invalidateQueries({ queryKey: ["adminStatus"] });
     },
   });
-
-  // Countdown auto-deploy
-  const toastIdRef = useRef<string | number | null>(null);
-  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const deployingRef = useRef(false);
-  const lastRemoteShaRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    const data = deploy.data;
-    if (!data || data.status === "error" || data.upToDate) {
-      // La zi — dacă era un toast activ, îl închidem
-      if (toastIdRef.current) {
-        toast.dismiss(toastIdRef.current);
-        toastIdRef.current = null;
-      }
-      if (countdownRef.current) {
-        clearInterval(countdownRef.current);
-        countdownRef.current = null;
-      }
-      deployingRef.current = false;
-      lastRemoteShaRef.current = data?.remoteSha ?? null;
-      return;
-    }
-
-    // Dacă e același commit remote ca înainte, nu relansa toast-ul
-    if (data.remoteSha === lastRemoteShaRef.current) return;
-    lastRemoteShaRef.current = data.remoteSha ?? null;
-
-    // Dacă deja am pornit un deploy, nu mai facem nimic
-    if (deployingRef.current) return;
-    if (toastIdRef.current) return;
-
-    let seconds = 5;
-
-    async function triggerDeploy() {
-      deployingRef.current = true;
-      if (countdownRef.current) clearInterval(countdownRef.current);
-
-      const deployStartTime = Date.now();
-      const targetSha = data.remoteSha;
-
-      // Lansăm deploy detașat
-      const { runAgentCommand } = await import("@/lib/agent.functions");
-      runAgentCommand({ data: { cmd: "deploy_app" } }).catch(() => {});
-
-      const toastId = toast.loading("🚀 Deploy în curs...", {
-        description: `Commit: ${data.remoteShortSha} — ${data.remoteMessage}`,
-        duration: Infinity,
-      });
-      toastIdRef.current = toastId;
-
-      let restartDetected = false;
-      let pollsSinceRestart = 0;
-
-      function onSuccess() {
-        clearInterval(poll);
-        clearTimeout(stop);
-        toast.success("✅ Deploy finalizat! Se reîmprospătează...", {
-          id: toastId,
-          description: `Commit ${data.remoteShortSha} aplicat cu succes.`,
-          duration: 3000,
-        });
-        toastIdRef.current = null;
-        deployingRef.current = false;
-        qc.invalidateQueries({ queryKey: ["recentCommits"] });
-        // Reload după 3 secunde ca userul să vadă toast-ul
-        setTimeout(() => window.location.reload(), 5000);
-      }
-
-      const poll = setInterval(async () => {
-        // Metoda 1: refetch activ deployStatus și verifică dacă localSha === targetSha
-        try {
-          const fresh = await qc.fetchQuery({ queryKey: ["deployStatus"], staleTime: 0 });
-          if ((fresh as any)?.localSha === targetSha) {
-            onSuccess();
-            return;
-          }
-        } catch {}
-
-        // Metoda 2: verifică log-ul pentru linia de final apărută după startTime
-        try {
-          const res = await getLogFn();
-          restartDetected = false;
-          pollsSinceRestart = 0;
-
-          // Caută ultima apariție de "[deploy] gata:" sau "nimic nou" în log
-          const lines = res.lines.split("\n");
-          const deployLine = [...lines].reverse().find(
-            l => l.includes("[deploy] gata:") || l.includes("[deploy] nimic nou.")
-          );
-
-          if (deployLine) {
-            // Extrage timestamp din linie: [deploy] 2026-07-06T12:32:29+00:00
-            const match = deployLine.match(/\[deploy\] (\d{4}-\d{2}-\d{2}T[\d:+]+)/);
-            const lineTime = match ? new Date(match[1]).getTime() : 0;
-            if (lineTime >= deployStartTime - 5000) {
-              onSuccess();
-            }
-          }
-        } catch {
-          if (!restartDetected) {
-            restartDetected = true;
-            toast.loading("⏳ Aplicația repornește...", { id: toastId, duration: Infinity });
-          }
-          pollsSinceRestart++;
-          if (pollsSinceRestart % 5 === 0) {
-            qc.invalidateQueries({ queryKey: ["deployStatus"] });
-          }
-        }
-      }, 4000);
-
-      const stop = setTimeout(() => {
-        clearInterval(poll);
-        if (toastIdRef.current === toastId) {
-          toast.error("Deploy — timeout după 15 minute", { id: toastId, duration: 6000 });
-          toastIdRef.current = null;
-          deployingRef.current = false;
-        }
-      }, 15 * 60_000);
-    }
-
-    function startCountdown() {
-      const id = toast.warning(
-        `🔄 Commit nou detectat — deploy automat în ${seconds}s`,
-        {
-          description: `${data.remoteShortSha} — ${data.remoteMessage}`,
-          duration: Infinity,
-          action: {
-            label: "Anulează",
-            onClick: () => {
-              if (countdownRef.current) clearInterval(countdownRef.current);
-              countdownRef.current = null;
-              toastIdRef.current = null;
-              lastRemoteShaRef.current = data.remoteSha ?? null;
-              toast.dismiss(id);
-            },
-          },
-        },
-      );
-      toastIdRef.current = id;
-
-      countdownRef.current = setInterval(() => {
-        seconds -= 1;
-        if (seconds <= 0) {
-          clearInterval(countdownRef.current!);
-          countdownRef.current = null;
-          toast.dismiss(id);
-          toastIdRef.current = null;
-          triggerDeploy();
-        } else {
-          toast.warning(
-            `🔄 Commit nou detectat — deploy automat în ${seconds}s`,
-            {
-              id,
-              description: `${data.remoteShortSha} — ${data.remoteMessage}`,
-              duration: Infinity,
-              action: {
-                label: "Anulează",
-                onClick: () => {
-                  if (countdownRef.current) clearInterval(countdownRef.current);
-                  countdownRef.current = null;
-                  toastIdRef.current = null;
-                  lastRemoteShaRef.current = data.remoteSha ?? null;
-                  toast.dismiss(id);
-                },
-              },
-            },
-          );
-        }
-      }, 1000);
-    }
-
-    startCountdown();
-
-    return () => {
-      if (countdownRef.current) clearInterval(countdownRef.current);
-    };
-  }, [deploy.data, getLogFn, qc]);
 
   return (
     <header
@@ -222,7 +39,6 @@ export function AppHeader({ title, subtitle, right }: Props) {
                 <ShieldCheck className="h-3 w-3" /> Admin
               </span>
             )}
-            {deploy.data && <DeployBadge data={deploy.data} />}
           </div>
           {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
         </div>
@@ -258,52 +74,5 @@ export function AppHeader({ title, subtitle, right }: Props) {
         </div>
       </div>
     </header>
-  );
-}
-
-function DeployBadge({ data }: { data: DeployStatus }) {
-  if (data.status === "error") {
-    return (
-      <button
-        type="button"
-        onClick={() => toast.error("Nu pot verifica versiunea", { description: data.error })}
-        title={data.error}
-        className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border"
-      >
-        <GitBranch className="h-3 w-3" /> ?
-      </button>
-    );
-  }
-
-  const upToDate = data.upToDate;
-  const fmtDate = (iso?: string) =>
-    iso ? new Date(iso).toLocaleString("ro-RO", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—";
-
-  const showDetails = () => {
-    if (upToDate) {
-      toast.success("Server la zi cu GitHub", {
-        description: `${data.localShortSha} · ${data.localMessage} · ${fmtDate(data.localDate)}`,
-      });
-    } else {
-      toast.warning("Actualizare disponibilă pe GitHub", {
-        description: `Server: ${data.localShortSha} (${fmtDate(data.localDate)})\nGitHub: ${data.remoteShortSha} — ${data.remoteMessage} (${fmtDate(data.remoteDate)})`,
-      });
-    }
-  };
-
-  return (
-    <button
-      type="button"
-      onClick={showDetails}
-      title={upToDate ? "Server la zi cu GitHub" : "Există o actualizare pe GitHub, neaplicată încă pe server"}
-      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ${
-        upToDate
-          ? "bg-emerald-500/15 text-emerald-400 ring-emerald-500/25"
-          : "bg-amber-500/15 text-amber-400 ring-amber-500/25"
-      }`}
-    >
-      <GitBranch className="h-3 w-3" />
-      {upToDate ? "La zi" : "Update disponibil"}
-    </button>
   );
 }
