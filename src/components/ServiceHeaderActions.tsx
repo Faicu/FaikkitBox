@@ -64,11 +64,12 @@ export function ServiceHeaderActions({ service, status, onRestart, onCommandResu
           type="button"
           onClick={() => mutation.mutate(config.restartCmd)}
           disabled={running === config.restartCmd}
-          className="flex h-9 w-9 items-center justify-center rounded-full border border-sky-500/30 bg-sky-500/15 text-sky-400 hover:bg-sky-500/25 disabled:opacity-50"
+          className="flex h-9 items-center gap-1.5 rounded-lg border border-sky-500/30 bg-sky-500/15 px-3 text-xs font-medium text-sky-400 hover:bg-sky-500/25 disabled:opacity-50"
           title={running === config.restartCmd ? "Se repornește..." : "Repornește"}
           aria-label="Repornește"
         >
-          <RotateCcw className={`h-4 w-4 ${running === config.restartCmd ? "animate-spin" : ""}`} />
+          <RotateCcw className={`h-3.5 w-3.5 ${running === config.restartCmd ? "animate-spin" : ""}`} />
+          {running === config.restartCmd ? "..." : "Restart"}
         </button>
       )}
       {canManage && version?.upToDate === false && (
