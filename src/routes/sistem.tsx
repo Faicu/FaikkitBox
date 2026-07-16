@@ -1,14 +1,19 @@
+import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { Cpu, MemoryStick, HardDrive, Network, Terminal, Boxes, HardDriveDownload, PackageCheck } from "lucide-react";
+import { toast } from "sonner";
 
 import { PageShell } from "@/components/PageShell";
 import { ServicePill } from "@/components/ServicePill";
 import { Meter } from "@/components/Meter";
 import { StatCard } from "@/components/StatCard";
 import { ErrorCard } from "@/components/ErrorCard";
-import { MaintenanceAction } from "@/components/MaintenanceAction";
-import { hostQuery } from "@/lib/queries";
+import { CommandOutput } from "@/components/ServiceHeaderActions";
+import { logAgentActivity, runAgentCommand } from "@/lib/agent.functions";
+import { adminStatusQuery, hostQuery } from "@/lib/queries";
+
 import { formatBytes, formatSpeed, formatDurationHMS } from "@/lib/format";
 
 export const Route = createFileRoute("/sistem")({
@@ -18,14 +23,53 @@ export const Route = createFileRoute("/sistem")({
 
 function HostPage() {
   const { data, isLoading } = useQuery(hostQuery);
+  const { data: adminData } = useQuery(adminStatusQuery);
+  const isAdmin = adminData?.isAdmin ?? false;
   const status = isLoading ? "loading" : data?.status ?? "error";
+
+  const runCmd = useServerFn(runAgentCommand);
+  const [lastCmd, setLastCmd] = useState<{ output: string; ok: boolean } | null>(null);
+
+  const upgrade = useMutation({
+    mutationFn: async () => {
+      const result = await runCmd({ data: { command: "apt_full_upgrade" } });
+      await logAgentActivity("apt_full_upgrade", result.ok ? "success" : "error");
+      return result;
+    },
+    onSuccess: (result) => setLastCmd(result),
+    onError: (err) => {
+      toast.error("Eroare la actualizare");
+      console.error(err);
+    },
+  });
+
+  function handleUpgrade() {
+    if (!confirm("Actualizezi complet Ubuntu?\n\napt-get update + apt-get upgrade -y\n\nPoate dura câteva minute.")) return;
+    upgrade.mutate();
+  }
 
   return (
     <PageShell
       title="Sistem"
       subtitle={data?.status === "ok" ? `${data.hostname ?? "mini-pc"} · ${data.os ?? ""}` : "Metrici sistem"}
-      right={<ServicePill status={status} />}
+      right={
+        <div className="flex items-center gap-2">
+          {isAdmin && (
+            <button
+              onClick={handleUpgrade}
+              disabled={upgrade.isPending}
+              className="flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-400 active:scale-95 transition-all disabled:opacity-50"
+            >
+              <PackageCheck className="h-3.5 w-3.5" />
+              {upgrade.isPending ? "Se actualizează…" : "Update Ubuntu"}
+            </button>
+          )}
+          <ServicePill status={status} />
+        </div>
+      }
     >
+      {lastCmd && <CommandOutput output={lastCmd.output} ok={lastCmd.ok} />}
+
       {data?.status === "error" && (
         <ErrorCard title="Metrici indisponibile" message={data.error ?? "Eroare necunoscută"} />
       )}
@@ -180,16 +224,6 @@ function HostPage() {
             </section>
           )}
 
-          <section>
-            <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Sistem</h2>
-            <MaintenanceAction
-              command="apt_full_upgrade"
-              label="Actualizează Ubuntu"
-              description="apt-get update + upgrade"
-              confirmMessage={"Actualizezi complet Ubuntu?\n\napt-get update + apt-get upgrade -y\n\nPoate dura câteva minute."}
-              icon={<PackageCheck className="h-4 w-4 shrink-0 text-emerald-400" />}
-            />
-          </section>
         </>
       )}
     </PageShell>
