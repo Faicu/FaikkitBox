@@ -5,8 +5,8 @@ import { adminStatusQuery } from "@/lib/queries";
 
 const baseItems = [
   { to: "/", label: "Acasă", icon: LayoutDashboard },
-  { to: "/plex", label: "Plex", icon: PlayCircle },
   { to: "/lansari", label: "Lansări", icon: Flame },
+  { to: "/plex", label: "Plex", icon: PlayCircle },
   { to: "/immich", label: "Immich", icon: Images },
   { to: "/qbit", label: "qBit", icon: Download },
   { to: "/host", label: "Gazdă", icon: Cpu },
