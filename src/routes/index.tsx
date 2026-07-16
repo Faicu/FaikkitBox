@@ -69,16 +69,6 @@ function Overview() {
 
   return (
     <PageShell title="Monitor Server" subtitle="Statistici în timp real">
-      <section>
-        <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Sistem</h2>
-        <MaintenanceAction
-          command="deploy_app"
-          label="Deploy aplicație"
-          description="pull + build + restart service"
-          confirmMessage={"Rulezi deploy aplicație?\n\n1) git pull --ff-only\n2) npm run build\n3) systemctl restart faikkitbox\n\nPoate dura câteva minute."}
-          icon={<RefreshCw className="h-4 w-4 shrink-0 text-sky-400" />}
-        />
-      </section>
       <ServiceRow
         to="/plex"
         title="Plex"
@@ -374,6 +364,16 @@ function Overview() {
         </DrawerContent>
       </Drawer>
       <ActivityLogSection />
+      <section>
+        <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Sistem</h2>
+        <MaintenanceAction
+          command="deploy_app"
+          label="Deploy aplicație"
+          description="pull + build + restart service"
+          confirmMessage={"Rulezi deploy aplicație?\n\n1) git pull --ff-only\n2) npm run build\n3) systemctl restart faikkitbox\n\nPoate dura câteva minute."}
+          icon={<RefreshCw className="h-4 w-4 shrink-0 text-sky-400" />}
+        />
+      </section>
     </PageShell>
   );
 }
