@@ -141,10 +141,14 @@ function AutoReloadWatcher() {
   useEffect(() => {
     return onUpdateDetected(() => {
       let seconds = 5;
-      const toastId = toast.warning(`Actualizare disponibilă — refresh în ${seconds}s`, {
-        duration: Infinity,
-        dismissible: false,
-      });
+
+      const toastId = toast.warning(
+        <div className="flex flex-col gap-1">
+          <span className="text-base font-semibold leading-tight">Actualizare disponibilă</span>
+          <span className="text-sm opacity-80">Reîncărcare automată în <span className="font-mono font-bold">{seconds}s</span></span>
+        </div>,
+        { duration: Infinity, dismissible: false }
+      );
 
       const interval = setInterval(() => {
         seconds -= 1;
@@ -153,11 +157,13 @@ function AutoReloadWatcher() {
           toast.dismiss(toastId);
           window.location.reload();
         } else {
-          toast.warning(`Actualizare disponibilă — refresh în ${seconds}s`, {
-            id: toastId,
-            duration: Infinity,
-            dismissible: false,
-          });
+          toast.warning(
+            <div className="flex flex-col gap-1">
+              <span className="text-base font-semibold leading-tight">Actualizare disponibilă</span>
+              <span className="text-sm opacity-80">Reîncărcare automată în <span className="font-mono font-bold">{seconds}s</span></span>
+            </div>,
+            { id: toastId, duration: Infinity, dismissible: false }
+          );
         }
       }, 1000);
     });
