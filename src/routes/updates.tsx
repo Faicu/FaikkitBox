@@ -55,6 +55,23 @@ function UpdatesInner() {
         <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Sistem</h2>
         <button
           onClick={() => {
+            if (!confirm("Rulezi deploy aplicație?\n\n1) git pull --ff-only\n2) npm run build\n3) systemctl restart faikkitbox\n\nPoate dura câteva minute.")) return;
+            m.mutate("deploy_app");
+          }}
+          disabled={running === "deploy_app"}
+          className="group flex w-full items-center justify-between gap-2 rounded-2xl border border-border bg-card px-4 py-3 text-sm hover:bg-muted disabled:opacity-50 transition-colors"
+        >
+          <span className="flex items-center gap-2.5">
+            <RefreshCw className="h-4 w-4 text-sky-400 shrink-0" />
+            <span className="font-medium">Deploy aplicație</span>
+            <span className="text-xs text-muted-foreground font-normal">pull + build + restart service</span>
+          </span>
+          <span className="text-xs text-muted-foreground shrink-0">
+            {running === "deploy_app" ? <><RefreshCw className="inline h-3 w-3 animate-spin mr-1" />Rulează...</> : <span className="rounded-lg bg-muted border border-border px-2.5 py-1 text-[11px] font-medium text-muted-foreground group-hover:text-foreground">Rulează</span>}
+          </span>
+        </button>
+        <button
+          onClick={() => {
             if (!confirm("Actualizezi complet Ubuntu?\n\napt-get update + apt-get upgrade -y\n\nPoate dura câteva minute.")) return;
             m.mutate("apt_full_upgrade");
           }}
