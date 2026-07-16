@@ -118,14 +118,26 @@ function HostPage() {
               <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
                 <Network className="h-3.5 w-3.5" /> Rețea
               </h2>
-              <ul className="rounded-2xl border border-border bg-card divide-y divide-border">
+              <ul className="space-y-2">
                 {data.net.map((n) => (
-                  <li key={n.name} className="flex items-center justify-between px-3 py-2 text-sm">
-                    <span className="font-medium">{n.name}</span>
-                    <span className="text-xs tabular-nums">
-                      <span className="text-sky-400">↓ {formatSpeed(n.rxSec)}</span>{" · "}
-                      <span className="text-emerald-400">↑ {formatSpeed(n.txSec)}</span>
-                    </span>
+                  <li key={n.name} className="rounded-2xl border border-border bg-card p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{n.name.startsWith("en") ? "Ethernet" : "Rețea"}</span>
+                        <span className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">{n.name}</span>
+                      </div>
+                      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Trafic live</span>
+                    </div>
+                    <div className="mt-2 grid grid-cols-2 gap-2 text-xs tabular-nums">
+                      <div className="rounded-lg bg-sky-500/10 px-2.5 py-1.5 text-sky-400">
+                        <div className="text-[10px] uppercase tracking-wide text-sky-300/70">Download</div>
+                        <div className="font-medium">↓ {formatSpeed(n.rxSec)}</div>
+                      </div>
+                      <div className="rounded-lg bg-emerald-500/10 px-2.5 py-1.5 text-emerald-400">
+                        <div className="text-[10px] uppercase tracking-wide text-emerald-300/70">Upload</div>
+                        <div className="font-medium">↑ {formatSpeed(n.txSec)}</div>
+                      </div>
+                    </div>
                   </li>
                 ))}
               </ul>
