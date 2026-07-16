@@ -11,8 +11,8 @@ import { MaintenanceAction } from "@/components/MaintenanceAction";
 import { hostQuery } from "@/lib/queries";
 import { formatBytes, formatSpeed, formatDurationHMS } from "@/lib/format";
 
-export const Route = createFileRoute("/host")({
-  head: () => ({ meta: [{ title: "Gazdă — Monitor Server" }] }),
+export const Route = createFileRoute("/sistem")({
+  head: () => ({ meta: [{ title: "Sistem — Monitor Server" }] }),
   component: HostPage,
 });
 
@@ -22,7 +22,7 @@ function HostPage() {
 
   return (
     <PageShell
-      title="Gazdă"
+      title="Sistem"
       subtitle={data?.status === "ok" ? `${data.hostname ?? "mini-pc"} · ${data.os ?? ""}` : "Metrici sistem"}
       right={<ServicePill status={status} />}
     >

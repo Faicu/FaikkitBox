@@ -7,7 +7,7 @@ const baseItems = [
   { to: "/plex", label: "Plex", icon: PlayCircle },
   { to: "/immich", label: "Immich", icon: Images },
   { to: "/qbit", label: "qBit", icon: Download },
-  { to: "/host", label: "Gazdă", icon: Cpu },
+  { to: "/sistem", label: "Sistem", icon: Cpu },
 ] as const;
 
 export function BottomNav() {

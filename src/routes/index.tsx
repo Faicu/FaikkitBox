@@ -203,8 +203,8 @@ function Overview() {
       </ServiceRow>
 
       <ServiceRow
-        to="/host"
-        title="Gazdă"
+        to="/sistem"
+        title="Sistem"
         icon={<Cpu className="h-5 w-5" />}
         accent="text-emerald-400"
         status={host.isLoading ? "loading" : host.data?.status ?? "error"}
@@ -413,7 +413,7 @@ function HostGauges({ data }: { data: HostData }) {
 function ServiceRow({
   to, title, icon, accent, status, error, children,
 }: {
-  to: "/plex" | "/immich" | "/qbit" | "/host";
+  to: "/plex" | "/immich" | "/qbit" | "/sistem";
   title: string;
   icon: React.ReactNode;
   accent: string;

@@ -9,14 +9,19 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SistemRouteImport } from './routes/sistem'
 import { Route as QbitRouteImport } from './routes/qbit'
 import { Route as PlexRouteImport } from './routes/plex'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as LansariRouteImport } from './routes/lansari'
 import { Route as ImmichRouteImport } from './routes/immich'
-import { Route as HostRouteImport } from './routes/host'
 import { Route as IndexRouteImport } from './routes/index'
 
+const SistemRoute = SistemRouteImport.update({
+  id: '/sistem',
+  path: '/sistem',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const QbitRoute = QbitRouteImport.update({
   id: '/qbit',
   path: '/qbit',
@@ -42,11 +47,6 @@ const ImmichRoute = ImmichRouteImport.update({
   path: '/immich',
   getParentRoute: () => rootRouteImport,
 } as any)
-const HostRoute = HostRouteImport.update({
-  id: '/host',
-  path: '/host',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -55,61 +55,68 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/host': typeof HostRoute
   '/immich': typeof ImmichRoute
   '/lansari': typeof LansariRoute
   '/login': typeof LoginRoute
   '/plex': typeof PlexRoute
   '/qbit': typeof QbitRoute
+  '/sistem': typeof SistemRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/host': typeof HostRoute
   '/immich': typeof ImmichRoute
   '/lansari': typeof LansariRoute
   '/login': typeof LoginRoute
   '/plex': typeof PlexRoute
   '/qbit': typeof QbitRoute
+  '/sistem': typeof SistemRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/host': typeof HostRoute
   '/immich': typeof ImmichRoute
   '/lansari': typeof LansariRoute
   '/login': typeof LoginRoute
   '/plex': typeof PlexRoute
   '/qbit': typeof QbitRoute
+  '/sistem': typeof SistemRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/host' | '/immich' | '/lansari' | '/login' | '/plex' | '/qbit'
+    '/' | '/immich' | '/lansari' | '/login' | '/plex' | '/qbit' | '/sistem'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/host' | '/immich' | '/lansari' | '/login' | '/plex' | '/qbit'
+  to: '/' | '/immich' | '/lansari' | '/login' | '/plex' | '/qbit' | '/sistem'
   id:
     | '__root__'
     | '/'
-    | '/host'
     | '/immich'
     | '/lansari'
     | '/login'
     | '/plex'
     | '/qbit'
+    | '/sistem'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  HostRoute: typeof HostRoute
   ImmichRoute: typeof ImmichRoute
   LansariRoute: typeof LansariRoute
   LoginRoute: typeof LoginRoute
   PlexRoute: typeof PlexRoute
   QbitRoute: typeof QbitRoute
+  SistemRoute: typeof SistemRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/sistem': {
+      id: '/sistem'
+      path: '/sistem'
+      fullPath: '/sistem'
+      preLoaderRoute: typeof SistemRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/qbit': {
       id: '/qbit'
       path: '/qbit'
@@ -145,13 +152,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ImmichRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/host': {
-      id: '/host'
-      path: '/host'
-      fullPath: '/host'
-      preLoaderRoute: typeof HostRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/': {
       id: '/'
       path: '/'
@@ -164,12 +164,12 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  HostRoute: HostRoute,
   ImmichRoute: ImmichRoute,
   LansariRoute: LansariRoute,
   LoginRoute: LoginRoute,
   PlexRoute: PlexRoute,
   QbitRoute: QbitRoute,
+  SistemRoute: SistemRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
