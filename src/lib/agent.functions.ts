@@ -8,6 +8,7 @@ export type AgentCommand =
   | "apt_update"
   | "apt_upgrade"
   | "apt_full_upgrade"
+  | "deploy_app"
   | "flush_dns"
   | "restart_plex"
   | "restart_immich"
@@ -20,6 +21,7 @@ const ALLOWED: AgentCommand[] = [
   "apt_update",
   "apt_upgrade",
   "apt_full_upgrade",
+  "deploy_app",
   "flush_dns",
   "restart_plex",
   "restart_immich",
@@ -44,6 +46,8 @@ type Step = { argv: string[] } | { sleepMs: number };
 function commandSteps(cmd: AgentCommand): Step[] {
   const plexCompose = process.env.PLEX_COMPOSE_FILE ?? "/root/plex/docker-compose.yml";
   const immichCompose = process.env.IMMICH_COMPOSE_FILE ?? "/root/immich-app/docker-compose.yml";
+  const appRepoDir = process.env.FAIKKITBOX_REPO_DIR ?? "/opt/faikkitbox";
+  const appService = process.env.FAIKKITBOX_SERVICE ?? "faikkitbox";
 
   switch (cmd) {
     case "apt_update":
@@ -54,6 +58,12 @@ function commandSteps(cmd: AgentCommand): Step[] {
       return [
         { argv: ["sudo", "apt-get", "update"] },
         { argv: ["sudo", "apt-get", "-y", "upgrade"] },
+      ];
+    case "deploy_app":
+      return [
+        { argv: ["git", "-C", appRepoDir, "pull", "--ff-only"] },
+        { argv: ["npm", "--prefix", appRepoDir, "run", "build"] },
+        { argv: ["sudo", "systemctl", "restart", appService] },
       ];
     case "flush_dns":
       return [
@@ -139,6 +149,7 @@ export async function logAgentActivity(cmd: AgentCommand, ok: boolean): Promise<
     restart_plex: "Plex a fost repornit",
     restart_immich: "Immich a fost repornit",
     restart_qbit: "qBittorrent a fost repornit",
+    deploy_app: "Aplicația FaikkitBox a fost actualizată (pull + build + restart)",
     update_plex: "Plex a fost actualizat (docker pull + up)",
     update_immich: "Immich a fost actualizat (docker pull + up)",
     apt_update: "Ubuntu: apt-get update rulat",
@@ -149,7 +160,8 @@ export async function logAgentActivity(cmd: AgentCommand, ok: boolean): Promise<
   };
   const msg = messages[cmd];
   if (!msg) return;
-  const type = cmd.startsWith("update_") ? "service_update"
+  const type = cmd === "deploy_app" ? "service_update"
+    : cmd.startsWith("update_") ? "service_update"
     : cmd.startsWith("restart_") ? "service_restart"
     : "ubuntu_update";
   await logActivity(type as any, ok ? msg : `${msg} — EȘUAT`, { cmd, ok });
