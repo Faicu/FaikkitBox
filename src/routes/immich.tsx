@@ -6,6 +6,7 @@ import { PageShell } from "@/components/PageShell";
 import { ServicePill } from "@/components/ServicePill";
 import { StatCard } from "@/components/StatCard";
 import { ErrorCard } from "@/components/ErrorCard";
+import { ServiceVersionWidget } from "@/components/ServiceVersionWidget";
 import { immichQuery } from "@/lib/queries";
 import { formatBytes } from "@/lib/format";
 
@@ -121,6 +122,8 @@ function ImmichPage() {
               Niciun job activ în fundal.
             </div>
           )}
+
+          <ServiceVersionWidget service="immich" />
         </>
       )}
     </PageShell>

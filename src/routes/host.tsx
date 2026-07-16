@@ -1,12 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Cpu, MemoryStick, HardDrive, Network, Thermometer, Terminal, Boxes, HardDriveDownload } from "lucide-react";
+import { Cpu, MemoryStick, HardDrive, Network, Thermometer, Terminal, Boxes, HardDriveDownload, PackageCheck } from "lucide-react";
 
 import { PageShell } from "@/components/PageShell";
 import { ServicePill } from "@/components/ServicePill";
 import { Meter } from "@/components/Meter";
 import { StatCard } from "@/components/StatCard";
 import { ErrorCard } from "@/components/ErrorCard";
+import { MaintenanceAction } from "@/components/MaintenanceAction";
 import { hostQuery } from "@/lib/queries";
 import { formatBytes, formatSpeed, formatDurationHMS } from "@/lib/format";
 
@@ -174,6 +175,17 @@ function HostPage() {
               </ul>
             </section>
           )}
+
+          <section>
+            <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Sistem</h2>
+            <MaintenanceAction
+              command="apt_full_upgrade"
+              label="Actualizează Ubuntu"
+              description="apt-get update + upgrade"
+              confirmMessage={"Actualizezi complet Ubuntu?\n\napt-get update + apt-get upgrade -y\n\nPoate dura câteva minute."}
+              icon={<PackageCheck className="h-4 w-4 shrink-0 text-emerald-400" />}
+            />
+          </section>
         </>
       )}
     </PageShell>

@@ -7,6 +7,7 @@ import { PageShell } from "@/components/PageShell";
 import { ServicePill } from "@/components/ServicePill";
 import { StatCard } from "@/components/StatCard";
 import { ErrorCard } from "@/components/ErrorCard";
+import { ServiceVersionWidget } from "@/components/ServiceVersionWidget";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription } from "@/components/ui/drawer";
 import { plexQuery } from "@/lib/queries";
 import { formatMsWithSeconds } from "@/lib/format";
@@ -218,6 +219,8 @@ function PlexPage() {
               </ul>
             </section>
           )}
+
+          <ServiceVersionWidget service="plex" />
         </>
       )}
 
