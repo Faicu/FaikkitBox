@@ -9,6 +9,7 @@ import type { ServiceVersion } from "@/lib/versions.functions";
 
 type ServiceVersionWidgetProps = {
   service: "plex" | "immich";
+  onRestart?: () => void;
 };
 
 const serviceConfig = {
@@ -28,12 +29,16 @@ const serviceConfig = {
   updateCmd: AgentCommand;
 }>;
 
-export function ServiceVersionWidget({ service }: ServiceVersionWidgetProps) {
+export function ServiceVersionWidget({ service, onRestart }: ServiceVersionWidgetProps) {
   const versions = useQuery(versionsQuery);
   const admin = useQuery(adminStatusQuery);
   const run = useServerFn(runAgentCommand);
+  const config = serviceConfig[service];
   const mutation = useMutation({
     mutationFn: (command: AgentCommand) => run({ data: { cmd: command } }),
+    onMutate: (command) => {
+      if (command === config.restartCmd) onRestart?.();
+    },
     onSuccess: (result, command) => {
       logAgentActivity(command, result.ok).catch(() => {});
       if (result.ok) toast.success(`Comanda ${command} a rulat cu succes`);
@@ -45,7 +50,6 @@ export function ServiceVersionWidget({ service }: ServiceVersionWidgetProps) {
   const version = versions.data?.[service];
   if (!version) return null;
 
-  const config = serviceConfig[service];
   const running = mutation.isPending ? mutation.variables : null;
   return (
     <section className="space-y-2">

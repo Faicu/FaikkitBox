@@ -8,6 +8,7 @@ import { ServicePill } from "@/components/ServicePill";
 import { StatCard } from "@/components/StatCard";
 import { ErrorCard } from "@/components/ErrorCard";
 import { ServiceVersionWidget } from "@/components/ServiceVersionWidget";
+import { useServiceRecovery } from "@/components/useServiceRecovery";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription } from "@/components/ui/drawer";
 import { plexQuery } from "@/lib/queries";
 import { formatMsWithSeconds } from "@/lib/format";
@@ -29,6 +30,7 @@ function libIcon(type: string) {
 function PlexPage() {
   const { data, isLoading } = useQuery(plexQuery);
   const status = isLoading ? "loading" : data?.status ?? "error";
+  const { recovering, startRecovery } = useServiceRecovery(data?.status);
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
   const userEntries: PlexHistoryEntry[] =
     selectedUser && data?.status === "ok" ? data.userHistory?.[selectedUser] ?? [] : [];
@@ -39,7 +41,11 @@ function PlexPage() {
       subtitle={data?.status === "ok" ? `${data.serverName ?? "Server"} · v${data.version ?? ""}` : "Server media"}
       right={<ServicePill status={status} />}
     >
-      {data?.status === "error" && <ErrorCard title="Plex indisponibil" message={data.error ?? "Eroare necunoscută"} />}
+      {data?.status === "error" && (
+        recovering
+          ? <RecoveryNotice service="Plex" />
+          : <ErrorCard title="Plex indisponibil" message={data.error ?? "Eroare necunoscută"} />
+      )}
 
       {data?.status === "ok" && (
         <>
@@ -220,7 +226,7 @@ function PlexPage() {
             </section>
           )}
 
-          <ServiceVersionWidget service="plex" />
+          <ServiceVersionWidget service="plex" onRestart={startRecovery} />
         </>
       )}
 
@@ -270,6 +276,14 @@ function PlexPage() {
         </DrawerContent>
       </Drawer>
     </PageShell>
+  );
+}
+
+function RecoveryNotice({ service }: { service: string }) {
+  return (
+    <div className="rounded-2xl border border-sky-500/30 bg-sky-500/10 p-3 text-sm text-sky-300">
+      {service} se repornește și va reveni online în câteva momente.
+    </div>
   );
 }
 

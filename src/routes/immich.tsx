@@ -7,6 +7,7 @@ import { ServicePill } from "@/components/ServicePill";
 import { StatCard } from "@/components/StatCard";
 import { ErrorCard } from "@/components/ErrorCard";
 import { ServiceVersionWidget } from "@/components/ServiceVersionWidget";
+import { useServiceRecovery } from "@/components/useServiceRecovery";
 import { immichQuery } from "@/lib/queries";
 import { formatBytes } from "@/lib/format";
 
@@ -18,6 +19,7 @@ export const Route = createFileRoute("/immich")({
 function ImmichPage() {
   const { data, isLoading } = useQuery(immichQuery);
   const status = isLoading ? "loading" : data?.status ?? "error";
+  const { recovering, startRecovery } = useServiceRecovery(data?.status);
 
   return (
     <PageShell
@@ -25,7 +27,11 @@ function ImmichPage() {
       subtitle={data?.status === "ok" ? `Fotografii & videoclipuri · v${data.version ?? ""}` : "Bibliotecă foto"}
       right={<ServicePill status={status} />}
     >
-      {data?.status === "error" && <ErrorCard title="Immich indisponibil" message={data.error ?? "Eroare necunoscută"} />}
+      {data?.status === "error" && (
+        recovering
+          ? <div className="rounded-2xl border border-sky-500/30 bg-sky-500/10 p-3 text-sm text-sky-300">Immich se repornește și va reveni online în câteva momente.</div>
+          : <ErrorCard title="Immich indisponibil" message={data.error ?? "Eroare necunoscută"} />
+      )}
 
       {data?.status === "ok" && (
         <>
@@ -123,7 +129,7 @@ function ImmichPage() {
             </div>
           )}
 
-          <ServiceVersionWidget service="immich" />
+          <ServiceVersionWidget service="immich" onRestart={startRecovery} />
         </>
       )}
     </PageShell>
