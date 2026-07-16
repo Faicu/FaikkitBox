@@ -7,11 +7,12 @@ import { logAgentActivity, runAgentCommand, type AgentCommand, type AgentResult 
 import { adminStatusQuery, versionsQuery } from "@/lib/queries";
 import { ServicePill } from "@/components/ServicePill";
 
-type Service = "plex" | "immich";
+type Service = "plex" | "immich" | "qbit";
 
 const serviceConfig = {
   plex: { restartCmd: "restart_plex" as AgentCommand, updateCmd: "update_plex" as AgentCommand },
   immich: { restartCmd: "restart_immich" as AgentCommand, updateCmd: "update_immich" as AgentCommand },
+  qbit: { restartCmd: "flush_dns" as AgentCommand, updateCmd: null },
 };
 
 type Props = {
@@ -72,15 +73,15 @@ export function ServiceHeaderActions({ service, status, onRestart, onCommandResu
           {running === config.restartCmd ? "..." : "Restart"}
         </button>
       )}
-      {canManage && version?.upToDate === false && (
+      {canManage && config.updateCmd && version?.upToDate === false && (
         <button
           type="button"
           onClick={() => {
-            if (confirm(`Actualizezi ${version.name}? Serviciul va fi oprit, actualizat și repornit.`)) {
-              mutation.mutate(config.updateCmd);
+            if (confirm(`Actualizezi ${version!.name}? Serviciul va fi oprit, actualizat și repornit.`)) {
+              mutation.mutate(config.updateCmd!);
             }
           }}
-          disabled={running === config.updateCmd}
+          disabled={running === config.updateCmd!}
           className="flex h-9 w-9 items-center justify-center rounded-full border border-amber-500/30 bg-amber-500/15 text-amber-400 hover:bg-amber-500/25 disabled:opacity-50"
           title={running === config.updateCmd ? "Se actualizează..." : "Actualizare disponibilă"}
           aria-label="Actualizează"

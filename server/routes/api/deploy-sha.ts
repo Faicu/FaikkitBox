@@ -1,10 +1,6 @@
 import { defineEventHandler, setHeader } from "h3";
-import { execSync } from "child_process";
 
-const sha = (() => {
-  try { return execSync("git rev-parse HEAD", { encoding: "utf8" }).trim(); }
-  catch { return "unknown"; }
-})();
+const sha = Date.now().toString();
 
 export default defineEventHandler((event) => {
   setHeader(event, "Content-Type", "text/event-stream");

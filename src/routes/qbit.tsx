@@ -6,11 +6,13 @@ import { ArrowDown, ArrowUp, HardDrive, Percent, Timer, Play, Pause, ChevronDown
 import { toast } from "sonner";
 
 import { PageShell } from "@/components/PageShell";
-import { ServicePill } from "@/components/ServicePill";
 import { StatCard } from "@/components/StatCard";
 import { Meter } from "@/components/Meter";
 import { ErrorCard } from "@/components/ErrorCard";
+import { ServiceHeaderActions, CommandOutput } from "@/components/ServiceHeaderActions";
+import { useServiceRecovery } from "@/components/useServiceRecovery";
 import { qbitQuery, adminStatusQuery } from "@/lib/queries";
+import type { AgentCommand, AgentResult } from "@/lib/agent.functions";
 import { formatBytes, formatSpeed, formatEta } from "@/lib/format";
 import { qbitAction } from "@/lib/services.functions";
 
@@ -34,10 +36,12 @@ function QbitPage() {
   const admin = useQuery(adminStatusQuery);
   const isAdmin = !!admin.data?.isAdmin;
   const status = isLoading ? "loading" : data?.status ?? "error";
+  const { recovering, startRecovery } = useServiceRecovery(data?.status);
   const queryClient = useQueryClient();
   const action = useServerFn(qbitAction);
   const [openList, setOpenList] = useState<"downloading" | "seeding" | "paused" | null>(null);
   const [torrentSearch, setTorrentSearch] = useState("");
+  const [lastCmd, setLastCmd] = useState<{ command: AgentCommand; result: AgentResult } | null>(null);
   const mutation = useMutation({
     mutationFn: (vars: { hashes: string[] | "all"; action: "pause" | "resume" }) =>
       action({ data: vars }),
@@ -69,9 +73,22 @@ function QbitPage() {
     <PageShell
       title="qBittorrent"
       subtitle={data?.status === "ok" ? `v${data.version} · ${data.counts.total} torrente` : "Client torrent"}
-      right={<ServicePill status={status} />}
+      right={
+        <ServiceHeaderActions
+          service="qbit"
+          status={status}
+          onRestart={startRecovery}
+          onCommandResult={(command, result) => setLastCmd({ command, result })}
+        />
+      }
     >
-      {data?.status === "error" && <ErrorCard title="qBittorrent indisponibil" message={data.error ?? "Eroare necunoscută"} />}
+      {lastCmd && <CommandOutput command={lastCmd.command} result={lastCmd.result} />}
+
+      {data?.status === "error" && (
+        recovering
+          ? <div className="rounded-2xl border border-sky-500/30 bg-sky-500/10 p-3 text-sm text-sky-300">qBittorrent se repornește și va reveni online în câteva momente.</div>
+          : <ErrorCard title="qBittorrent indisponibil" message={data.error ?? "Eroare necunoscută"} />
+      )}
 
       {data?.status === "ok" && (
         <>

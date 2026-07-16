@@ -1,8 +1,8 @@
-import { RefreshCw, Lock, LogOut, ShieldCheck, GitBranch } from "lucide-react";
-import { useIsFetching, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Lock, ShieldCheck, GitBranch } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { adminStatusQuery, githubSyncQuery } from "@/lib/queries";
 import { adminLogout } from "@/lib/admin.functions";
@@ -16,12 +16,13 @@ interface Props {
 
 export function AppHeader({ title, subtitle, right }: Props) {
   const qc = useQueryClient();
-  const isFetching = useIsFetching() > 0;
   const admin = useQuery(adminStatusQuery);
   const sync = useQuery(githubSyncQuery);
   const [updateAvailable, setUpdateAvailable] = useState(false);
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => onUpdateDetected(() => setUpdateAvailable(true)), []);
+
   const logoutFn = useServerFn(adminLogout);
   const logout = useMutation({
     mutationFn: () => logoutFn(),
@@ -30,6 +31,16 @@ export function AppHeader({ title, subtitle, right }: Props) {
       await qc.invalidateQueries({ queryKey: ["adminStatus"] });
     },
   });
+
+  function startLongPress() {
+    longPressTimer.current = setTimeout(() => {
+      logout.mutate();
+    }, 600);
+  }
+
+  function cancelLongPress() {
+    if (longPressTimer.current) clearTimeout(longPressTimer.current);
+  }
 
   return (
     <header
@@ -41,7 +52,15 @@ export function AppHeader({ title, subtitle, right }: Props) {
           <div className="flex items-center gap-2">
             <h1 className="text-lg font-semibold leading-tight text-gradient-primary">{title}</h1>
             {admin.data?.isAdmin && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-400 ring-1 ring-emerald-500/25">
+              <span
+                className="inline-flex cursor-pointer select-none items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-400 ring-1 ring-emerald-500/25 active:bg-emerald-500/30"
+                title="Ține apăsat pentru deconectare"
+                onMouseDown={startLongPress}
+                onMouseUp={cancelLongPress}
+                onMouseLeave={cancelLongPress}
+                onTouchStart={startLongPress}
+                onTouchEnd={cancelLongPress}
+              >
                 <ShieldCheck className="h-3 w-3" /> Admin
               </span>
             )}
@@ -77,17 +96,7 @@ export function AppHeader({ title, subtitle, right }: Props) {
               </button>
             );
           })()}
-          {admin.data?.isAdmin ? (
-            <button
-              onClick={() => logout.mutate()}
-              disabled={logout.isPending}
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-muted-foreground hover:text-foreground disabled:opacity-50"
-              aria-label="Deconectare admin"
-              title="Deconectare admin"
-            >
-              <LogOut className="h-4 w-4" />
-            </button>
-          ) : (
+          {!admin.data?.isAdmin && (
             <Link
               to="/login"
               className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-muted-foreground hover:text-foreground"
@@ -97,13 +106,6 @@ export function AppHeader({ title, subtitle, right }: Props) {
               <Lock className="h-4 w-4" />
             </Link>
           )}
-          <button
-            onClick={() => qc.invalidateQueries()}
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-muted-foreground hover:text-foreground"
-            aria-label="Reîmprospătează"
-          >
-            <RefreshCw className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
-          </button>
         </div>
       </div>
     </header>
