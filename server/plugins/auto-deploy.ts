@@ -79,6 +79,6 @@ async function checkGitHub() {
 }
 
 export default function () {
-  setTimeout(checkGitHub, 15_000);
-  setInterval(checkGitHub, 60_000);
+  setTimeout(checkGitHub, 10_000);
+  setInterval(checkGitHub, 3_000);
 }
