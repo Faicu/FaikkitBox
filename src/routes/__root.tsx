@@ -12,6 +12,7 @@ import type { ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { BottomNav } from "../components/BottomNav";
 import { Toaster } from "../components/ui/sonner";
+import { useAutoReload } from "../hooks/use-auto-reload";
 
 function NotFoundComponent() {
   return (
@@ -123,9 +124,15 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <AutoReloadWatcher />
       <Outlet />
       <BottomNav />
       <Toaster richColors closeButton position="top-center" />
     </QueryClientProvider>
   );
+}
+
+function AutoReloadWatcher() {
+  useAutoReload();
+  return null;
 }

@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { execSync } from "child_process";
 
 export interface GitHubCommit {
   sha: string;
@@ -163,3 +164,56 @@ export const getCommitDetail = createServerFn({ method: "GET" })
       };
     }
   });
+
+export interface GitHubSyncStatus {
+  deployedSha: string;
+  deployedShortSha: string;
+  latestSha: string;
+  latestShortSha: string;
+  isSynced: boolean;
+  commitsBehind: number;
+}
+
+export const getDeployedSha = createServerFn({ method: "GET" }).handler(
+  async (): Promise<{ sha: string }> => {
+    try {
+      const sha = execSync("git rev-parse HEAD", { encoding: "utf8" }).trim();
+      return { sha };
+    } catch {
+      return { sha: "" };
+    }
+  },
+);
+
+export const getGitHubSyncStatus = createServerFn({ method: "GET" }).handler(
+  async (): Promise<{ status: "ok"; data: GitHubSyncStatus } | { status: "error"; error: string }> => {
+    try {
+      const deployedSha = execSync("git rev-parse HEAD", { encoding: "utf8" }).trim();
+
+      const res = await fetch(
+        `https://api.github.com/repos/${GITHUB_REPO}/commits?per_page=30`,
+        { headers: githubHeaders(), signal: AbortSignal.timeout(8000) },
+      );
+      if (!res.ok) throw new Error(`GitHub API ${res.status}`);
+      const commits: any[] = await res.json();
+
+      const latestSha = String(commits[0]?.sha ?? "");
+      const idx = commits.findIndex((c) => c.sha === deployedSha);
+      const commitsBehind = idx === -1 ? (latestSha !== deployedSha ? 1 : 0) : idx;
+
+      return {
+        status: "ok",
+        data: {
+          deployedSha,
+          deployedShortSha: deployedSha.slice(0, 7),
+          latestSha,
+          latestShortSha: latestSha.slice(0, 7),
+          isSynced: deployedSha === latestSha,
+          commitsBehind,
+        },
+      };
+    } catch (e) {
+      return { status: "error", error: e instanceof Error ? e.message : String(e) };
+    }
+  },
+);
