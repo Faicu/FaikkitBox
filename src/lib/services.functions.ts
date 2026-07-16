@@ -444,7 +444,7 @@ function parsePlexResources(payload: string): PlexConnectionCandidate[] {
     const deviceAttrs = parseAttributes(deviceMatch[1]);
     if (!String(deviceAttrs.provides ?? "").includes("server")) continue;
 
-    const connectionMatches = deviceMatch[2].matchAll(/<Connection\b([^/>]*)(?:\/>|>[\s\S]*?<\/Connection>)/g);
+    const connectionMatches = deviceMatch[2].matchAll(/<Connection\b([^>]*)(?:\/>|>[\s\S]*?<\/Connection>)/g);
     for (const connectionMatch of connectionMatches) {
       const conn = parseAttributes(connectionMatch[1]);
       const uri = conn.uri;
