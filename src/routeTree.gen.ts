@@ -10,7 +10,6 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as UpdatesRouteImport } from './routes/updates'
-import { Route as TestRouteImport } from './routes/test'
 import { Route as QbitRouteImport } from './routes/qbit'
 import { Route as PlexRouteImport } from './routes/plex'
 import { Route as LoginRouteImport } from './routes/login'
@@ -22,11 +21,6 @@ import { Route as IndexRouteImport } from './routes/index'
 const UpdatesRoute = UpdatesRouteImport.update({
   id: '/updates',
   path: '/updates',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const TestRoute = TestRouteImport.update({
-  id: '/test',
-  path: '/test',
   getParentRoute: () => rootRouteImport,
 } as any)
 const QbitRoute = QbitRouteImport.update({
@@ -73,7 +67,6 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/plex': typeof PlexRoute
   '/qbit': typeof QbitRoute
-  '/test': typeof TestRoute
   '/updates': typeof UpdatesRoute
 }
 export interface FileRoutesByTo {
@@ -84,7 +77,6 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/plex': typeof PlexRoute
   '/qbit': typeof QbitRoute
-  '/test': typeof TestRoute
   '/updates': typeof UpdatesRoute
 }
 export interface FileRoutesById {
@@ -96,7 +88,6 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/plex': typeof PlexRoute
   '/qbit': typeof QbitRoute
-  '/test': typeof TestRoute
   '/updates': typeof UpdatesRoute
 }
 export interface FileRouteTypes {
@@ -109,7 +100,6 @@ export interface FileRouteTypes {
     | '/login'
     | '/plex'
     | '/qbit'
-    | '/test'
     | '/updates'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -120,7 +110,6 @@ export interface FileRouteTypes {
     | '/login'
     | '/plex'
     | '/qbit'
-    | '/test'
     | '/updates'
   id:
     | '__root__'
@@ -131,7 +120,6 @@ export interface FileRouteTypes {
     | '/login'
     | '/plex'
     | '/qbit'
-    | '/test'
     | '/updates'
   fileRoutesById: FileRoutesById
 }
@@ -143,7 +131,6 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   PlexRoute: typeof PlexRoute
   QbitRoute: typeof QbitRoute
-  TestRoute: typeof TestRoute
   UpdatesRoute: typeof UpdatesRoute
 }
 
@@ -154,13 +141,6 @@ declare module '@tanstack/react-router' {
       path: '/updates'
       fullPath: '/updates'
       preLoaderRoute: typeof UpdatesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/test': {
-      id: '/test'
-      path: '/test'
-      fullPath: '/test'
-      preLoaderRoute: typeof TestRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/qbit': {
@@ -223,7 +203,6 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   PlexRoute: PlexRoute,
   QbitRoute: QbitRoute,
-  TestRoute: TestRoute,
   UpdatesRoute: UpdatesRoute,
 }
 export const routeTree = rootRouteImport

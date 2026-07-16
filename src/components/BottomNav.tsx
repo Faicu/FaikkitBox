@@ -1,6 +1,6 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { LayoutDashboard, PlayCircle, Flame, Images, Download, Cpu, RefreshCcw, CheckCircle2 } from "lucide-react";
+import { LayoutDashboard, PlayCircle, Flame, Images, Download, Cpu, RefreshCcw } from "lucide-react";
 import { adminStatusQuery } from "@/lib/queries";
 
 const baseItems = [
@@ -10,7 +10,6 @@ const baseItems = [
   { to: "/immich", label: "Immich", icon: Images },
   { to: "/qbit", label: "qBit", icon: Download },
   { to: "/host", label: "Gazdă", icon: Cpu },
-  { to: "/test", label: "Test", icon: CheckCircle2 },
 ] as const;
 
 const adminExtra = { to: "/updates", label: "Update", icon: RefreshCcw } as const;
