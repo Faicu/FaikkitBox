@@ -8,7 +8,6 @@ import { randomUUID } from "node:crypto";
 export type ActivityType =
   | "server_start"
   | "server_stop"
-  | "deploy"
   | "plex_watch_start"
   | "plex_watch_stop"
   | "torrent_added"
@@ -152,27 +151,6 @@ export async function trackImmichUploads(
   }
   if (uploadsThisWeek > lastImmichUploadsThisWeek) {
     lastImmichUploadsThisWeek = uploadsThisWeek;
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Tracking deploy (in-memory)
-// ---------------------------------------------------------------------------
-
-let lastKnownSha: string | null = null;
-
-export async function trackDeploy(localSha: string, message: string): Promise<void> {
-  if (lastKnownSha === null) {
-    lastKnownSha = localSha;
-    return;
-  }
-  if (localSha !== lastKnownSha) {
-    lastKnownSha = localSha;
-    await logActivity(
-      "deploy",
-      `Deploy reușit: ${localSha.slice(0, 7)} — ${message}`,
-      { sha: localSha, commitMessage: message },
-    );
   }
 }
 

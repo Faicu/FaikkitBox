@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { PlayCircle, Images, Download, Cpu, ChevronRight, Users, HardDrive, ListChecks, Gauge, ArrowDown, ArrowUp, Activity, Tv, Film, ScrollText, RefreshCw, CheckCircle2, Server, Package } from "lucide-react";
+import { PlayCircle, Images, Download, Cpu, ChevronRight, Users, HardDrive, ListChecks, Gauge, ArrowDown, ArrowUp, Activity, Tv, Film, ScrollText, RefreshCw, CheckCircle2, Server, Package, GitCommitHorizontal, ExternalLink } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -9,8 +9,9 @@ import { PageShell } from "@/components/PageShell";
 import { ServicePill } from "@/components/ServicePill";
 import { RadialGauge } from "@/components/RadialGauge";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription } from "@/components/ui/drawer";
-import { plexQuery, immichQuery, qbitQuery, hostQuery, adminStatusQuery, lastSpeedtestQuery, activityLogQuery } from "@/lib/queries";
+import { plexQuery, immichQuery, qbitQuery, hostQuery, adminStatusQuery, lastSpeedtestQuery, activityLogQuery, recentCommitsQuery } from "@/lib/queries";
 import type { ActivityEntry } from "@/lib/activity-log";
+import type { GitHubCommit } from "@/lib/github.functions";
 import type { HostData } from "@/lib/services.functions";
 import { runSpeedtest } from "@/lib/speedtest.functions";
 import { formatBytes, formatSpeed } from "@/lib/format";
@@ -462,8 +463,13 @@ function MetricButton({
   );
 }
 
+type TimelineItem =
+  | { kind: "activity"; ts: number; entry: ActivityEntry }
+  | { kind: "commit"; ts: number; commit: GitHubCommit };
+
 function ActivityLogSection() {
-  const { data: log, isLoading } = useQuery(activityLogQuery);
+  const { data: log, isLoading: logLoading } = useQuery(activityLogQuery);
+  const { data: commitsData, isLoading: commitsLoading } = useQuery(recentCommitsQuery);
   const [visible, setVisible] = useState(10);
 
   const iconMap: Record<string, React.ReactNode> = {
@@ -492,8 +498,18 @@ function ActivityLogSection() {
     return `acum ${d}z`;
   }
 
-  const shown = log?.slice(0, visible) ?? [];
-  const hasMore = (log?.length ?? 0) > visible;
+  const timeline: TimelineItem[] = [
+    ...(log ?? []).map((entry): TimelineItem => ({
+      kind: "activity", ts: new Date(entry.timestamp).getTime(), entry,
+    })),
+    ...(commitsData?.status === "ok" ? commitsData.commits : []).map((commit): TimelineItem => ({
+      kind: "commit", ts: new Date(commit.date).getTime(), commit,
+    })),
+  ].sort((a, b) => b.ts - a.ts);
+
+  const isLoading = logLoading || commitsLoading;
+  const shown = timeline.slice(0, visible);
+  const hasMore = timeline.length > visible;
 
   return (
     <section className="space-y-2">
@@ -504,28 +520,59 @@ function ActivityLogSection() {
         {isLoading && (
           <div className="px-3 py-4 text-xs text-muted-foreground text-center">Se încarcă...</div>
         )}
-        {!isLoading && (!log || log.length === 0) && (
+        {!isLoading && timeline.length === 0 && (
           <div className="px-3 py-4 text-xs text-muted-foreground text-center">Nicio activitate înregistrată încă.</div>
         )}
-        {shown.map((entry: ActivityEntry) => (
-          <div key={entry.id} className="flex items-start gap-2.5 px-3 py-2.5">
-            <div className="mt-0.5 shrink-0">
-              {iconMap[entry.type] ?? <Activity className="h-3.5 w-3.5 text-muted-foreground" />}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="text-sm leading-tight">{entry.message}</div>
-            </div>
-            <div className="shrink-0 text-[11px] text-muted-foreground whitespace-nowrap">
-              {relativeTime(entry.timestamp)}
-            </div>
-          </div>
-        ))}
+        {shown.map((item) => {
+          if (item.kind === "activity") {
+            const entry = item.entry;
+            return (
+              <div key={entry.id} className="flex items-start gap-2.5 px-3 py-2.5">
+                <div className="mt-0.5 shrink-0">
+                  {iconMap[entry.type] ?? <Activity className="h-3.5 w-3.5 text-muted-foreground" />}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm leading-tight">{entry.message}</div>
+                </div>
+                <div className="shrink-0 text-[11px] text-muted-foreground whitespace-nowrap">
+                  {relativeTime(entry.timestamp)}
+                </div>
+              </div>
+            );
+          }
+          const c = item.commit;
+          return (
+            <a
+              key={c.sha}
+              href={c.url}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-start gap-2.5 px-3 py-2.5 hover:bg-muted/40 transition-colors group"
+            >
+              <div className="mt-0.5 shrink-0">
+                <GitCommitHorizontal className="h-3.5 w-3.5 text-sky-400" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-sm leading-tight group-hover:text-sky-400 transition-colors">{c.message}</div>
+                <div className="mt-0.5 text-[11px] text-muted-foreground">
+                  {c.author} · <span className="font-mono">{c.shortSha}</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+                  {relativeTime(c.date)}
+                </span>
+                <ExternalLink className="h-3 w-3 text-muted-foreground/50 group-hover:text-sky-400 transition-colors" />
+              </div>
+            </a>
+          );
+        })}
         {hasMore && (
           <button
             onClick={() => setVisible(v => v + 10)}
             className="w-full px-3 py-2.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/30 transition-colors text-center"
           >
-            Afișează încă 10 ({(log?.length ?? 0) - visible} rămase)
+            Afișează încă 10 ({timeline.length - visible} rămase)
           </button>
         )}
       </div>

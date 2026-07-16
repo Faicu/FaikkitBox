@@ -5,6 +5,7 @@ import { getVersions } from "./versions.functions";
 import { getLastSpeedtest } from "./speedtest.functions";
 import { getActivityLog } from "./activity-log";
 import { getFilelistDownloadLog } from "./filelist.functions";
+import { getRecentCommits } from "./github.functions";
 
 // Interval de bază pentru statistici live (Plex/Immich/qBit/Host)
 const REFRESH_MS = 1000;
@@ -88,6 +89,14 @@ export const lastSpeedtestQuery = queryOptions({
   queryKey: ["speedtest"],
   queryFn: () => getLastSpeedtest(),
   staleTime: 30_000,
+  refetchOnWindowFocus: true,
+});
+
+export const recentCommitsQuery = queryOptions({
+  queryKey: ["recentCommits"],
+  queryFn: () => getRecentCommits(),
+  refetchInterval: 5 * 60_000,
+  staleTime: 2 * 60_000,
   refetchOnWindowFocus: true,
 });
 
