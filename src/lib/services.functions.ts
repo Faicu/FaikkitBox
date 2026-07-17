@@ -841,13 +841,14 @@ export const getPlexEpisodesInSeason = createServerFn({ method: "GET" })
       );
       const results = search?.MediaContainer?.Metadata ?? [];
       const shows = results.filter((r: any) => r.type === "show");
+      console.log(`[Plex getPlexEpisodesInSeason] query="${searchQuery}" season=${data.season} results=${results.length} shows=${shows.length} titles=${shows.map((r:any)=>r.title).join("|")}`);
       const normalizedTarget = searchQuery;
       const show =
         shows.find((r: any) => normalizeShowTitle(String(r.title ?? "")) === normalizedTarget) ??
         shows.find((r: any) => normalizeShowTitle(String(r.title ?? "")).includes(normalizedTarget)) ??
         shows.find((r: any) => normalizedTarget.includes(normalizeShowTitle(String(r.title ?? "")))) ??
         shows[0];
-      if (!show) return [];
+      if (!show) { console.log(`[Plex getPlexEpisodesInSeason] no show matched`); return []; }
 
       const seasons = await fetchJson<any>(
         `${url}/library/metadata/${show.ratingKey}/children`,
