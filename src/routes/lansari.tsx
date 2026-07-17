@@ -81,6 +81,14 @@ function savePinned(list: PinnedItem[]) {
 }
 
 // ---------------------------------------------------------------------------
+// Utilitar: elimină diacriticele pentru căutări externe (Filelist nu le suportă)
+// ---------------------------------------------------------------------------
+
+function stripDiacritics(str: string): string {
+  return str.normalize("NFD").replace(/[̀-ͯ]/g, "");
+}
+
+// ---------------------------------------------------------------------------
 // Detectare calitate torrent
 // ---------------------------------------------------------------------------
 
@@ -278,7 +286,7 @@ function PinnedItemCard({ item, onUnpin }: { item: PinnedItem; onUnpin: () => vo
     staleTime: 5 * 60_000,
   });
 
-  const origTitle = details?.originalTitle || item.originalTitle || item.title;
+  const origTitle = stripDiacritics(details?.originalTitle || item.originalTitle || item.title);
 
   const { data: filelistData, isLoading: filelistLoading } = useQuery({
     queryKey: ["filelistForItem", item.mediaType, item.id, origTitle],
@@ -486,36 +494,39 @@ interface SeasonGroup {
 
 function groupTorrentsBySeasonEpisode(torrents: FilelistTorrent[]): SeasonGroup[] {
   const seasonMap = new Map<number, SeasonGroup>();
-  const hasEpisodes = torrents.some((t) => /S\d{2}E\d{2}/i.test(t.name));
 
   for (const t of torrents) {
     const seasonMatch = t.name.match(/S(\d{2})/i);
     if (!seasonMatch) continue;
     const seasonNum = parseInt(seasonMatch[1], 10);
+    // S00 = speciale/bonus — ignorăm
+    if (seasonNum === 0) continue;
+
+    const epMatch = t.name.match(/S\d{2}E(\d{2})/i);
+    const isEpisodeTorrent = epMatch !== null;
     const q = detectQuality(t.name);
 
     if (!seasonMap.has(seasonNum)) {
-      if (hasEpisodes) {
+      if (isEpisodeTorrent) {
         seasonMap.set(seasonNum, { seasonNum, episodes: new Map() });
       } else {
         seasonMap.set(seasonNum, { seasonNum, byQuality: { t1080: null, t4k: null, t4kHdr: null } });
       }
     }
+
     const group = seasonMap.get(seasonNum)!;
 
-    if (hasEpisodes) {
-      const epMatch = t.name.match(/S\d{2}E(\d{2})/i);
-      if (!epMatch) continue;
-      const epNum = parseInt(epMatch[1], 10);
-      if (!group.episodes!.has(epNum)) {
-        group.episodes!.set(epNum, { t1080: null, t4k: null, t4kHdr: null });
+    if (isEpisodeTorrent && group.episodes !== undefined) {
+      const epNum = parseInt(epMatch![1], 10);
+      if (!group.episodes.has(epNum)) {
+        group.episodes.set(epNum, { t1080: null, t4k: null, t4kHdr: null });
       }
-      const ep = group.episodes!.get(epNum)!;
+      const ep = group.episodes.get(epNum)!;
       if (q.is1080p && !ep.t1080) ep.t1080 = t;
       if (q.is4k && !ep.t4k) ep.t4k = t;
       if (q.is4kHdr && !ep.t4kHdr) ep.t4kHdr = t;
-    } else {
-      const bq = group.byQuality!;
+    } else if (!isEpisodeTorrent && group.byQuality !== undefined) {
+      const bq = group.byQuality;
       if (q.is1080p && !bq.t1080) bq.t1080 = t;
       if (q.is4k && !bq.t4k) bq.t4k = t;
       if (q.is4kHdr && !bq.t4kHdr) bq.t4kHdr = t;
