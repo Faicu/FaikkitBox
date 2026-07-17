@@ -784,12 +784,22 @@ export async function checkPlexHasEpisode(
 
     const normalizedTargetTitle = normalizeShowTitle(showTitle);
     const search = await fetchJson<any>(
-      `${url}/search?query=${encodeURIComponent(normalizedTargetTitle)}&type=2`,
+      `${url}/search?query=${encodeURIComponent(showTitle)}&type=2`,
       { headers },
       8000,
     );
-    const results = search?.MediaContainer?.Metadata ?? [];
-    const shows = results.filter((r: any) => r.type === "show");
+    let results = search?.MediaContainer?.Metadata ?? [];
+    let shows = results.filter((r: any) => r.type === "show");
+    // Fallback fără diacritice dacă titlul original nu returnează rezultate
+    if (shows.length === 0 && normalizedTargetTitle !== showTitle.toLowerCase().trim()) {
+      const s2 = await fetchJson<any>(
+        `${url}/search?query=${encodeURIComponent(normalizedTargetTitle)}&type=2`,
+        { headers },
+        8000,
+      );
+      results = s2?.MediaContainer?.Metadata ?? [];
+      shows = results.filter((r: any) => r.type === "show");
+    }
     const show =
       shows.find((r: any) => normalizeShowTitle(String(r.title ?? "")) === normalizedTargetTitle) ??
       shows.find((r: any) =>
@@ -833,22 +843,35 @@ export const getPlexEpisodesInSeason = createServerFn({ method: "GET" })
       const discovered = await discoverPlexUrl(token, base);
       const url = discovered.url;
 
-      const searchQuery = normalizeShowTitle(data.showTitle);
+      const searchQuery = data.showTitle;
       const search = await fetchJson<any>(
         `${url}/search?query=${encodeURIComponent(searchQuery)}&type=2`,
         { headers },
         8000,
       );
       const results = search?.MediaContainer?.Metadata ?? [];
-      const shows = results.filter((r: any) => r.type === "show");
-      console.log(`[Plex getPlexEpisodesInSeason] query="${searchQuery}" season=${data.season} results=${results.length} shows=${shows.length} titles=${shows.map((r:any)=>r.title).join("|")}`);
-      const normalizedTarget = searchQuery;
+      let shows = results.filter((r: any) => r.type === "show");
+
+      // Dacă nu găsim nimic cu titlul original, încearcă fără diacritice
+      if (shows.length === 0) {
+        const fallbackQuery = normalizeShowTitle(data.showTitle);
+        if (fallbackQuery !== searchQuery) {
+          const search2 = await fetchJson<any>(
+            `${url}/search?query=${encodeURIComponent(fallbackQuery)}&type=2`,
+            { headers },
+            8000,
+          );
+          shows = (search2?.MediaContainer?.Metadata ?? []).filter((r: any) => r.type === "show");
+        }
+      }
+
+      const normalizedTarget = normalizeShowTitle(data.showTitle);
       const show =
         shows.find((r: any) => normalizeShowTitle(String(r.title ?? "")) === normalizedTarget) ??
         shows.find((r: any) => normalizeShowTitle(String(r.title ?? "")).includes(normalizedTarget)) ??
         shows.find((r: any) => normalizedTarget.includes(normalizeShowTitle(String(r.title ?? "")))) ??
         shows[0];
-      if (!show) { console.log(`[Plex getPlexEpisodesInSeason] no show matched`); return []; }
+      if (!show) return [];
 
       const seasons = await fetchJson<any>(
         `${url}/library/metadata/${show.ratingKey}/children`,
@@ -884,7 +907,7 @@ export const checkPlexHasTitle = createServerFn({ method: "GET" })
       // type=1 = filme, type=2 = seriale
       const plexType = data.mediaType === "movie" ? 1 : 2;
 
-      for (const queryTitle of [data.title, data.originalTitle].filter(Boolean).map(normalizeShowTitle)) {
+      for (const queryTitle of [data.title, data.originalTitle, normalizeShowTitle(data.title)].filter(Boolean)) {
         const search = await fetchJson<any>(
           `${url}/search?query=${encodeURIComponent(queryTitle)}&type=${plexType}`,
           { headers },

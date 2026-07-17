@@ -308,7 +308,8 @@ function PinnedItemCard({ item, onUnpin }: { item: PinnedItem; onUnpin: () => vo
 
   // Pentru seriale: status Plex bazat pe ultimul sezon difuzat
   const latestSeason = countdown?.status === "ok" ? (countdown.lastAired?.season ?? null) : null;
-  const showTitleForPlex = countdown?.showName || item.title;
+  // Preferăm originalTitle (TMDB păstrează diacriticele), apoi showName din TVmaze, apoi title
+  const showTitleForPlex = item.originalTitle || countdown?.showName || item.title;
 
   const { data: plexSeasonEps, isLoading: plexSeasonLoading } = useQuery({
     queryKey: ["plexSeasonEps", showTitleForPlex, latestSeason],
