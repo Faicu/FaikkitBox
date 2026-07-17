@@ -782,19 +782,14 @@ export async function checkPlexHasEpisode(
     const discovered = await discoverPlexUrl(token, base);
     const url = discovered.url;
 
+    const normalizedTargetTitle = normalizeShowTitle(showTitle);
     const search = await fetchJson<any>(
-      `${url}/search?query=${encodeURIComponent(showTitle)}&type=2`,
+      `${url}/search?query=${encodeURIComponent(normalizedTargetTitle)}&type=2`,
       { headers },
       8000,
     );
     const results = search?.MediaContainer?.Metadata ?? [];
-    // Nu mai verificam daca titlul din Plex contine textul englezesc - unele
-    // agente de metadate (in special cele localizate, ex. romana) afiseaza
-    // titlul tradus ("Casa Dragonului" in loc de "House of the Dragon").
-    // Cautarea de mai sus e deja specifica (type=2 = show), asa ca primul
-    // rezultat e suficient de sigur.
     const shows = results.filter((r: any) => r.type === "show");
-    const normalizedTargetTitle = normalizeShowTitle(showTitle);
     const show =
       shows.find((r: any) => normalizeShowTitle(String(r.title ?? "")) === normalizedTargetTitle) ??
       shows.find((r: any) =>
@@ -838,14 +833,15 @@ export const getPlexEpisodesInSeason = createServerFn({ method: "GET" })
       const discovered = await discoverPlexUrl(token, base);
       const url = discovered.url;
 
+      const searchQuery = normalizeShowTitle(data.showTitle);
       const search = await fetchJson<any>(
-        `${url}/search?query=${encodeURIComponent(data.showTitle)}&type=2`,
+        `${url}/search?query=${encodeURIComponent(searchQuery)}&type=2`,
         { headers },
         8000,
       );
       const results = search?.MediaContainer?.Metadata ?? [];
       const shows = results.filter((r: any) => r.type === "show");
-      const normalizedTarget = normalizeShowTitle(data.showTitle);
+      const normalizedTarget = searchQuery;
       const show =
         shows.find((r: any) => normalizeShowTitle(String(r.title ?? "")) === normalizedTarget) ??
         shows.find((r: any) => normalizeShowTitle(String(r.title ?? "")).includes(normalizedTarget)) ??
@@ -887,7 +883,7 @@ export const checkPlexHasTitle = createServerFn({ method: "GET" })
       // type=1 = filme, type=2 = seriale
       const plexType = data.mediaType === "movie" ? 1 : 2;
 
-      for (const queryTitle of [data.title, data.originalTitle].filter(Boolean)) {
+      for (const queryTitle of [data.title, data.originalTitle].filter(Boolean).map(normalizeShowTitle)) {
         const search = await fetchJson<any>(
           `${url}/search?query=${encodeURIComponent(queryTitle)}&type=${plexType}`,
           { headers },
