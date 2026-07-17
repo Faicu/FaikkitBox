@@ -271,6 +271,8 @@ function UnifiedSearchSection() {
 function PinnedItemCard({ item, onUnpin }: { item: PinnedItem; onUnpin: () => void }) {
   const detailsFn = useServerFn(getTmdbDetails);
   const plexFn = useServerFn(checkPlexHasTitle);
+  const plexSeasonFn = useServerFn(getPlexEpisodesInSeason);
+  const tmdbSeasonFn = useServerFn(getTmdbSeasonEpisodes);
   const filelistFn = useServerFn(searchFilelist);
   const countdownFn = useServerFn(getTvShowCountdown);
 
@@ -280,10 +282,12 @@ function PinnedItemCard({ item, onUnpin }: { item: PinnedItem; onUnpin: () => vo
     staleTime: 5 * 60_000,
   });
 
-  const { data: inPlex, isLoading: plexLoading } = useQuery({
+  // Pentru filme: checkPlexHasTitle simplu
+  const { data: inPlexMovie, isLoading: plexMovieLoading } = useQuery({
     queryKey: ["plexHasTitle", item.mediaType, item.id],
     queryFn: () => plexFn({ data: { title: item.title, originalTitle: item.originalTitle, mediaType: item.mediaType } }),
     staleTime: 5 * 60_000,
+    enabled: item.mediaType === "movie",
   });
 
   const origTitle = stripDiacritics(details?.originalTitle || item.originalTitle || item.title);
@@ -302,7 +306,42 @@ function PinnedItemCard({ item, onUnpin }: { item: PinnedItem; onUnpin: () => vo
     enabled: item.mediaType === "tv" && !!details,
   });
 
-  const isLoading = detailsLoading || plexLoading;
+  // Pentru seriale: status Plex bazat pe ultimul sezon difuzat
+  const latestSeason = countdown?.status === "ok" ? (countdown.lastAired?.season ?? null) : null;
+  const showTitleForPlex = countdown?.showName || item.title;
+
+  const { data: plexSeasonEps, isLoading: plexSeasonLoading } = useQuery({
+    queryKey: ["plexSeasonEps", showTitleForPlex, latestSeason],
+    queryFn: () => plexSeasonFn({ data: { showTitle: showTitleForPlex, season: latestSeason! } }),
+    staleTime: 5 * 60_000,
+    enabled: item.mediaType === "tv" && latestSeason !== null,
+  });
+
+  const { data: tmdbSeasonEps, isLoading: tmdbSeasonLoading } = useQuery({
+    queryKey: ["tmdbSeasonEps", item.id, latestSeason],
+    queryFn: () => tmdbSeasonFn({ data: { tmdbId: item.id, seasonNum: latestSeason! } }),
+    staleTime: 60 * 60_000,
+    enabled: item.mediaType === "tv" && latestSeason !== null,
+  });
+
+  // Calculează statusul Plex pentru ultimul sezon
+  let tvPlexStatus: "complet" | "incomplet" | "lipsa" | null = null;
+  if (item.mediaType === "tv" && latestSeason !== null && plexSeasonEps !== undefined && tmdbSeasonEps !== undefined) {
+    const plexSet = new Set(plexSeasonEps);
+    const airedEpNums = tmdbSeasonEps.filter((e) => e.aired).map((e) => e.episodeNum);
+    const epList = airedEpNums.length > 0 ? airedEpNums : [];
+    if (epList.length === 0) {
+      tvPlexStatus = plexSeasonEps.length > 0 ? "complet" : "lipsa";
+    } else if (epList.every((n) => plexSet.has(n))) {
+      tvPlexStatus = "complet";
+    } else if (epList.some((n) => plexSet.has(n))) {
+      tvPlexStatus = "incomplet";
+    } else {
+      tvPlexStatus = "lipsa";
+    }
+  }
+
+  const isLoading = detailsLoading || (item.mediaType === "movie" ? plexMovieLoading : false);
 
   if (isLoading) {
     return <div className="h-32 animate-pulse rounded-2xl border border-border bg-card" />;
@@ -315,7 +354,7 @@ function PinnedItemCard({ item, onUnpin }: { item: PinnedItem; onUnpin: () => vo
       <MovieCard
         item={item}
         details={details ?? null}
-        inPlex={inPlex ?? null}
+        inPlex={inPlexMovie ?? null}
         torrents={torrents}
         filelistLoading={filelistLoading}
         onUnpin={onUnpin}
@@ -327,7 +366,8 @@ function PinnedItemCard({ item, onUnpin }: { item: PinnedItem; onUnpin: () => vo
     <ShowCard
       item={item}
       details={details ?? null}
-      inPlex={inPlex ?? null}
+      tvPlexStatus={tvPlexStatus}
+      tvPlexLoading={plexSeasonLoading || tmdbSeasonLoading || countdownLoading}
       torrents={torrents}
       filelistLoading={filelistLoading}
       countdown={countdown ?? null}
@@ -784,7 +824,8 @@ function SeasonPanel({
 function ShowCard({
   item,
   details,
-  inPlex,
+  tvPlexStatus,
+  tvPlexLoading,
   torrents,
   filelistLoading,
   countdown,
@@ -793,7 +834,8 @@ function ShowCard({
 }: {
   item: PinnedItem;
   details: TmdbDetails | null;
-  inPlex: boolean | null;
+  tvPlexStatus: "complet" | "incomplet" | "lipsa" | null;
+  tvPlexLoading: boolean;
   torrents: FilelistTorrent[];
   filelistLoading: boolean;
   countdown: TvShowCountdown | null;
@@ -857,7 +899,11 @@ function ShowCard({
         {/* Plex badge general */}
         <div className="flex items-center justify-between">
           <span className="text-xs text-muted-foreground">Plex</span>
-          <PlexStatusBadge status={inPlex === true ? "complet" : inPlex === false ? "lipsa" : "lipsa"} />
+          {tvPlexLoading ? (
+            <div className="h-4 w-16 animate-pulse rounded bg-muted" />
+          ) : (
+            <PlexStatusBadge status={tvPlexStatus ?? "lipsa"} />
+          )}
         </div>
 
         {/* Countdown + ultimul episod */}
