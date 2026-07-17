@@ -827,6 +827,34 @@ export async function checkPlexHasEpisode(
   }
 }
 
+export const checkPlexHasTitle = createServerFn({ method: "GET" })
+  .validator((data: { title: string; originalTitle: string; mediaType: "movie" | "tv" }) => data)
+  .handler(async ({ data }): Promise<boolean | null> => {
+    const token = process.env.PLEX_TOKEN;
+    const base = process.env.PLEX_URL;
+    if (!token) return null;
+    try {
+      const headers = { Accept: "application/json", "X-Plex-Token": token };
+      const discovered = await discoverPlexUrl(token, base);
+      const url = discovered.url;
+      // type=1 = filme, type=2 = seriale
+      const plexType = data.mediaType === "movie" ? 1 : 2;
+
+      for (const queryTitle of [data.title, data.originalTitle].filter(Boolean)) {
+        const search = await fetchJson<any>(
+          `${url}/search?query=${encodeURIComponent(queryTitle)}&type=${plexType}`,
+          { headers },
+          8000,
+        );
+        const results = search?.MediaContainer?.Metadata ?? [];
+        if (results.length > 0) return true;
+      }
+      return false;
+    } catch {
+      return null;
+    }
+  });
+
 export const getShowStatus = createServerFn({ method: "GET" }).handler(
   async (): Promise<ShowStatusData> => {
     return await buildShowStatus(HOTD_SHOW_TITLE, HOTD_SEASON, HOTD_S3_EPISODES);

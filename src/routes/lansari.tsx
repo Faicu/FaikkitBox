@@ -20,6 +20,8 @@ import {
   ShieldCheck,
   History,
   Trash2,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -27,12 +29,12 @@ import { toast } from "sonner";
 import { PageShell } from "@/components/PageShell";
 import { ServicePill } from "@/components/ServicePill";
 import { ErrorCard } from "@/components/ErrorCard";
-import { showStatusQuery, filelistLogQuery } from "@/lib/queries";
-import type { ShowStatusData } from "@/lib/services.functions";
-import { searchTvShows, getTvShowStatus } from "@/lib/tvshows.functions";
-import type { TvShowSearchResult } from "@/lib/tvshows.functions";
+import { filelistLogQuery } from "@/lib/queries";
+import { checkPlexHasTitle } from "@/lib/services.functions";
 import { searchFilelist, downloadFilelist, deleteFilelistLogEntry } from "@/lib/filelist.functions";
 import type { FilelistTorrent, FilelistCategory, FilelistLogEntry } from "@/lib/filelist.functions";
+import { searchTmdb, getTmdbDetails, getTvShowCountdown } from "@/lib/tmdb.functions";
+import type { TmdbSearchResult, TmdbDetails, TvShowCountdown } from "@/lib/tmdb.functions";
 
 export const Route = createFileRoute("/lansari")({
   head: () => ({ meta: [{ title: "Lansări — Monitor Server" }] }),
@@ -40,34 +42,29 @@ export const Route = createFileRoute("/lansari")({
 });
 
 function LansariPage() {
-  const { data: hotdData, isLoading: isHotdLoading } = useQuery(showStatusQuery);
-  const status = isHotdLoading ? "loading" : hotdData?.status === "error" ? "error" : "ok";
-
   return (
-    <PageShell title="Lansări" subtitle="Calendar seriale" right={<ServicePill status={status} />}>
-      {hotdData?.status === "error" && (
-        <ErrorCard
-          title="House of the Dragon indisponibil"
-          message={hotdData.error ?? "Eroare necunoscută"}
-        />
-      )}
-      {hotdData?.status === "ok" && <ShowStatusCard data={hotdData} />}
-
-      <CustomShowsSection />
+    <PageShell title="Lansări" subtitle="Film · Serial · Filelist">
+      <UnifiedSearchSection />
       <FilelistSection />
       <DownloadLogSection />
     </PageShell>
   );
 }
 
-const PINNED_KEY = "faikkitbox:pinnedShows";
+// ---------------------------------------------------------------------------
+// Helpers localStorage pentru itemele fixate
+// ---------------------------------------------------------------------------
 
-interface PinnedShow {
+const PINNED_KEY = "faikkitbox:pinnedItems";
+
+interface PinnedItem {
   id: number;
-  name: string;
+  mediaType: "movie" | "tv";
+  title: string;
+  originalTitle: string;
 }
 
-function loadPinned(): PinnedShow[] {
+function loadPinned(): PinnedItem[] {
   if (typeof window === "undefined") return [];
   try {
     const raw = window.localStorage.getItem(PINNED_KEY);
@@ -77,20 +74,80 @@ function loadPinned(): PinnedShow[] {
   }
 }
 
-function savePinned(list: PinnedShow[]) {
+function savePinned(list: PinnedItem[]) {
   try {
     window.localStorage.setItem(PINNED_KEY, JSON.stringify(list));
-  } catch {
-    // localStorage indisponibil (mod privat etc.) - fixarea pur si simplu nu persista
-  }
+  } catch {}
 }
 
-function CustomShowsSection() {
-  const [pinned, setPinned] = useState<PinnedShow[]>([]);
+// ---------------------------------------------------------------------------
+// Detectare calitate torrent
+// ---------------------------------------------------------------------------
+
+function detectQuality(name: string) {
+  const n = name.toLowerCase();
+  const is4k = /2160p|4k/.test(n);
+  const is4kHdr = is4k && /hdr/.test(n);
+  const is1080p = /1080p/.test(n);
+  return { is1080p, is4k: is4k && !is4kHdr, is4kHdr };
+}
+
+// ---------------------------------------------------------------------------
+// Buton download calitate
+// ---------------------------------------------------------------------------
+
+function QualityDownloadButton({
+  label,
+  torrent,
+  downloading,
+  onDownload,
+}: {
+  label: string;
+  torrent: FilelistTorrent | null;
+  downloading: number | null;
+  onDownload: (t: FilelistTorrent) => void;
+}) {
+  const available = torrent !== null;
+  const isLoading = torrent !== null && downloading === torrent.id;
+
+  const colorClass = label === "4K HDR"
+    ? "bg-purple-500/15 text-purple-400 hover:bg-purple-500/25 border-purple-500/30"
+    : label === "4K"
+    ? "bg-blue-500/15 text-blue-400 hover:bg-blue-500/25 border-blue-500/30"
+    : "bg-slate-500/15 text-slate-300 hover:bg-slate-500/25 border-slate-500/30";
+
+  return (
+    <button
+      onClick={() => torrent && onDownload(torrent)}
+      disabled={!available || isLoading}
+      className={`flex flex-col items-center gap-0.5 rounded-xl border px-3 py-2 text-[11px] font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${colorClass}`}
+      title={available ? `${torrent!.name} — ${formatBytes(torrent!.size)}` : `Indisponibil ${label}`}
+    >
+      {isLoading ? (
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+      ) : (
+        <Download className="h-3.5 w-3.5" />
+      )}
+      <span>{label}</span>
+      {available && (
+        <span className="text-[10px] font-normal text-muted-foreground">
+          {formatBytes(torrent!.size)}
+        </span>
+      )}
+    </button>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Secțiune de căutare unificată (TMDB)
+// ---------------------------------------------------------------------------
+
+function UnifiedSearchSection() {
+  const [pinned, setPinned] = useState<PinnedItem[]>([]);
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<TvShowSearchResult[]>([]);
+  const [results, setResults] = useState<TmdbSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
-  const searchFn = useServerFn(searchTvShows);
+  const searchFn = useServerFn(searchTmdb);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -100,10 +157,7 @@ function CustomShowsSection() {
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     const q = query.trim();
-    if (q.length < 2) {
-      setResults([]);
-      return;
-    }
+    if (q.length < 2) { setResults([]); return; }
     debounceRef.current = setTimeout(async () => {
       setSearching(true);
       try {
@@ -113,22 +167,20 @@ function CustomShowsSection() {
         setSearching(false);
       }
     }, 400);
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [query, searchFn]);
 
-  function pin(show: TvShowSearchResult) {
-    if (pinned.some((p) => p.id === show.id)) return;
-    const next = [...pinned, { id: show.id, name: show.name }];
+  function pin(item: TmdbSearchResult) {
+    if (pinned.some((p) => p.id === item.id && p.mediaType === item.mediaType)) return;
+    const next = [...pinned, { id: item.id, mediaType: item.mediaType, title: item.title, originalTitle: item.originalTitle }];
     setPinned(next);
     savePinned(next);
     setQuery("");
     setResults([]);
   }
 
-  function unpin(id: number) {
-    const next = pinned.filter((p) => p.id !== id);
+  function unpin(id: number, mediaType: "movie" | "tv") {
+    const next = pinned.filter((p) => !(p.id === id && p.mediaType === mediaType));
     setPinned(next);
     savePinned(next);
   }
@@ -136,7 +188,7 @@ function CustomShowsSection() {
   return (
     <section>
       <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
-        <Search className="h-3.5 w-3.5" /> Caută alt serial
+        <Search className="h-3.5 w-3.5" /> Caută film sau serial
       </h2>
 
       <div className="rounded-2xl border border-border bg-card p-3">
@@ -145,7 +197,7 @@ function CustomShowsSection() {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Numele serialului..."
+            placeholder="Titlu film sau serial..."
             className="w-full rounded-xl border border-border bg-background py-2 pl-9 pr-3 text-sm outline-none focus:ring-1 focus:ring-primary"
           />
           {searching && (
@@ -156,18 +208,25 @@ function CustomShowsSection() {
         {results.length > 0 && (
           <div className="mt-2 space-y-1.5">
             {results.map((r) => {
-              const alreadyPinned = pinned.some((p) => p.id === r.id);
+              const alreadyPinned = pinned.some((p) => p.id === r.id && p.mediaType === r.mediaType);
               return (
-                <div key={r.id} className="flex items-center gap-2 rounded-xl bg-muted/60 p-2">
-                  {r.image ? (
-                    <img src={r.image} alt="" className="h-10 w-7 rounded object-cover" />
+                <div key={`${r.mediaType}-${r.id}`} className="flex items-center gap-2 rounded-xl bg-muted/60 p-2">
+                  {r.posterUrl ? (
+                    <img src={r.posterUrl} alt="" className="h-12 w-8 rounded object-cover shrink-0" />
                   ) : (
-                    <div className="h-10 w-7 rounded bg-muted" />
+                    <div className="h-12 w-8 rounded bg-muted shrink-0 flex items-center justify-center">
+                      {r.mediaType === "movie" ? <Film className="h-4 w-4 text-muted-foreground" /> : <Tv className="h-4 w-4 text-muted-foreground" />}
+                    </div>
                   )}
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium">{r.name}</div>
-                    <div className="truncate text-xs text-muted-foreground">
-                      {[r.network, r.premiered?.slice(0, 4)].filter(Boolean).join(" · ") || "—"}
+                    <div className="flex items-center gap-1.5">
+                      <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${r.mediaType === "movie" ? "bg-amber-500/15 text-amber-400" : "bg-blue-500/15 text-blue-400"}`}>
+                        {r.mediaType === "movie" ? "Film" : "Serial"}
+                      </span>
+                      <span className="truncate text-sm font-medium">{r.title}</span>
+                    </div>
+                    <div className="mt-0.5 truncate text-xs text-muted-foreground">
+                      {[r.originalTitle !== r.title ? r.originalTitle : null, r.year].filter(Boolean).join(" · ") || "—"}
                     </div>
                   </div>
                   <button
@@ -186,56 +245,194 @@ function CustomShowsSection() {
 
       <div className="mt-3 space-y-3">
         {pinned.map((p) => (
-          <PinnedShowCard key={p.id} id={p.id} onUnpin={() => unpin(p.id)} />
+          <PinnedItemCard
+            key={`${p.mediaType}-${p.id}`}
+            item={p}
+            onUnpin={() => unpin(p.id, p.mediaType)}
+          />
         ))}
       </div>
     </section>
   );
 }
 
-function PinnedShowCard({ id, onUnpin }: { id: number; onUnpin: () => void }) {
-  const qc = useQueryClient();
-  const { data, isLoading } = useQuery({
-    queryKey: ["customShowStatus", id],
-    queryFn: () => getTvShowStatus({ data: { showId: id } }),
-    staleTime: 0,
-    refetchOnMount: "always",
+// ---------------------------------------------------------------------------
+// Card item fixat — router spre Movie sau Show
+// ---------------------------------------------------------------------------
+
+function PinnedItemCard({ item, onUnpin }: { item: PinnedItem; onUnpin: () => void }) {
+  const detailsFn = useServerFn(getTmdbDetails);
+  const plexFn = useServerFn(checkPlexHasTitle);
+  const filelistFn = useServerFn(searchFilelist);
+  const countdownFn = useServerFn(getTvShowCountdown);
+
+  const { data: details, isLoading: detailsLoading } = useQuery({
+    queryKey: ["tmdbDetails", item.mediaType, item.id],
+    queryFn: () => detailsFn({ data: { id: item.id, mediaType: item.mediaType } }),
+    staleTime: 5 * 60_000,
   });
 
-  if (isLoading || !data) {
-    return <div className="h-24 animate-pulse rounded-2xl border border-border bg-card" />;
+  const { data: inPlex, isLoading: plexLoading } = useQuery({
+    queryKey: ["plexHasTitle", item.mediaType, item.id],
+    queryFn: () => plexFn({ data: { title: item.title, originalTitle: item.originalTitle, mediaType: item.mediaType } }),
+    staleTime: 5 * 60_000,
+  });
+
+  const origTitle = details?.originalTitle || item.originalTitle || item.title;
+
+  const { data: filelistData, isLoading: filelistLoading } = useQuery({
+    queryKey: ["filelistForItem", item.mediaType, item.id, origTitle],
+    queryFn: () => filelistFn({ data: { query: origTitle, category: item.mediaType === "movie" ? "movies" : "series" } }),
+    staleTime: 2 * 60_000,
+    enabled: !!origTitle,
+  });
+
+  const { data: countdown, isLoading: countdownLoading } = useQuery({
+    queryKey: ["tvCountdown", item.id],
+    queryFn: () => countdownFn({ data: { imdbId: details?.imdbId ?? null, showTitle: item.title } }),
+    staleTime: 5 * 60_000,
+    enabled: item.mediaType === "tv" && !!details,
+  });
+
+  const isLoading = detailsLoading || plexLoading;
+
+  if (isLoading) {
+    return <div className="h-32 animate-pulse rounded-2xl border border-border bg-card" />;
   }
 
-  if (data.status === "error") {
+  const torrents = filelistData?.status === "ok" ? filelistData.torrents : [];
+
+  if (item.mediaType === "movie") {
     return (
-      <div className="rounded-2xl border border-border bg-card p-4">
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-sm text-muted-foreground">Nu am putut încărca acest serial.</span>
-          <button
-            onClick={() => {
-              onUnpin();
-              qc.removeQueries({ queryKey: ["customShowStatus", id] });
-            }}
-            className="shrink-0 rounded-lg bg-muted px-2 py-1 text-[11px] font-medium text-muted-foreground"
-          >
-            <PinOff className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      </div>
+      <MovieCard
+        item={item}
+        details={details ?? null}
+        inPlex={inPlex ?? null}
+        torrents={torrents}
+        filelistLoading={filelistLoading}
+        onUnpin={onUnpin}
+      />
     );
   }
 
   return (
-    <ShowStatusCard
-      data={data}
-      imdbId={data.imdbId}
-      onUnpin={() => {
-        onUnpin();
-        qc.removeQueries({ queryKey: ["customShowStatus", id] });
-      }}
+    <ShowCard
+      item={item}
+      details={details ?? null}
+      inPlex={inPlex ?? null}
+      torrents={torrents}
+      filelistLoading={filelistLoading}
+      countdown={countdown ?? null}
+      countdownLoading={countdownLoading}
+      onUnpin={onUnpin}
     />
   );
 }
+
+// ---------------------------------------------------------------------------
+// MovieCard
+// ---------------------------------------------------------------------------
+
+function MovieCard({
+  item,
+  details,
+  inPlex,
+  torrents,
+  filelistLoading,
+  onUnpin,
+}: {
+  item: PinnedItem;
+  details: TmdbDetails | null;
+  inPlex: boolean | null;
+  torrents: FilelistTorrent[];
+  filelistLoading: boolean;
+  onUnpin: () => void;
+}) {
+  const qc = useQueryClient();
+  const downloadFn = useServerFn(downloadFilelist);
+  const [downloading, setDownloading] = useState<number | null>(null);
+
+  const imdbId = details?.imdbId ?? null;
+
+  async function handleDownload(torrent: FilelistTorrent) {
+    setDownloading(torrent.id);
+    const toastId = toast.loading(`Se descarcă: ${torrent.name}…`);
+    try {
+      const res = await downloadFn({
+        data: {
+          torrentId: torrent.id,
+          torrentName: torrent.name,
+          categoryId: torrent.category,
+          categoryName: torrent.categoryName,
+          size: torrent.size,
+          freeleech: torrent.freeleech,
+          internal: torrent.internal,
+        },
+      });
+      if (res.status === "ok") {
+        toast.success("Adăugat în qBittorrent!", { id: toastId, description: `${torrent.name} → ${res.savePath}`, duration: 6000 });
+        qc.invalidateQueries({ queryKey: ["filelistLog"] });
+      } else {
+        toast.error("Eroare la descărcare", { id: toastId, description: res.error, duration: 8000 });
+      }
+    } catch (e: any) {
+      toast.error("Eroare neașteptată", { id: toastId, description: e?.message ?? String(e), duration: 8000 });
+    } finally {
+      setDownloading(null);
+    }
+  }
+
+  const t1080 = torrents.find((t) => detectQuality(t.name).is1080p) ?? null;
+  const t4k = torrents.find((t) => detectQuality(t.name).is4k) ?? null;
+  const t4kHdr = torrents.find((t) => detectQuality(t.name).is4kHdr) ?? null;
+
+  return (
+    <section>
+      <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
+        <Film className="h-3.5 w-3.5 text-amber-400" />
+        <span className="truncate">{item.title}</span>
+        {imdbId && (
+          <a href={`https://www.imdb.com/title/${imdbId}/`} target="_blank" rel="noreferrer"
+            className="ml-auto flex shrink-0 items-center gap-0.5 text-[10px] normal-case tracking-normal text-muted-foreground hover:text-foreground">
+            IMDb <ExternalLink className="h-3 w-3" />
+          </a>
+        )}
+        <button onClick={() => { onUnpin(); qc.removeQueries({ queryKey: ["tmdbDetails", "movie", item.id] }); }}
+          className="ml-2 shrink-0 text-muted-foreground hover:text-foreground" title="Scoate din listă">
+          <PinOff className="h-3.5 w-3.5" />
+        </button>
+      </h2>
+      <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
+        {/* Plex badge */}
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-muted-foreground">Plex</span>
+          <LibraryBadge inLibrary={inPlex} />
+        </div>
+
+        {/* Butoane calitate Filelist */}
+        <div className="border-t border-border pt-3">
+          <div className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground flex items-center gap-1">
+            <Download className="h-3 w-3" /> Descarcă de pe Filelist
+            {filelistLoading && <Loader2 className="h-3 w-3 animate-spin ml-1" />}
+          </div>
+          {!filelistLoading && torrents.length === 0 ? (
+            <div className="text-xs text-muted-foreground">Niciun torrent găsit pe Filelist.</div>
+          ) : (
+            <div className="flex gap-2">
+              <QualityDownloadButton label="1080p" torrent={t1080} downloading={downloading} onDownload={handleDownload} />
+              <QualityDownloadButton label="4K" torrent={t4k} downloading={downloading} onDownload={handleDownload} />
+              <QualityDownloadButton label="4K HDR" torrent={t4kHdr} downloading={downloading} onDownload={handleDownload} />
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ShowCard
+// ---------------------------------------------------------------------------
 
 function useCountdown(targetIso: string) {
   const [remaining, setRemaining] = useState(() => new Date(targetIso).getTime() - Date.now());
@@ -246,16 +443,8 @@ function useCountdown(targetIso: string) {
   return remaining;
 }
 
-function ShowStatusCard({
-  data,
-  imdbId,
-  onUnpin,
-}: {
-  data: ShowStatusData;
-  imdbId?: string | null;
-  onUnpin?: () => void;
-}) {
-  const remainingMs = useCountdown(data.next?.airDateIso ?? new Date().toISOString());
+function CountdownDisplay({ airDateIso }: { airDateIso: string }) {
+  const remainingMs = useCountdown(airDateIso);
   const past = remainingMs <= 0;
   const totalSec = Math.max(0, Math.floor(remainingMs / 1000));
   const days = Math.floor(totalSec / 86400);
@@ -263,98 +452,250 @@ function ShowStatusCard({
   const minutes = Math.floor((totalSec % 3600) / 60);
   const seconds = totalSec % 60;
 
+  if (past) {
+    return <div className="mt-1 text-sm font-medium text-emerald-400">Ar trebui să fi apărut deja</div>;
+  }
+  return (
+    <>
+      <div className="mt-1.5 flex items-center gap-2 tabular-nums">
+        {[{ v: days, l: "zile" }, { v: hours, l: "ore" }, { v: minutes, l: "min" }, { v: seconds, l: "sec" }].map((u) => (
+          <div key={u.l} className="flex-1 rounded-xl bg-muted px-2 py-1.5 text-center">
+            <div className="text-lg font-semibold leading-none">{String(u.v).padStart(2, "0")}</div>
+            <div className="mt-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">{u.l}</div>
+          </div>
+        ))}
+      </div>
+      <div className="mt-1.5 text-[11px] text-muted-foreground">
+        {new Date(airDateIso).toLocaleString("ro-RO", {
+          weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit",
+          timeZone: "Europe/Bucharest",
+        })}{" "}(ora României)
+      </div>
+    </>
+  );
+}
+
+// Grupare torrente pe sezoane
+interface SeasonGroup {
+  seasonNum: number;
+  // Mod A: per-sezon — un torrent pe calitate
+  byQuality?: { t1080: FilelistTorrent | null; t4k: FilelistTorrent | null; t4kHdr: FilelistTorrent | null };
+  // Mod B: per-episod
+  episodes?: Map<number, { t1080: FilelistTorrent | null; t4k: FilelistTorrent | null; t4kHdr: FilelistTorrent | null }>;
+}
+
+function groupTorrentsBySeasonEpisode(torrents: FilelistTorrent[]): SeasonGroup[] {
+  const seasonMap = new Map<number, SeasonGroup>();
+  const hasEpisodes = torrents.some((t) => /S\d{2}E\d{2}/i.test(t.name));
+
+  for (const t of torrents) {
+    const seasonMatch = t.name.match(/S(\d{2})/i);
+    if (!seasonMatch) continue;
+    const seasonNum = parseInt(seasonMatch[1], 10);
+    const q = detectQuality(t.name);
+
+    if (!seasonMap.has(seasonNum)) {
+      if (hasEpisodes) {
+        seasonMap.set(seasonNum, { seasonNum, episodes: new Map() });
+      } else {
+        seasonMap.set(seasonNum, { seasonNum, byQuality: { t1080: null, t4k: null, t4kHdr: null } });
+      }
+    }
+    const group = seasonMap.get(seasonNum)!;
+
+    if (hasEpisodes) {
+      const epMatch = t.name.match(/S\d{2}E(\d{2})/i);
+      if (!epMatch) continue;
+      const epNum = parseInt(epMatch[1], 10);
+      if (!group.episodes!.has(epNum)) {
+        group.episodes!.set(epNum, { t1080: null, t4k: null, t4kHdr: null });
+      }
+      const ep = group.episodes!.get(epNum)!;
+      if (q.is1080p && !ep.t1080) ep.t1080 = t;
+      if (q.is4k && !ep.t4k) ep.t4k = t;
+      if (q.is4kHdr && !ep.t4kHdr) ep.t4kHdr = t;
+    } else {
+      const bq = group.byQuality!;
+      if (q.is1080p && !bq.t1080) bq.t1080 = t;
+      if (q.is4k && !bq.t4k) bq.t4k = t;
+      if (q.is4kHdr && !bq.t4kHdr) bq.t4kHdr = t;
+    }
+  }
+
+  return Array.from(seasonMap.values()).sort((a, b) => a.seasonNum - b.seasonNum);
+}
+
+function ShowCard({
+  item,
+  details,
+  inPlex,
+  torrents,
+  filelistLoading,
+  countdown,
+  countdownLoading,
+  onUnpin,
+}: {
+  item: PinnedItem;
+  details: TmdbDetails | null;
+  inPlex: boolean | null;
+  torrents: FilelistTorrent[];
+  filelistLoading: boolean;
+  countdown: TvShowCountdown | null;
+  countdownLoading: boolean;
+  onUnpin: () => void;
+}) {
+  const qc = useQueryClient();
+  const downloadFn = useServerFn(downloadFilelist);
+  const [downloading, setDownloading] = useState<number | null>(null);
+  const [expandedSeason, setExpandedSeason] = useState<number | null>(null);
+
+  const imdbId = details?.imdbId ?? countdown?.imdbId ?? null;
+
+  async function handleDownload(torrent: FilelistTorrent) {
+    setDownloading(torrent.id);
+    const toastId = toast.loading(`Se descarcă: ${torrent.name}…`);
+    try {
+      const res = await downloadFn({
+        data: {
+          torrentId: torrent.id,
+          torrentName: torrent.name,
+          categoryId: torrent.category,
+          categoryName: torrent.categoryName,
+          size: torrent.size,
+          freeleech: torrent.freeleech,
+          internal: torrent.internal,
+        },
+      });
+      if (res.status === "ok") {
+        toast.success("Adăugat în qBittorrent!", { id: toastId, description: `${torrent.name} → ${res.savePath}`, duration: 6000 });
+        qc.invalidateQueries({ queryKey: ["filelistLog"] });
+      } else {
+        toast.error("Eroare la descărcare", { id: toastId, description: res.error, duration: 8000 });
+      }
+    } catch (e: any) {
+      toast.error("Eroare neașteptată", { id: toastId, description: e?.message ?? String(e), duration: 8000 });
+    } finally {
+      setDownloading(null);
+    }
+  }
+
+  const seasonGroups = groupTorrentsBySeasonEpisode(torrents);
+  const hasEpisodes = seasonGroups.some((g) => g.episodes !== undefined);
+
   return (
     <section>
       <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
-        <Flame className="h-3.5 w-3.5 text-orange-400" /> {data.show}
+        <Tv className="h-3.5 w-3.5 text-blue-400" />
+        <span className="truncate">{item.title}</span>
         {imdbId && (
-          <a
-            href={`https://www.imdb.com/title/${imdbId}/`}
-            target="_blank"
-            rel="noreferrer"
-            className="ml-auto flex items-center gap-0.5 text-[10px] normal-case tracking-normal text-muted-foreground hover:text-foreground"
-          >
+          <a href={`https://www.imdb.com/title/${imdbId}/`} target="_blank" rel="noreferrer"
+            className="ml-auto flex shrink-0 items-center gap-0.5 text-[10px] normal-case tracking-normal text-muted-foreground hover:text-foreground">
             IMDb <ExternalLink className="h-3 w-3" />
           </a>
         )}
-        {onUnpin && (
-          <button
-            onClick={onUnpin}
-            className="ml-2 text-muted-foreground hover:text-foreground"
-            title="Scoate din listă"
-          >
-            <PinOff className="h-3.5 w-3.5" />
-          </button>
-        )}
+        <button onClick={() => { onUnpin(); qc.removeQueries({ queryKey: ["tmdbDetails", "tv", item.id] }); }}
+          className="ml-2 shrink-0 text-muted-foreground hover:text-foreground" title="Scoate din listă">
+          <PinOff className="h-3.5 w-3.5" />
+        </button>
       </h2>
-      <div className="rounded-2xl border border-border bg-card p-4 space-y-4">
-        {data.lastAired ? (
-          <div>
-            <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
-              Ultimul episod lansat
-            </div>
-            <div className="mt-1 flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <div className="truncate font-medium">
-                  E{data.lastAired.episode} — {data.lastAired.title}
-                </div>
-                <div className="mt-0.5 text-xs text-muted-foreground">
-                  {new Date(data.lastAired.airDateIso).toLocaleDateString("ro-RO", {
-                    day: "numeric",
-                    month: "long",
-                    year: "numeric",
-                    timeZone: "Europe/Bucharest",
-                  })}
-                </div>
-              </div>
-              <LibraryBadge inLibrary={data.lastAired.inLibrary} />
-            </div>
-          </div>
-        ) : (
-          <div className="text-sm text-muted-foreground">Sezonul nu a început încă.</div>
-        )}
+      <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
+        {/* Plex badge */}
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-muted-foreground">Plex</span>
+          <LibraryBadge inLibrary={inPlex} />
+        </div>
 
-        {data.next && (
-          <div className="border-t border-border pt-3">
-            <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
-              Următorul episod — E{data.next.episode}
-            </div>
-            {past ? (
-              <div className="mt-1 text-sm font-medium text-emerald-400">
-                Ar trebui să fi apărut deja
-              </div>
-            ) : (
-              <div className="mt-1.5 flex items-center gap-2 tabular-nums">
-                {[
-                  { v: days, l: "zile" },
-                  { v: hours, l: "ore" },
-                  { v: minutes, l: "min" },
-                  { v: seconds, l: "sec" },
-                ].map((u) => (
-                  <div key={u.l} className="flex-1 rounded-xl bg-muted px-2 py-1.5 text-center">
-                    <div className="text-lg font-semibold leading-none">
-                      {String(u.v).padStart(2, "0")}
+        {/* Countdown + ultimul episod */}
+        {countdownLoading ? (
+          <div className="h-8 animate-pulse rounded-xl bg-muted" />
+        ) : countdown && countdown.status === "ok" ? (
+          <div className="border-t border-border pt-3 space-y-3">
+            {countdown.lastAired && (
+              <div>
+                <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Ultimul episod lansat</div>
+                <div className="mt-1 flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="truncate font-medium text-sm">
+                      S{String(countdown.lastAired.season).padStart(2, "0")}E{String(countdown.lastAired.episode).padStart(2, "0")} — {countdown.lastAired.title}
                     </div>
-                    <div className="mt-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-                      {u.l}
+                    <div className="mt-0.5 text-xs text-muted-foreground">
+                      {new Date(countdown.lastAired.airDateIso).toLocaleDateString("ro-RO", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Bucharest" })}
                     </div>
                   </div>
-                ))}
+                  <LibraryBadge inLibrary={countdown.lastAired.inLibrary} />
+                </div>
               </div>
             )}
-            <div className="mt-1.5 text-[11px] text-muted-foreground">
-              {new Date(data.next.airDateIso).toLocaleString("ro-RO", {
-                weekday: "long",
-                day: "numeric",
-                month: "long",
-                hour: "2-digit",
-                minute: "2-digit",
-                timeZone: "Europe/Bucharest",
-              })}{" "}
-              (ora României)
-            </div>
+            {countdown.next && (
+              <div className={countdown.lastAired ? "border-t border-border pt-3" : ""}>
+                <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                  Următorul episod — S{String(countdown.next.season).padStart(2, "0")}E{String(countdown.next.episode).padStart(2, "0")}
+                </div>
+                <CountdownDisplay airDateIso={countdown.next.airDateIso} />
+              </div>
+            )}
+            {!countdown.lastAired && !countdown.next && (
+              <div className="text-sm text-muted-foreground">Nu există date despre episoade.</div>
+            )}
           </div>
-        )}
+        ) : null}
+
+        {/* Secțiunea Filelist */}
+        <div className="border-t border-border pt-3">
+          <div className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground flex items-center gap-1">
+            <Download className="h-3 w-3" /> Descarcă de pe Filelist
+            {filelistLoading && <Loader2 className="h-3 w-3 animate-spin ml-1" />}
+          </div>
+          {!filelistLoading && torrents.length === 0 ? (
+            <div className="text-xs text-muted-foreground">Niciun torrent găsit pe Filelist.</div>
+          ) : seasonGroups.length === 0 && !filelistLoading ? (
+            <div className="text-xs text-muted-foreground">Niciun torrent cu sezon detectat.</div>
+          ) : (
+            <div className="space-y-1.5">
+              {seasonGroups.map((group) => {
+                const isOpen = expandedSeason === group.seasonNum;
+                return (
+                  <div key={group.seasonNum} className="rounded-xl border border-border/60 overflow-hidden">
+                    <button
+                      onClick={() => setExpandedSeason(isOpen ? null : group.seasonNum)}
+                      className="w-full flex items-center justify-between px-3 py-2 text-sm font-medium hover:bg-muted/50 transition-colors"
+                    >
+                      <span>Sezon {String(group.seasonNum).padStart(2, "0")}</span>
+                      {isOpen ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                    </button>
+                    {isOpen && (
+                      <div className="border-t border-border/60 p-3">
+                        {!hasEpisodes && group.byQuality && (
+                          <div className="flex gap-2">
+                            <QualityDownloadButton label="1080p" torrent={group.byQuality.t1080} downloading={downloading} onDownload={handleDownload} />
+                            <QualityDownloadButton label="4K" torrent={group.byQuality.t4k} downloading={downloading} onDownload={handleDownload} />
+                            <QualityDownloadButton label="4K HDR" torrent={group.byQuality.t4kHdr} downloading={downloading} onDownload={handleDownload} />
+                          </div>
+                        )}
+                        {hasEpisodes && group.episodes && (
+                          <div className="space-y-2">
+                            {Array.from(group.episodes.entries())
+                              .sort(([a], [b]) => a - b)
+                              .map(([epNum, q]) => (
+                                <div key={epNum} className="flex items-center gap-2">
+                                  <span className="text-xs text-muted-foreground w-8 shrink-0">E{String(epNum).padStart(2, "0")}</span>
+                                  <div className="flex gap-1.5">
+                                    <QualityDownloadButton label="1080p" torrent={q.t1080} downloading={downloading} onDownload={handleDownload} />
+                                    <QualityDownloadButton label="4K" torrent={q.t4k} downloading={downloading} onDownload={handleDownload} />
+                                    <QualityDownloadButton label="4K HDR" torrent={q.t4kHdr} downloading={downloading} onDownload={handleDownload} />
+                                  </div>
+                                </div>
+                              ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
     </section>
   );
