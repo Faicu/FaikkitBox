@@ -156,6 +156,12 @@ function AutoReloadWatcher() {
   useAutoReload();
 
   useEffect(() => {
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    }
+  }, []);
+
+  useEffect(() => {
     return onUpdateDetected(() => {
       let seconds = 5;
 

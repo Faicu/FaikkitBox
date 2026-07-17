@@ -30,6 +30,20 @@ export interface ActivityEntry {
 // Persistență: SQLite (node:sqlite nativ)
 // ---------------------------------------------------------------------------
 
+const PUSH_TITLES: Record<ActivityType, string> = {
+  server_start: "🟢 Server",
+  server_stop: "🔴 Server",
+  plex_watch_start: "🎬 Plex",
+  plex_watch_stop: "🎬 Plex",
+  torrent_added: "⬇️ Torrent",
+  torrent_complete: "✅ Torrent",
+  immich_upload: "📷 Immich",
+  service_restart: "🔄 Serviciu",
+  service_update: "⬆️ Update",
+  ubuntu_update: "🐧 Ubuntu",
+  qbit_action: "⚙️ qBittorrent",
+};
+
 export async function logActivity(
   type: ActivityType,
   message: string,
@@ -50,6 +64,11 @@ export async function logActivity(
   } catch (e) {
     console.warn("[activity-log] Eroare la logActivity:", e);
   }
+
+  // Trimite notificare push (fire and forget)
+  import("./push")
+    .then(({ sendPushToAll }) => sendPushToAll(PUSH_TITLES[type] ?? "FaikkitBox", message))
+    .catch(() => {});
 }
 
 // ---------------------------------------------------------------------------
