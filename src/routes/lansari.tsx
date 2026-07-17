@@ -931,9 +931,6 @@ function ShowCard({
               </div>
               <div className="flex items-center gap-1.5 mt-1">
                 <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-400">Serial</span>
-                {countdown?.status === "ok" && countdown.next && (
-                  <span className="text-[10px] text-muted-foreground">S{String(countdown.next.season).padStart(2,"0")}E{String(countdown.next.episode).padStart(2,"0")} în curând</span>
-                )}
               </div>
             </div>
             <div className="flex items-center justify-between">
