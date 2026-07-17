@@ -101,27 +101,37 @@ function PlexPage() {
                       key={i}
                       className={`rounded-2xl border bg-card p-3 space-y-3 ${isPaused ? "border-amber-500/20" : "border-emerald-500/20"}`}
                     >
-                      {/* Header: titlu + badge stare */}
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          {s.grandparentTitle && (
-                            <div className="text-[11px] text-muted-foreground font-medium truncate">
-                              {s.grandparentTitle}
-                            </div>
-                          )}
-                          <div className="truncate font-semibold text-sm leading-tight">
-                            {s.title}
-                          </div>
-                        </div>
-                        {isPaused ? (
-                          <span className="shrink-0 rounded-lg bg-amber-500/15 border border-amber-500/20 px-2.5 py-1 text-[11px] font-medium text-amber-400">
-                            ⏸ Pauză
-                          </span>
-                        ) : (
-                          <span className="shrink-0 rounded-lg bg-emerald-500/15 border border-emerald-500/20 px-2.5 py-1 text-[11px] font-medium text-emerald-400">
-                            ▶ Redare
-                          </span>
+                      {/* Header: thumbnail + titlu + badge stare */}
+                      <div className="flex items-start gap-3">
+                        {s.thumbPath && (
+                          <img
+                            src={`/api/plex-thumb?path=${encodeURIComponent(s.thumbPath)}`}
+                            className="h-20 w-14 rounded-lg object-cover shrink-0 bg-muted"
+                            loading="lazy"
+                            alt=""
+                          />
                         )}
+                        <div className="flex-1 min-w-0 flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            {s.grandparentTitle && (
+                              <div className="text-[11px] text-muted-foreground font-medium truncate">
+                                {s.grandparentTitle}
+                              </div>
+                            )}
+                            <div className="truncate font-semibold text-sm leading-tight">
+                              {s.title}
+                            </div>
+                          </div>
+                          {isPaused ? (
+                            <span className="shrink-0 rounded-lg bg-amber-500/15 border border-amber-500/20 px-2.5 py-1 text-[11px] font-medium text-amber-400">
+                              ⏸ Pauză
+                            </span>
+                          ) : (
+                            <span className="shrink-0 rounded-lg bg-emerald-500/15 border border-emerald-500/20 px-2.5 py-1 text-[11px] font-medium text-emerald-400">
+                              ▶ Redare
+                            </span>
+                          )}
+                        </div>
                       </div>
 
                       {/* Progress bar mare */}

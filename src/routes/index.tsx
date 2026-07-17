@@ -138,11 +138,14 @@ function Overview() {
                   const isEpisode = !!s.grandparentTitle;
                   return (
                     <div key={i} className="rounded-lg bg-muted/40 px-2.5 py-2 space-y-1.5">
-                      <div className="flex items-start gap-1.5">
-                        {isEpisode ? (
-                          <Tv className="h-3.5 w-3.5 shrink-0 mt-0.5 text-blue-400" />
-                        ) : (
-                          <Film className="h-3.5 w-3.5 shrink-0 mt-0.5 text-amber-400" />
+                      <div className="flex items-start gap-2">
+                        {s.thumbPath && (
+                          <img
+                            src={`/api/plex-thumb?path=${encodeURIComponent(s.thumbPath)}`}
+                            className="h-14 w-10 rounded object-cover shrink-0 bg-muted"
+                            loading="lazy"
+                            alt=""
+                          />
                         )}
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5">
