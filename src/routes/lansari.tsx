@@ -857,7 +857,7 @@ function ShowCard({
         {/* Plex badge general */}
         <div className="flex items-center justify-between">
           <span className="text-xs text-muted-foreground">Plex</span>
-          <LibraryBadge inLibrary={inPlex} />
+          <PlexStatusBadge status={inPlex === true ? "complet" : inPlex === false ? "lipsa" : "lipsa"} />
         </div>
 
         {/* Countdown + ultimul episod */}
@@ -877,7 +877,7 @@ function ShowCard({
                       {new Date(countdown.lastAired.airDateIso).toLocaleDateString("ro-RO", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Bucharest" })}
                     </div>
                   </div>
-                  <PlexStatusBadge status={countdown.lastAired.inLibrary === true ? "complet" : countdown.lastAired.inLibrary === false ? "lipsa" : "lipsa"} />
+                  <LibraryBadge inLibrary={countdown.lastAired.inLibrary} />
                 </div>
               </div>
             )}
