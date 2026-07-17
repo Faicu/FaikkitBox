@@ -257,6 +257,19 @@ export async function trackImmichUploads(
 let dbModuleRef: typeof import("./db") | null = null;
 let cryptoRef: typeof import("node:crypto") | null = null;
 
+async function isCodeRestart(): Promise<boolean> {
+  try {
+    const { stat } = await import("node:fs/promises");
+    const { fileURLToPath } = await import("node:url");
+    // Calea spre build-ul curent — dacă a fost modificat în ultimele 3 minute, e un restart din cod
+    const buildFile = new URL("../index.mjs", import.meta.url);
+    const s = await stat(fileURLToPath(buildFile));
+    return Date.now() - s.mtimeMs < 3 * 60_000;
+  } catch {
+    return false;
+  }
+}
+
 async function logServerStartOnce(): Promise<void> {
   try {
     const dbModule = await import("./db");
@@ -269,6 +282,8 @@ async function logServerStartOnce(): Promise<void> {
       .prepare("SELECT COUNT(*) as c FROM activity WHERE type = 'server_start' AND timestamp > ?")
       .get(new Date(Date.now() - 30_000).toISOString()) as { c: number };
     if (recent.c > 0) return;
+    // Nu logăm dacă e un restart cauzat de un build recent (modificare cod)
+    if (await isCodeRestart()) return;
     await logActivity("server_start", "Serverul FaikkitBox a pornit");
   } catch {}
 }
@@ -276,6 +291,8 @@ async function logServerStartOnce(): Promise<void> {
 function logServerStopSync(): void {
   try {
     if (!dbModuleRef || !cryptoRef) return;
+    // Nu logăm dacă e un restart cauzat de un build recent
+    if (codeRestartDetected) return;
     const db = dbModuleRef.getDb();
     db.prepare(
       "INSERT INTO activity (id, timestamp, type, message, meta) VALUES (?, ?, ?, ?, ?)",
@@ -290,12 +307,15 @@ function logServerStopSync(): void {
 }
 
 declare global {
-  // Guard global împotriva înregistrării duplicate a handler-elor
   var __faikkitboxActivityInit: boolean | undefined;
 }
 
+let codeRestartDetected = false;
+
 if (typeof process !== "undefined" && process.env && !globalThis.__faikkitboxActivityInit) {
   globalThis.__faikkitboxActivityInit = true;
+  // Detectăm înainte de logare dacă e restart din cod, pentru a suprima și server_stop
+  isCodeRestart().then((isCode) => { codeRestartDetected = isCode; });
   logServerStartOnce();
   // "exit" rulează la orice ieșire normală — doar cod sincron (node:sqlite poate).
   let stopLogged = false;
