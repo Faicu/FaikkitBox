@@ -476,7 +476,6 @@ function MovieCard({
                 </div>
                 <div className="flex items-center gap-1.5 mt-1">
                   <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400">Film</span>
-                  {details?.imdbId && <span className="text-[10px] text-muted-foreground">{details.imdbId}</span>}
                 </div>
               </div>
               <div className="flex items-center gap-2">
