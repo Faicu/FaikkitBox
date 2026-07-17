@@ -94,6 +94,7 @@ function Overview() {
     onSuccess: (res) => {
       if (res.ok) {
         qc.setQueryData(["speedtest"], res);
+        qc.invalidateQueries({ queryKey: ["speedtestHistory"] });
         toast.success("Test de viteză finalizat");
       } else {
         setSpeedtestError(res.error);
@@ -473,7 +474,7 @@ function Overview() {
               </div>
             )}
 
-            {(speedtestHistory.data?.length ?? 0) > 1 && (
+            {(speedtestHistory.data?.length ?? 0) > 0 && (
               <SpeedtestChart history={speedtestHistory.data!} />
             )}
           </div>

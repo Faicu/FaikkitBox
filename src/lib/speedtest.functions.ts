@@ -46,7 +46,7 @@ type BinaryConfig = {
 
 function speedtestConfigs(): BinaryConfig[] {
   const configured = process.env.SPEEDTEST_BIN?.trim();
-  const ooklaArgs = ["--accept-license", "--accept-gdpr", "-f", "json", "-p", "no"];
+  const ooklaArgs = ["--accept-license", "--accept-gdpr", "-f", "json", "-p", "no", "--server-id", "11494"];
   const pyArgs = ["--json"];
 
   if (configured) {
