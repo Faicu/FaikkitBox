@@ -827,6 +827,53 @@ export async function checkPlexHasEpisode(
   }
 }
 
+export const getPlexEpisodesInSeason = createServerFn({ method: "GET" })
+  .validator((data: { showTitle: string; season: number }) => data)
+  .handler(async ({ data }): Promise<number[]> => {
+    const token = process.env.PLEX_TOKEN;
+    const base = process.env.PLEX_URL;
+    if (!token) return [];
+    try {
+      const headers = { Accept: "application/json", "X-Plex-Token": token };
+      const discovered = await discoverPlexUrl(token, base);
+      const url = discovered.url;
+
+      const search = await fetchJson<any>(
+        `${url}/search?query=${encodeURIComponent(data.showTitle)}&type=2`,
+        { headers },
+        8000,
+      );
+      const results = search?.MediaContainer?.Metadata ?? [];
+      const shows = results.filter((r: any) => r.type === "show");
+      const normalizedTarget = normalizeShowTitle(data.showTitle);
+      const show =
+        shows.find((r: any) => normalizeShowTitle(String(r.title ?? "")) === normalizedTarget) ??
+        shows.find((r: any) => normalizeShowTitle(String(r.title ?? "")).includes(normalizedTarget)) ??
+        shows.find((r: any) => normalizedTarget.includes(normalizeShowTitle(String(r.title ?? "")))) ??
+        shows[0];
+      if (!show) return [];
+
+      const seasons = await fetchJson<any>(
+        `${url}/library/metadata/${show.ratingKey}/children`,
+        { headers },
+        8000,
+      );
+      const seasonsMd = seasons?.MediaContainer?.Metadata ?? [];
+      const seasonMatch = seasonsMd.find((s: any) => Number(s.index) === data.season);
+      if (!seasonMatch) return [];
+
+      const episodes = await fetchJson<any>(
+        `${url}/library/metadata/${seasonMatch.ratingKey}/children`,
+        { headers },
+        8000,
+      );
+      const episodesMd = episodes?.MediaContainer?.Metadata ?? [];
+      return episodesMd.map((e: any) => Number(e.index)).filter((n: number) => n > 0);
+    } catch {
+      return [];
+    }
+  });
+
 export const checkPlexHasTitle = createServerFn({ method: "GET" })
   .validator((data: { title: string; originalTitle: string; mediaType: "movie" | "tv" }) => data)
   .handler(async ({ data }): Promise<boolean | null> => {

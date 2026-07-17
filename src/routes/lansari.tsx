@@ -30,7 +30,7 @@ import { PageShell } from "@/components/PageShell";
 import { ServicePill } from "@/components/ServicePill";
 import { ErrorCard } from "@/components/ErrorCard";
 import { filelistLogQuery } from "@/lib/queries";
-import { checkPlexHasTitle } from "@/lib/services.functions";
+import { checkPlexHasTitle, getPlexEpisodesInSeason } from "@/lib/services.functions";
 import { searchFilelist, downloadFilelist, deleteFilelistLogEntry } from "@/lib/filelist.functions";
 import type { FilelistTorrent, FilelistCategory, FilelistLogEntry } from "@/lib/filelist.functions";
 import { searchTmdb, getTmdbDetails, getTvShowCountdown } from "@/lib/tmdb.functions";
@@ -525,6 +525,89 @@ function groupTorrentsBySeasonEpisode(torrents: FilelistTorrent[]): SeasonGroup[
   return Array.from(seasonMap.values()).sort((a, b) => a.seasonNum - b.seasonNum);
 }
 
+// SeasonPanel — accordion cu fetch Plex la expandare
+function SeasonPanel({
+  showTitle,
+  group,
+  downloading,
+  onDownload,
+}: {
+  showTitle: string;
+  group: SeasonGroup;
+  downloading: number | null;
+  onDownload: (t: FilelistTorrent) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const plexFn = useServerFn(getPlexEpisodesInSeason);
+
+  const { data: plexEpisodes, isLoading: plexLoading } = useQuery({
+    queryKey: ["plexSeasonEps", showTitle, group.seasonNum],
+    queryFn: () => plexFn({ data: { showTitle, season: group.seasonNum } }),
+    enabled: isOpen && group.episodes !== undefined,
+    staleTime: 5 * 60_000,
+  });
+
+  const plexSet = new Set(plexEpisodes ?? []);
+  const hasEpMode = group.episodes !== undefined;
+
+  return (
+    <div className="rounded-xl border border-border/60 overflow-hidden">
+      <button
+        onClick={() => setIsOpen((v) => !v)}
+        className="w-full flex items-center justify-between px-3 py-2 text-sm font-medium hover:bg-muted/50 transition-colors"
+      >
+        <span>Sezon {String(group.seasonNum).padStart(2, "0")}</span>
+        {isOpen ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+      </button>
+      {isOpen && (
+        <div className="border-t border-border/60 p-3">
+          {/* Mod A: per-sezon */}
+          {!hasEpMode && group.byQuality && (
+            <div className="flex gap-2">
+              <QualityDownloadButton label="1080p" torrent={group.byQuality.t1080} downloading={downloading} onDownload={onDownload} />
+              <QualityDownloadButton label="4K" torrent={group.byQuality.t4k} downloading={downloading} onDownload={onDownload} />
+              <QualityDownloadButton label="4K HDR" torrent={group.byQuality.t4kHdr} downloading={downloading} onDownload={onDownload} />
+            </div>
+          )}
+          {/* Mod B: per-episod */}
+          {hasEpMode && group.episodes && (
+            <div className="space-y-2">
+              {plexLoading && (
+                <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground pb-1">
+                  <Loader2 className="h-3 w-3 animate-spin" /> Verifică Plex...
+                </div>
+              )}
+              {Array.from(group.episodes.entries())
+                .sort(([a], [b]) => a - b)
+                .map(([epNum, q]) => {
+                  const inPlex = plexSet.has(epNum);
+                  return (
+                    <div key={epNum} className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground w-8 shrink-0">
+                        E{String(epNum).padStart(2, "0")}
+                      </span>
+                      {inPlex ? (
+                        <span className="flex items-center gap-1 rounded-lg bg-emerald-500/15 px-2 py-1 text-[11px] font-medium text-emerald-400">
+                          <CheckCircle2 className="h-3.5 w-3.5" /> În bibliotecă
+                        </span>
+                      ) : (
+                        <div className="flex gap-1.5">
+                          <QualityDownloadButton label="1080p" torrent={q.t1080} downloading={downloading} onDownload={onDownload} />
+                          <QualityDownloadButton label="4K" torrent={q.t4k} downloading={downloading} onDownload={onDownload} />
+                          <QualityDownloadButton label="4K HDR" torrent={q.t4kHdr} downloading={downloading} onDownload={onDownload} />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ShowCard({
   item,
   details,
@@ -547,9 +630,9 @@ function ShowCard({
   const qc = useQueryClient();
   const downloadFn = useServerFn(downloadFilelist);
   const [downloading, setDownloading] = useState<number | null>(null);
-  const [expandedSeason, setExpandedSeason] = useState<number | null>(null);
 
   const imdbId = details?.imdbId ?? countdown?.imdbId ?? null;
+  const showTitle = countdown?.showName || item.title;
 
   async function handleDownload(torrent: FilelistTorrent) {
     setDownloading(torrent.id);
@@ -580,7 +663,6 @@ function ShowCard({
   }
 
   const seasonGroups = groupTorrentsBySeasonEpisode(torrents);
-  const hasEpisodes = seasonGroups.some((g) => g.episodes !== undefined);
 
   return (
     <section>
@@ -599,7 +681,7 @@ function ShowCard({
         </button>
       </h2>
       <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
-        {/* Plex badge */}
+        {/* Plex badge general */}
         <div className="flex items-center justify-between">
           <span className="text-xs text-muted-foreground">Plex</span>
           <LibraryBadge inLibrary={inPlex} />
@@ -652,47 +734,15 @@ function ShowCard({
             <div className="text-xs text-muted-foreground">Niciun torrent cu sezon detectat.</div>
           ) : (
             <div className="space-y-1.5">
-              {seasonGroups.map((group) => {
-                const isOpen = expandedSeason === group.seasonNum;
-                return (
-                  <div key={group.seasonNum} className="rounded-xl border border-border/60 overflow-hidden">
-                    <button
-                      onClick={() => setExpandedSeason(isOpen ? null : group.seasonNum)}
-                      className="w-full flex items-center justify-between px-3 py-2 text-sm font-medium hover:bg-muted/50 transition-colors"
-                    >
-                      <span>Sezon {String(group.seasonNum).padStart(2, "0")}</span>
-                      {isOpen ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
-                    </button>
-                    {isOpen && (
-                      <div className="border-t border-border/60 p-3">
-                        {!hasEpisodes && group.byQuality && (
-                          <div className="flex gap-2">
-                            <QualityDownloadButton label="1080p" torrent={group.byQuality.t1080} downloading={downloading} onDownload={handleDownload} />
-                            <QualityDownloadButton label="4K" torrent={group.byQuality.t4k} downloading={downloading} onDownload={handleDownload} />
-                            <QualityDownloadButton label="4K HDR" torrent={group.byQuality.t4kHdr} downloading={downloading} onDownload={handleDownload} />
-                          </div>
-                        )}
-                        {hasEpisodes && group.episodes && (
-                          <div className="space-y-2">
-                            {Array.from(group.episodes.entries())
-                              .sort(([a], [b]) => a - b)
-                              .map(([epNum, q]) => (
-                                <div key={epNum} className="flex items-center gap-2">
-                                  <span className="text-xs text-muted-foreground w-8 shrink-0">E{String(epNum).padStart(2, "0")}</span>
-                                  <div className="flex gap-1.5">
-                                    <QualityDownloadButton label="1080p" torrent={q.t1080} downloading={downloading} onDownload={handleDownload} />
-                                    <QualityDownloadButton label="4K" torrent={q.t4k} downloading={downloading} onDownload={handleDownload} />
-                                    <QualityDownloadButton label="4K HDR" torrent={q.t4kHdr} downloading={downloading} onDownload={handleDownload} />
-                                  </div>
-                                </div>
-                              ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+              {seasonGroups.map((group) => (
+                <SeasonPanel
+                  key={group.seasonNum}
+                  showTitle={showTitle}
+                  group={group}
+                  downloading={downloading}
+                  onDownload={handleDownload}
+                />
+              ))}
             </div>
           )}
         </div>
