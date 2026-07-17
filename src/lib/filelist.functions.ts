@@ -61,6 +61,32 @@ const MOVIE_CATEGORIES = [1, 2, 3, 4, 6, 19, 26];
 const SERIES_CATEGORIES = [21, 22, 23, 27];
 const ALL_CATEGORIES = [...MOVIE_CATEGORIES, ...SERIES_CATEGORIES];
 
+// Filelist API poate returna categoria ca string (ex: "Movies HD") — mapăm la ID numeric
+const CATEGORY_STRING_MAP: Record<string, number> = {
+  "Movies SD": 1, "Filme SD": 1,
+  "Movies DVD": 2, "Filme DVD": 2,
+  "Movies DVD-RO": 3, "Filme DVD-RO": 3,
+  "Movies HD": 4, "Filme HD": 4,
+  "Movies 4K": 6, "Filme 4K": 6,
+  "Movies HD-RO": 19, "Filme HD-RO": 19,
+  "Movies 4K-RO": 26, "Filme 4K-RO": 26,
+  "TV-Series HD": 21, "Seriale HD": 21,
+  "TV-Series HD-RO": 22, "Seriale HD-RO": 22,
+  "TV-Series SD": 23, "Seriale SD": 23,
+  "TV-Series 4K": 27, "Seriale 4K": 27,
+};
+
+function parseCategoryId(raw: unknown): number {
+  if (typeof raw === "number") return raw;
+  if (typeof raw === "string") {
+    const mapped = CATEGORY_STRING_MAP[raw.trim()];
+    if (mapped !== undefined) return mapped;
+    const n = Number(raw);
+    if (!isNaN(n)) return n;
+  }
+  return 0;
+}
+
 const CATEGORY_NAMES: Record<number, string> = {
   1: "Filme SD",
   2: "Filme DVD",
@@ -406,8 +432,8 @@ export const searchFilelist = createServerFn({ method: "GET" })
         seeders: Number(t.seeders ?? 0),
         leechers: Number(t.leechers ?? 0),
         times_completed: Number(t.times_completed ?? 0),
-        category: Number(t.category ?? 0),
-        categoryName: CATEGORY_NAMES[Number(t.category)] ?? `Cat ${t.category}`,
+        category: parseCategoryId(t.category),
+        categoryName: CATEGORY_NAMES[parseCategoryId(t.category)] ?? `Cat ${t.category}`,
         freeleech: !!Number(t.freeleech),
         internal: !!Number(t.internal),
         upload_date: String(t.upload_date ?? ""),

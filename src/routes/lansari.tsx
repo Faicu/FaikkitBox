@@ -457,7 +457,9 @@ function FilelistSection() {
     }
   }
 
-  const isMovie = (catId: number) => [1, 2, 3, 4, 6, 19, 26].includes(catId);
+  const isMovie = (catId: number, catName = "") =>
+    [1, 2, 3, 4, 6, 19, 26].includes(catId) ||
+    (catId === 0 && /film|movie/i.test(catName));
 
   return (
     <section>
@@ -642,7 +644,9 @@ function DownloadLogSection() {
   const queryClient = useQueryClient();
   const { data: log, isLoading } = useQuery(filelistLogQuery);
   const deleteFn = useServerFn(deleteFilelistLogEntry);
-  const isMovie = (catId: number) => [1, 2, 3, 4, 6, 19, 26].includes(catId);
+  const isMovie = (catId: number, catName = "") =>
+    [1, 2, 3, 4, 6, 19, 26].includes(catId) ||
+    (catId === 0 && /film|movie/i.test(catName));
 
   async function handleDelete(id: number) {
     await deleteFn({ data: { id } });
@@ -664,7 +668,7 @@ function DownloadLogSection() {
               className="flex items-start gap-2.5 py-2 first:pt-0 last:pb-0"
             >
               <div className="mt-0.5 shrink-0">
-                {isMovie(e.category) ? (
+                {isMovie(e.category, e.categoryName) ? (
                   <Film className="h-4 w-4 text-amber-400" />
                 ) : (
                   <Tv className="h-4 w-4 text-blue-400" />
