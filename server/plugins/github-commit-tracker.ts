@@ -52,7 +52,7 @@ export default function () {
     }
   }
 
-  // Prima verificare după 10 secunde (să dăm timp serverului să pornească)
-  setTimeout(poll, 10_000);
-  setInterval(poll, INTERVAL_MS);
+  const t1 = setTimeout(poll, 10_000);
+  const t2 = setInterval(poll, INTERVAL_MS);
+  process.on("exit", () => { clearTimeout(t1); clearInterval(t2); });
 }

@@ -55,27 +55,12 @@ async function upsertCommits(commits: GitHubCommit[]): Promise<void> {
     const db = getDb();
     const now = new Date().toISOString();
 
-    const newCommits: GitHubCommit[] = [];
-    for (const c of commits) {
-      const existing = db.prepare("SELECT sha FROM commits WHERE sha = ?").get(c.sha);
-      if (!existing) newCommits.push(c);
-    }
-
     const stmt = db.prepare(
       `INSERT OR REPLACE INTO commits (sha, short_sha, message, author, date, url, fetched_at)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
     );
     for (const c of commits) {
       stmt.run(c.sha, c.shortSha, c.message, c.author, c.date, c.url, now);
-    }
-
-    // Trimite push pentru commiturile noi (cel mai recent primul)
-    for (const c of newCommits.slice(0, 3)) {
-      import("./push")
-        .then(({ sendPushToAll }) =>
-          sendPushToAll(`📦 Commit nou — ${c.author}`, c.message),
-        )
-        .catch(() => {});
     }
   } catch (e) {
     console.warn("[github] Upsert commits eșuat:", e);

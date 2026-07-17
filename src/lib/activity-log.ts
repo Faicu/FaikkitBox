@@ -288,11 +288,23 @@ async function logServerStartOnce(): Promise<void> {
   } catch {}
 }
 
+function isCodeRestartSync(): boolean {
+  try {
+    const { statSync } = require("node:fs");
+    const { fileURLToPath } = require("node:url");
+    const buildFile = new URL("../index.mjs", import.meta.url);
+    const s = statSync(fileURLToPath(buildFile));
+    return Date.now() - s.mtimeMs < 3 * 60_000;
+  } catch {
+    return false;
+  }
+}
+
 function logServerStopSync(): void {
   try {
     if (!dbModuleRef || !cryptoRef) return;
-    // Nu logăm dacă e un restart cauzat de un build recent
-    if (codeRestartDetected) return;
+    // Nu logăm dacă e un restart cauzat de un build recent (verificare async sau sync fallback)
+    if (codeRestartDetected || isCodeRestartSync()) return;
     const db = dbModuleRef.getDb();
     db.prepare(
       "INSERT INTO activity (id, timestamp, type, message, meta) VALUES (?, ?, ?, ?, ?)",

@@ -893,9 +893,8 @@ function ActivityLogSection() {
 
 function SpeedtestChart({ history }: { history: SpeedtestHistoryEntry[] }) {
   const sorted = [...history].reverse(); // cronologic
-  const maxDl = Math.max(...sorted.map((h) => h.download));
-  const maxUp = Math.max(...sorted.map((h) => h.upload));
-  const maxVal = Math.max(maxDl, maxUp, 1);
+  const maxDl = Math.max(...sorted.map((h) => h.download), 1);
+  const maxUp = Math.max(...sorted.map((h) => h.upload), 1);
 
   return (
     <div className="space-y-2">
@@ -904,18 +903,16 @@ function SpeedtestChart({ history }: { history: SpeedtestHistoryEntry[] }) {
       </div>
       <div className="rounded-xl border border-border bg-card p-3">
         <div className="flex items-end gap-1 h-16">
-          {sorted.map((h, i) => (
-            <div key={h.id} className="flex-1 flex flex-col items-center gap-0.5 group relative">
-              <div className="w-full flex flex-col justify-end gap-px h-14">
-                <div
-                  className="w-full rounded-t bg-sky-500/70"
-                  style={{ height: `${(h.download / maxVal) * 100}%` }}
-                />
-                <div
-                  className="w-full rounded-t bg-emerald-500/70"
-                  style={{ height: `${(h.upload / maxVal) * 100}%` }}
-                />
-              </div>
+          {sorted.map((h) => (
+            <div key={h.id} className="flex-1 flex flex-row items-end gap-px group relative">
+              <div
+                className="flex-1 rounded-t bg-sky-500/70 min-h-[2px]"
+                style={{ height: `${(h.download / maxDl) * 100}%` }}
+              />
+              <div
+                className="flex-1 rounded-t bg-emerald-500/70 min-h-[2px]"
+                style={{ height: `${(h.upload / maxUp) * 100}%` }}
+              />
               {/* tooltip */}
               <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 hidden group-hover:flex flex-col items-center z-10 pointer-events-none">
                 <div className="rounded-lg bg-popover border border-border px-2 py-1 text-[10px] whitespace-nowrap shadow-lg">
