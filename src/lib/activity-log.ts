@@ -264,7 +264,7 @@ async function isCodeRestart(): Promise<boolean> {
     // Calea spre build-ul curent — dacă a fost modificat în ultimele 3 minute, e un restart din cod
     const buildFile = new URL("../index.mjs", import.meta.url);
     const s = await stat(fileURLToPath(buildFile));
-    return Date.now() - s.mtimeMs < 3 * 60_000;
+    return Date.now() - s.mtimeMs < 10 * 60_000;
   } catch {
     return false;
   }
@@ -294,7 +294,7 @@ function isCodeRestartSync(): boolean {
     const { fileURLToPath } = require("node:url");
     const buildFile = new URL("../index.mjs", import.meta.url);
     const s = statSync(fileURLToPath(buildFile));
-    return Date.now() - s.mtimeMs < 3 * 60_000;
+    return Date.now() - s.mtimeMs < 10 * 60_000;
   } catch {
     return false;
   }
