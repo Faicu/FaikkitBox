@@ -62,6 +62,7 @@ interface PinnedItem {
   mediaType: "movie" | "tv";
   title: string;
   originalTitle: string;
+  posterUrl: string | null;
 }
 
 function loadPinned(): PinnedItem[] {
@@ -180,7 +181,7 @@ function UnifiedSearchSection() {
 
   function pin(item: TmdbSearchResult) {
     if (pinned.some((p) => p.id === item.id && p.mediaType === item.mediaType)) return;
-    const next = [...pinned, { id: item.id, mediaType: item.mediaType, title: item.title, originalTitle: item.originalTitle }];
+    const next = [...pinned, { id: item.id, mediaType: item.mediaType, title: item.title, originalTitle: item.originalTitle, posterUrl: item.posterUrl ?? null }];
     setPinned(next);
     savePinned(next);
     setQuery("");
@@ -454,21 +455,41 @@ function MovieCard({
         />
       )}
       <section>
-        <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
-          <Film className="h-3.5 w-3.5 text-amber-400" />
-          <span className="truncate">{item.title}</span>
-          {imdbId && (
-            <a href={`https://www.imdb.com/title/${imdbId}/`} target="_blank" rel="noreferrer"
-              className="ml-auto flex shrink-0 items-center gap-0.5 text-[10px] normal-case tracking-normal text-muted-foreground hover:text-foreground">
-              IMDb <ExternalLink className="h-3 w-3" />
-            </a>
-          )}
-          <button onClick={() => { onUnpin(); qc.removeQueries({ queryKey: ["tmdbDetails", "movie", item.id] }); }}
-            className="ml-2 shrink-0 text-muted-foreground hover:text-foreground" title="Scoate din listă">
-            <PinOff className="h-3.5 w-3.5" />
-          </button>
-        </h2>
-        <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
+        <div className="rounded-2xl border border-border bg-card overflow-hidden">
+          {/* Header cu poster */}
+          <div className="flex gap-3 p-3 pb-0">
+            {item.posterUrl ? (
+              <img src={item.posterUrl} alt="" className="h-24 w-16 rounded-xl object-cover shrink-0 shadow-md" />
+            ) : (
+              <div className="h-24 w-16 rounded-xl bg-muted shrink-0 flex items-center justify-center">
+                <Film className="h-6 w-6 text-muted-foreground/40" />
+              </div>
+            )}
+            <div className="flex flex-col justify-between min-w-0 py-0.5 flex-1">
+              <div>
+                <div className="flex items-start gap-1">
+                  <span className="font-semibold text-sm leading-tight line-clamp-2 flex-1">{item.title}</span>
+                  <button onClick={() => { onUnpin(); qc.removeQueries({ queryKey: ["tmdbDetails", "movie", item.id] }); }}
+                    className="shrink-0 text-muted-foreground hover:text-foreground mt-0.5" title="Scoate din listă">
+                    <PinOff className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                <div className="flex items-center gap-1.5 mt-1">
+                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400">Film</span>
+                  {details?.imdbId && <span className="text-[10px] text-muted-foreground">{details.imdbId}</span>}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {imdbId && (
+                  <a href={`https://www.imdb.com/title/${imdbId}/`} target="_blank" rel="noreferrer"
+                    className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground">
+                    IMDb <ExternalLink className="h-2.5 w-2.5" />
+                  </a>
+                )}
+              </div>
+            </div>
+          </div>
+          <div className="p-3 pt-3 space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-xs text-muted-foreground">Plex</span>
             {plexStatus ? <PlexStatusBadge status={plexStatus} /> : <LibraryBadge inLibrary={null} />}
@@ -487,6 +508,7 @@ function MovieCard({
                 <QualityDownloadButton label="4K HDR" torrent={t4kHdr} downloading={downloading} onDownload={(t, l) => setConfirm({ torrent: t, label: l })} />
               </div>
             )}
+          </div>
           </div>
         </div>
       </section>
@@ -888,36 +910,55 @@ function ShowCard({
 
   return (
     <section>
-      <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
-        <Tv className="h-3.5 w-3.5 text-blue-400" />
-        <span className="truncate">{item.title}</span>
-        {imdbId && (
-          <a href={`https://www.imdb.com/title/${imdbId}/`} target="_blank" rel="noreferrer"
-            className="ml-auto flex shrink-0 items-center gap-0.5 text-[10px] normal-case tracking-normal text-muted-foreground hover:text-foreground">
-            IMDb <ExternalLink className="h-3 w-3" />
-          </a>
-        )}
-        <button onClick={() => { onUnpin(); qc.removeQueries({ queryKey: ["tmdbDetails", "tv", item.id] }); }}
-          className="ml-2 shrink-0 text-muted-foreground hover:text-foreground" title="Scoate din listă">
-          <PinOff className="h-3.5 w-3.5" />
-        </button>
-      </h2>
-      <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
-        {/* Plex badge general */}
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-muted-foreground">Plex</span>
-          {tvPlexLoading ? (
-            <div className="h-4 w-16 animate-pulse rounded bg-muted" />
+      <div className="rounded-2xl border border-border bg-card overflow-hidden">
+        {/* Header cu poster */}
+        <div className="flex gap-3 p-3 pb-0">
+          {item.posterUrl ? (
+            <img src={item.posterUrl} alt="" className="h-24 w-16 rounded-xl object-cover shrink-0 shadow-md" />
           ) : (
-            <PlexStatusBadge status={tvPlexStatus ?? "lipsa"} />
+            <div className="h-24 w-16 rounded-xl bg-muted shrink-0 flex items-center justify-center">
+              <Tv className="h-6 w-6 text-muted-foreground/40" />
+            </div>
           )}
+          <div className="flex flex-col justify-between min-w-0 py-0.5 flex-1">
+            <div>
+              <div className="flex items-start gap-1">
+                <span className="font-semibold text-sm leading-tight line-clamp-2 flex-1">{item.title}</span>
+                <button onClick={() => { onUnpin(); qc.removeQueries({ queryKey: ["tmdbDetails", "tv", item.id] }); }}
+                  className="shrink-0 text-muted-foreground hover:text-foreground mt-0.5" title="Scoate din listă">
+                  <PinOff className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              <div className="flex items-center gap-1.5 mt-1">
+                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-400">Serial</span>
+                {countdown?.status === "ok" && countdown.next && (
+                  <span className="text-[10px] text-muted-foreground">S{String(countdown.next.season).padStart(2,"0")}E{String(countdown.next.episode).padStart(2,"0")} în curând</span>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                {imdbId && (
+                  <a href={`https://www.imdb.com/title/${imdbId}/`} target="_blank" rel="noreferrer"
+                    className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground">
+                    IMDb <ExternalLink className="h-2.5 w-2.5" />
+                  </a>
+                )}
+              </div>
+              {tvPlexLoading ? (
+                <div className="h-4 w-16 animate-pulse rounded bg-muted" />
+              ) : (
+                <PlexStatusBadge status={tvPlexStatus ?? "lipsa"} />
+              )}
+            </div>
+          </div>
         </div>
-
+        <div className="p-3 pt-3 space-y-3">
         {/* Countdown + ultimul episod */}
         {countdownLoading ? (
           <div className="h-8 animate-pulse rounded-xl bg-muted" />
         ) : countdown && countdown.status === "ok" ? (
-          <div className="border-t border-border pt-3 space-y-3">
+          <div className="space-y-3">
             {countdown.lastAired && (
               <div>
                 <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Ultimul episod lansat</div>
@@ -972,6 +1013,7 @@ function ShowCard({
               ))}
             </div>
           )}
+        </div>
         </div>
       </div>
     </section>
