@@ -114,6 +114,33 @@ export const getTmdbDetails = createServerFn({ method: "GET" })
     }
   });
 
+export interface TmdbEpisode {
+  episodeNum: number;
+  title: string;
+  airDate: string | null;
+  aired: boolean;
+}
+
+export const getTmdbSeasonEpisodes = createServerFn({ method: "GET" })
+  .validator((data: { tmdbId: number; seasonNum: number }) => data)
+  .handler(async ({ data }): Promise<TmdbEpisode[]> => {
+    try {
+      const season: any = await tmdbFetch(`/tv/${data.tmdbId}/season/${data.seasonNum}`);
+      const now = new Date();
+      return (season.episodes ?? []).map((e: any) => {
+        const airDate = e.air_date ?? null;
+        return {
+          episodeNum: Number(e.episode_number),
+          title: e.name ?? `Episodul ${e.episode_number}`,
+          airDate,
+          aired: airDate ? new Date(airDate) <= now : false,
+        };
+      });
+    } catch {
+      return [];
+    }
+  });
+
 export interface TvShowCountdown {
   status: "ok" | "error" | "not_found";
   showName: string;

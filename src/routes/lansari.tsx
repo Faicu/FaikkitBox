@@ -33,8 +33,8 @@ import { filelistLogQuery } from "@/lib/queries";
 import { checkPlexHasTitle, getPlexEpisodesInSeason } from "@/lib/services.functions";
 import { searchFilelist, downloadFilelist, deleteFilelistLogEntry } from "@/lib/filelist.functions";
 import type { FilelistTorrent, FilelistCategory, FilelistLogEntry } from "@/lib/filelist.functions";
-import { searchTmdb, getTmdbDetails, getTvShowCountdown } from "@/lib/tmdb.functions";
-import type { TmdbSearchResult, TmdbDetails, TvShowCountdown } from "@/lib/tmdb.functions";
+import { searchTmdb, getTmdbDetails, getTvShowCountdown, getTmdbSeasonEpisodes } from "@/lib/tmdb.functions";
+import type { TmdbSearchResult, TmdbDetails, TvShowCountdown, TmdbEpisode } from "@/lib/tmdb.functions";
 
 export const Route = createFileRoute("/lansari")({
   head: () => ({ meta: [{ title: "Lansări — Monitor Server" }] }),
@@ -536,20 +536,23 @@ function groupTorrentsBySeasonEpisode(torrents: FilelistTorrent[]): SeasonGroup[
   return Array.from(seasonMap.values()).sort((a, b) => a.seasonNum - b.seasonNum);
 }
 
-// SeasonPanel — accordion cu fetch Plex la expandare
+// SeasonPanel — accordion cu verificare completă Plex vs episoade difuzate TMDB
 function SeasonPanel({
   showTitle,
+  tmdbId,
   group,
   downloading,
   onDownload,
 }: {
   showTitle: string;
+  tmdbId: number;
   group: SeasonGroup;
   downloading: number | null;
   onDownload: (t: FilelistTorrent) => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const plexFn = useServerFn(getPlexEpisodesInSeason);
+  const tmdbSeasonFn = useServerFn(getTmdbSeasonEpisodes);
 
   const { data: plexEpisodes, isLoading: plexLoading } = useQuery({
     queryKey: ["plexSeasonEps", showTitle, group.seasonNum],
@@ -558,8 +561,45 @@ function SeasonPanel({
     staleTime: 5 * 60_000,
   });
 
+  const { data: tmdbEpisodes, isLoading: tmdbLoading } = useQuery({
+    queryKey: ["tmdbSeasonEps", tmdbId, group.seasonNum],
+    queryFn: () => tmdbSeasonFn({ data: { tmdbId, seasonNum: group.seasonNum } }),
+    enabled: isOpen,
+    staleTime: 60 * 60_000,
+  });
+
+  const loading = plexLoading || tmdbLoading;
   const plexSet = new Set(plexEpisodes ?? []);
-  const seasonInPlex = (plexEpisodes ?? []).length > 0;
+  // Episoadele deja difuzate conform TMDB
+  const airedEps: TmdbEpisode[] = (tmdbEpisodes ?? []).filter((e) => e.aired);
+  // Dacă nu avem date TMDB, folosim lista din Filelist ca fallback
+  const filelistEpNums = group.episodes ? Array.from(group.episodes.keys()).sort((a, b) => a - b) : [];
+  const episodeList: number[] = airedEps.length > 0
+    ? airedEps.map((e) => e.episodeNum)
+    : filelistEpNums;
+
+  const allInPlex = episodeList.length > 0 && episodeList.every((n) => plexSet.has(n));
+  const someInPlex = episodeList.some((n) => plexSet.has(n));
+  const missingCount = episodeList.filter((n) => !plexSet.has(n)).length;
+
+  // Badge resumat pentru butonul închis
+  let closedBadge: React.ReactNode = null;
+  if (plexEpisodes !== undefined && !loading) {
+    if (allInPlex) {
+      closedBadge = (
+        <span className="text-[10px] font-medium text-emerald-400 flex items-center gap-0.5">
+          <CheckCircle2 className="h-3 w-3" /> Complet
+        </span>
+      );
+    } else if (someInPlex) {
+      closedBadge = (
+        <span className="text-[10px] font-medium text-amber-400 flex items-center gap-0.5">
+          <HelpCircle className="h-3 w-3" /> Incomplet
+        </span>
+      );
+    }
+  }
+
   const hasEpMode = group.episodes !== undefined;
 
   return (
@@ -570,62 +610,108 @@ function SeasonPanel({
       >
         <span>Sezon {String(group.seasonNum).padStart(2, "0")}</span>
         <div className="flex items-center gap-2">
-          {!isOpen && plexEpisodes !== undefined && seasonInPlex && (
-            <span className="text-[10px] font-medium text-emerald-400 flex items-center gap-0.5">
-              <CheckCircle2 className="h-3 w-3" /> Plex
-            </span>
-          )}
+          {!isOpen && closedBadge}
           {isOpen ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
         </div>
       </button>
+
       {isOpen && (
-        <div className="border-t border-border/60 p-3">
-          {plexLoading && (
-            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground pb-2">
-              <Loader2 className="h-3 w-3 animate-spin" /> Verifică Plex...
+        <div className="border-t border-border/60 p-3 space-y-3">
+          {loading && (
+            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <Loader2 className="h-3 w-3 animate-spin" /> Verifică Plex și episoade...
             </div>
           )}
-          {/* Mod A: per-sezon */}
-          {!hasEpMode && group.byQuality && (
-            seasonInPlex ? (
-              <span className="flex items-center gap-1 rounded-lg bg-emerald-500/15 px-2 py-1 text-[11px] font-medium text-emerald-400">
-                <CheckCircle2 className="h-3.5 w-3.5" /> Sezonul este deja în bibliotecă Plex
-              </span>
-            ) : (
-              <div className="flex gap-2">
-                <QualityDownloadButton label="1080p" torrent={group.byQuality.t1080} downloading={downloading} onDownload={onDownload} />
-                <QualityDownloadButton label="4K" torrent={group.byQuality.t4k} downloading={downloading} onDownload={onDownload} />
-                <QualityDownloadButton label="4K HDR" torrent={group.byQuality.t4kHdr} downloading={downloading} onDownload={onDownload} />
-              </div>
-            )
-          )}
-          {/* Mod B: per-episod */}
-          {hasEpMode && group.episodes && (
-            <div className="space-y-2">
-              {Array.from(group.episodes.entries())
-                .sort(([a], [b]) => a - b)
-                .map(([epNum, q]) => {
-                  const inPlex = plexSet.has(epNum);
-                  return (
-                    <div key={epNum} className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground w-8 shrink-0">
-                        E{String(epNum).padStart(2, "0")}
-                      </span>
-                      {inPlex ? (
-                        <span className="flex items-center gap-1 rounded-lg bg-emerald-500/15 px-2 py-1 text-[11px] font-medium text-emerald-400">
-                          <CheckCircle2 className="h-3.5 w-3.5" /> În bibliotecă
-                        </span>
-                      ) : (
-                        <div className="flex gap-1.5">
-                          <QualityDownloadButton label="1080p" torrent={q.t1080} downloading={downloading} onDownload={onDownload} />
-                          <QualityDownloadButton label="4K" torrent={q.t4k} downloading={downloading} onDownload={onDownload} />
-                          <QualityDownloadButton label="4K HDR" torrent={q.t4kHdr} downloading={downloading} onDownload={onDownload} />
-                        </div>
-                      )}
+
+          {!loading && (
+            <>
+              {/* Status general sezon */}
+              {allInPlex ? (
+                <span className="flex items-center gap-1.5 rounded-lg bg-emerald-500/15 px-3 py-1.5 text-[11px] font-medium text-emerald-400">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  În bibliotecă — toate cele {episodeList.length} episoade difuzate sunt în Plex
+                </span>
+              ) : someInPlex ? (
+                <span className="flex items-center gap-1.5 rounded-lg bg-amber-500/15 px-3 py-1.5 text-[11px] font-medium text-amber-400">
+                  <HelpCircle className="h-3.5 w-3.5" />
+                  Incomplet — {plexSet.size}/{episodeList.length} episoade în Plex, lipsesc {missingCount}
+                </span>
+              ) : null}
+
+              {/* Mod A (per-sezon): afișează butoane sezon + lista episoade */}
+              {!hasEpMode && group.byQuality && (
+                <div className="space-y-2">
+                  {!allInPlex && (
+                    <>
+                      <div className="text-[11px] text-muted-foreground uppercase tracking-wide">Descarcă sezonul complet</div>
+                      <div className="flex gap-2">
+                        <QualityDownloadButton label="1080p" torrent={group.byQuality.t1080} downloading={downloading} onDownload={onDownload} />
+                        <QualityDownloadButton label="4K" torrent={group.byQuality.t4k} downloading={downloading} onDownload={onDownload} />
+                        <QualityDownloadButton label="4K HDR" torrent={group.byQuality.t4kHdr} downloading={downloading} onDownload={onDownload} />
+                      </div>
+                    </>
+                  )}
+                  {episodeList.length > 0 && (
+                    <div className="space-y-1 pt-1 border-t border-border/40">
+                      <div className="text-[11px] text-muted-foreground uppercase tracking-wide pb-1">Status episoade</div>
+                      {episodeList.map((epNum) => {
+                        const inPlex = plexSet.has(epNum);
+                        const tmdbEp = airedEps.find((e) => e.episodeNum === epNum);
+                        return (
+                          <div key={epNum} className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground w-8 shrink-0">E{String(epNum).padStart(2, "0")}</span>
+                            {tmdbEp && <span className="text-xs text-muted-foreground truncate flex-1 hidden sm:block">{tmdbEp.title}</span>}
+                            {inPlex ? (
+                              <span className="flex items-center gap-1 rounded-lg bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-400 shrink-0">
+                                <CheckCircle2 className="h-3 w-3" /> Plex
+                              </span>
+                            ) : (
+                              <span className="flex items-center gap-1 rounded-lg bg-red-500/15 px-2 py-0.5 text-[10px] font-medium text-red-400 shrink-0">
+                                <XCircle className="h-3 w-3" /> Lipsă
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
-                  );
-                })}
-            </div>
+                  )}
+                </div>
+              )}
+
+              {/* Mod B (per-episod): download individual pentru episoadele lipsă */}
+              {hasEpMode && group.episodes && (
+                <div className="space-y-2">
+                  {episodeList.map((epNum) => {
+                    const inPlex = plexSet.has(epNum);
+                    const q = group.episodes!.get(epNum);
+                    const tmdbEp = airedEps.find((e) => e.episodeNum === epNum);
+                    return (
+                      <div key={epNum} className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-medium w-8 shrink-0">E{String(epNum).padStart(2, "0")}</span>
+                          {tmdbEp && <span className="text-xs text-muted-foreground truncate flex-1">{tmdbEp.title}</span>}
+                        </div>
+                        <div className="pl-10">
+                          {inPlex ? (
+                            <span className="flex items-center gap-1 rounded-lg bg-emerald-500/15 px-2 py-1 text-[11px] font-medium text-emerald-400 w-fit">
+                              <CheckCircle2 className="h-3.5 w-3.5" /> În bibliotecă
+                            </span>
+                          ) : q ? (
+                            <div className="flex gap-1.5">
+                              <QualityDownloadButton label="1080p" torrent={q.t1080} downloading={downloading} onDownload={onDownload} />
+                              <QualityDownloadButton label="4K" torrent={q.t4k} downloading={downloading} onDownload={onDownload} />
+                              <QualityDownloadButton label="4K HDR" torrent={q.t4kHdr} downloading={downloading} onDownload={onDownload} />
+                            </div>
+                          ) : (
+                            <span className="text-[11px] text-muted-foreground">Indisponibil pe Filelist</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
@@ -763,6 +849,7 @@ function ShowCard({
                 <SeasonPanel
                   key={group.seasonNum}
                   showTitle={showTitle}
+                  tmdbId={item.id}
                   group={group}
                   downloading={downloading}
                   onDownload={handleDownload}
