@@ -102,7 +102,7 @@ function HostPage() {
     >
       {lastCmd && <CommandOutput output={lastCmd.output} ok={lastCmd.ok} />}
 
-      <PushNotificationsCard push={push} />
+      {isAdmin && <PushNotificationsCard push={push} />}
 
       {data?.status === "error" && (
         <ErrorCard title="Metrici indisponibile" message={data.error ?? "Eroare necunoscută"} />
