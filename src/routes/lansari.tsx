@@ -307,7 +307,13 @@ function PinnedItemCard({ item, onUnpin }: { item: PinnedItem; onUnpin: () => vo
   });
 
   // Pentru seriale: status Plex bazat pe ultimul sezon difuzat
-  const latestSeason = countdown?.status === "ok" ? (countdown.lastAired?.season ?? null) : null;
+  // Dacă TVmaze nu găsește serialul, folosim ultimul sezon din TMDB details
+  const latestSeasonFromTmdb = details && details.seasons.length > 0
+    ? details.seasons[details.seasons.length - 1].seasonNumber
+    : null;
+  const latestSeason = countdown?.status === "ok"
+    ? (countdown.lastAired?.season ?? latestSeasonFromTmdb)
+    : latestSeasonFromTmdb;
   // Preferăm originalTitle (TMDB păstrează diacriticele), apoi showName din TVmaze, apoi title
   const showTitleForPlex = item.originalTitle || countdown?.showName || item.title;
 
