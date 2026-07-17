@@ -2,14 +2,20 @@ interface Props {
   value: number;
   label?: string;
   right?: string;
-  tone?: "default" | "warn" | "danger";
+  tone?: "default" | "warn" | "danger" | "success" | "sky" | "muted";
 }
 
 export function Meter({ value, label, right, tone }: Props) {
   const pct = Math.min(100, Math.max(0, value));
-  const auto: "default" | "warn" | "danger" = pct >= 90 ? "danger" : pct >= 75 ? "warn" : "default";
+  const auto: Props["tone"] = pct >= 90 ? "danger" : pct >= 75 ? "warn" : "default";
   const t = tone ?? auto;
-  const color = t === "danger" ? "bg-red-500" : t === "warn" ? "bg-amber-500" : "bg-primary";
+  const color =
+    t === "danger" ? "bg-red-500" :
+    t === "warn" ? "bg-amber-500" :
+    t === "success" ? "bg-emerald-500" :
+    t === "sky" ? "bg-sky-500" :
+    t === "muted" ? "bg-muted-foreground/40" :
+    "bg-primary";
   return (
     <div>
       {(label || right) && (

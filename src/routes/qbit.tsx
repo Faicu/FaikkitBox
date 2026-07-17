@@ -33,6 +33,16 @@ export const Route = createFileRoute("/qbit")({
   component: QbitPage,
 });
 
+function stateTone(state: string): "sky" | "success" | "warn" | "danger" | "muted" {
+  const s = state.toLowerCase();
+  if (s.includes("download")) return "sky";
+  if (s.includes("seed") || s.includes("upload")) return "success";
+  if (s.includes("paus") || s.includes("stop")) return "muted";
+  if (s.includes("error")) return "danger";
+  if (s.includes("stall")) return "warn";
+  return "muted";
+}
+
 function stateBadge(state: string) {
   const s = state.toLowerCase();
   if (s.includes("download")) return { text: "Descarcă", cls: "bg-sky-500/20 text-sky-400" };
@@ -352,11 +362,17 @@ function QbitPage() {
                     const b = stateBadge(t.state);
                     const isPaused = /paus|stop/i.test(t.state);
                     const busy = pendingHash === t.hash;
+                    const tone = stateTone(t.state);
                     return (
                       <div key={t.hash} className="rounded-2xl border border-border bg-card p-3">
                         <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0 flex-1 truncate text-sm font-medium">
-                            {t.name}
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-sm font-medium">{t.name}</div>
+                            {t.category ? (
+                              <span className="mt-0.5 inline-block rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                                {t.category}
+                              </span>
+                            ) : null}
                           </div>
                           <div className="flex shrink-0 items-center gap-1">
                             <span
@@ -411,7 +427,7 @@ function QbitPage() {
                           <Meter
                             value={t.progress * 100}
                             right={`${(t.progress * 100).toFixed(1)}%`}
-                            tone="default"
+                            tone={tone}
                           />
                         </div>
                         <div className="mt-1 flex items-center justify-between text-[11px] text-muted-foreground tabular-nums">
