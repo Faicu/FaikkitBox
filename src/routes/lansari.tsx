@@ -554,11 +554,12 @@ function SeasonPanel({
   const { data: plexEpisodes, isLoading: plexLoading } = useQuery({
     queryKey: ["plexSeasonEps", showTitle, group.seasonNum],
     queryFn: () => plexFn({ data: { showTitle, season: group.seasonNum } }),
-    enabled: isOpen && group.episodes !== undefined,
+    enabled: isOpen,
     staleTime: 5 * 60_000,
   });
 
   const plexSet = new Set(plexEpisodes ?? []);
+  const seasonInPlex = (plexEpisodes ?? []).length > 0;
   const hasEpMode = group.episodes !== undefined;
 
   return (
@@ -568,26 +569,39 @@ function SeasonPanel({
         className="w-full flex items-center justify-between px-3 py-2 text-sm font-medium hover:bg-muted/50 transition-colors"
       >
         <span>Sezon {String(group.seasonNum).padStart(2, "0")}</span>
-        {isOpen ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+        <div className="flex items-center gap-2">
+          {!isOpen && plexEpisodes !== undefined && seasonInPlex && (
+            <span className="text-[10px] font-medium text-emerald-400 flex items-center gap-0.5">
+              <CheckCircle2 className="h-3 w-3" /> Plex
+            </span>
+          )}
+          {isOpen ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+        </div>
       </button>
       {isOpen && (
         <div className="border-t border-border/60 p-3">
+          {plexLoading && (
+            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground pb-2">
+              <Loader2 className="h-3 w-3 animate-spin" /> Verifică Plex...
+            </div>
+          )}
           {/* Mod A: per-sezon */}
           {!hasEpMode && group.byQuality && (
-            <div className="flex gap-2">
-              <QualityDownloadButton label="1080p" torrent={group.byQuality.t1080} downloading={downloading} onDownload={onDownload} />
-              <QualityDownloadButton label="4K" torrent={group.byQuality.t4k} downloading={downloading} onDownload={onDownload} />
-              <QualityDownloadButton label="4K HDR" torrent={group.byQuality.t4kHdr} downloading={downloading} onDownload={onDownload} />
-            </div>
+            seasonInPlex ? (
+              <span className="flex items-center gap-1 rounded-lg bg-emerald-500/15 px-2 py-1 text-[11px] font-medium text-emerald-400">
+                <CheckCircle2 className="h-3.5 w-3.5" /> Sezonul este deja în bibliotecă Plex
+              </span>
+            ) : (
+              <div className="flex gap-2">
+                <QualityDownloadButton label="1080p" torrent={group.byQuality.t1080} downloading={downloading} onDownload={onDownload} />
+                <QualityDownloadButton label="4K" torrent={group.byQuality.t4k} downloading={downloading} onDownload={onDownload} />
+                <QualityDownloadButton label="4K HDR" torrent={group.byQuality.t4kHdr} downloading={downloading} onDownload={onDownload} />
+              </div>
+            )
           )}
           {/* Mod B: per-episod */}
           {hasEpMode && group.episodes && (
             <div className="space-y-2">
-              {plexLoading && (
-                <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground pb-1">
-                  <Loader2 className="h-3 w-3 animate-spin" /> Verifică Plex...
-                </div>
-              )}
               {Array.from(group.episodes.entries())
                 .sort(([a], [b]) => a - b)
                 .map(([epNum, q]) => {
