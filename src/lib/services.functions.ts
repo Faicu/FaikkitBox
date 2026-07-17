@@ -788,21 +788,20 @@ export async function checkPlexHasEpisode(
       { headers },
       8000,
     );
-    let shows = (search?.MediaContainer?.Metadata ?? []).filter((r: any) => r.type === "show");
-    // Fallback: parcurge biblioteca (prinde seriale cu diacritice în titlu)
-    if (shows.length === 0) {
+    const searchShows = (search?.MediaContainer?.Metadata ?? []).filter((r: any) => r.type === "show");
+    let show: any =
+      searchShows.find((r: any) => normalizeShowTitle(String(r.title ?? "")) === normalizedTargetTitle) ??
+      searchShows.find((r: any) => normalizeShowTitle(String(r.title ?? "")).includes(normalizedTargetTitle)) ??
+      searchShows.find((r: any) => normalizedTargetTitle.includes(normalizeShowTitle(String(r.title ?? "")))) ??
+      searchShows[0];
+    if (!show) {
       const all = await fetchJson<any>(`${url}/library/sections/2/all?type=2`, { headers }, 10000);
-      shows = (all?.MediaContainer?.Metadata ?? []).filter((r: any) => r.type === "show");
+      const libShows = (all?.MediaContainer?.Metadata ?? []).filter((r: any) => r.type === "show");
+      show =
+        libShows.find((r: any) => normalizeShowTitle(String(r.title ?? "")) === normalizedTargetTitle) ??
+        libShows.find((r: any) => normalizeShowTitle(String(r.title ?? "")).includes(normalizedTargetTitle)) ??
+        libShows.find((r: any) => normalizedTargetTitle.includes(normalizeShowTitle(String(r.title ?? ""))));
     }
-    const show =
-      shows.find((r: any) => normalizeShowTitle(String(r.title ?? "")) === normalizedTargetTitle) ??
-      shows.find((r: any) =>
-        normalizeShowTitle(String(r.title ?? "")).includes(normalizedTargetTitle),
-      ) ??
-      shows.find((r: any) =>
-        normalizedTargetTitle.includes(normalizeShowTitle(String(r.title ?? ""))),
-      ) ??
-      shows[0];
     if (!show) return false;
 
     const seasons = await fetchJson<any>(
@@ -845,22 +844,29 @@ export const getPlexEpisodesInSeason = createServerFn({ method: "GET" })
         { headers },
         8000,
       );
-      let shows = (search?.MediaContainer?.Metadata ?? []).filter((r: any) => r.type === "show");
+      const searchShows = (search?.MediaContainer?.Metadata ?? []).filter((r: any) => r.type === "show");
 
-      // Fallback: parcurge întreaga bibliotecă și potrivește normalizat (ignoră diacritice)
-      if (shows.length === 0) {
+      // Încearcă mai întâi potrivire normalizată din rezultatele search-ului
+      let show: any =
+        searchShows.find((r: any) => normalizeShowTitle(String(r.title ?? "")) === normalizedTarget) ??
+        searchShows.find((r: any) => normalizeShowTitle(String(r.title ?? "")).includes(normalizedTarget)) ??
+        searchShows.find((r: any) => normalizedTarget.includes(normalizeShowTitle(String(r.title ?? "")))) ??
+        searchShows[0]; // search-ul Plex e deja relevant (ex: "Casa Dragonului" pentru "House of the Dragon")
+
+      // Dacă search n-a returnat nimic, parcurge biblioteca și potrivește normalizat
+      if (!show) {
         const allShows = await fetchJson<any>(
           `${url}/library/sections/2/all?type=2`,
           { headers },
           10000,
         );
-        shows = (allShows?.MediaContainer?.Metadata ?? []).filter((r: any) => r.type === "show");
+        const libShows = (allShows?.MediaContainer?.Metadata ?? []).filter((r: any) => r.type === "show");
+        show =
+          libShows.find((r: any) => normalizeShowTitle(String(r.title ?? "")) === normalizedTarget) ??
+          libShows.find((r: any) => normalizeShowTitle(String(r.title ?? "")).includes(normalizedTarget)) ??
+          libShows.find((r: any) => normalizedTarget.includes(normalizeShowTitle(String(r.title ?? ""))));
       }
 
-      const show =
-        shows.find((r: any) => normalizeShowTitle(String(r.title ?? "")) === normalizedTarget) ??
-        shows.find((r: any) => normalizeShowTitle(String(r.title ?? "")).includes(normalizedTarget)) ??
-        shows.find((r: any) => normalizedTarget.includes(normalizeShowTitle(String(r.title ?? ""))));
       if (!show) return [];
 
       const seasons = await fetchJson<any>(
