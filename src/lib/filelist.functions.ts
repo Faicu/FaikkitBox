@@ -492,7 +492,9 @@ export const downloadFilelist = createServerFn({ method: "POST" })
       return { status: "error", error: "QBIT_USERNAME / QBIT_PASSWORD nu sunt configurate" };
     }
 
-    const isMovie = isMovieCategory(data.categoryId);
+    const catId = data.categoryId || (data.categoryName ? parseCategoryId(data.categoryName) : 0);
+    const isMovie = isMovieCategory(catId) ||
+      (catId === 0 && /film|movie/i.test(data.categoryName ?? ""));
     const savePath = isMovie ? moviesPath : seriesPath;
 
     // 1. Descarcă fișierul .torrent de la Filelist
