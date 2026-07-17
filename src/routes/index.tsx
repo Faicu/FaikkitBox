@@ -46,6 +46,7 @@ import {
   hostQuery,
   adminStatusQuery,
   lastSpeedtestQuery,
+  speedtestHistoryQuery,
   activityLogQuery,
   recentCommitsQuery,
   commitsFromDbQuery,
@@ -55,6 +56,7 @@ import type { GitHubCommit, GitHubCommitDetail } from "@/lib/github.functions";
 import { getCommitDetail } from "@/lib/github.functions";
 import type { HostData } from "@/lib/services.functions";
 import { runSpeedtest } from "@/lib/speedtest.functions";
+import type { SpeedtestHistoryEntry } from "@/lib/speedtest.functions";
 import { formatBytes, formatSpeed } from "@/lib/format";
 
 export const Route = createFileRoute("/")({
@@ -77,6 +79,7 @@ function Overview() {
   const host = useQuery(hostQuery);
   const admin = useQuery(adminStatusQuery);
   const speedtest = useQuery(lastSpeedtestQuery);
+  const speedtestHistory = useQuery(speedtestHistoryQuery);
   const [plexDrawer, setPlexDrawer] = useState<"views" | "users" | null>(null);
   const [speedtestDrawer, setSpeedtestDrawer] = useState(false);
 
@@ -469,6 +472,10 @@ function Overview() {
                 </pre>
               </div>
             )}
+
+            {(speedtestHistory.data?.length ?? 0) > 1 && (
+              <SpeedtestChart history={speedtestHistory.data!} />
+            )}
           </div>
         </DrawerContent>
       </Drawer>
@@ -727,11 +734,30 @@ function CommitDrawer({ commit, onClose }: { commit: GitHubCommit; onClose: () =
   );
 }
 
+const FILTER_GROUPS: { key: string; label: string }[] = [
+  { key: "all", label: "Toate" },
+  { key: "server", label: "Server" },
+  { key: "plex", label: "Plex" },
+  { key: "torrente", label: "Torrente" },
+  { key: "immich", label: "Immich" },
+  { key: "updates", label: "Updates" },
+  { key: "commits", label: "Commits" },
+];
+
+const TYPE_TO_GROUP: Record<string, string> = {
+  server_start: "server", server_stop: "server",
+  plex_watch_start: "plex", plex_watch_stop: "plex",
+  torrent_added: "torrente", torrent_complete: "torrente", qbit_action: "torrente",
+  immich_upload: "immich",
+  service_restart: "updates", service_update: "updates", ubuntu_update: "updates",
+};
+
 function ActivityLogSection() {
   const { data: log, isLoading: logLoading } = useQuery(activityLogQuery);
   useQuery(recentCommitsQuery); // fetch periodic GitHub → upsert DB
   const { data: commitsData, isLoading: commitsLoading } = useQuery(commitsFromDbQuery);
   const [visible, setVisible] = useState(10);
+  const [filter, setFilter] = useState("all");
   const [selectedCommit, setSelectedCommit] = useState<GitHubCommit | null>(null);
 
   const iconMap: Record<string, React.ReactNode> = {
@@ -762,8 +788,16 @@ function ActivityLogSection() {
   ].sort((a, b) => b.ts - a.ts);
 
   const isLoading = logLoading || commitsLoading;
-  const shown = timeline.slice(0, visible);
-  const hasMore = timeline.length > visible;
+
+  const filtered = filter === "all" ? timeline : timeline.filter((item) => {
+    if (item.kind === "commit") return filter === "commits";
+    return TYPE_TO_GROUP[item.entry.type] === filter;
+  });
+
+  useEffect(() => { setVisible(10); }, [filter]);
+
+  const shown = filtered.slice(0, visible);
+  const hasMore = filtered.length > visible;
 
   return (
     <>
@@ -771,13 +805,28 @@ function ActivityLogSection() {
         <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
           <ScrollText className="h-3.5 w-3.5" /> Jurnal activitate
         </h2>
+        <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
+          {FILTER_GROUPS.map((g) => (
+            <button
+              key={g.key}
+              onClick={() => setFilter(g.key)}
+              className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                filter === g.key
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {g.label}
+            </button>
+          ))}
+        </div>
         <div className="rounded-2xl border border-border bg-card divide-y divide-border/50">
           {isLoading && (
             <div className="px-3 py-4 text-xs text-muted-foreground text-center">Se încarcă...</div>
           )}
-          {!isLoading && timeline.length === 0 && (
+          {!isLoading && filtered.length === 0 && (
             <div className="px-3 py-4 text-xs text-muted-foreground text-center">
-              Nicio activitate înregistrată încă.
+              {filter === "all" ? "Nicio activitate înregistrată încă." : "Nicio activitate pentru acest filtru."}
             </div>
           )}
           {shown.map((item) => {
@@ -828,7 +877,7 @@ function ActivityLogSection() {
               onClick={() => setVisible((v) => v + 10)}
               className="w-full px-3 py-2.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/30 transition-colors text-center"
             >
-              Afișează încă 10 ({timeline.length - visible} rămase)
+              Afișează încă 10 ({filtered.length - visible} rămase)
             </button>
           )}
         </div>
@@ -838,5 +887,50 @@ function ActivityLogSection() {
         <CommitDrawer commit={selectedCommit} onClose={() => setSelectedCommit(null)} />
       )}
     </>
+  );
+}
+
+function SpeedtestChart({ history }: { history: SpeedtestHistoryEntry[] }) {
+  const sorted = [...history].reverse(); // cronologic
+  const maxDl = Math.max(...sorted.map((h) => h.download));
+  const maxUp = Math.max(...sorted.map((h) => h.upload));
+  const maxVal = Math.max(maxDl, maxUp, 1);
+
+  return (
+    <div className="space-y-2">
+      <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        Istoric ({sorted.length} teste)
+      </div>
+      <div className="rounded-xl border border-border bg-card p-3">
+        <div className="flex items-end gap-1 h-16">
+          {sorted.map((h, i) => (
+            <div key={h.id} className="flex-1 flex flex-col items-center gap-0.5 group relative">
+              <div className="w-full flex flex-col justify-end gap-px h-14">
+                <div
+                  className="w-full rounded-t bg-sky-500/70"
+                  style={{ height: `${(h.download / maxVal) * 100}%` }}
+                />
+                <div
+                  className="w-full rounded-t bg-emerald-500/70"
+                  style={{ height: `${(h.upload / maxVal) * 100}%` }}
+                />
+              </div>
+              {/* tooltip */}
+              <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 hidden group-hover:flex flex-col items-center z-10 pointer-events-none">
+                <div className="rounded-lg bg-popover border border-border px-2 py-1 text-[10px] whitespace-nowrap shadow-lg">
+                  <div className="text-sky-400">↓ {(h.download / 1_000_000).toFixed(0)} MB/s</div>
+                  <div className="text-emerald-400">↑ {(h.upload / 1_000_000).toFixed(0)} MB/s</div>
+                  <div className="text-muted-foreground">{new Date(h.timestamp).toLocaleDateString("ro-RO", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-2 flex items-center gap-3 text-[10px] text-muted-foreground">
+          <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-sky-500/70" />Download</span>
+          <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-emerald-500/70" />Upload</span>
+        </div>
+      </div>
+    </div>
   );
 }

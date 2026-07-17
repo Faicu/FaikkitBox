@@ -5,6 +5,19 @@ import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
+
+export type SpeedtestHistoryEntry = {
+  id: string;
+  timestamp: string;
+  download: number;
+  upload: number;
+  ping: number;
+  jitter?: number;
+  isp?: string;
+  serverName?: string;
+  resultUrl?: string;
+};
 
 const execFileAsync = promisify(execFile);
 
@@ -105,8 +118,64 @@ function parsePythonCliJson(raw: string): SpeedtestResult {
   };
 }
 
+async function saveToHistory(result: SpeedtestResult) {
+  try {
+    const { getDb } = await import("./db");
+    const db = getDb();
+    db.prepare(
+      `INSERT INTO speedtest_history (id, timestamp, download, upload, ping, jitter, isp, server_name, result_url)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      randomUUID(),
+      result.timestamp,
+      result.download,
+      result.upload,
+      result.ping.latency,
+      result.ping.jitter ?? null,
+      result.isp ?? null,
+      result.server?.name ?? null,
+      result.resultUrl ?? null,
+    );
+    // Păstrăm doar ultimele 30
+    db.prepare(
+      `DELETE FROM speedtest_history WHERE id NOT IN (
+        SELECT id FROM speedtest_history ORDER BY timestamp DESC LIMIT 30
+      )`,
+    ).run();
+  } catch (e) {
+    console.warn("[speedtest] Eroare la salvare istoric:", e);
+  }
+}
+
 export const getLastSpeedtest = createServerFn({ method: "GET" }).handler(async () => {
   return await readCache();
+});
+
+export const getSpeedtestHistory = createServerFn({ method: "GET" }).handler(async (): Promise<SpeedtestHistoryEntry[]> => {
+  try {
+    const { getDb } = await import("./db");
+    const db = getDb();
+    const rows = db.prepare(
+      "SELECT * FROM speedtest_history ORDER BY timestamp DESC LIMIT 30",
+    ).all() as Array<{
+      id: string; timestamp: string; download: number; upload: number;
+      ping: number; jitter: number | null; isp: string | null;
+      server_name: string | null; result_url: string | null;
+    }>;
+    return rows.map((r) => ({
+      id: r.id,
+      timestamp: r.timestamp,
+      download: r.download,
+      upload: r.upload,
+      ping: r.ping,
+      jitter: r.jitter ?? undefined,
+      isp: r.isp ?? undefined,
+      serverName: r.server_name ?? undefined,
+      resultUrl: r.result_url ?? undefined,
+    }));
+  } catch {
+    return [];
+  }
 });
 
 export const runSpeedtest = createServerFn({ method: "POST" }).handler(
@@ -127,6 +196,7 @@ export const runSpeedtest = createServerFn({ method: "POST" }).handler(
         });
         const result = parser(stdout);
         await writeCache(result);
+        await saveToHistory(result);
         return { ok: true, ...result };
       } catch (e: any) {
         if (e?.code === "ENOENT") {

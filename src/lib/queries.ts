@@ -2,7 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 import { getPlex, getImmich, getQbit, getHost, getShowStatus } from "./services.functions";
 import { getAdminStatus } from "./admin.functions";
 import { getVersions } from "./versions.functions";
-import { getLastSpeedtest } from "./speedtest.functions";
+import { getLastSpeedtest, getSpeedtestHistory } from "./speedtest.functions";
 import { getActivityLog } from "./activity-log";
 import { getFilelistDownloadLog } from "./filelist.functions";
 import { getRecentCommits, getCommitsFromDb, getGitHubSyncStatus } from "./github.functions";
@@ -120,4 +120,9 @@ export const githubSyncQuery = queryOptions({
   refetchInterval: 60_000,
   staleTime: 30_000,
   refetchOnWindowFocus: true,
+});
+export const speedtestHistoryQuery = queryOptions({
+  queryKey: ["speedtestHistory"],
+  queryFn: () => getSpeedtestHistory(),
+  staleTime: 60_000,
 });

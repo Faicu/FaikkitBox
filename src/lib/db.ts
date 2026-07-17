@@ -69,6 +69,19 @@ export function getDb(): DatabaseSync {
       auth TEXT NOT NULL,
       created_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS speedtest_history (
+      id TEXT PRIMARY KEY,
+      timestamp TEXT NOT NULL,
+      download REAL NOT NULL,
+      upload REAL NOT NULL,
+      ping REAL NOT NULL,
+      jitter REAL,
+      isp TEXT,
+      server_name TEXT,
+      result_url TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_speedtest_ts ON speedtest_history(timestamp DESC);
   `);
 
   // Migrare din JSON (o singură dată, la prima pornire cu SQLite)
