@@ -57,6 +57,7 @@ function speedtestConfigs(): BinaryConfig[] {
   }
 
   return [
+    { path: "/usr/local/bin/ookla-speedtest", args: ooklaArgs, parser: parseOoklaJson },
     { path: "speedtest", args: ooklaArgs, parser: parseOoklaJson },
     { path: "/usr/bin/speedtest", args: ooklaArgs, parser: parseOoklaJson },
     { path: "/usr/local/bin/speedtest", args: ooklaArgs, parser: parseOoklaJson },
