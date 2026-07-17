@@ -788,17 +788,11 @@ export async function checkPlexHasEpisode(
       { headers },
       8000,
     );
-    let results = search?.MediaContainer?.Metadata ?? [];
-    let shows = results.filter((r: any) => r.type === "show");
-    // Fallback fără diacritice dacă titlul original nu returnează rezultate
-    if (shows.length === 0 && normalizedTargetTitle !== showTitle.toLowerCase().trim()) {
-      const s2 = await fetchJson<any>(
-        `${url}/search?query=${encodeURIComponent(normalizedTargetTitle)}&type=2`,
-        { headers },
-        8000,
-      );
-      results = s2?.MediaContainer?.Metadata ?? [];
-      shows = results.filter((r: any) => r.type === "show");
+    let shows = (search?.MediaContainer?.Metadata ?? []).filter((r: any) => r.type === "show");
+    // Fallback: parcurge biblioteca (prinde seriale cu diacritice în titlu)
+    if (shows.length === 0) {
+      const all = await fetchJson<any>(`${url}/library/sections/2/all?type=2`, { headers }, 10000);
+      shows = (all?.MediaContainer?.Metadata ?? []).filter((r: any) => r.type === "show");
     }
     const show =
       shows.find((r: any) => normalizeShowTitle(String(r.title ?? "")) === normalizedTargetTitle) ??
@@ -843,34 +837,30 @@ export const getPlexEpisodesInSeason = createServerFn({ method: "GET" })
       const discovered = await discoverPlexUrl(token, base);
       const url = discovered.url;
 
-      const searchQuery = data.showTitle;
+      const normalizedTarget = normalizeShowTitle(data.showTitle);
+
+      // Caută mai întâi prin search endpoint (rapid)
       const search = await fetchJson<any>(
-        `${url}/search?query=${encodeURIComponent(searchQuery)}&type=2`,
+        `${url}/search?query=${encodeURIComponent(data.showTitle)}&type=2`,
         { headers },
         8000,
       );
-      const results = search?.MediaContainer?.Metadata ?? [];
-      let shows = results.filter((r: any) => r.type === "show");
+      let shows = (search?.MediaContainer?.Metadata ?? []).filter((r: any) => r.type === "show");
 
-      // Dacă nu găsim nimic cu titlul original, încearcă fără diacritice
+      // Fallback: parcurge întreaga bibliotecă și potrivește normalizat (ignoră diacritice)
       if (shows.length === 0) {
-        const fallbackQuery = normalizeShowTitle(data.showTitle);
-        if (fallbackQuery !== searchQuery) {
-          const search2 = await fetchJson<any>(
-            `${url}/search?query=${encodeURIComponent(fallbackQuery)}&type=2`,
-            { headers },
-            8000,
-          );
-          shows = (search2?.MediaContainer?.Metadata ?? []).filter((r: any) => r.type === "show");
-        }
+        const allShows = await fetchJson<any>(
+          `${url}/library/sections/2/all?type=2`,
+          { headers },
+          10000,
+        );
+        shows = (allShows?.MediaContainer?.Metadata ?? []).filter((r: any) => r.type === "show");
       }
 
-      const normalizedTarget = normalizeShowTitle(data.showTitle);
       const show =
         shows.find((r: any) => normalizeShowTitle(String(r.title ?? "")) === normalizedTarget) ??
         shows.find((r: any) => normalizeShowTitle(String(r.title ?? "")).includes(normalizedTarget)) ??
-        shows.find((r: any) => normalizedTarget.includes(normalizeShowTitle(String(r.title ?? "")))) ??
-        shows[0];
+        shows.find((r: any) => normalizedTarget.includes(normalizeShowTitle(String(r.title ?? ""))));
       if (!show) return [];
 
       const seasons = await fetchJson<any>(
