@@ -90,22 +90,31 @@ export const getActivityLog = createServerFn({ method: "GET" }).handler(
 // Tracking sesiuni Plex active (in-memory, pentru detectie start/stop)
 // ---------------------------------------------------------------------------
 
-// Cheie: "user|title|grandparentTitle" → timestamp start
-const activePlexSessions = new Map<string, string>();
+// Cheie: "user|title|grandparentTitle" → { startedAt, lastViewOffsetMs, durationMs }
+type PlexSessionState = { startedAt: string; lastViewOffsetMs: number; durationMs: number };
+const activePlexSessions = new Map<string, PlexSessionState>();
 let plexSessionsInitialized = false;
 
 function sessionKey(user: string, title: string, grandparent?: string): string {
   return `${user}|${grandparent ?? ""}|${title}`;
 }
 
+function fmtProgress(viewOffsetMs: number, durationMs: number): string {
+  if (durationMs <= 0) return "";
+  const watched = Math.round(viewOffsetMs / 60_000);
+  const total = Math.round(durationMs / 60_000);
+  const pct = Math.round((viewOffsetMs / durationMs) * 100);
+  return ` · ${watched}/${total} min (${pct}%)`;
+}
+
 export async function trackPlexSessions(
-  sessions: Array<{ user: string; title: string; grandparentTitle?: string; player?: string }>,
+  sessions: Array<{ user: string; title: string; grandparentTitle?: string; player?: string; viewOffsetMs?: number; durationMs?: number }>,
 ): Promise<void> {
   if (!plexSessionsInitialized) {
     // Prima citire după restart — salvăm baseline fără a loga
     for (const s of sessions) {
       const key = sessionKey(s.user, s.title, s.grandparentTitle);
-      activePlexSessions.set(key, new Date().toISOString());
+      activePlexSessions.set(key, { startedAt: new Date().toISOString(), lastViewOffsetMs: s.viewOffsetMs ?? 0, durationMs: s.durationMs ?? 0 });
     }
     plexSessionsInitialized = true;
     return;
@@ -118,8 +127,7 @@ export async function trackPlexSessions(
     currentKeys.add(key);
 
     if (!activePlexSessions.has(key)) {
-      // Sesiune nouă — loghez start
-      activePlexSessions.set(key, new Date().toISOString());
+      activePlexSessions.set(key, { startedAt: new Date().toISOString(), lastViewOffsetMs: s.viewOffsetMs ?? 0, durationMs: s.durationMs ?? 0 });
       const what = s.grandparentTitle ? `${s.grandparentTitle} — ${s.title}` : s.title;
       await logActivity("plex_watch_start", `${s.user} a început vizionarea: ${what}`, {
         user: s.user,
@@ -127,20 +135,24 @@ export async function trackPlexSessions(
         grandparentTitle: s.grandparentTitle,
         player: s.player,
       });
+    } else {
+      // actualizăm progresul curent
+      const state = activePlexSessions.get(key)!;
+      state.lastViewOffsetMs = s.viewOffsetMs ?? state.lastViewOffsetMs;
+      state.durationMs = s.durationMs ?? state.durationMs;
     }
   }
 
   // Sesiuni terminate — cele din activePlexSessions care nu mai sunt în currentKeys
-  for (const [key, startedAt] of activePlexSessions.entries()) {
+  for (const [key, state] of activePlexSessions.entries()) {
     if (!currentKeys.has(key)) {
       activePlexSessions.delete(key);
       const [user, grandparent, title] = key.split("|");
       const what = grandparent ? `${grandparent} — ${title}` : title;
-      const durationMs = Date.now() - new Date(startedAt).getTime();
-      const mins = Math.round(durationMs / 60_000);
+      const progress = fmtProgress(state.lastViewOffsetMs, state.durationMs);
       await logActivity(
         "plex_watch_stop",
-        `${user} a terminat vizionarea: ${what}${mins > 0 ? ` (${mins} min)` : ""}`,
+        `${user} a terminat vizionarea: ${what}${progress}`,
         { user, title, grandparentTitle: grandparent || undefined },
       );
     }
@@ -155,11 +167,32 @@ type ImmichUserSnapshot = { photos: number; videos: number };
 const lastImmichByUser = new Map<string, ImmichUserSnapshot>();
 let immichInitialized = false;
 
+// Debounce: acumulăm modificările per user și logăm după 2 minute de inactivitate
+const IMMICH_DEBOUNCE_MS = 2 * 60_000;
+type ImmichPending = { photos: number; videos: number; timer: ReturnType<typeof setTimeout> };
+const immichPending = new Map<string, ImmichPending>();
+
+async function flushImmichUser(userName: string): Promise<void> {
+  const pending = immichPending.get(userName);
+  if (!pending) return;
+  immichPending.delete(userName);
+
+  const { photos: newPhotos, videos: newVideos } = pending;
+  const parts: string[] = [];
+  if (newPhotos > 0) parts.push(`${newPhotos} ${newPhotos === 1 ? "fotografie" : "fotografii"}`);
+  if (newVideos > 0) parts.push(`${newVideos} ${newVideos === 1 ? "videoclip" : "videoclipuri"}`);
+  const ora = new Date().toLocaleTimeString("ro-RO", { hour: "2-digit", minute: "2-digit" });
+  await logActivity("immich_upload", `${userName} a încărcat ${parts.join(" și ")} la ora ${ora}`, {
+    user: userName,
+    newPhotos,
+    newVideos,
+  });
+}
+
 export async function trackImmichUploads(
   usageByUser: Array<{ userName: string; photos: number; videos: number }>,
 ): Promise<void> {
   if (!immichInitialized) {
-    // Prima citire — salvăm baseline fără a loga
     for (const u of usageByUser) {
       lastImmichByUser.set(u.userName, { photos: u.photos, videos: u.videos });
     }
@@ -175,17 +208,20 @@ export async function trackImmichUploads(
     if (newPhotos > 0 || newVideos > 0) {
       lastImmichByUser.set(u.userName, { photos: u.photos, videos: u.videos });
 
-      const parts: string[] = [];
-      if (newPhotos > 0) parts.push(`${newPhotos} ${newPhotos === 1 ? "fotografie" : "fotografii"}`);
-      if (newVideos > 0) parts.push(`${newVideos} ${newVideos === 1 ? "videoclip" : "videoclipuri"}`);
-      const ora = new Date().toLocaleTimeString("ro-RO", { hour: "2-digit", minute: "2-digit" });
-      const msg = `${u.userName} a încărcat ${parts.join(" și ")} la ora ${ora}`;
-
-      await logActivity("immich_upload", msg, {
-        user: u.userName,
-        newPhotos,
-        newVideos,
-      });
+      // Acumulăm în buffer debounce
+      const existing = immichPending.get(u.userName);
+      if (existing) {
+        clearTimeout(existing.timer);
+        existing.photos += newPhotos;
+        existing.videos += newVideos;
+        existing.timer = setTimeout(() => flushImmichUser(u.userName), IMMICH_DEBOUNCE_MS);
+      } else {
+        immichPending.set(u.userName, {
+          photos: newPhotos,
+          videos: newVideos,
+          timer: setTimeout(() => flushImmichUser(u.userName), IMMICH_DEBOUNCE_MS),
+        });
+      }
     }
 
     if (!lastImmichByUser.has(u.userName)) {

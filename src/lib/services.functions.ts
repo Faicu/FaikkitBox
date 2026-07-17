@@ -699,6 +699,8 @@ export const getPlex = createServerFn({ method: "GET" }).handler(async (): Promi
         title: s.title,
         grandparentTitle: s.grandparentTitle,
         player: s.player,
+        viewOffsetMs: s.viewOffsetMs,
+        durationMs: s.durationMs,
       })),
     ).catch(() => {});
 

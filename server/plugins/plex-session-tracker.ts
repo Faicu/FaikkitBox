@@ -21,12 +21,19 @@ export default function () {
       const sessionsMd: any[] = json?.MediaContainer?.Metadata ?? [];
 
       await trackPlexSessions(
-        sessionsMd.map((s: any) => ({
-          user: s.User?.title ?? "unknown",
-          title: s.title ?? "",
-          grandparentTitle: s.grandparentTitle || undefined,
-          player: s.Player?.title || undefined,
-        })),
+        sessionsMd.map((s: any) => {
+          const dur = Number(s.duration ?? 0);
+          const rawOff = Number(s.viewOffset ?? 0);
+          const off = dur > 1000 && rawOff > 0 && rawOff < 1000 ? rawOff * 1000 : rawOff;
+          return {
+            user: s.User?.title ?? "unknown",
+            title: s.title ?? "",
+            grandparentTitle: s.grandparentTitle || undefined,
+            player: s.Player?.title || undefined,
+            viewOffsetMs: off,
+            durationMs: dur,
+          };
+        }),
       );
     } catch {
       // Plex poate fi offline — ignorăm

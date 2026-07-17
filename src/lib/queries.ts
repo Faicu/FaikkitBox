@@ -16,7 +16,11 @@ const keepPrev = { placeholderData: (prev: any) => prev };
 export const plexQuery = queryOptions({
   queryKey: ["plex"],
   queryFn: () => getPlex(),
-  refetchInterval: REFRESH_MS,
+  refetchInterval: (query) => {
+    const data = query.state.data as any;
+    // Polling mai rapid (3s) când sunt sesiuni active, altfel 1s de bază
+    return data?.sessions?.length > 0 ? 3_000 : REFRESH_MS;
+  },
   refetchIntervalInBackground: false,
   staleTime: 0,
   ...keepPrev,
