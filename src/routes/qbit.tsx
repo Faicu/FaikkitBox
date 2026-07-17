@@ -84,7 +84,8 @@ function QbitPage() {
         vars.hashes === "all"
           ? "toate torrentele"
           : `${vars.hashes.length} torrent${vars.hashes.length === 1 ? "" : "e"}`;
-      toast.success(`${vars.action === "pause" ? "Oprite" : "Reluate"}: ${target}`);
+      const label = vars.action === "pause" ? "Oprite" : vars.action === "delete" ? "Șterse" : "Reluate";
+      toast.success(`${label}: ${target}`);
       queryClient.invalidateQueries({ queryKey: ["qbit"] });
     },
     onError: (e) => toast.error(`Eroare acțiune qBit: ${(e as Error).message}`),

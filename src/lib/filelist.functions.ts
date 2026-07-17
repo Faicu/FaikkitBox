@@ -185,13 +185,42 @@ export const getFilelistDownloadLog = createServerFn({ method: "GET" }).handler(
 
 export const deleteFilelistLogEntry = createServerFn({ method: "POST" })
   .validator((data: { id: number }) => data)
-  .handler(async ({ data }): Promise<{ ok: boolean }> => {
+  .handler(async ({ data }): Promise<{ ok: boolean; qbitDeleted?: boolean }> => {
     const { requireAdmin } = await import("./admin.server");
     await requireAdmin();
     try {
       const { getDb } = await import("./db");
-      getDb().prepare("DELETE FROM downloads WHERE id = ?").run(data.id);
-      return { ok: true };
+      const db = getDb();
+
+      // Obținem hash-ul torrentului înainte de ștergere
+      const row = db.prepare("SELECT torrent_hash FROM downloads WHERE id = ?").get(data.id) as
+        | { torrent_hash: string | null }
+        | undefined;
+      const torrentHash = row?.torrent_hash ?? null;
+
+      db.prepare("DELETE FROM downloads WHERE id = ?").run(data.id);
+
+      // Ștergem și din qBittorrent (cu fișierele de pe disk)
+      let qbitDeleted = false;
+      if (torrentHash) {
+        try {
+          const qbitUrl = (process.env.QBIT_URL ?? "http://192.168.1.192:25556").replace(/\/$/, "");
+          const user = process.env.QBIT_USERNAME ?? "";
+          const pass = process.env.QBIT_PASSWORD ?? "";
+          const cookie = await qbitLogin(qbitUrl, user, pass);
+          const form = new URLSearchParams({ hashes: torrentHash, deleteFiles: "true" });
+          const res = await fetch(`${qbitUrl}/api/v2/torrents/delete`, {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded", Cookie: cookie },
+            body: form.toString(),
+          });
+          qbitDeleted = res.ok;
+        } catch (e) {
+          console.warn("[filelist] Nu am putut șterge din qBit:", e);
+        }
+      }
+
+      return { ok: true, qbitDeleted };
     } catch (e) {
       console.error("[filelist] Nu am putut șterge intrarea din log:", e);
       return { ok: false };

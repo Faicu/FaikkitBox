@@ -648,9 +648,17 @@ function DownloadLogSection() {
     [1, 2, 3, 4, 6, 19, 26].includes(catId) ||
     (catId === 0 && /film|movie/i.test(catName));
 
-  async function handleDelete(id: number) {
-    await deleteFn({ data: { id } });
+  async function handleDelete(id: number, name: string, hasHash: boolean) {
+    const msg = hasHash
+      ? `Ștergi torrentul din log, din qBittorrent și fișierele de pe disk?\n\n${name}`
+      : `Ștergi intrarea din log?\n\n${name}`;
+    if (!confirm(msg)) return;
+    const res = await deleteFn({ data: { id } });
     queryClient.invalidateQueries({ queryKey: ["filelistLog"] });
+    if (hasHash) {
+      if (res.qbitDeleted) toast.success("Torrent și fișiere șterse din qBittorrent");
+      else toast.warning("Șters din log, dar nu am putut șterge din qBittorrent (poate deja șters)");
+    }
   }
 
   if (isLoading || !log || log.length === 0) return null;
@@ -725,9 +733,9 @@ function DownloadLogSection() {
                 </div>
               </div>
               <button
-                onClick={() => handleDelete(e.id)}
+                onClick={() => handleDelete(e.id, e.name, !!e.torrentHash)}
                 className="shrink-0 mt-0.5 rounded-lg p-1.5 text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                title="Șterge din log"
+                title={e.torrentHash ? "Șterge din log + qBit + disk" : "Șterge din log"}
               >
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
