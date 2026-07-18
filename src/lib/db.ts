@@ -83,6 +83,17 @@ export function getDb(): DatabaseSync {
     );
     CREATE INDEX IF NOT EXISTS idx_speedtest_ts ON speedtest_history(timestamp DESC);
 
+    CREATE TABLE IF NOT EXISTS pinned_items (
+      id INTEGER NOT NULL,
+      media_type TEXT NOT NULL,
+      title TEXT NOT NULL,
+      original_title TEXT NOT NULL,
+      poster_url TEXT,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      added_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (id, media_type)
+    );
+
     CREATE TABLE IF NOT EXISTS plex_active_sessions (
       key TEXT PRIMARY KEY,
       started_at TEXT NOT NULL,

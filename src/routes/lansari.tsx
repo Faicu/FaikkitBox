@@ -35,6 +35,7 @@ import { searchFilelist, downloadFilelist, deleteFilelistLogEntry } from "@/lib/
 import type { FilelistTorrent, FilelistCategory, FilelistLogEntry } from "@/lib/filelist.functions";
 import { searchTmdb, getTmdbDetails, getTvShowCountdown, getTmdbSeasonEpisodes } from "@/lib/tmdb.functions";
 import type { TmdbSearchResult, TmdbDetails, TvShowCountdown, TmdbEpisode } from "@/lib/tmdb.functions";
+import { getPinnedItems, setPinnedItems } from "@/lib/pinned.functions";
 
 export const Route = createFileRoute("/lansari")({
   head: () => ({ meta: [{ title: "Lansări — Monitor Server" }] }),
@@ -51,34 +52,12 @@ function LansariPage() {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Helpers localStorage pentru itemele fixate
-// ---------------------------------------------------------------------------
-
-const PINNED_KEY = "faikkitbox:pinnedItems";
-
 interface PinnedItem {
   id: number;
   mediaType: "movie" | "tv";
   title: string;
   originalTitle: string;
   posterUrl: string | null;
-}
-
-function loadPinned(): PinnedItem[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = window.localStorage.getItem(PINNED_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-function savePinned(list: PinnedItem[]) {
-  try {
-    window.localStorage.setItem(PINNED_KEY, JSON.stringify(list));
-  } catch {}
 }
 
 // ---------------------------------------------------------------------------
@@ -157,11 +136,18 @@ function UnifiedSearchSection() {
   const [results, setResults] = useState<TmdbSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
   const searchFn = useServerFn(searchTmdb);
+  const getPinnedFn = useServerFn(getPinnedItems);
+  const setPinnedFn = useServerFn(setPinnedItems);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    setPinned(loadPinned());
+    getPinnedFn({}).then(setPinned).catch(() => {});
   }, []);
+
+  async function savePinned(list: PinnedItem[]) {
+    setPinned(list);
+    await setPinnedFn({ data: { items: list } }).catch(() => {});
+  }
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -182,16 +168,13 @@ function UnifiedSearchSection() {
   function pin(item: TmdbSearchResult) {
     if (pinned.some((p) => p.id === item.id && p.mediaType === item.mediaType)) return;
     const next = [...pinned, { id: item.id, mediaType: item.mediaType, title: item.title, originalTitle: item.originalTitle, posterUrl: item.posterUrl ?? null }];
-    setPinned(next);
     savePinned(next);
     setQuery("");
     setResults([]);
   }
 
   function unpin(id: number, mediaType: "movie" | "tv") {
-    const next = pinned.filter((p) => !(p.id === id && p.mediaType === mediaType));
-    setPinned(next);
-    savePinned(next);
+    savePinned(pinned.filter((p) => !(p.id === id && p.mediaType === mediaType)));
   }
 
   return (
