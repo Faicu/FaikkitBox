@@ -1,5 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { LayoutDashboard, PlayCircle, Flame, Images, Download, Cpu } from "lucide-react";
+import { LayoutDashboard, PlayCircle, Flame, Images, Download, Wrench } from "lucide-react";
 
 const baseItems = [
   { to: "/", label: "Acasă", icon: LayoutDashboard },
@@ -7,7 +7,7 @@ const baseItems = [
   { to: "/plex", label: "Plex", icon: PlayCircle },
   { to: "/immich", label: "Immich", icon: Images },
   { to: "/qbit", label: "qBit", icon: Download },
-  { to: "/sistem", label: "Sistem", icon: Cpu },
+  { to: "/tehnic", label: "Tehnic", icon: Wrench },
 ] as const;
 
 export function BottomNav() {
