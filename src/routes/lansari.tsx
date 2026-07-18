@@ -362,7 +362,7 @@ function PinnedItemCard({ item, onUnpin }: { item: PinnedItem; onUnpin: () => vo
       <MovieCard
         item={item}
         details={details ?? null}
-        inPlex={inPlexMovie ?? null}
+        plexInfo={inPlexMovie ?? null}
         torrents={torrents}
         filelistLoading={filelistLoading}
         onUnpin={onUnpin}
@@ -392,14 +392,14 @@ function PinnedItemCard({ item, onUnpin }: { item: PinnedItem; onUnpin: () => vo
 function MovieCard({
   item,
   details,
-  inPlex,
+  plexInfo,
   torrents,
   filelistLoading,
   onUnpin,
 }: {
   item: PinnedItem;
   details: TmdbDetails | null;
-  inPlex: boolean | null;
+  plexInfo: { found: boolean; quality: string | null } | null;
   torrents: FilelistTorrent[];
   filelistLoading: boolean;
   onUnpin: () => void;
@@ -410,7 +410,8 @@ function MovieCard({
   const [confirm, setConfirm] = useState<{ torrent: FilelistTorrent; label: string } | null>(null);
 
   const imdbId = details?.imdbId ?? null;
-  const plexStatus = inPlex === true ? "complet" : inPlex === false ? "lipsa" : null;
+  const plexStatus = plexInfo?.found === true ? "complet" : plexInfo?.found === false ? "lipsa" : null;
+  const plexQuality = plexInfo?.quality ?? null;
 
   async function handleDownload(torrent: FilelistTorrent) {
     setDownloading(torrent.id);
@@ -491,7 +492,12 @@ function MovieCard({
           <div className="p-3 pt-3 space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-xs text-muted-foreground">Plex</span>
-            {plexStatus ? <PlexStatusBadge status={plexStatus} /> : <LibraryBadge inLibrary={null} />}
+            <div className="flex items-center gap-2">
+              {plexStatus === "complet" && plexQuality && (
+                <span className="text-[11px] text-muted-foreground">{plexQuality}</span>
+              )}
+              {plexStatus ? <PlexStatusBadge status={plexStatus} /> : <LibraryBadge inLibrary={null} />}
+            </div>
           </div>
           <div className="border-t border-border pt-3">
             <div className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground flex items-center gap-1">

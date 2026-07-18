@@ -892,7 +892,7 @@ export const getPlexEpisodesInSeason = createServerFn({ method: "GET" })
 
 export const checkPlexHasTitle = createServerFn({ method: "GET" })
   .validator((data: { title: string; originalTitle: string; mediaType: "movie" | "tv" }) => data)
-  .handler(async ({ data }): Promise<boolean | null> => {
+  .handler(async ({ data }): Promise<{ found: boolean; quality: string | null } | null> => {
     const token = process.env.PLEX_TOKEN;
     const base = process.env.PLEX_URL;
     if (!token) return null;
@@ -900,7 +900,6 @@ export const checkPlexHasTitle = createServerFn({ method: "GET" })
       const headers = { Accept: "application/json", "X-Plex-Token": token };
       const discovered = await discoverPlexUrl(token, base);
       const url = discovered.url;
-      // type=1 = filme, type=2 = seriale
       const plexType = data.mediaType === "movie" ? 1 : 2;
 
       for (const queryTitle of [data.title, data.originalTitle, normalizeShowTitle(data.title)].filter(Boolean)) {
@@ -910,9 +909,21 @@ export const checkPlexHasTitle = createServerFn({ method: "GET" })
           8000,
         );
         const results = search?.MediaContainer?.Metadata ?? [];
-        if (results.length > 0) return true;
+        if (results.length > 0) {
+          // Extrage rezoluția din primul rezultat (Media[0].videoResolution)
+          const res: string | undefined = results[0]?.Media?.[0]?.videoResolution;
+          let quality: string | null = null;
+          if (res) {
+            const r = String(res).toLowerCase();
+            if (r === "4k" || r === "2160") quality = "4K";
+            else if (r === "1080") quality = "1080p";
+            else if (r === "720") quality = "720p";
+            else quality = res.toUpperCase();
+          }
+          return { found: true, quality };
+        }
       }
-      return false;
+      return { found: false, quality: null };
     } catch {
       return null;
     }
