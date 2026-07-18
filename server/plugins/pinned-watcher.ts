@@ -137,7 +137,7 @@ async function checkAll(): Promise<void> {
               const k = epKey(latestAired.season, ep.num);
               if (!plexEpKeys.has(k)) {
                 plexEpKeys.add(k);
-                if (!isFirstRun && stateRow && stateRow.plex_episode_keys !== "[]") {
+                if (!isFirstRun) {
                   const qStr = ep.quality ? ` (${ep.quality})` : "";
                   changes.push(`📺 Episod nou în Plex: ${k}${qStr}`);
                 }
