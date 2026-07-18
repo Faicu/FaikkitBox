@@ -475,6 +475,7 @@ function PinnedItemCard({ item, watchSettings, onWatchChange, onUnpin }: {
       details={details ?? null}
       tvPlexStatus={tvPlexStatus}
       tvPlexLoading={plexSeasonLoading || tmdbSeasonLoading || countdownLoading}
+      plexSeasonEps={plexSeasonEps ?? []}
       torrents={torrents}
       filelistLoading={filelistLoading}
       countdown={countdown ?? null}
@@ -884,9 +885,9 @@ function SeasonPanel({
   });
 
   const loading = plexLoading || tmdbLoading;
-  // Map epNum → quality (sau null dacă calitatea nu e disponibilă din Plex metadata)
-  const plexMap = new Map<number, string | null>(
-    (plexEpisodes ?? []).map((e) => [e.num, e.quality])
+  // Map epNum → { quality, watched }
+  const plexMap = new Map<number, { quality: string | null; watched: boolean }>(
+    (plexEpisodes ?? []).map((e) => [e.num, { quality: e.quality, watched: e.watched }])
   );
   const airedEps: TmdbEpisode[] = (tmdbEpisodes ?? []).filter((e) => e.aired);
   const filelistEpNums = Array.from(group.episodes.keys()).sort((a, b) => a - b);
@@ -898,6 +899,7 @@ function SeasonPanel({
   const someInPlex = !allInPlex && episodeList.some((n) => plexMap.has(n));
   const noneInPlex = episodeList.length > 0 && !episodeList.some((n) => plexMap.has(n));
   const missingCount = episodeList.filter((n) => !plexMap.has(n)).length;
+  const unwatchedCount = episodeList.filter((n) => plexMap.has(n) && !plexMap.get(n)!.watched).length;
 
   const hasPackTorrents = group.byQuality.t1080.length > 0 || group.byQuality.t4k.length > 0 || group.byQuality.t4kHdr.length > 0;
   const hasEpisodeTorrents = group.episodes.size > 0;
@@ -985,7 +987,7 @@ function SeasonPanel({
                   <div className="space-y-2">
                     {hasPackTorrents && <div className="text-[11px] text-muted-foreground uppercase tracking-wide">Episoade individuale</div>}
                     {episodeList.map((epNum) => {
-                      const epPlexQuality = plexMap.get(epNum);
+                      const epData = plexMap.get(epNum);
                       const inPlex = plexSet.has(epNum);
                       const q = group.episodes.get(epNum);
                       const tmdbEp = airedEps.find((e) => e.episodeNum === epNum);
@@ -997,15 +999,20 @@ function SeasonPanel({
                             {inPlex && (
                               <span className="shrink-0 flex items-center gap-1 text-[10px] text-emerald-400">
                                 <CheckCircle2 className="h-3 w-3" />
-                                {epPlexQuality ?? "Complet"}
+                                {epData?.quality ?? "Complet"}
+                              </span>
+                            )}
+                            {inPlex && !epData?.watched && (
+                              <span className="shrink-0 flex items-center gap-0.5 text-[10px] font-medium text-orange-400">
+                                <HelpCircle className="h-3 w-3" /> Nevăzut
                               </span>
                             )}
                           </div>
                           {q && (
                             <div className="pl-10 flex gap-1.5">
-                              <QualityDownloadButton label="1080p" torrents={q.t1080} plexQuality={epPlexQuality ?? null} downloading={downloading} onDownload={requestDownload} />
-                              <QualityDownloadButton label="4K" torrents={q.t4k} plexQuality={epPlexQuality ?? null} downloading={downloading} onDownload={requestDownload} />
-                              <QualityDownloadButton label="4K HDR" torrents={q.t4kHdr} plexQuality={epPlexQuality ?? null} downloading={downloading} onDownload={requestDownload} />
+                              <QualityDownloadButton label="1080p" torrents={q.t1080} plexQuality={epData?.quality ?? null} downloading={downloading} onDownload={requestDownload} />
+                              <QualityDownloadButton label="4K" torrents={q.t4k} plexQuality={epData?.quality ?? null} downloading={downloading} onDownload={requestDownload} />
+                              <QualityDownloadButton label="4K HDR" torrents={q.t4kHdr} plexQuality={epData?.quality ?? null} downloading={downloading} onDownload={requestDownload} />
                             </div>
                           )}
                           {!inPlex && !q && (
@@ -1032,6 +1039,7 @@ function ShowCard({
   details,
   tvPlexStatus,
   tvPlexLoading,
+  plexSeasonEps,
   torrents,
   filelistLoading,
   countdown,
@@ -1044,6 +1052,7 @@ function ShowCard({
   details: TmdbDetails | null;
   tvPlexStatus: "complet" | "incomplet" | "lipsa" | null;
   tvPlexLoading: boolean;
+  plexSeasonEps: { num: number; quality: string | null; watched: boolean }[];
   torrents: FilelistTorrent[];
   filelistLoading: boolean;
   countdown: TvShowCountdown | null;
@@ -1147,7 +1156,16 @@ function ShowCard({
                   {new Date(countdown.lastAired.airDateIso).toLocaleDateString("ro-RO", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Bucharest" })}
                 </div>
               </div>
-              <LibraryBadge inLibrary={countdown.lastAired.inLibrary} />
+              <div className="flex flex-col items-end gap-1 shrink-0">
+                <LibraryBadge inLibrary={countdown.lastAired.inLibrary} />
+                {countdown.lastAired.inLibrary && (() => {
+                  const ep = plexSeasonEps.find((e) => e.num === countdown.lastAired!.episode);
+                  if (!ep) return null;
+                  return ep.watched
+                    ? <span className="text-[10px] text-emerald-400/70">Văzut</span>
+                    : <span className="flex items-center gap-0.5 text-[10px] font-medium text-orange-400"><HelpCircle className="h-3 w-3" /> Nevăzut</span>;
+                })()}
+              </div>
             </div>
           </div>
         ) : null}
