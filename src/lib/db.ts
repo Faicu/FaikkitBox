@@ -82,6 +82,16 @@ export function getDb(): DatabaseSync {
       result_url TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_speedtest_ts ON speedtest_history(timestamp DESC);
+
+    CREATE TABLE IF NOT EXISTS plex_active_sessions (
+      key TEXT PRIMARY KEY,
+      started_at TEXT NOT NULL,
+      last_view_offset_ms INTEGER NOT NULL DEFAULT 0,
+      duration_ms INTEGER NOT NULL DEFAULT 0,
+      user TEXT NOT NULL,
+      title TEXT NOT NULL,
+      grandparent_title TEXT
+    );
   `);
 
   // Migrare din JSON (o singură dată, la prima pornire cu SQLite)

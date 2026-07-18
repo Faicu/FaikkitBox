@@ -106,13 +106,8 @@ export const getActivityLog = createServerFn({ method: "GET" }).handler(
 );
 
 // ---------------------------------------------------------------------------
-// Tracking sesiuni Plex active (in-memory, pentru detectie start/stop)
+// Tracking sesiuni Plex active (persistat în SQLite, supraviețuiește restarturilor)
 // ---------------------------------------------------------------------------
-
-// Cheie: "user|title|grandparentTitle" → { startedAt, lastViewOffsetMs, durationMs }
-type PlexSessionState = { startedAt: string; lastViewOffsetMs: number; durationMs: number };
-const activePlexSessions = new Map<string, PlexSessionState>();
-let plexSessionsInitialized = false;
 
 function sessionKey(user: string, title: string, grandparent?: string): string {
   return `${user}|${grandparent ?? ""}|${title}`;
@@ -129,15 +124,15 @@ function fmtProgress(viewOffsetMs: number, durationMs: number): string {
 export async function trackPlexSessions(
   sessions: Array<{ user: string; title: string; grandparentTitle?: string; player?: string; viewOffsetMs?: number; durationMs?: number }>,
 ): Promise<void> {
-  if (!plexSessionsInitialized) {
-    // Prima citire după restart — salvăm baseline fără a loga
-    for (const s of sessions) {
-      const key = sessionKey(s.user, s.title, s.grandparentTitle);
-      activePlexSessions.set(key, { startedAt: new Date().toISOString(), lastViewOffsetMs: s.viewOffsetMs ?? 0, durationMs: s.durationMs ?? 0 });
-    }
-    plexSessionsInitialized = true;
-    return;
-  }
+  const { getDb } = await import("./db");
+  const db = getDb();
+
+  // Citește sesiunile active din SQLite (supraviețuiesc restarturilor)
+  const stored = db.prepare("SELECT * FROM plex_active_sessions").all() as Array<{
+    key: string; started_at: string; last_view_offset_ms: number; duration_ms: number;
+    user: string; title: string; grandparent_title: string | null;
+  }>;
+  const storedMap = new Map(stored.map((r) => [r.key, r]));
 
   const currentKeys = new Set<string>();
 
@@ -145,34 +140,37 @@ export async function trackPlexSessions(
     const key = sessionKey(s.user, s.title, s.grandparentTitle);
     currentKeys.add(key);
 
-    if (!activePlexSessions.has(key)) {
-      activePlexSessions.set(key, { startedAt: new Date().toISOString(), lastViewOffsetMs: s.viewOffsetMs ?? 0, durationMs: s.durationMs ?? 0 });
+    if (!storedMap.has(key)) {
+      // Sesiune nouă — inserăm în DB și logăm start
+      const startedAt = new Date().toISOString();
+      db.prepare(
+        `INSERT OR REPLACE INTO plex_active_sessions
+         (key, started_at, last_view_offset_ms, duration_ms, user, title, grandparent_title)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
+      ).run(key, startedAt, s.viewOffsetMs ?? 0, s.durationMs ?? 0, s.user, s.title, s.grandparentTitle ?? null);
+
       const what = s.grandparentTitle ? `${s.grandparentTitle} — ${s.title}` : s.title;
       await logActivity("plex_watch_start", `${s.user} a început vizionarea: ${what}`, {
-        user: s.user,
-        title: s.title,
-        grandparentTitle: s.grandparentTitle,
-        player: s.player,
+        user: s.user, title: s.title, grandparentTitle: s.grandparentTitle, player: s.player,
       });
     } else {
-      // actualizăm progresul curent
-      const state = activePlexSessions.get(key)!;
-      state.lastViewOffsetMs = s.viewOffsetMs ?? state.lastViewOffsetMs;
-      state.durationMs = s.durationMs ?? state.durationMs;
+      // Actualizăm progresul în DB
+      db.prepare(
+        `UPDATE plex_active_sessions SET last_view_offset_ms = ?, duration_ms = ? WHERE key = ?`
+      ).run(s.viewOffsetMs ?? storedMap.get(key)!.last_view_offset_ms, s.durationMs ?? storedMap.get(key)!.duration_ms, key);
     }
   }
 
-  // Sesiuni terminate — cele din activePlexSessions care nu mai sunt în currentKeys
-  for (const [key, state] of activePlexSessions.entries()) {
+  // Sesiuni terminate — în DB dar nu mai sunt active pe Plex
+  for (const [key, row] of storedMap.entries()) {
     if (!currentKeys.has(key)) {
-      activePlexSessions.delete(key);
-      const [user, grandparent, title] = key.split("|");
-      const what = grandparent ? `${grandparent} — ${title}` : title;
-      const progress = fmtProgress(state.lastViewOffsetMs, state.durationMs);
+      db.prepare("DELETE FROM plex_active_sessions WHERE key = ?").run(key);
+      const what = row.grandparent_title ? `${row.grandparent_title} — ${row.title}` : row.title;
+      const progress = fmtProgress(row.last_view_offset_ms, row.duration_ms);
       await logActivity(
         "plex_watch_stop",
-        `${user} a terminat vizionarea: ${what}${progress}`,
-        { user, title, grandparentTitle: grandparent || undefined },
+        `${row.user} a terminat vizionarea: ${what}${progress}`,
+        { user: row.user, title: row.title, grandparentTitle: row.grandparent_title || undefined },
       );
     }
   }
