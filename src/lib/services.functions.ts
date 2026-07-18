@@ -827,7 +827,7 @@ export async function checkPlexHasEpisode(
 
 export const getPlexEpisodesInSeason = createServerFn({ method: "GET" })
   .validator((data: { showTitle: string; season: number }) => data)
-  .handler(async ({ data }): Promise<number[]> => {
+  .handler(async ({ data }): Promise<{ num: number; quality: string | null }[]> => {
     const token = process.env.PLEX_TOKEN;
     const base = process.env.PLEX_URL;
     if (!token) return [];
@@ -884,7 +884,20 @@ export const getPlexEpisodesInSeason = createServerFn({ method: "GET" })
         8000,
       );
       const episodesMd = episodes?.MediaContainer?.Metadata ?? [];
-      return episodesMd.map((e: any) => Number(e.index)).filter((n: number) => n > 0);
+      return episodesMd
+        .filter((e: any) => Number(e.index) > 0)
+        .map((e: any) => {
+          const res: string | undefined = e.Media?.[0]?.videoResolution;
+          let quality: string | null = null;
+          if (res) {
+            const r = String(res).toLowerCase();
+            if (r === "4k" || r === "2160") quality = "4K";
+            else if (r === "1080") quality = "1080p";
+            else if (r === "720") quality = "720p";
+            else quality = res.toUpperCase();
+          }
+          return { num: Number(e.index), quality };
+        });
     } catch {
       return [];
     }

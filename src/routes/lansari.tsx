@@ -84,45 +84,128 @@ function detectQuality(name: string) {
 // Buton download calitate
 // ---------------------------------------------------------------------------
 
+function TorrentPickerDialog({
+  label,
+  torrents,
+  onPick,
+  onCancel,
+}: {
+  label: string;
+  torrents: FilelistTorrent[];
+  onPick: (t: FilelistTorrent) => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onCancel}>
+      <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-5 space-y-3 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="text-sm font-semibold">Alege torrent {label}</div>
+        <div className="space-y-2">
+          {torrents.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => onPick(t)}
+              className="w-full text-left rounded-xl border border-border bg-muted/40 hover:bg-muted/80 p-3 space-y-1.5 transition-colors"
+            >
+              <div className="text-xs font-medium break-words leading-snug">{t.name}</div>
+              <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
+                <span className="flex items-center gap-1"><HardDrive className="h-3 w-3" /> {formatBytes(t.size)}</span>
+                <span className="flex items-center gap-1 text-emerald-400"><Users className="h-3 w-3" /> {t.seeders}</span>
+                {t.freeleech && <span className="flex items-center gap-1 text-yellow-400"><Zap className="h-3 w-3" /> Freeleech</span>}
+                {t.internal && <span className="flex items-center gap-1 text-purple-400"><ShieldCheck className="h-3 w-3" /> Internal</span>}
+                {t.upload_date && <span>{new Date(t.upload_date).toLocaleDateString("ro-RO")}</span>}
+              </div>
+            </button>
+          ))}
+        </div>
+        <button onClick={onCancel} className="w-full rounded-xl border border-border py-2 text-sm text-muted-foreground hover:bg-muted transition-colors">
+          Anulează
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function QualityDownloadButton({
   label,
-  torrent,
+  torrents,
+  plexQuality,
   downloading,
   onDownload,
 }: {
   label: string;
-  torrent: FilelistTorrent | null;
+  torrents: FilelistTorrent[];
+  plexQuality?: string | null;
   downloading: number | null;
   onDownload: (t: FilelistTorrent, label: string) => void;
 }) {
-  const available = torrent !== null;
-  const isLoading = torrent !== null && downloading === torrent.id;
+  const [showPicker, setShowPicker] = useState(false);
 
-  const colorClass = label === "4K HDR"
+  const inPlex = plexQuality === label;
+  const available = torrents.length > 0;
+  const isLoading = available && torrents.some((t) => downloading === t.id);
+
+  const colorClass = inPlex
+    ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/30 opacity-70 cursor-default"
+    : label === "4K HDR"
     ? "bg-purple-500/15 text-purple-400 hover:bg-purple-500/25 border-purple-500/30"
     : label === "4K"
     ? "bg-blue-500/15 text-blue-400 hover:bg-blue-500/25 border-blue-500/30"
     : "bg-slate-500/15 text-slate-300 hover:bg-slate-500/25 border-slate-500/30";
 
+  function handleClick() {
+    if (inPlex || !available || isLoading) return;
+    if (torrents.length > 1) {
+      setShowPicker(true);
+    } else {
+      onDownload(torrents[0], label);
+    }
+  }
+
+  const sizeLabel = available
+    ? torrents.length > 1
+      ? `${torrents.length} torrente`
+      : formatBytes(torrents[0].size)
+    : null;
+
+  const titleText = inPlex
+    ? `Ai deja ${label} în Plex`
+    : available
+    ? torrents.length > 1
+      ? `${torrents.length} torrente disponibile — apasă pentru a alege`
+      : `${torrents[0].name} — ${formatBytes(torrents[0].size)}`
+    : `Indisponibil ${label}`;
+
   return (
-    <button
-      onClick={() => torrent && onDownload(torrent, label)}
-      disabled={!available || isLoading}
-      className={`flex flex-col items-center gap-0.5 rounded-xl border px-3 py-2 text-[11px] font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${colorClass}`}
-      title={available ? `${torrent!.name} — ${formatBytes(torrent!.size)}` : `Indisponibil ${label}`}
-    >
-      {isLoading ? (
-        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-      ) : (
-        <Download className="h-3.5 w-3.5" />
+    <>
+      {showPicker && (
+        <TorrentPickerDialog
+          label={label}
+          torrents={torrents}
+          onPick={(t) => { setShowPicker(false); onDownload(t, label); }}
+          onCancel={() => setShowPicker(false)}
+        />
       )}
-      <span>{label}</span>
-      {available && (
-        <span className="text-[10px] font-normal text-muted-foreground">
-          {formatBytes(torrent!.size)}
-        </span>
-      )}
-    </button>
+      <button
+        onClick={handleClick}
+        disabled={(!available && !inPlex) || isLoading}
+        className={`flex flex-col items-center gap-0.5 rounded-xl border px-3 py-2 text-[11px] font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${colorClass}`}
+        title={titleText}
+      >
+        {isLoading ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        ) : inPlex ? (
+          <CheckCircle2 className="h-3.5 w-3.5" />
+        ) : (
+          <Download className="h-3.5 w-3.5" />
+        )}
+        <span>{label}</span>
+        {inPlex ? (
+          <span className="text-[10px] font-normal">În Plex</span>
+        ) : sizeLabel ? (
+          <span className="text-[10px] font-normal text-muted-foreground">{sizeLabel}</span>
+        ) : null}
+      </button>
+    </>
   );
 }
 
@@ -318,7 +401,7 @@ function PinnedItemCard({ item, onUnpin }: { item: PinnedItem; onUnpin: () => vo
   // Calculează statusul Plex pentru ultimul sezon
   let tvPlexStatus: "complet" | "incomplet" | "lipsa" | null = null;
   if (item.mediaType === "tv" && latestSeason !== null && plexSeasonEps !== undefined && tmdbSeasonEps !== undefined) {
-    const plexSet = new Set(plexSeasonEps);
+    const plexSet = new Set((plexSeasonEps).map((e) => e.num));
     const airedEpNums = tmdbSeasonEps.filter((e) => e.aired).map((e) => e.episodeNum);
     const epList = airedEpNums.length > 0 ? airedEpNums : [];
     if (epList.length === 0) {
@@ -424,9 +507,9 @@ function MovieCard({
     }
   }
 
-  const t1080 = torrents.find((t) => detectQuality(t.name).is1080p) ?? null;
-  const t4k = torrents.find((t) => detectQuality(t.name).is4k) ?? null;
-  const t4kHdr = torrents.find((t) => detectQuality(t.name).is4kHdr) ?? null;
+  const t1080 = torrents.filter((t) => detectQuality(t.name).is1080p);
+  const t4k = torrents.filter((t) => detectQuality(t.name).is4k);
+  const t4kHdr = torrents.filter((t) => detectQuality(t.name).is4kHdr);
 
   return (
     <>
@@ -491,9 +574,9 @@ function MovieCard({
               <div className="text-xs text-muted-foreground">Niciun torrent găsit pe Filelist.</div>
             ) : (
               <div className="flex gap-2">
-                <QualityDownloadButton label="1080p" torrent={t1080} downloading={downloading} onDownload={(t, l) => setConfirm({ torrent: t, label: l })} />
-                <QualityDownloadButton label="4K" torrent={t4k} downloading={downloading} onDownload={(t, l) => setConfirm({ torrent: t, label: l })} />
-                <QualityDownloadButton label="4K HDR" torrent={t4kHdr} downloading={downloading} onDownload={(t, l) => setConfirm({ torrent: t, label: l })} />
+                <QualityDownloadButton label="1080p" torrents={t1080} plexQuality={plexQuality} downloading={downloading} onDownload={(t, l) => setConfirm({ torrent: t, label: l })} />
+                <QualityDownloadButton label="4K" torrents={t4k} plexQuality={plexQuality} downloading={downloading} onDownload={(t, l) => setConfirm({ torrent: t, label: l })} />
+                <QualityDownloadButton label="4K HDR" torrents={t4kHdr} plexQuality={plexQuality} downloading={downloading} onDownload={(t, l) => setConfirm({ torrent: t, label: l })} />
               </div>
             )}
           </div>
@@ -551,15 +634,19 @@ function CountdownDisplay({ airDateIso }: { airDateIso: string }) {
 
 // Grupare torrente pe sezoane — ambele moduri pot coexista pe același sezon
 interface QualitySet {
-  t1080: FilelistTorrent | null;
-  t4k: FilelistTorrent | null;
-  t4kHdr: FilelistTorrent | null;
+  t1080: FilelistTorrent[];
+  t4k: FilelistTorrent[];
+  t4kHdr: FilelistTorrent[];
 }
 
 interface SeasonGroup {
   seasonNum: number;
   byQuality: QualitySet;                          // pack sezon întreg (poate fi gol)
   episodes: Map<number, QualitySet>;              // episoade individuale (poate fi gol)
+}
+
+function emptyQualitySet(): QualitySet {
+  return { t1080: [], t4k: [], t4kHdr: [] };
 }
 
 function groupTorrentsBySeasonEpisode(torrents: FilelistTorrent[]): SeasonGroup[] {
@@ -574,7 +661,7 @@ function groupTorrentsBySeasonEpisode(torrents: FilelistTorrent[]): SeasonGroup[
     if (!seasonMap.has(seasonNum)) {
       seasonMap.set(seasonNum, {
         seasonNum,
-        byQuality: { t1080: null, t4k: null, t4kHdr: null },
+        byQuality: emptyQualitySet(),
         episodes: new Map(),
       });
     }
@@ -586,17 +673,17 @@ function groupTorrentsBySeasonEpisode(torrents: FilelistTorrent[]): SeasonGroup[
     if (epMatch) {
       const epNum = parseInt(epMatch[1], 10);
       if (!group.episodes.has(epNum)) {
-        group.episodes.set(epNum, { t1080: null, t4k: null, t4kHdr: null });
+        group.episodes.set(epNum, emptyQualitySet());
       }
       const ep = group.episodes.get(epNum)!;
-      if (q.is1080p && !ep.t1080) ep.t1080 = t;
-      if (q.is4k && !ep.t4k) ep.t4k = t;
-      if (q.is4kHdr && !ep.t4kHdr) ep.t4kHdr = t;
+      if (q.is1080p) ep.t1080.push(t);
+      if (q.is4k) ep.t4k.push(t);
+      if (q.is4kHdr) ep.t4kHdr.push(t);
     } else {
       const bq = group.byQuality;
-      if (q.is1080p && !bq.t1080) bq.t1080 = t;
-      if (q.is4k && !bq.t4k) bq.t4k = t;
-      if (q.is4kHdr && !bq.t4kHdr) bq.t4kHdr = t;
+      if (q.is1080p) bq.t1080.push(t);
+      if (q.is4k) bq.t4k.push(t);
+      if (q.is4kHdr) bq.t4kHdr.push(t);
     }
   }
 
@@ -706,19 +793,22 @@ function SeasonPanel({
   });
 
   const loading = plexLoading || tmdbLoading;
-  const plexSet = new Set(plexEpisodes ?? []);
+  // Map epNum → quality (sau null dacă calitatea nu e disponibilă din Plex metadata)
+  const plexMap = new Map<number, string | null>(
+    (plexEpisodes ?? []).map((e) => [e.num, e.quality])
+  );
   const airedEps: TmdbEpisode[] = (tmdbEpisodes ?? []).filter((e) => e.aired);
   const filelistEpNums = Array.from(group.episodes.keys()).sort((a, b) => a - b);
   const episodeList: number[] = airedEps.length > 0
     ? airedEps.map((e) => e.episodeNum)
     : filelistEpNums;
 
-  const allInPlex = episodeList.length > 0 && episodeList.every((n) => plexSet.has(n));
-  const someInPlex = !allInPlex && episodeList.some((n) => plexSet.has(n));
-  const noneInPlex = episodeList.length > 0 && !episodeList.some((n) => plexSet.has(n));
-  const missingCount = episodeList.filter((n) => !plexSet.has(n)).length;
+  const allInPlex = episodeList.length > 0 && episodeList.every((n) => plexMap.has(n));
+  const someInPlex = !allInPlex && episodeList.some((n) => plexMap.has(n));
+  const noneInPlex = episodeList.length > 0 && !episodeList.some((n) => plexMap.has(n));
+  const missingCount = episodeList.filter((n) => !plexMap.has(n)).length;
 
-  const hasPackTorrents = group.byQuality.t1080 !== null || group.byQuality.t4k !== null || group.byQuality.t4kHdr !== null;
+  const hasPackTorrents = group.byQuality.t1080.length > 0 || group.byQuality.t4k.length > 0 || group.byQuality.t4kHdr.length > 0;
   const hasEpisodeTorrents = group.episodes.size > 0;
 
   function requestDownload(t: FilelistTorrent, label: string) {
@@ -732,6 +822,8 @@ function SeasonPanel({
     else if (someInPlex) closedBadge = <PlexStatusBadge status="incomplet" />;
     else closedBadge = <PlexStatusBadge status="lipsa" />;
   }
+
+  const plexSet = new Set(plexMap.keys()); // pentru verificări rapide în render
 
   return (
     <>
@@ -790,9 +882,9 @@ function SeasonPanel({
                   <div className="space-y-1.5">
                     <div className="text-[11px] text-muted-foreground uppercase tracking-wide">Sezon complet (pack)</div>
                     <div className="flex gap-2">
-                      <QualityDownloadButton label="1080p" torrent={group.byQuality.t1080} downloading={downloading} onDownload={requestDownload} />
-                      <QualityDownloadButton label="4K" torrent={group.byQuality.t4k} downloading={downloading} onDownload={requestDownload} />
-                      <QualityDownloadButton label="4K HDR" torrent={group.byQuality.t4kHdr} downloading={downloading} onDownload={requestDownload} />
+                      <QualityDownloadButton label="1080p" torrents={group.byQuality.t1080} downloading={downloading} onDownload={requestDownload} />
+                      <QualityDownloadButton label="4K" torrents={group.byQuality.t4k} downloading={downloading} onDownload={requestDownload} />
+                      <QualityDownloadButton label="4K HDR" torrents={group.byQuality.t4kHdr} downloading={downloading} onDownload={requestDownload} />
                     </div>
                   </div>
                 )}
@@ -802,6 +894,7 @@ function SeasonPanel({
                   <div className="space-y-2">
                     {hasPackTorrents && <div className="text-[11px] text-muted-foreground uppercase tracking-wide">Episoade individuale</div>}
                     {episodeList.map((epNum) => {
+                      const epPlexQuality = plexMap.get(epNum);
                       const inPlex = plexSet.has(epNum);
                       const q = group.episodes.get(epNum);
                       const tmdbEp = airedEps.find((e) => e.episodeNum === epNum);
@@ -810,20 +903,25 @@ function SeasonPanel({
                           <div className="flex items-center gap-2">
                             <span className="text-xs font-medium w-8 shrink-0 text-muted-foreground">E{String(epNum).padStart(2, "0")}</span>
                             {tmdbEp && <span className="text-xs text-muted-foreground truncate flex-1">{tmdbEp.title}</span>}
-                          </div>
-                          <div className="pl-10">
-                            {inPlex ? (
-                              <PlexStatusBadge status="complet" />
-                            ) : q ? (
-                              <div className="flex gap-1.5">
-                                <QualityDownloadButton label="1080p" torrent={q.t1080} downloading={downloading} onDownload={requestDownload} />
-                                <QualityDownloadButton label="4K" torrent={q.t4k} downloading={downloading} onDownload={requestDownload} />
-                                <QualityDownloadButton label="4K HDR" torrent={q.t4kHdr} downloading={downloading} onDownload={requestDownload} />
-                              </div>
-                            ) : (
-                              <PlexStatusBadge status="lipsa" />
+                            {inPlex && (
+                              <span className="shrink-0 flex items-center gap-1 text-[10px] text-emerald-400">
+                                <CheckCircle2 className="h-3 w-3" />
+                                {epPlexQuality ?? "Complet"}
+                              </span>
                             )}
                           </div>
+                          {!inPlex && q && (
+                            <div className="pl-10 flex gap-1.5">
+                              <QualityDownloadButton label="1080p" torrents={q.t1080} downloading={downloading} onDownload={requestDownload} />
+                              <QualityDownloadButton label="4K" torrents={q.t4k} downloading={downloading} onDownload={requestDownload} />
+                              <QualityDownloadButton label="4K HDR" torrents={q.t4kHdr} downloading={downloading} onDownload={requestDownload} />
+                            </div>
+                          )}
+                          {!inPlex && !q && (
+                            <div className="pl-10">
+                              <PlexStatusBadge status="lipsa" />
+                            </div>
+                          )}
                         </div>
                       );
                     })}
