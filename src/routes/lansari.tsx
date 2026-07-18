@@ -22,6 +22,8 @@ import {
   Trash2,
   ChevronDown,
   ChevronRight,
+  Bell,
+  BellOff,
 } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -35,7 +37,8 @@ import { searchFilelist, downloadFilelist, deleteFilelistLogEntry } from "@/lib/
 import type { FilelistTorrent, FilelistCategory, FilelistLogEntry } from "@/lib/filelist.functions";
 import { searchTmdb, getTmdbDetails, getTvShowCountdown, getTmdbSeasonEpisodes } from "@/lib/tmdb.functions";
 import type { TmdbSearchResult, TmdbDetails, TvShowCountdown, TmdbEpisode } from "@/lib/tmdb.functions";
-import { getPinnedItems, setPinnedItems } from "@/lib/pinned.functions";
+import { getPinnedItems, setPinnedItems, getWatchSettings, setWatchSettings } from "@/lib/pinned.functions";
+import type { WatchSettings } from "@/lib/pinned.functions";
 
 export const Route = createFileRoute("/lansari")({
   head: () => ({ meta: [{ title: "Lansări — Monitor Server" }] }),
@@ -215,17 +218,33 @@ function QualityDownloadButton({
 
 function UnifiedSearchSection() {
   const [pinned, setPinned] = useState<PinnedItem[]>([]);
+  const [watchMap, setWatchMap] = useState<Map<string, WatchSettings>>(new Map());
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<TmdbSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
   const searchFn = useServerFn(searchTmdb);
   const getPinnedFn = useServerFn(getPinnedItems);
   const setPinnedFn = useServerFn(setPinnedItems);
+  const getWatchFn = useServerFn(getWatchSettings);
+  const setWatchFn = useServerFn(setWatchSettings);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     getPinnedFn({}).then(setPinned).catch(() => {});
+    getWatchFn({}).then((settings) => {
+      const map = new Map<string, WatchSettings>();
+      for (const s of settings) map.set(`${s.mediaType}-${s.id}`, s);
+      setWatchMap(map);
+    }).catch(() => {});
   }, []);
+
+  async function updateWatch(id: number, mediaType: "movie" | "tv", patch: Partial<Pick<WatchSettings, "watchFilelist" | "watchTmdb" | "watchPlex">>) {
+    const key = `${mediaType}-${id}`;
+    const current = watchMap.get(key) ?? { id, mediaType, watchFilelist: false, watchTmdb: false, watchPlex: false };
+    const next = { ...current, ...patch };
+    setWatchMap((m) => new Map(m).set(key, next));
+    await setWatchFn({ data: next }).catch(() => {});
+  }
 
   async function savePinned(list: PinnedItem[]) {
     setPinned(list);
@@ -319,13 +338,18 @@ function UnifiedSearchSection() {
       </div>
 
       <div className="mt-3 space-y-3">
-        {pinned.map((p) => (
-          <PinnedItemCard
-            key={`${p.mediaType}-${p.id}`}
-            item={p}
-            onUnpin={() => unpin(p.id, p.mediaType)}
-          />
-        ))}
+        {pinned.map((p) => {
+          const ws = watchMap.get(`${p.mediaType}-${p.id}`) ?? { id: p.id, mediaType: p.mediaType, watchFilelist: false, watchTmdb: false, watchPlex: false };
+          return (
+            <PinnedItemCard
+              key={`${p.mediaType}-${p.id}`}
+              item={p}
+              watchSettings={ws}
+              onWatchChange={(patch) => updateWatch(p.id, p.mediaType, patch)}
+              onUnpin={() => unpin(p.id, p.mediaType)}
+            />
+          );
+        })}
       </div>
     </section>
   );
@@ -335,7 +359,12 @@ function UnifiedSearchSection() {
 // Card item fixat — router spre Movie sau Show
 // ---------------------------------------------------------------------------
 
-function PinnedItemCard({ item, onUnpin }: { item: PinnedItem; onUnpin: () => void }) {
+function PinnedItemCard({ item, watchSettings, onWatchChange, onUnpin }: {
+  item: PinnedItem;
+  watchSettings: WatchSettings;
+  onWatchChange: (patch: Partial<Pick<WatchSettings, "watchFilelist" | "watchTmdb" | "watchPlex">>) => void;
+  onUnpin: () => void;
+}) {
   const detailsFn = useServerFn(getTmdbDetails);
   const plexFn = useServerFn(checkPlexHasTitle);
   const plexSeasonFn = useServerFn(getPlexEpisodesInSeason);
@@ -431,6 +460,8 @@ function PinnedItemCard({ item, onUnpin }: { item: PinnedItem; onUnpin: () => vo
         plexInfo={inPlexMovie ?? null}
         torrents={torrents}
         filelistLoading={filelistLoading}
+        watchSettings={watchSettings}
+        onWatchChange={onWatchChange}
         onUnpin={onUnpin}
       />
     );
@@ -446,6 +477,8 @@ function PinnedItemCard({ item, onUnpin }: { item: PinnedItem; onUnpin: () => vo
       filelistLoading={filelistLoading}
       countdown={countdown ?? null}
       countdownLoading={countdownLoading}
+      watchSettings={watchSettings}
+      onWatchChange={onWatchChange}
       onUnpin={onUnpin}
     />
   );
@@ -461,6 +494,8 @@ function MovieCard({
   plexInfo,
   torrents,
   filelistLoading,
+  watchSettings,
+  onWatchChange,
   onUnpin,
 }: {
   item: PinnedItem;
@@ -468,6 +503,8 @@ function MovieCard({
   plexInfo: { found: boolean; quality: string | null } | null;
   torrents: FilelistTorrent[];
   filelistLoading: boolean;
+  watchSettings: WatchSettings;
+  onWatchChange: (patch: Partial<Pick<WatchSettings, "watchFilelist" | "watchTmdb" | "watchPlex">>) => void;
   onUnpin: () => void;
 }) {
   const qc = useQueryClient();
@@ -580,6 +617,7 @@ function MovieCard({
               </div>
             )}
           </div>
+          <WatchTogglePanel mediaType="movie" settings={watchSettings} onChange={onWatchChange} />
           </div>
         </div>
       </section>
@@ -732,6 +770,56 @@ function DownloadConfirmDialog({
             <Download className="h-4 w-4" /> Descarcă
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Panoul de notificări watch (toggle-uri per tip)
+// ---------------------------------------------------------------------------
+
+function WatchTogglePanel({
+  mediaType,
+  settings,
+  onChange,
+}: {
+  mediaType: "movie" | "tv";
+  settings: WatchSettings;
+  onChange: (patch: Partial<Pick<WatchSettings, "watchFilelist" | "watchTmdb" | "watchPlex">>) => void;
+}) {
+  const anyEnabled = settings.watchFilelist || settings.watchTmdb || settings.watchPlex;
+
+  const toggles: { key: keyof Pick<WatchSettings, "watchFilelist" | "watchTmdb" | "watchPlex">; label: string; show: boolean }[] = [
+    { key: "watchFilelist", label: "Torrent nou Filelist", show: true },
+    { key: "watchTmdb", label: "Episod nou lansat", show: mediaType === "tv" },
+    { key: "watchPlex", label: mediaType === "tv" ? "Episod nou în Plex" : "Film adăugat în Plex", show: true },
+  ];
+
+  return (
+    <div className="border-t border-border pt-3">
+      <div className="mb-2 flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-muted-foreground">
+        {anyEnabled ? <Bell className="h-3 w-3 text-primary" /> : <BellOff className="h-3 w-3" />}
+        Notificări automate · la fiecare 3 ore
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {toggles.filter((t) => t.show).map((t) => {
+          const on = settings[t.key] as boolean;
+          return (
+            <button
+              key={t.key}
+              onClick={() => onChange({ [t.key]: !on })}
+              className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
+                on
+                  ? "bg-primary/15 border-primary/30 text-primary"
+                  : "bg-muted/40 border-border text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {on ? <Bell className="h-3 w-3" /> : <BellOff className="h-3 w-3" />}
+              {t.label}
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -945,6 +1033,8 @@ function ShowCard({
   filelistLoading,
   countdown,
   countdownLoading,
+  watchSettings,
+  onWatchChange,
   onUnpin,
 }: {
   item: PinnedItem;
@@ -955,6 +1045,8 @@ function ShowCard({
   filelistLoading: boolean;
   countdown: TvShowCountdown | null;
   countdownLoading: boolean;
+  watchSettings: WatchSettings;
+  onWatchChange: (patch: Partial<Pick<WatchSettings, "watchFilelist" | "watchTmdb" | "watchPlex">>) => void;
   onUnpin: () => void;
 }) {
   const qc = useQueryClient();
@@ -1082,6 +1174,8 @@ function ShowCard({
             </div>
           )}
         </div>
+
+        <WatchTogglePanel mediaType="tv" settings={watchSettings} onChange={onWatchChange} />
 
         {/* Următorul episod — jos, după Filelist */}
         {countdown?.status === "ok" && countdown.next && (

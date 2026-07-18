@@ -16,7 +16,8 @@ export type ActivityType =
   | "service_restart"
   | "service_update"
   | "ubuntu_update"
-  | "qbit_action";
+  | "qbit_action"
+  | "pinned_update";
 
 export interface ActivityEntry {
   id: string;
@@ -42,6 +43,7 @@ const PUSH_TITLES: Record<ActivityType, string> = {
   service_update: "⬆️ Update",
   ubuntu_update: "🐧 Ubuntu",
   qbit_action: "⚙️ qBittorrent",
+  pinned_update: "🔔 Lansări",
 };
 
 export async function logActivity(

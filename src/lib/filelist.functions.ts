@@ -403,6 +403,45 @@ if (typeof process !== "undefined" && process.env) {
 }
 
 // ---------------------------------------------------------------------------
+// Căutare Filelist internă (fără requireAdmin — pentru plugin-uri background)
+// ---------------------------------------------------------------------------
+
+export async function searchFilelistRaw(query: string, category: FilelistCategory): Promise<FilelistTorrent[]> {
+  const username = process.env.FILELIST_USERNAME;
+  const passkey = process.env.FILELIST_PASSKEY;
+  if (!username || !passkey) return [];
+  const catIds = category === "movies" ? MOVIE_CATEGORIES : category === "series" ? SERIES_CATEGORIES : ALL_CATEGORIES;
+  const params = new URLSearchParams({
+    username, passkey, action: "search-torrents", type: "name",
+    query: query.trim(), category: catIds.join(","), output: "json",
+  });
+  try {
+    const res = await fetch(`https://filelist.io/api.php?${params.toString()}`, {
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!res.ok) return [];
+    const raw: any[] = await res.json();
+    if (!Array.isArray(raw)) return [];
+    return raw.map((t) => ({
+      id: Number(t.id),
+      name: String(t.name ?? ""),
+      size: Number(t.size ?? 0),
+      seeders: Number(t.seeders ?? 0),
+      leechers: Number(t.leechers ?? 0),
+      times_completed: Number(t.times_completed ?? 0),
+      category: parseCategoryId(t.category),
+      categoryName: CATEGORY_NAMES[parseCategoryId(t.category)] ?? `Cat ${t.category}`,
+      freeleech: !!Number(t.freeleech),
+      internal: !!Number(t.internal),
+      upload_date: String(t.upload_date ?? ""),
+      imdb: t.imdb || undefined,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Server function: căutare pe Filelist.io
 // ---------------------------------------------------------------------------
 

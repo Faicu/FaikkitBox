@@ -103,6 +103,26 @@ export function getDb(): DatabaseSync {
       title TEXT NOT NULL,
       grandparent_title TEXT
     );
+
+    CREATE TABLE IF NOT EXISTS pinned_watch_settings (
+      id INTEGER NOT NULL,
+      media_type TEXT NOT NULL,
+      watch_filelist INTEGER NOT NULL DEFAULT 0,
+      watch_tmdb INTEGER NOT NULL DEFAULT 0,
+      watch_plex INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (id, media_type)
+    );
+
+    CREATE TABLE IF NOT EXISTS pinned_watch_state (
+      id INTEGER NOT NULL,
+      media_type TEXT NOT NULL,
+      last_checked_at TEXT,
+      seen_torrent_ids TEXT NOT NULL DEFAULT '[]',
+      last_aired_key TEXT,
+      plex_episode_keys TEXT NOT NULL DEFAULT '[]',
+      plex_movie_found INTEGER,
+      PRIMARY KEY (id, media_type)
+    );
   `);
 
   // Migrare din JSON (o singură dată, la prima pornire cu SQLite)

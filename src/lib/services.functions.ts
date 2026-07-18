@@ -942,6 +942,103 @@ export const checkPlexHasTitle = createServerFn({ method: "GET" })
     }
   });
 
+// ---------------------------------------------------------------------------
+// Funcții interne exportate (fără createServerFn, pentru plugin-uri background)
+// ---------------------------------------------------------------------------
+
+export async function getPlexEpisodesInSeasonInternal(showTitle: string, season: number): Promise<{ num: number; quality: string | null }[]> {
+  const token = process.env.PLEX_TOKEN;
+  const base = process.env.PLEX_URL;
+  if (!token) return [];
+  try {
+    const headers = { Accept: "application/json", "X-Plex-Token": token };
+    const discovered = await discoverPlexUrl(token, base);
+    const url = discovered.url;
+    const normalizedTarget = normalizeShowTitle(showTitle);
+
+    const search = await fetchJson<any>(
+      `${url}/search?query=${encodeURIComponent(showTitle)}&type=2`,
+      { headers },
+      8000,
+    );
+    const searchShows = (search?.MediaContainer?.Metadata ?? []).filter((r: any) => r.type === "show");
+    let show: any =
+      searchShows.find((r: any) => normalizeShowTitle(String(r.title ?? "")) === normalizedTarget) ??
+      searchShows.find((r: any) => normalizeShowTitle(String(r.title ?? "")).includes(normalizedTarget)) ??
+      searchShows.find((r: any) => normalizedTarget.includes(normalizeShowTitle(String(r.title ?? "")))) ??
+      searchShows[0];
+
+    if (!show) {
+      const allShows = await fetchJson<any>(`${url}/library/sections/2/all?type=2`, { headers }, 10000);
+      const libShows = (allShows?.MediaContainer?.Metadata ?? []).filter((r: any) => r.type === "show");
+      show =
+        libShows.find((r: any) => normalizeShowTitle(String(r.title ?? "")) === normalizedTarget) ??
+        libShows.find((r: any) => normalizeShowTitle(String(r.title ?? "")).includes(normalizedTarget)) ??
+        libShows.find((r: any) => normalizedTarget.includes(normalizeShowTitle(String(r.title ?? ""))));
+    }
+    if (!show) return [];
+
+    const seasons = await fetchJson<any>(`${url}/library/metadata/${show.ratingKey}/children`, { headers }, 8000);
+    const seasonsMd = seasons?.MediaContainer?.Metadata ?? [];
+    const seasonMatch = seasonsMd.find((s: any) => Number(s.index) === season);
+    if (!seasonMatch) return [];
+
+    const episodes = await fetchJson<any>(`${url}/library/metadata/${seasonMatch.ratingKey}/children`, { headers }, 8000);
+    const episodesMd = episodes?.MediaContainer?.Metadata ?? [];
+    return episodesMd
+      .filter((e: any) => Number(e.index) > 0)
+      .map((e: any) => {
+        const res: string | undefined = e.Media?.[0]?.videoResolution;
+        let quality: string | null = null;
+        if (res) {
+          const r = String(res).toLowerCase();
+          if (r === "4k" || r === "2160") quality = "4K";
+          else if (r === "1080") quality = "1080p";
+          else if (r === "720") quality = "720p";
+          else quality = res.toUpperCase();
+        }
+        return { num: Number(e.index), quality };
+      });
+  } catch {
+    return [];
+  }
+}
+
+export async function checkPlexHasTitleInternal(title: string, originalTitle: string, mediaType: "movie" | "tv"): Promise<{ found: boolean; quality: string | null } | null> {
+  const token = process.env.PLEX_TOKEN;
+  const base = process.env.PLEX_URL;
+  if (!token) return null;
+  try {
+    const headers = { Accept: "application/json", "X-Plex-Token": token };
+    const discovered = await discoverPlexUrl(token, base);
+    const url = discovered.url;
+    const plexType = mediaType === "movie" ? 1 : 2;
+    for (const q of [title, originalTitle, normalizeShowTitle(title)].filter(Boolean)) {
+      const search = await fetchJson<any>(
+        `${url}/search?query=${encodeURIComponent(q)}&type=${plexType}`,
+        { headers },
+        8000,
+      );
+      const results = search?.MediaContainer?.Metadata ?? [];
+      if (results.length > 0) {
+        const res: string | undefined = results[0]?.Media?.[0]?.videoResolution;
+        let quality: string | null = null;
+        if (res) {
+          const r = String(res).toLowerCase();
+          if (r === "4k" || r === "2160") quality = "4K";
+          else if (r === "1080") quality = "1080p";
+          else if (r === "720") quality = "720p";
+          else quality = res.toUpperCase();
+        }
+        return { found: true, quality };
+      }
+    }
+    return { found: false, quality: null };
+  } catch {
+    return null;
+  }
+}
+
 export const getShowStatus = createServerFn({ method: "GET" }).handler(
   async (): Promise<ShowStatusData> => {
     return await buildShowStatus(HOTD_SHOW_TITLE, HOTD_SEASON, HOTD_S3_EPISODES);
