@@ -341,7 +341,7 @@ function UnifiedSearchSection() {
 
       <div className="mt-3 space-y-3">
         {pinned.map((p) => {
-          const ws = watchMap.get(`${p.mediaType}-${p.id}`) ?? { id: p.id, mediaType: p.mediaType, watchFilelist: false, watchTmdb: false, watchPlex: false };
+          const ws = watchMap.get(`${p.mediaType}-${p.id}`) ?? { id: p.id, mediaType: p.mediaType, watchFilelist: false, watchFilelistSeason: false, watchTmdb: false, watchPlex: false };
           return (
             <PinnedItemCard
               key={`${p.mediaType}-${p.id}`}
