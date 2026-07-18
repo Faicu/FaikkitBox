@@ -82,7 +82,7 @@ export const getActivityLog = createServerFn({ method: "GET" }).handler(
       const db = getDb();
       const rows = db
         .prepare(
-          "SELECT id, timestamp, type, message, meta FROM activity ORDER BY timestamp DESC LIMIT 500",
+          "SELECT id, timestamp, type, message, meta FROM activity ORDER BY timestamp DESC, rowid DESC LIMIT 500",
         )
         .all() as Array<{
         id: string;
@@ -139,29 +139,17 @@ export async function trackPlexSessions(
   for (const s of sessions) {
     const key = sessionKey(s.user, s.title, s.grandparentTitle);
     currentKeys.add(key);
-
-    if (!storedMap.has(key)) {
-      // Sesiune nouă — inserăm în DB și logăm start
-      const startedAt = new Date().toISOString();
-      db.prepare(
-        `INSERT OR REPLACE INTO plex_active_sessions
-         (key, started_at, last_view_offset_ms, duration_ms, user, title, grandparent_title)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`
-      ).run(key, startedAt, s.viewOffsetMs ?? 0, s.durationMs ?? 0, s.user, s.title, s.grandparentTitle ?? null);
-
-      const what = s.grandparentTitle ? `${s.grandparentTitle} — ${s.title}` : s.title;
-      await logActivity("plex_watch_start", `${s.user} a început vizionarea: ${what}`, {
-        user: s.user, title: s.title, grandparentTitle: s.grandparentTitle, player: s.player,
-      });
-    } else {
+    if (storedMap.has(key)) {
       // Actualizăm progresul în DB
+      const prev = storedMap.get(key)!;
       db.prepare(
         `UPDATE plex_active_sessions SET last_view_offset_ms = ?, duration_ms = ? WHERE key = ?`
-      ).run(s.viewOffsetMs ?? storedMap.get(key)!.last_view_offset_ms, s.durationMs ?? storedMap.get(key)!.duration_ms, key);
+      ).run(s.viewOffsetMs ?? prev.last_view_offset_ms, s.durationMs ?? prev.duration_ms, key);
     }
   }
 
-  // Sesiuni terminate — în DB dar nu mai sunt active pe Plex
+  // STOPs înainte de STARTs — astfel rowid-ul stop < rowid start,
+  // iar cu ORDER BY timestamp DESC, rowid DESC starts apar deasupra stops în UI
   for (const [key, row] of storedMap.entries()) {
     if (!currentKeys.has(key)) {
       db.prepare("DELETE FROM plex_active_sessions WHERE key = ?").run(key);
@@ -172,6 +160,23 @@ export async function trackPlexSessions(
         `${row.user} a terminat vizionarea: ${what}${progress}`,
         { user: row.user, title: row.title, grandparentTitle: row.grandparent_title || undefined },
       );
+    }
+  }
+
+  for (const s of sessions) {
+    const key = sessionKey(s.user, s.title, s.grandparentTitle);
+    if (!storedMap.has(key)) {
+      // Sesiune nouă — inserăm în DB și logăm start
+      db.prepare(
+        `INSERT OR REPLACE INTO plex_active_sessions
+         (key, started_at, last_view_offset_ms, duration_ms, user, title, grandparent_title)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
+      ).run(key, new Date().toISOString(), s.viewOffsetMs ?? 0, s.durationMs ?? 0, s.user, s.title, s.grandparentTitle ?? null);
+
+      const what = s.grandparentTitle ? `${s.grandparentTitle} — ${s.title}` : s.title;
+      await logActivity("plex_watch_start", `${s.user} a început vizionarea: ${what}`, {
+        user: s.user, title: s.title, grandparentTitle: s.grandparentTitle, player: s.player,
+      });
     }
   }
 }
