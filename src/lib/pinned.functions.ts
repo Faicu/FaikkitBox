@@ -76,4 +76,15 @@ export const setPinnedItems = createServerFn({ method: "POST" })
     data.items.forEach((item, i) => {
       stmt.run(item.id, item.mediaType, item.title, item.originalTitle, item.posterUrl ?? null, i);
     });
+    // Curăță setările/starea de watch pentru itemele care nu mai sunt fixate
+    db.prepare(
+      `DELETE FROM pinned_watch_settings WHERE NOT EXISTS (
+         SELECT 1 FROM pinned_items pi WHERE pi.id = pinned_watch_settings.id AND pi.media_type = pinned_watch_settings.media_type
+       )`
+    ).run();
+    db.prepare(
+      `DELETE FROM pinned_watch_state WHERE NOT EXISTS (
+         SELECT 1 FROM pinned_items pi WHERE pi.id = pinned_watch_state.id AND pi.media_type = pinned_watch_state.media_type
+       )`
+    ).run();
   });
