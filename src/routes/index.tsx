@@ -32,7 +32,7 @@ import {
   hostQuery,
 } from "@/lib/queries";
 import type { HostData } from "@/lib/services.functions";
-import { formatBytes } from "@/lib/format";
+import { formatBytes, formatSpeed } from "@/lib/format";
 
 export const Route = createFileRoute("/")({
   head: () => ({
