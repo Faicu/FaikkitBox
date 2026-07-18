@@ -1,51 +1,89 @@
 # FaikkitBox
 
-Dashboard de monitorizare pentru serverul de acasă (Plex, Immich, qBittorrent), rulat independent.
+Dashboard personal de monitorizare pentru serverul de acasă — Plex, Immich, qBittorrent și sistem.
 
-Aplicația este construită cu [TanStack Start](https://tanstack.com/start) (React 19 + TanStack Router/Query) și rulează ca server Node standard (via Nitro, preset `node-server`), gata de pus în spatele unui reverse proxy (ex. nginx) pe Ubuntu.
+Construit cu [TanStack Start](https://tanstack.com/start) (React 19 + TanStack Router/Query), rulează ca server Node via Nitro, gata de pus în spatele unui reverse proxy (nginx) pe Ubuntu.
+
+---
 
 ## Funcționalități
 
-- **Prezentare generală** — status live pentru Plex, Immich, qBittorrent și gazdă, într-un singur ecran.
-- **Plex** — sesiuni active cu progres și status Redare/Pauză, episoade vizionate azi, utilizatori activi azi.
-- **Immich** — număr fișiere, spațiu ocupat, coadă de joburi.
-- **qBittorrent** — viteze download/upload, torrente active/total, filtre pe stări și căutare în listă.
-- **Control qBittorrent** — acțiuni admin de pauză/reluare (global sau individual) și ștergere torrent + fișiere.
-- **Gazdă** — CPU, memorie, swap, uptime, discuri (inclusiv viteze read/write per disc), rețea, senzori de temperatură, top procese și top I/O disc, plus aplicații monitorizate.
-- **Jurnal activitate** — timeline unificat cu evenimente server (pornire/oprire, Plex, qBit, update-uri) și commit-uri GitHub, cu detalii commit la click.
-- **Speedtest** — card pe pagina principală cu vitezele ultimului test (Speedtest by Ookla); rularea unui test nou necesită autentificare admin. Presupune CLI-ul `speedtest` (Ookla) instalat și disponibil în `PATH` pe server.
-- **Lansări seriale** — pagină dedicată pentru episoade lansate/următoare, cu căutare seriale prin TVmaze, fixare în listă, countdown până la episodul următor și status „în bibliotecă”.
-- **FileList.io** — căutare torrent direct din dashboard, trimitere în qBittorrent pe foldere separate filme/seriale și jurnal cu ultimele descărcări.
-- **Actualizări** — pagină de admin pentru verificarea versiunilor Plex/Immich și comenzi de mentenanță (update Ubuntu, restart/update servicii).
-- **Pagină Test** — rută dedicată pentru verificare rapidă a UI-ului (toast de test).
-- **Autentificare admin** — acces protejat prin sesiune (user/parolă + secret de sesiune) pentru funcțiile administrative.
+### Prezentare generală
+Status live pentru toate serviciile monitorizate într-un singur ecran: Plex, Immich, qBittorrent, gazdă, ultimul speedtest și jurnal de activitate.
+
+### Plex
+Sesiuni active cu progres și stare (Redare/Pauză), episoade vizionate azi, utilizatori activi.
+
+### Immich
+Număr fișiere, spațiu ocupat, coadă de joburi active.
+
+### qBittorrent
+Viteze download/upload, torrente active/total, filtre pe stări, căutare în listă, acțiuni de pauză/reluare (global sau individual) și ștergere torrent + fișiere.
+
+### Sistem (Gazdă)
+CPU, memorie, swap, uptime, discuri cu viteze read/write, rețea, senzori temperatură, top procese și top I/O disc, aplicații monitorizate.
+
+### Lansări — filme și seriale
+Pagină dedicată cu search unificat (TMDB) pentru filme și seriale. Itemele fixate afișează:
+
+- **Poster** din TMDB
+- **Status Plex** — `Complet` / `Incomplet` / `Lipsă` cu culori (verde/galben/roșu)
+  - Pentru **filme**: afișează și calitatea existentă în bibliotecă (ex: `1080p · Complet`)
+  - Pentru **seriale**: statusul reflectă *doar ultimul sezon lansat*, nu întreaga serie
+- **Download de pe Filelist** — butoane pe calități (`1080p`, `4K`, `4K HDR`) cu confirmare înainte de descărcare
+  - Seriale: grupate pe sezoane cu accordion; suportă atât pack-uri întregi (S01) cât și episoade individuale (S01E01) în același sezon
+  - Per-episod: status Plex individual cu badge `În bibliotecă`
+- **Countdown** până la următorul episod (zile/ore/min/sec) cu data și ora exactă (ora României)
+- **Ultimul episod lansat** cu status Plex
+
+Căutare Plex robustă: suportă titluri localizate (ex: „Casa Dragonului" găsit prin „House of the Dragon") și titluri cu diacritice (ex: „Cămătarii") prin fallback la parcurgerea întregii biblioteci.
+
+### FileList.io
+Căutare torrent direct din dashboard, trimitere în qBittorrent pe foldere separate filme/seriale, jurnal cu ultimele descărcări.
+
+### Jurnal activitate
+Timeline unificat cu evenimente server (pornire/oprire, Plex, qBit, update-uri) și commit-uri GitHub. Click pe commit pentru detalii.
+
+### Notificări push
+Notificări web push pentru commit-uri noi pe GitHub. Funcționează fără browser deschis — se recuperează automat notificările pierdute în timpul unui restart.
+
+### Speedtest
+Card pe pagina principală cu vitezele ultimului test (Speedtest by Ookla). Rularea unui test nou necesită autentificare admin. Necesită CLI-ul `speedtest` (Ookla) în `PATH`.
+
+### Actualizări
+Pagină admin pentru verificarea versiunilor Plex/Immich și comenzi de mentenanță (update Ubuntu, restart/update servicii).
+
+### Autentificare admin
+Acces protejat prin sesiune (user/parolă + secret de sesiune) pentru funcțiile administrative.
+
+---
 
 ## Stack tehnic
 
 - [React 19](https://react.dev/) + [TanStack Start](https://tanstack.com/start) / [TanStack Router](https://tanstack.com/router) / [TanStack Query](https://tanstack.com/query)
 - [Vite](https://vitejs.dev/) + [Nitro](https://nitro.build/) (preset `node-server`)
-- [Tailwind CSS v4](https://tailwindcss.com/) + [shadcn/ui](https://ui.shadcn.com/) (componente Radix UI)
-- [systeminformation](https://www.npmjs.com/package/systeminformation) pentru metrici de sistem
+- [Tailwind CSS v4](https://tailwindcss.com/) + [shadcn/ui](https://ui.shadcn.com/)
+- [systeminformation](https://www.npmjs.com/package/systeminformation) — metrici sistem
+- SQLite nativ (Node.js 22.5+) — fără ORM
 - TypeScript, ESLint, Prettier
+
+---
 
 ## Structură proiect
 
 ```
 src/
-  components/       # componente UI reutilizabile (AppHeader, BottomNav, gauges, ui/ shadcn)
-  hooks/             # hook-uri React custom
-  lib/               # funcții server (Plex/Immich/qBittorrent/host), autentificare admin, query-uri, formatare
-  routes/            # pagini/rute: index (overview), plex, immich, qbit, host, lansari, login, updates
-  server.ts          # entrypoint server (handler fetch, normalizare erori SSR)
-  start.ts           # bootstrap TanStack Start
-  styles.css         # stiluri globale Tailwind
-public/              # assets statice
+  components/     # componente UI reutilizabile (AppHeader, BottomNav, gauge-uri, ui/ shadcn)
+  hooks/          # hook-uri React custom
+  lib/            # funcții server: Plex, Immich, qBittorrent, Filelist, TMDB, TVmaze, push, DB
+  routes/         # pagini: index, plex, immich, qbit, host, lansari, login, updates
+server/
+  plugins/        # plugin-uri Nitro: Plex session tracker, GitHub commit tracker
+  routes/         # rute API: GitHub webhook, push subscription
+public/           # assets statice, Service Worker
 ```
 
-## Cerințe
-
-- Node.js (compatibil cu dependințele din `package.json`) și npm
-- Acces la serviciile monitorizate: Plex, Immich, qBittorrent (opțional, fiecare secțiune arată eroare dacă serviciul nu e configurat/accesibil)
+---
 
 ## Configurare
 
@@ -55,56 +93,56 @@ Copiază `.env.example` în `.env` și completează valorile:
 cp .env.example .env
 ```
 
-Variabile disponibile:
+| Variabilă | Descriere |
+|---|---|
+| `ADMIN_USER` / `ADMIN_PASS` | Credențiale login admin dashboard |
+| `SESSION_SECRET` | Secret sesiune admin (min. 32 caractere, ex: `openssl rand -hex 32`) |
+| `PLEX_URL` / `PLEX_TOKEN` | URL și token server Plex |
+| `IMMICH_URL` / `IMMICH_API_KEY` | URL și cheie API Immich |
+| `QBIT_URL` / `QBIT_USERNAME` / `QBIT_PASSWORD` | URL și credențiale WebUI qBittorrent |
+| `FILELIST_USERNAME` / `FILELIST_PASSKEY` | Credențiale API FileList.io |
+| `TMDB_API_KEY` | Token Bearer JWT pentru API TMDB (themoviedb.org) |
+| `MEDIA_MOVIES_PATH` / `MEDIA_SERIES_PATH` | Căi locale unde qBittorrent salvează filmele/serialele din Filelist |
+| `GITHUB_REPO` | Repo GitHub (ex: `Faicu/FaikkitBox`) pentru tracking commits |
+| `GITHUB_TOKEN` | (opțional) Token GitHub API pentru limită mai mare la request-uri |
+| `GITHUB_WEBHOOK_SECRET` | Secret pentru validarea webhook-urilor GitHub |
+| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | Chei VAPID pentru notificări web push |
+| `PLEX_COMPOSE_FILE` / `IMMICH_COMPOSE_FILE` | (opțional) Căi custom `docker-compose.yml` pentru butoanele de restart |
+| `SPEEDTEST_CACHE_FILE` | (opțional) Cale fișier cache ultimul rezultat Speedtest |
+| `SPEEDTEST_BIN` | (opțional) Cale completă binar `speedtest` (util dacă snap nu rulează din systemd) |
+| `PORT` | Port server (implicit `3000`) |
+| `NODE_ENV` | Mediu de rulare (`production` în producție) |
 
-| Variabilă                                      | Descriere                                                                                          |
-| ---------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `ADMIN_USER` / `ADMIN_PASS`                    | Credențiale pentru login-ul de admin al dashboard-ului                                             |
-| `SESSION_SECRET`                               | Secret pentru sesiunea de admin (minim 32 caractere aleatorii, ex. `openssl rand -hex 32`)         |
-| `PLEX_URL` / `PLEX_TOKEN`                      | URL și token pentru serverul Plex                                                                  |
-| `IMMICH_URL` / `IMMICH_API_KEY`                | URL și cheie API pentru Immich                                                                     |
-| `QBIT_URL` / `QBIT_USERNAME` / `QBIT_PASSWORD` | URL și credențiale pentru WebUI-ul qBittorrent                                                     |
-| `FILELIST_USERNAME` / `FILELIST_PASSKEY`       | Credențiale API FileList.io pentru căutare și descărcare torrent                                   |
-| `MEDIA_MOVIES_PATH` / `MEDIA_SERIES_PATH`      | Căi locale unde qBittorrent salvează filmele și serialele adăugate din FileList                   |
-| `PLEX_COMPOSE_FILE` / `IMMICH_COMPOSE_FILE`    | (opțional) căi custom către `docker-compose.yml` ale serviciilor, folosite de butoanele de restart |
-| `SPEEDTEST_CACHE_FILE`                         | (opțional) cale către fișierul unde e salvat ultimul rezultat Speedtest (implicit un fișier temporar) |
-| `SPEEDTEST_BIN`                                | (opțional) cale completă către binarul `speedtest` (util dacă instalarea via snap nu rulează din systemd) |
-| `GITHUB_TOKEN`                                 | (opțional) token GitHub API pentru limită mai mare la request-uri (commits + verificări versiuni) |
-| `PORT`                                         | Portul pe care rulează serverul (implicit `3000`)                                                  |
-| `NODE_ENV`                                     | Mediul de rulare (`production` în producție)                                                       |
+**Nu comite niciodată `.env` în git.**
 
-**Nu comite niciodată fișierul `.env` în git.**
+---
 
 ## Instalare și rulare
 
 ```bash
 npm install
 
-# Development (Vite dev server, port 8080)
+# Development
 npm run dev
 
-# Build de producție (Nitro, preset node-server)
+# Build producție
 npm run build
 
 # Preview build local
 npm run preview
 
-# Lint
+# Lint / Formatare
 npm run lint
-
-# Formatare cod (Prettier)
 npm run format
 ```
 
-După `npm run build`, aplicația poate fi pornită direct cu:
+Pornire directă după build:
 
 ```bash
 node .output/server/index.mjs
 ```
 
 ## Deploy
-
-Repository-ul nu include script de deploy automat.
 
 ```bash
 git pull
