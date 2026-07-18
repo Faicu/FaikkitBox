@@ -238,10 +238,12 @@ function UnifiedSearchSection() {
     }).catch(() => {});
   }, []);
 
-  async function updateWatch(id: number, mediaType: "movie" | "tv", patch: Partial<Pick<WatchSettings, "watchFilelist" | "watchTmdb" | "watchPlex">>) {
+  async function updateWatch(id: number, mediaType: "movie" | "tv", patch: Partial<Pick<WatchSettings, "watchFilelist" | "watchFilelistSeason" | "watchTmdb" | "watchPlex">>) {
     const key = `${mediaType}-${id}`;
-    const current = watchMap.get(key) ?? { id, mediaType, watchFilelist: false, watchTmdb: false, watchPlex: false };
+    const current = watchMap.get(key) ?? { id, mediaType, watchFilelist: false, watchFilelistSeason: false, watchTmdb: false, watchPlex: false };
     const next = { ...current, ...patch };
+    // Dacă watchFilelist e dezactivat, dezactivăm și sub-toggle-ul
+    if (!next.watchFilelist) next.watchFilelistSeason = false;
     setWatchMap((m) => new Map(m).set(key, next));
     await setWatchFn({ data: next }).catch(() => {});
   }
@@ -790,8 +792,9 @@ function WatchTogglePanel({
 }) {
   const anyEnabled = settings.watchFilelist || settings.watchTmdb || settings.watchPlex;
 
-  const toggles: { key: keyof Pick<WatchSettings, "watchFilelist" | "watchTmdb" | "watchPlex">; label: string; show: boolean }[] = [
+  const toggles: { key: keyof Pick<WatchSettings, "watchFilelist" | "watchFilelistSeason" | "watchTmdb" | "watchPlex">; label: string; show: boolean; indent?: boolean }[] = [
     { key: "watchFilelist", label: "Torrent nou Filelist", show: true },
+    { key: "watchFilelistSeason", label: "Doar sezonul curent", show: mediaType === "tv" && settings.watchFilelist, indent: true },
     { key: "watchTmdb", label: "Episod nou lansat", show: mediaType === "tv" },
     { key: "watchPlex", label: mediaType === "tv" ? "Episod nou în Plex" : "Film adăugat în Plex", show: true },
   ];
@@ -809,7 +812,7 @@ function WatchTogglePanel({
             <button
               key={t.key}
               onClick={() => onChange({ [t.key]: !on })}
-              className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
+              className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-colors ${t.indent ? "ml-3" : ""} ${
                 on
                   ? "bg-primary/15 border-primary/30 text-primary"
                   : "bg-muted/40 border-border text-muted-foreground hover:text-foreground"

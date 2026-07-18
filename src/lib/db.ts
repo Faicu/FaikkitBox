@@ -110,6 +110,7 @@ export function getDb(): DatabaseSync {
       watch_filelist INTEGER NOT NULL DEFAULT 0,
       watch_tmdb INTEGER NOT NULL DEFAULT 0,
       watch_plex INTEGER NOT NULL DEFAULT 0,
+      watch_filelist_season INTEGER NOT NULL DEFAULT 0,
       PRIMARY KEY (id, media_type)
     );
 
@@ -156,6 +157,17 @@ function runCleanups(database: DatabaseSync): void {
         .run();
       console.log(`[db] Curățare v1: eliminate ${result.changes} duplicate server_start`);
       database.exec("PRAGMA user_version = 1");
+    }
+
+    if (version < 2) {
+      // v2: adaugă coloana watch_filelist_season la pinned_watch_settings (dacă nu există)
+      try {
+        database.exec("ALTER TABLE pinned_watch_settings ADD COLUMN watch_filelist_season INTEGER NOT NULL DEFAULT 0");
+        console.log("[db] Migrare v2: adăugat watch_filelist_season");
+      } catch {
+        // coloana există deja — ignorăm
+      }
+      database.exec("PRAGMA user_version = 2");
     }
   } catch (e) {
     console.warn("[db] Curățare eșuată:", e);

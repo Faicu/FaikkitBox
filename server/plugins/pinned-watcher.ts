@@ -64,7 +64,7 @@ async function checkAll(): Promise<void> {
     const items = db
       .prepare(
         `SELECT pi.id, pi.media_type, pi.title, pi.original_title,
-                pw.watch_filelist, pw.watch_tmdb, pw.watch_plex
+                pw.watch_filelist, pw.watch_filelist_season, pw.watch_tmdb, pw.watch_plex
          FROM pinned_items pi
          JOIN pinned_watch_settings pw ON pw.id = pi.id AND pw.media_type = pi.media_type
          WHERE pw.watch_filelist = 1 OR pw.watch_tmdb = 1 OR pw.watch_plex = 1`,
@@ -75,6 +75,7 @@ async function checkAll(): Promise<void> {
         title: string;
         original_title: string;
         watch_filelist: number;
+        watch_filelist_season: number;
         watch_tmdb: number;
         watch_plex: number;
       }>;
@@ -101,23 +102,9 @@ async function checkAll(): Promise<void> {
         let newLastAiredKey = lastAiredKey;
         let newPlexMovieFound = plexMovieFound;
 
-        // ── 1. Filelist ──────────────────────────────────────────────────────
-        if (item.watch_filelist) {
-          const query = stripDiacritics(item.original_title || item.title);
-          const category = item.media_type === "movie" ? "movies" as const : "series" as const;
-          const torrents = await searchFilelistRaw(query, category);
-          const newTorrents = torrents.filter((t) => !seenTorrentIds.has(t.id));
-          for (const t of newTorrents) {
-            seenTorrentIds.add(t.id);
-            if (!isFirstRun) {
-              changes.push(`🎞 Torrent nou: ${t.name}`);
-            }
-          }
-        }
-
-        // ── 2. Episod nou lansat TMDB (TV) ──────────────────────────────────
+        // ── 1. Sezon curent din TMDB (necesar și pentru filtrul Filelist) ────
         let latestAired: { season: number; episode: number; title: string } | null = null;
-        if (item.media_type === "tv" && (item.watch_tmdb || item.watch_plex)) {
+        if (item.media_type === "tv" && (item.watch_tmdb || item.watch_plex || item.watch_filelist_season)) {
           latestAired = await getLatestAiredTmdb(item.id);
           if (latestAired) {
             const key = epKey(latestAired.season, latestAired.episode);
@@ -125,6 +112,28 @@ async function checkAll(): Promise<void> {
               changes.push(`📅 Episod nou lansat: ${key} — ${latestAired.title}`);
             }
             newLastAiredKey = key;
+          }
+        }
+
+        // ── 2. Filelist ──────────────────────────────────────────────────────
+        if (item.watch_filelist) {
+          const query = stripDiacritics(item.original_title || item.title);
+          const category = item.media_type === "movie" ? "movies" as const : "series" as const;
+          const torrents = await searchFilelistRaw(query, category);
+          const newTorrents = torrents.filter((t) => !seenTorrentIds.has(t.id));
+          for (const t of newTorrents) seenTorrentIds.add(t.id);
+
+          if (!isFirstRun && newTorrents.length > 0) {
+            let toNotify = newTorrents;
+            // Filtru opțional: doar sezonul curent
+            if (item.watch_filelist_season && latestAired) {
+              const seasonPad = String(latestAired.season).padStart(2, "0");
+              const seasonRe = new RegExp(`S${seasonPad}`, "i");
+              toNotify = newTorrents.filter((t) => seasonRe.test(t.name));
+            }
+            for (const t of toNotify) {
+              changes.push(`🎞 Torrent nou: ${t.name}`);
+            }
           }
         }
 
