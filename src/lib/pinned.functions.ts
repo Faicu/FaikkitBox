@@ -31,14 +31,16 @@ export interface WatchSettings {
   watchFilelistSeason: boolean;
   watchTmdb: boolean;
   watchPlex: boolean;
+  autoDownload: boolean;
+  autoDownloadQuality: "1080p" | "4K" | "4K HDR";
 }
 
 export const getWatchSettings = createServerFn({ method: "GET" })
   .handler(async (): Promise<WatchSettings[]> => {
     const db = getDb();
     const rows = db
-      .prepare("SELECT id, media_type, watch_filelist, watch_filelist_season, watch_tmdb, watch_plex FROM pinned_watch_settings")
-      .all() as Array<{ id: number; media_type: string; watch_filelist: number; watch_filelist_season: number; watch_tmdb: number; watch_plex: number }>;
+      .prepare("SELECT id, media_type, watch_filelist, watch_filelist_season, watch_tmdb, watch_plex, auto_download, auto_download_quality FROM pinned_watch_settings")
+      .all() as Array<{ id: number; media_type: string; watch_filelist: number; watch_filelist_season: number; watch_tmdb: number; watch_plex: number; auto_download: number; auto_download_quality: string }>;
     return rows.map((r) => ({
       id: r.id,
       mediaType: r.media_type as "movie" | "tv",
@@ -46,21 +48,25 @@ export const getWatchSettings = createServerFn({ method: "GET" })
       watchFilelistSeason: !!r.watch_filelist_season,
       watchTmdb: !!r.watch_tmdb,
       watchPlex: !!r.watch_plex,
+      autoDownload: !!r.auto_download,
+      autoDownloadQuality: (r.auto_download_quality || "1080p") as "1080p" | "4K" | "4K HDR",
     }));
   });
 
 export const setWatchSettings = createServerFn({ method: "POST" })
-  .validator((data: { id: number; mediaType: "movie" | "tv"; watchFilelist: boolean; watchFilelistSeason: boolean; watchTmdb: boolean; watchPlex: boolean }) => data)
+  .validator((data: { id: number; mediaType: "movie" | "tv"; watchFilelist: boolean; watchFilelistSeason: boolean; watchTmdb: boolean; watchPlex: boolean; autoDownload: boolean; autoDownloadQuality: string }) => data)
   .handler(async ({ data }): Promise<void> => {
     const db = getDb();
     db.prepare(
-      `INSERT INTO pinned_watch_settings (id, media_type, watch_filelist, watch_filelist_season, watch_tmdb, watch_plex) VALUES (?, ?, ?, ?, ?, ?)
+      `INSERT INTO pinned_watch_settings (id, media_type, watch_filelist, watch_filelist_season, watch_tmdb, watch_plex, auto_download, auto_download_quality) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(id, media_type) DO UPDATE SET
          watch_filelist = excluded.watch_filelist,
          watch_filelist_season = excluded.watch_filelist_season,
          watch_tmdb = excluded.watch_tmdb,
-         watch_plex = excluded.watch_plex`
-    ).run(data.id, data.mediaType, data.watchFilelist ? 1 : 0, data.watchFilelistSeason ? 1 : 0, data.watchTmdb ? 1 : 0, data.watchPlex ? 1 : 0);
+         watch_plex = excluded.watch_plex,
+         auto_download = excluded.auto_download,
+         auto_download_quality = excluded.auto_download_quality`
+    ).run(data.id, data.mediaType, data.watchFilelist ? 1 : 0, data.watchFilelistSeason ? 1 : 0, data.watchTmdb ? 1 : 0, data.watchPlex ? 1 : 0, data.autoDownload ? 1 : 0, data.autoDownloadQuality);
     const anyEnabled = data.watchFilelist || data.watchTmdb || data.watchPlex;
     if (!anyEnabled) {
       db.prepare("DELETE FROM pinned_watch_state WHERE id = ? AND media_type = ?").run(data.id, data.mediaType);

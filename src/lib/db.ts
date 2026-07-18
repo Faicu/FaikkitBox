@@ -111,6 +111,8 @@ export function getDb(): DatabaseSync {
       watch_tmdb INTEGER NOT NULL DEFAULT 0,
       watch_plex INTEGER NOT NULL DEFAULT 0,
       watch_filelist_season INTEGER NOT NULL DEFAULT 0,
+      auto_download INTEGER NOT NULL DEFAULT 0,
+      auto_download_quality TEXT NOT NULL DEFAULT '1080p',
       PRIMARY KEY (id, media_type)
     );
 
@@ -168,6 +170,18 @@ function runCleanups(database: DatabaseSync): void {
         // coloana există deja — ignorăm
       }
       database.exec("PRAGMA user_version = 2");
+    }
+
+    if (version < 3) {
+      try {
+        database.exec("ALTER TABLE pinned_watch_settings ADD COLUMN auto_download INTEGER NOT NULL DEFAULT 0");
+        console.log("[db] Migrare v3: adăugat auto_download");
+      } catch {}
+      try {
+        database.exec("ALTER TABLE pinned_watch_settings ADD COLUMN auto_download_quality TEXT NOT NULL DEFAULT '1080p'");
+        console.log("[db] Migrare v3: adăugat auto_download_quality");
+      } catch {}
+      database.exec("PRAGMA user_version = 3");
     }
   } catch (e) {
     console.warn("[db] Curățare eșuată:", e);

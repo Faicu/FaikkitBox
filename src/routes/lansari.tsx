@@ -238,12 +238,12 @@ function UnifiedSearchSection() {
     }).catch(() => {});
   }, []);
 
-  async function updateWatch(id: number, mediaType: "movie" | "tv", patch: Partial<Pick<WatchSettings, "watchFilelist" | "watchFilelistSeason" | "watchTmdb" | "watchPlex">>) {
+  async function updateWatch(id: number, mediaType: "movie" | "tv", patch: Partial<WatchSettings>) {
     const key = `${mediaType}-${id}`;
-    const current = watchMap.get(key) ?? { id, mediaType, watchFilelist: false, watchFilelistSeason: false, watchTmdb: false, watchPlex: false };
+    const current = watchMap.get(key) ?? { id, mediaType, watchFilelist: false, watchFilelistSeason: false, watchTmdb: false, watchPlex: false, autoDownload: false, autoDownloadQuality: "1080p" as const };
     const next = { ...current, ...patch };
-    // Dacă watchFilelist e dezactivat, dezactivăm și sub-toggle-ul
-    if (!next.watchFilelist) next.watchFilelistSeason = false;
+    // Dacă watchFilelist e dezactivat, dezactivăm și sub-toggle-urile
+    if (!next.watchFilelist) { next.watchFilelistSeason = false; next.autoDownload = false; }
     setWatchMap((m) => new Map(m).set(key, next));
     await setWatchFn({ data: next }).catch(() => {});
   }
@@ -341,7 +341,7 @@ function UnifiedSearchSection() {
 
       <div className="mt-3 space-y-3">
         {pinned.map((p) => {
-          const ws = watchMap.get(`${p.mediaType}-${p.id}`) ?? { id: p.id, mediaType: p.mediaType, watchFilelist: false, watchFilelistSeason: false, watchTmdb: false, watchPlex: false };
+          const ws = watchMap.get(`${p.mediaType}-${p.id}`) ?? { id: p.id, mediaType: p.mediaType, watchFilelist: false, watchFilelistSeason: false, watchTmdb: false, watchPlex: false, autoDownload: false, autoDownloadQuality: "1080p" as const };
           return (
             <PinnedItemCard
               key={`${p.mediaType}-${p.id}`}
@@ -364,7 +364,7 @@ function UnifiedSearchSection() {
 function PinnedItemCard({ item, watchSettings, onWatchChange, onUnpin }: {
   item: PinnedItem;
   watchSettings: WatchSettings;
-  onWatchChange: (patch: Partial<Pick<WatchSettings, "watchFilelist" | "watchTmdb" | "watchPlex">>) => void;
+  onWatchChange: (patch: Partial<WatchSettings>) => void;
   onUnpin: () => void;
 }) {
   const detailsFn = useServerFn(getTmdbDetails);
@@ -507,7 +507,7 @@ function MovieCard({
   torrents: FilelistTorrent[];
   filelistLoading: boolean;
   watchSettings: WatchSettings;
-  onWatchChange: (patch: Partial<Pick<WatchSettings, "watchFilelist" | "watchTmdb" | "watchPlex">>) => void;
+  onWatchChange: (patch: Partial<WatchSettings>) => void;
   onUnpin: () => void;
 }) {
   const qc = useQueryClient();
@@ -789,7 +789,7 @@ function WatchTogglePanel({
 }: {
   mediaType: "movie" | "tv";
   settings: WatchSettings;
-  onChange: (patch: Partial<Pick<WatchSettings, "watchFilelist" | "watchTmdb" | "watchPlex">>) => void;
+  onChange: (patch: Partial<WatchSettings>) => void;
 }) {
   const anyEnabled = settings.watchFilelist || settings.watchTmdb || settings.watchPlex;
 
@@ -799,6 +799,8 @@ function WatchTogglePanel({
     { key: "watchTmdb", label: "Episod nou lansat", show: mediaType === "tv" },
     { key: "watchPlex", label: mediaType === "tv" ? "Episod nou în Plex" : "Film adăugat în Plex", show: true },
   ];
+
+  const qualities: Array<"1080p" | "4K" | "4K HDR"> = ["1080p", "4K", "4K HDR"];
 
   return (
     <div className="border-t border-border pt-3">
@@ -824,6 +826,40 @@ function WatchTogglePanel({
             </button>
           );
         })}
+
+        {/* Auto-download — sub-toggle sub Filelist */}
+        {settings.watchFilelist && (
+          <button
+            onClick={() => onChange({ autoDownload: !settings.autoDownload })}
+            className={`ml-3 flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
+              settings.autoDownload
+                ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-400"
+                : "bg-muted/40 border-border text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Download className="h-3 w-3" />
+            Descarcă automat
+          </button>
+        )}
+
+        {/* Selector calitate — vizibil doar când auto-download e activ */}
+        {settings.watchFilelist && settings.autoDownload && (
+          <div className="ml-3 flex items-center gap-1 rounded-lg border border-border bg-muted/40 p-1">
+            {qualities.map((q) => (
+              <button
+                key={q}
+                onClick={() => onChange({ autoDownloadQuality: q })}
+                className={`rounded px-2 py-0.5 text-[10px] font-medium transition-colors ${
+                  settings.autoDownloadQuality === q
+                    ? "bg-emerald-500/25 text-emerald-400"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {q}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1058,7 +1094,7 @@ function ShowCard({
   countdown: TvShowCountdown | null;
   countdownLoading: boolean;
   watchSettings: WatchSettings;
-  onWatchChange: (patch: Partial<Pick<WatchSettings, "watchFilelist" | "watchTmdb" | "watchPlex">>) => void;
+  onWatchChange: (patch: Partial<WatchSettings>) => void;
   onUnpin: () => void;
 }) {
   const qc = useQueryClient();

@@ -706,3 +706,114 @@ export const downloadFilelist = createServerFn({ method: "POST" })
       await unlink(tmpPath).catch(() => {});
     }
   });
+
+// Versiune internă pentru plugin (fără requireAdmin)
+export async function downloadFilelistInternal(params: {
+  torrentId: number;
+  torrentName: string;
+  categoryId: number;
+  categoryName?: string;
+  size?: number;
+  freeleech?: boolean;
+  internal?: boolean;
+}): Promise<FilelistDownloadResult> {
+  const username = process.env.FILELIST_USERNAME;
+  const passkey = process.env.FILELIST_PASSKEY;
+  const qbitBase = process.env.QBIT_URL ?? "http://192.168.1.192:25556";
+  const qbitUser = process.env.QBIT_USERNAME;
+  const qbitPass = process.env.QBIT_PASSWORD;
+  const moviesPath = process.env.MEDIA_MOVIES_PATH ?? "/media/ssd2tb/Filme";
+  const seriesPath = process.env.MEDIA_SERIES_PATH ?? "/media/ssd2tb/Seriale";
+
+  if (!username || !passkey) return { status: "error", error: "FILELIST credentials lipsă" };
+  if (!qbitUser || !qbitPass) return { status: "error", error: "qBit credentials lipsă" };
+
+  const catId = params.categoryId || (params.categoryName ? parseCategoryId(params.categoryName) : 0);
+  const isMovie = isMovieCategory(catId) || (catId === 0 && /film|movie/i.test(params.categoryName ?? ""));
+  const savePath = isMovie ? moviesPath : seriesPath;
+
+  const dlUrl = `https://filelist.io/download.php?id=${params.torrentId}&passkey=${passkey}`;
+  let torrentBuffer: ArrayBuffer;
+  try {
+    const dlRes = await fetch(dlUrl, {
+      signal: AbortSignal.timeout(20_000),
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; FaikkitBox/1.0)" },
+    });
+    if (!dlRes.ok) return { status: "error", error: `Filelist HTTP ${dlRes.status}` };
+    torrentBuffer = await dlRes.arrayBuffer();
+  } catch (e: any) {
+    return { status: "error", error: `Eroare rețea Filelist: ${e?.message ?? e}` };
+  }
+
+  const safeName = params.torrentName.replace(/[^a-z0-9_\-\. ]/gi, "_").slice(0, 80);
+  const tmpPath = join(tmpdir(), `faikkitbox_auto_${params.torrentId}_${Date.now()}.torrent`);
+  await writeFile(tmpPath, Buffer.from(torrentBuffer));
+
+  try {
+    const url = qbitBase.replace(/\/$/, "");
+    let cookie: string;
+    try {
+      cookie = await qbitEnsureCookie(url, qbitUser, qbitPass);
+    } catch {
+      qbitCookie = null;
+      cookie = await qbitLogin(url, qbitUser, qbitPass);
+    }
+
+    const form = new FormData();
+    const fileBytes = await import("node:fs/promises").then((m) => m.readFile(tmpPath));
+    form.append("torrents", new Blob([fileBytes], { type: "application/x-bittorrent" }), `${safeName}.torrent`);
+    form.append("savepath", savePath);
+    form.append("category", isMovie ? "filme" : "seriale");
+
+    const uploadRes = await fetch(`${url}/api/v2/torrents/add`, {
+      method: "POST",
+      headers: { Cookie: cookie },
+      body: form,
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!uploadRes.ok) {
+      return { status: "error", error: `qBit upload eșuat: HTTP ${uploadRes.status}` };
+    }
+
+    await new Promise((r) => setTimeout(r, 2000));
+    let torrentHash: string | null = null;
+    try {
+      const listRes = await fetch(`${url}/api/v2/torrents/info?sort=added_on&reverse=true&limit=5`, {
+        headers: { Cookie: cookie },
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (listRes.ok) {
+        const list: any[] = await listRes.json();
+        const match = list.find((t) => String(t.name ?? "").toLowerCase().includes(params.torrentName.slice(0, 20).toLowerCase())) ?? list[0];
+        torrentHash = match?.hash ?? null;
+      }
+    } catch {}
+
+    const catName = params.categoryName || CATEGORY_NAMES[catId] || `Cat ${catId}`;
+    import("./activity-log").then(({ logActivity }) =>
+      logActivity("torrent_added", `Auto-descărcat: ${params.torrentName}`, { category: catName, savePath, size: params.size })
+    ).catch(() => {});
+    await appendDownloadLog({
+      id: params.torrentId,
+      name: params.torrentName,
+      size: params.size ?? 0,
+      category: catId,
+      categoryName: catName,
+      freeleech: params.freeleech ?? false,
+      internal: params.internal ?? false,
+      savePath,
+      downloadedAt: new Date().toISOString(),
+      completedAt: null,
+      torrentHash: torrentHash ?? undefined,
+    });
+
+    if (torrentHash) {
+      const plexType = isMovie ? "movie" : "show";
+      pollUntilComplete(url, cookie, torrentHash, plexType, params.torrentName, params.torrentId).catch(() => {});
+    }
+
+    return { status: "ok", torrentName: params.torrentName, savePath };
+  } finally {
+    await unlink(tmpPath).catch(() => {});
+  }
+}

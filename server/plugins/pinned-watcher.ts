@@ -54,7 +54,7 @@ async function checkAll(): Promise<void> {
     const { getDb } = await import("../../src/lib/db");
     const { logActivity } = await import("../../src/lib/activity-log");
     const { sendPushToAll } = await import("../../src/lib/push");
-    const { searchFilelistRaw } = await import("../../src/lib/filelist.functions");
+    const { searchFilelistRaw, downloadFilelistInternal } = await import("../../src/lib/filelist.functions");
     const { getPlexEpisodesInSeasonInternal, checkPlexHasTitleInternal } = await import(
       "../../src/lib/services.functions"
     );
@@ -64,7 +64,8 @@ async function checkAll(): Promise<void> {
     const items = db
       .prepare(
         `SELECT pi.id, pi.media_type, pi.title, pi.original_title,
-                pw.watch_filelist, pw.watch_filelist_season, pw.watch_tmdb, pw.watch_plex
+                pw.watch_filelist, pw.watch_filelist_season, pw.watch_tmdb, pw.watch_plex,
+                pw.auto_download, pw.auto_download_quality
          FROM pinned_items pi
          JOIN pinned_watch_settings pw ON pw.id = pi.id AND pw.media_type = pi.media_type
          WHERE pw.watch_filelist = 1 OR pw.watch_tmdb = 1 OR pw.watch_plex = 1`,
@@ -78,6 +79,8 @@ async function checkAll(): Promise<void> {
         watch_filelist_season: number;
         watch_tmdb: number;
         watch_plex: number;
+        auto_download: number;
+        auto_download_quality: string;
       }>;
 
     if (items.length === 0) return;
@@ -133,6 +136,37 @@ async function checkAll(): Promise<void> {
             }
             for (const t of toNotify) {
               changes.push(`🎞 Torrent nou: ${t.name}`);
+            }
+
+            // Auto-download: cel mai bun torrent din calitatea dorită
+            if (item.auto_download && toNotify.length > 0) {
+              const quality = item.auto_download_quality || "1080p";
+              const qualityRe =
+                quality === "4K HDR" ? /4k.?hdr|2160p.?hdr|hdr.?2160p/i :
+                quality === "4K"     ? /4k|2160p/i :
+                                       /1080p/i;
+              const candidates = toNotify.filter((t) => qualityRe.test(t.name));
+              const best = candidates.sort((a, b) => b.seeders - a.seeders)[0];
+              if (best) {
+                try {
+                  const dlResult = await downloadFilelistInternal({
+                    torrentId: best.id,
+                    torrentName: best.name,
+                    categoryId: best.category,
+                    categoryName: best.categoryName,
+                    size: best.size,
+                    freeleech: best.freeleech,
+                    internal: best.internal,
+                  });
+                  if (dlResult.status === "ok") {
+                    changes.push(`⬇️ Auto-descărcat (${quality}): ${best.name}`);
+                  } else {
+                    console.warn(`[pinned-watcher] Auto-download eșuat: ${dlResult.error}`);
+                  }
+                } catch (e) {
+                  console.warn("[pinned-watcher] Eroare auto-download:", e);
+                }
+              }
             }
           }
         }
