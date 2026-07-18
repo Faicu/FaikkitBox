@@ -910,11 +910,11 @@ function SeasonPanel({
                               </span>
                             )}
                           </div>
-                          {!inPlex && q && (
+                          {q && (
                             <div className="pl-10 flex gap-1.5">
-                              <QualityDownloadButton label="1080p" torrents={q.t1080} downloading={downloading} onDownload={requestDownload} />
-                              <QualityDownloadButton label="4K" torrents={q.t4k} downloading={downloading} onDownload={requestDownload} />
-                              <QualityDownloadButton label="4K HDR" torrents={q.t4kHdr} downloading={downloading} onDownload={requestDownload} />
+                              <QualityDownloadButton label="1080p" torrents={q.t1080} plexQuality={epPlexQuality ?? null} downloading={downloading} onDownload={requestDownload} />
+                              <QualityDownloadButton label="4K" torrents={q.t4k} plexQuality={epPlexQuality ?? null} downloading={downloading} onDownload={requestDownload} />
+                              <QualityDownloadButton label="4K HDR" torrents={q.t4kHdr} plexQuality={epPlexQuality ?? null} downloading={downloading} onDownload={requestDownload} />
                             </div>
                           )}
                           {!inPlex && !q && (
