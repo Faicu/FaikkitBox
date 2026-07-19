@@ -183,6 +183,19 @@ function normalizeShowTitle(value: string): string {
     .trim();
 }
 
+function plexQualityFromMedia(media: any): string | null {
+  const res: string | undefined = media?.videoResolution;
+  if (!res) return null;
+  const r = String(res).toLowerCase();
+  const is4k = r === "4k" || r === "2160";
+  const filename: string = media?.Part?.[0]?.file ?? "";
+  const isHdr = /dovi|hdr10|hdr|hlg/i.test(filename);
+  if (is4k) return isHdr ? "4K HDR" : "4K";
+  if (r === "1080") return "1080p";
+  if (r === "720") return "720p";
+  return res.toUpperCase();
+}
+
 async function fetchText(url: string, init?: RequestInit, timeoutMs = 8000): Promise<string> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -827,7 +840,7 @@ export async function checkPlexHasEpisode(
 
 export const getPlexEpisodesInSeason = createServerFn({ method: "GET" })
   .validator((data: { showTitle: string; season: number }) => data)
-  .handler(async ({ data }): Promise<{ num: number; quality: string | null }[]> => {
+  .handler(async ({ data }): Promise<{ num: number; quality: string | null; watched: boolean }[]> => {
     const token = process.env.PLEX_TOKEN;
     const base = process.env.PLEX_URL;
     if (!token) return [];
@@ -887,16 +900,8 @@ export const getPlexEpisodesInSeason = createServerFn({ method: "GET" })
       return episodesMd
         .filter((e: any) => Number(e.index) > 0)
         .map((e: any) => {
-          const res: string | undefined = e.Media?.[0]?.videoResolution;
-          let quality: string | null = null;
-          if (res) {
-            const r = String(res).toLowerCase();
-            if (r === "4k" || r === "2160") quality = "4K";
-            else if (r === "1080") quality = "1080p";
-            else if (r === "720") quality = "720p";
-            else quality = res.toUpperCase();
-          }
-          return { num: Number(e.index), quality };
+          const quality = plexQualityFromMedia(e.Media?.[0]);
+          return { num: Number(e.index), quality, watched: Number(e.viewCount ?? 0) > 0 };
         });
     } catch {
       return [];
@@ -923,16 +928,7 @@ export const checkPlexHasTitle = createServerFn({ method: "GET" })
         );
         const results = search?.MediaContainer?.Metadata ?? [];
         if (results.length > 0) {
-          // Extrage rezoluția din primul rezultat (Media[0].videoResolution)
-          const res: string | undefined = results[0]?.Media?.[0]?.videoResolution;
-          let quality: string | null = null;
-          if (res) {
-            const r = String(res).toLowerCase();
-            if (r === "4k" || r === "2160") quality = "4K";
-            else if (r === "1080") quality = "1080p";
-            else if (r === "720") quality = "720p";
-            else quality = res.toUpperCase();
-          }
+          const quality = plexQualityFromMedia(results[0]?.Media?.[0]);
           return { found: true, quality };
         }
       }
@@ -946,7 +942,7 @@ export const checkPlexHasTitle = createServerFn({ method: "GET" })
 // Funcții interne exportate (fără createServerFn, pentru plugin-uri background)
 // ---------------------------------------------------------------------------
 
-export async function getPlexEpisodesInSeasonInternal(showTitle: string, season: number): Promise<{ num: number; quality: string | null }[]> {
+export async function getPlexEpisodesInSeasonInternal(showTitle: string, season: number): Promise<{ num: number; quality: string | null; watched: boolean }[]> {
   const token = process.env.PLEX_TOKEN;
   const base = process.env.PLEX_URL;
   if (!token) return [];
@@ -987,18 +983,11 @@ export async function getPlexEpisodesInSeasonInternal(showTitle: string, season:
     const episodesMd = episodes?.MediaContainer?.Metadata ?? [];
     return episodesMd
       .filter((e: any) => Number(e.index) > 0)
-      .map((e: any) => {
-        const res: string | undefined = e.Media?.[0]?.videoResolution;
-        let quality: string | null = null;
-        if (res) {
-          const r = String(res).toLowerCase();
-          if (r === "4k" || r === "2160") quality = "4K";
-          else if (r === "1080") quality = "1080p";
-          else if (r === "720") quality = "720p";
-          else quality = res.toUpperCase();
-        }
-        return { num: Number(e.index), quality };
-      });
+      .map((e: any) => ({
+        num: Number(e.index),
+        quality: plexQualityFromMedia(e.Media?.[0]),
+        watched: Number(e.viewCount ?? 0) > 0,
+      }));
   } catch {
     return [];
   }
@@ -1021,15 +1010,7 @@ export async function checkPlexHasTitleInternal(title: string, originalTitle: st
       );
       const results = search?.MediaContainer?.Metadata ?? [];
       if (results.length > 0) {
-        const res: string | undefined = results[0]?.Media?.[0]?.videoResolution;
-        let quality: string | null = null;
-        if (res) {
-          const r = String(res).toLowerCase();
-          if (r === "4k" || r === "2160") quality = "4K";
-          else if (r === "1080") quality = "1080p";
-          else if (r === "720") quality = "720p";
-          else quality = res.toUpperCase();
-        }
+        const quality = plexQualityFromMedia(results[0]?.Media?.[0]);
         return { found: true, quality };
       }
     }
