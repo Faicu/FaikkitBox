@@ -1,7 +1,7 @@
 {
-  "name": "Server Monitor",
-  "short_name": "Monitor",
-  "description": "Live dashboard for Plex, Immich, qBittorrent, and host metrics.",
+  "name": "FaikkitBox",
+  "short_name": "FaikkitBox",
+  "description": "Dashboard personal — Plex, Filelist, qBittorrent, server.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

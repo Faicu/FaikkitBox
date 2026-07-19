@@ -87,7 +87,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "theme-color", content: "#0b0f19" },
       { name: "apple-mobile-web-app-capable", content: "yes" },
       { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
-      { name: "apple-mobile-web-app-title", content: "Server Monitor" },
+      { name: "apple-mobile-web-app-title", content: "FaikkitBox" },
       { property: "og:title", content: "FaikkitBox - Status Monitor" },
       {
         property: "og:description",
