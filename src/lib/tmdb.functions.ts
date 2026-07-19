@@ -126,14 +126,14 @@ export const getTmdbSeasonEpisodes = createServerFn({ method: "GET" })
   .handler(async ({ data }): Promise<TmdbEpisode[]> => {
     try {
       const season: any = await tmdbFetch(`/tv/${data.tmdbId}/season/${data.seasonNum}`);
-      const now = new Date();
+      const todayStr = new Date().toISOString().slice(0, 10);
       return (season.episodes ?? []).map((e: any) => {
         const airDate = e.air_date ?? null;
         return {
           episodeNum: Number(e.episode_number),
           title: e.name ?? `Episodul ${e.episode_number}`,
           airDate,
-          aired: airDate ? new Date(airDate) <= now : false,
+          aired: airDate ? airDate < todayStr : false,
         };
       });
     } catch {
