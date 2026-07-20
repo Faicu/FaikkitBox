@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueries, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import {
   Flame,
@@ -409,45 +409,65 @@ function PinnedItemCard({ item, watchSettings, isAdmin, onWatchChange, onUnpin }
     enabled: item.mediaType === "tv" && !!details,
   });
 
-  // Pentru seriale: status Plex bazat pe ultimul sezon difuzat
-  // Dacă TVmaze nu găsește serialul, folosim ultimul sezon din TMDB details
   const latestSeasonFromTmdb = details && details.seasons.length > 0
     ? details.seasons[details.seasons.length - 1].seasonNumber
     : null;
   const latestSeason = countdown?.status === "ok"
     ? (countdown.lastAired?.season ?? latestSeasonFromTmdb)
     : latestSeasonFromTmdb;
-  // Preferăm originalTitle (TMDB păstrează diacriticele), apoi showName din TVmaze, apoi title
   const showTitleForPlex = item.originalTitle || countdown?.showName || item.title;
 
-  const { data: plexSeasonEps, isLoading: plexSeasonLoading } = useQuery({
-    queryKey: ["plexSeasonEps", showTitleForPlex, latestSeason],
-    queryFn: () => plexSeasonFn({ data: { showTitle: showTitleForPlex, season: latestSeason! } }),
-    staleTime: 5 * 60_000,
-    enabled: item.mediaType === "tv" && latestSeason !== null,
+  const torrents = filelistData?.status === "ok" ? filelistData.torrents : [];
+  const seasonGroups = groupTorrentsBySeasonEpisode(torrents);
+  const allSeasonNums = seasonGroups.map((g) => g.seasonNum);
+
+  // Plex + TMDB pentru TOATE sezoanele detectate — pentru badge-ul principal
+  const plexSeasonQueries = useQueries({
+    queries: allSeasonNums.map((sn) => ({
+      queryKey: ["plexSeasonEps", showTitleForPlex, sn],
+      queryFn: () => plexSeasonFn({ data: { showTitle: showTitleForPlex, season: sn } }),
+      staleTime: 5 * 60_000,
+      enabled: item.mediaType === "tv" && allSeasonNums.length > 0,
+    })),
+  });
+  const tmdbSeasonQueries = useQueries({
+    queries: allSeasonNums.map((sn) => ({
+      queryKey: ["tmdbSeasonEps", item.id, sn],
+      queryFn: () => tmdbSeasonFn({ data: { tmdbId: item.id, seasonNum: sn } }),
+      staleTime: 60 * 60_000,
+      enabled: item.mediaType === "tv" && allSeasonNums.length > 0,
+    })),
   });
 
-  const { data: tmdbSeasonEps, isLoading: tmdbSeasonLoading } = useQuery({
-    queryKey: ["tmdbSeasonEps", item.id, latestSeason],
-    queryFn: () => tmdbSeasonFn({ data: { tmdbId: item.id, seasonNum: latestSeason! } }),
-    staleTime: 60 * 60_000,
-    enabled: item.mediaType === "tv" && latestSeason !== null,
-  });
+  // Status per sezon — din aceleași date ca SeasonPanel
+  const plexSeasonEps = plexSeasonQueries[allSeasonNums.indexOf(latestSeason ?? -1)]?.data;
+  const tmdbSeasonEps = tmdbSeasonQueries[allSeasonNums.indexOf(latestSeason ?? -1)]?.data;
+  const plexSeasonLoading = plexSeasonQueries.some((q) => q.isLoading);
+  const tmdbSeasonLoading = tmdbSeasonQueries.some((q) => q.isLoading);
 
-  // Calculează statusul Plex pentru ultimul sezon
+  // Badge principal — agregat din toate sezoanele
   let tvPlexStatus: "complet" | "incomplet" | "lipsa" | null = null;
-  if (item.mediaType === "tv" && latestSeason !== null && plexSeasonEps !== undefined && tmdbSeasonEps !== undefined) {
-    const plexSet = new Set((plexSeasonEps).map((e) => e.num));
-    const airedEpNums = tmdbSeasonEps.filter((e) => e.aired).map((e) => e.episodeNum);
-    const epList = airedEpNums.length > 0 ? airedEpNums : [];
-    if (epList.length === 0) {
-      tvPlexStatus = plexSeasonEps.length > 0 ? "complet" : "lipsa";
-    } else if (epList.every((n) => plexSet.has(n))) {
-      tvPlexStatus = "complet";
-    } else if (epList.some((n) => plexSet.has(n))) {
-      tvPlexStatus = "incomplet";
-    } else {
-      tvPlexStatus = "lipsa";
+  if (item.mediaType === "tv" && allSeasonNums.length > 0) {
+    const allLoaded = plexSeasonQueries.every((q) => q.data !== undefined) && tmdbSeasonQueries.every((q) => q.data !== undefined);
+    if (allLoaded) {
+      let totalComplete = 0;
+      let totalPartial = 0;
+      for (let i = 0; i < allSeasonNums.length; i++) {
+        const plexEps = plexSeasonQueries[i].data ?? [];
+        const tmdbEps = (tmdbSeasonQueries[i].data ?? []).filter((e: any) => e.aired);
+        const plexSet = new Set(plexEps.map((e: any) => e.num));
+        const epList = tmdbEps.length > 0 ? tmdbEps.map((e: any) => e.episodeNum) : [];
+        if (epList.length === 0) {
+          if (plexEps.length > 0) totalComplete++;
+        } else if (epList.every((n: number) => plexSet.has(n))) {
+          totalComplete++;
+        } else if (epList.some((n: number) => plexSet.has(n))) {
+          totalPartial++;
+        }
+      }
+      if (totalComplete === allSeasonNums.length) tvPlexStatus = "complet";
+      else if (totalComplete > 0 || totalPartial > 0) tvPlexStatus = "incomplet";
+      else tvPlexStatus = "lipsa";
     }
   }
 
@@ -456,8 +476,6 @@ function PinnedItemCard({ item, watchSettings, isAdmin, onWatchChange, onUnpin }
   if (isLoading) {
     return <div className="h-32 animate-pulse rounded-2xl border border-border bg-card" />;
   }
-
-  const torrents = filelistData?.status === "ok" ? filelistData.torrents : [];
 
   if (item.mediaType === "movie") {
     return (
@@ -1154,7 +1172,7 @@ function ShowCard({
     }
   }
 
-  const seasonGroups = groupTorrentsBySeasonEpisode(torrents);
+  const seasonGroups = groupTorrentsBySeasonEpisode(torrents); // torrents vine din PinnedItemCard
 
   return (
     <section>
