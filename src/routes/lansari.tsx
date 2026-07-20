@@ -927,18 +927,16 @@ function SeasonPanel({
   const plexFn = useServerFn(getPlexEpisodesInSeason);
   const tmdbSeasonFn = useServerFn(getTmdbSeasonEpisodes);
 
-  // Plex se verifică automat la mount (pentru badge pe rândul închis)
+  // Plex + TMDB se verifică automat la mount — necesare pentru badge pe rândul închis
   const { data: plexEpisodes, isLoading: plexLoading } = useQuery({
     queryKey: ["plexSeasonEps", showTitle, group.seasonNum],
     queryFn: () => plexFn({ data: { showTitle, season: group.seasonNum } }),
     staleTime: 5 * 60_000,
   });
 
-  // TMDB + detalii episoade — doar când e deschis
   const { data: tmdbEpisodes, isLoading: tmdbLoading } = useQuery({
     queryKey: ["tmdbSeasonEps", tmdbId, group.seasonNum],
     queryFn: () => tmdbSeasonFn({ data: { tmdbId, seasonNum: group.seasonNum } }),
-    enabled: isOpen,
     staleTime: 60 * 60_000,
   });
 
