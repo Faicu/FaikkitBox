@@ -1687,14 +1687,14 @@ function LibraryBadge({ inLibrary }: { inLibrary: boolean | null }) {
   if (inLibrary === true) {
     return (
       <span className="flex shrink-0 items-center gap-1 rounded-lg bg-emerald-500/15 px-2 py-1 text-[11px] font-medium text-emerald-400">
-        <CheckCircle2 className="h-3.5 w-3.5" /> În bibliotecă
+        <CheckCircle2 className="h-3.5 w-3.5" /> În biblioteca Plex
       </span>
     );
   }
   if (inLibrary === false) {
     return (
       <span className="flex shrink-0 items-center gap-1 rounded-lg bg-red-500/15 px-2 py-1 text-[11px] font-medium text-red-400">
-        <XCircle className="h-3.5 w-3.5" /> Nu e încă
+        <XCircle className="h-3.5 w-3.5" /> Nu e în Plex
       </span>
     );
   }
