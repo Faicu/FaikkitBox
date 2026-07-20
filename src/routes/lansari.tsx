@@ -927,13 +927,14 @@ function SeasonPanel({
   const plexFn = useServerFn(getPlexEpisodesInSeason);
   const tmdbSeasonFn = useServerFn(getTmdbSeasonEpisodes);
 
+  // Plex se verifică automat la mount (pentru badge pe rândul închis)
   const { data: plexEpisodes, isLoading: plexLoading } = useQuery({
     queryKey: ["plexSeasonEps", showTitle, group.seasonNum],
     queryFn: () => plexFn({ data: { showTitle, season: group.seasonNum } }),
-    enabled: isOpen,
     staleTime: 5 * 60_000,
   });
 
+  // TMDB + detalii episoade — doar când e deschis
   const { data: tmdbEpisodes, isLoading: tmdbLoading } = useQuery({
     queryKey: ["tmdbSeasonEps", tmdbId, group.seasonNum],
     queryFn: () => tmdbSeasonFn({ data: { tmdbId, seasonNum: group.seasonNum } }),
@@ -941,7 +942,7 @@ function SeasonPanel({
     staleTime: 60 * 60_000,
   });
 
-  const loading = plexLoading || tmdbLoading;
+  const loading = isOpen && (plexLoading || tmdbLoading);
   // Map epNum → { quality, watched }
   const plexMap = new Map<number, { quality: string | null; watched: boolean }>(
     (plexEpisodes ?? []).map((e) => [e.num, { quality: e.quality, watched: e.watched }])
