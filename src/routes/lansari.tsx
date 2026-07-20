@@ -39,6 +39,7 @@ import { searchTmdb, getTmdbDetails, getTvShowCountdown, getTmdbSeasonEpisodes }
 import type { TmdbSearchResult, TmdbDetails, TvShowCountdown, TmdbEpisode } from "@/lib/tmdb.functions";
 import { getPinnedItems, setPinnedItems, getWatchSettings, setWatchSettings } from "@/lib/pinned.functions";
 import type { WatchSettings } from "@/lib/pinned.functions";
+import { adminStatusQuery } from "@/lib/queries";
 
 export const Route = createFileRoute("/lansari")({
   head: () => ({ meta: [{ title: "Lansări — Monitor Server" }] }),
@@ -217,6 +218,8 @@ function QualityDownloadButton({
 // ---------------------------------------------------------------------------
 
 function UnifiedSearchSection() {
+  const { data: adminData } = useQuery(adminStatusQuery);
+  const isAdmin = !!adminData?.isAdmin;
   const [pinned, setPinned] = useState<PinnedItem[]>([]);
   const [watchMap, setWatchMap] = useState<Map<string, WatchSettings>>(new Map());
   const [query, setQuery] = useState("");
@@ -347,6 +350,7 @@ function UnifiedSearchSection() {
               key={`${p.mediaType}-${p.id}`}
               item={p}
               watchSettings={ws}
+              isAdmin={isAdmin}
               onWatchChange={(patch) => updateWatch(p.id, p.mediaType, patch)}
               onUnpin={() => unpin(p.id, p.mediaType)}
             />
@@ -361,9 +365,10 @@ function UnifiedSearchSection() {
 // Card item fixat — router spre Movie sau Show
 // ---------------------------------------------------------------------------
 
-function PinnedItemCard({ item, watchSettings, onWatchChange, onUnpin }: {
+function PinnedItemCard({ item, watchSettings, isAdmin, onWatchChange, onUnpin }: {
   item: PinnedItem;
   watchSettings: WatchSettings;
+  isAdmin: boolean;
   onWatchChange: (patch: Partial<WatchSettings>) => void;
   onUnpin: () => void;
 }) {
@@ -463,6 +468,7 @@ function PinnedItemCard({ item, watchSettings, onWatchChange, onUnpin }: {
         torrents={torrents}
         filelistLoading={filelistLoading}
         watchSettings={watchSettings}
+        isAdmin={isAdmin}
         onWatchChange={onWatchChange}
         onUnpin={onUnpin}
       />
@@ -481,6 +487,7 @@ function PinnedItemCard({ item, watchSettings, onWatchChange, onUnpin }: {
       countdown={countdown ?? null}
       countdownLoading={countdownLoading}
       watchSettings={watchSettings}
+      isAdmin={isAdmin}
       onWatchChange={onWatchChange}
       onUnpin={onUnpin}
     />
@@ -498,6 +505,7 @@ function MovieCard({
   torrents,
   filelistLoading,
   watchSettings,
+  isAdmin,
   onWatchChange,
   onUnpin,
 }: {
@@ -507,6 +515,7 @@ function MovieCard({
   torrents: FilelistTorrent[];
   filelistLoading: boolean;
   watchSettings: WatchSettings;
+  isAdmin: boolean;
   onWatchChange: (patch: Partial<WatchSettings>) => void;
   onUnpin: () => void;
 }) {
@@ -605,22 +614,24 @@ function MovieCard({
               {plexStatus ? <PlexStatusBadge status={plexStatus} /> : <LibraryBadge inLibrary={null} />}
             </div>
           </div>
-          <div className="border-t border-border pt-3">
-            <div className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground flex items-center gap-1">
-              <Download className="h-3 w-3" /> Descarcă de pe Filelist
-              {filelistLoading && <Loader2 className="h-3 w-3 animate-spin ml-1" />}
-            </div>
-            {!filelistLoading && torrents.length === 0 ? (
-              <div className="text-xs text-muted-foreground">Niciun torrent găsit pe Filelist.</div>
-            ) : (
-              <div className="flex gap-2">
-                <QualityDownloadButton label="1080p" torrents={t1080} plexQuality={plexQuality} downloading={downloading} onDownload={(t, l) => setConfirm({ torrent: t, label: l })} />
-                <QualityDownloadButton label="4K" torrents={t4k} plexQuality={plexQuality} downloading={downloading} onDownload={(t, l) => setConfirm({ torrent: t, label: l })} />
-                <QualityDownloadButton label="4K HDR" torrents={t4kHdr} plexQuality={plexQuality} downloading={downloading} onDownload={(t, l) => setConfirm({ torrent: t, label: l })} />
+          {isAdmin && (
+            <div className="border-t border-border pt-3">
+              <div className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground flex items-center gap-1">
+                <Download className="h-3 w-3" /> Descarcă de pe Filelist
+                {filelistLoading && <Loader2 className="h-3 w-3 animate-spin ml-1" />}
               </div>
-            )}
-          </div>
-          <WatchTogglePanel mediaType="movie" settings={watchSettings} onChange={onWatchChange} />
+              {!filelistLoading && torrents.length === 0 ? (
+                <div className="text-xs text-muted-foreground">Niciun torrent găsit pe Filelist.</div>
+              ) : (
+                <div className="flex gap-2">
+                  <QualityDownloadButton label="1080p" torrents={t1080} plexQuality={plexQuality} downloading={downloading} onDownload={(t, l) => setConfirm({ torrent: t, label: l })} />
+                  <QualityDownloadButton label="4K" torrents={t4k} plexQuality={plexQuality} downloading={downloading} onDownload={(t, l) => setConfirm({ torrent: t, label: l })} />
+                  <QualityDownloadButton label="4K HDR" torrents={t4kHdr} plexQuality={plexQuality} downloading={downloading} onDownload={(t, l) => setConfirm({ torrent: t, label: l })} />
+                </div>
+              )}
+            </div>
+          )}
+          <WatchTogglePanel mediaType="movie" settings={watchSettings} isAdmin={isAdmin} onChange={onWatchChange} />
           </div>
         </div>
       </section>
@@ -785,53 +796,55 @@ function DownloadConfirmDialog({
 function WatchTogglePanel({
   mediaType,
   settings,
+  isAdmin,
   onChange,
 }: {
   mediaType: "movie" | "tv";
   settings: WatchSettings;
+  isAdmin: boolean;
   onChange: (patch: Partial<WatchSettings>) => void;
 }) {
   const anyEnabled = settings.watchFilelist || settings.watchTmdb || settings.watchPlex;
-
-  const toggles: { key: keyof Pick<WatchSettings, "watchFilelist" | "watchFilelistSeason" | "watchTmdb" | "watchPlex">; label: string; show: boolean; indent?: boolean }[] = [
-    { key: "watchFilelist", label: "Torrent nou Filelist", show: true },
-    { key: "watchFilelistSeason", label: "Doar sezonul curent", show: mediaType === "tv" && settings.watchFilelist, indent: true },
-    { key: "watchTmdb", label: "Episod nou lansat", show: mediaType === "tv" },
-    { key: "watchPlex", label: mediaType === "tv" ? "Episod nou în Plex" : "Film adăugat în Plex", show: true },
-  ];
-
   const qualities: Array<"1080p" | "4K" | "4K HDR"> = ["1080p", "4K", "4K HDR"];
 
+  function Toggle({ toggleKey, label }: { toggleKey: keyof Pick<WatchSettings, "watchFilelist" | "watchFilelistSeason" | "watchTmdb" | "watchPlex">; label: string }) {
+    const on = settings[toggleKey] as boolean;
+    return (
+      <button
+        onClick={() => onChange({ [toggleKey]: !on })}
+        className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
+          on
+            ? "bg-primary/15 border-primary/30 text-primary"
+            : "bg-muted/40 border-border text-muted-foreground hover:text-foreground"
+        }`}
+      >
+        {on ? <Bell className="h-3 w-3" /> : <BellOff className="h-3 w-3" />}
+        {label}
+      </button>
+    );
+  }
+
   return (
-    <div className="border-t border-border pt-3">
-      <div className="mb-2 flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-muted-foreground">
+    <div className="border-t border-border pt-3 space-y-2">
+      <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-muted-foreground">
         {anyEnabled ? <Bell className="h-3 w-3 text-primary" /> : <BellOff className="h-3 w-3" />}
         Notificări automate · la fiecare 3 ore
       </div>
-      <div className="flex flex-wrap gap-2">
-        {toggles.filter((t) => t.show).map((t) => {
-          const on = settings[t.key] as boolean;
-          return (
-            <button
-              key={t.key}
-              onClick={() => onChange({ [t.key]: !on })}
-              className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-colors ${t.indent ? "ml-3" : ""} ${
-                on
-                  ? "bg-primary/15 border-primary/30 text-primary"
-                  : "bg-muted/40 border-border text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {on ? <Bell className="h-3 w-3" /> : <BellOff className="h-3 w-3" />}
-              {t.label}
-            </button>
-          );
-        })}
 
-        {/* Auto-download — sub-toggle sub Filelist */}
-        {settings.watchFilelist && (
+      {/* Rând 1: Filelist (admin) + TMDB + Plex */}
+      <div className="flex flex-wrap gap-2">
+        {isAdmin && <Toggle toggleKey="watchFilelist" label="Torrent nou Filelist" />}
+        {mediaType === "tv" && <Toggle toggleKey="watchTmdb" label="Episod nou lansat" />}
+        <Toggle toggleKey="watchPlex" label={mediaType === "tv" ? "Episod nou în Plex" : "Film adăugat în Plex"} />
+      </div>
+
+      {/* Rând 2: opțiuni Filelist (doar admin) */}
+      {isAdmin && settings.watchFilelist && (
+        <div className="flex flex-wrap gap-2 pl-3 border-l-2 border-primary/20">
+          {mediaType === "tv" && <Toggle toggleKey="watchFilelistSeason" label="Doar sezonul curent" />}
           <button
             onClick={() => onChange({ autoDownload: !settings.autoDownload })}
-            className={`ml-3 flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
+            className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
               settings.autoDownload
                 ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-400"
                 : "bg-muted/40 border-border text-muted-foreground hover:text-foreground"
@@ -840,27 +853,25 @@ function WatchTogglePanel({
             <Download className="h-3 w-3" />
             Descarcă automat
           </button>
-        )}
-
-        {/* Selector calitate — vizibil doar când auto-download e activ */}
-        {settings.watchFilelist && settings.autoDownload && (
-          <div className="ml-3 flex items-center gap-1 rounded-lg border border-border bg-muted/40 p-1">
-            {qualities.map((q) => (
-              <button
-                key={q}
-                onClick={() => onChange({ autoDownloadQuality: q })}
-                className={`rounded px-2 py-0.5 text-[10px] font-medium transition-colors ${
-                  settings.autoDownloadQuality === q
-                    ? "bg-emerald-500/25 text-emerald-400"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {q}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
+          {settings.autoDownload && (
+            <div className="flex items-center gap-1 rounded-lg border border-border bg-muted/40 p-1">
+              {qualities.map((q) => (
+                <button
+                  key={q}
+                  onClick={() => onChange({ autoDownloadQuality: q })}
+                  className={`rounded px-2 py-0.5 text-[10px] font-medium transition-colors ${
+                    settings.autoDownloadQuality === q
+                      ? "bg-emerald-500/25 text-emerald-400"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -1081,6 +1092,7 @@ function ShowCard({
   countdown,
   countdownLoading,
   watchSettings,
+  isAdmin,
   onWatchChange,
   onUnpin,
 }: {
@@ -1094,6 +1106,7 @@ function ShowCard({
   countdown: TvShowCountdown | null;
   countdownLoading: boolean;
   watchSettings: WatchSettings;
+  isAdmin: boolean;
   onWatchChange: (patch: Partial<WatchSettings>) => void;
   onUnpin: () => void;
 }) {
@@ -1206,33 +1219,35 @@ function ShowCard({
           </div>
         ) : null}
 
-        {/* Secțiunea Filelist */}
-        <div className="border-t border-border pt-3">
-          <div className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground flex items-center gap-1">
-            <Download className="h-3 w-3" /> Descarcă de pe Filelist
-            {filelistLoading && <Loader2 className="h-3 w-3 animate-spin ml-1" />}
-          </div>
-          {!filelistLoading && torrents.length === 0 ? (
-            <div className="text-xs text-muted-foreground">Niciun torrent găsit pe Filelist.</div>
-          ) : seasonGroups.length === 0 && !filelistLoading ? (
-            <div className="text-xs text-muted-foreground">Niciun torrent cu sezon detectat.</div>
-          ) : (
-            <div className="space-y-1.5">
-              {seasonGroups.map((group) => (
-                <SeasonPanel
-                  key={group.seasonNum}
-                  showTitle={showTitle}
-                  tmdbId={item.id}
-                  group={group}
-                  downloading={downloading}
-                  onDownload={handleDownload}
-                />
-              ))}
+        {/* Secțiunea Filelist — doar pentru admin */}
+        {isAdmin && (
+          <div className="border-t border-border pt-3">
+            <div className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground flex items-center gap-1">
+              <Download className="h-3 w-3" /> Descarcă de pe Filelist
+              {filelistLoading && <Loader2 className="h-3 w-3 animate-spin ml-1" />}
             </div>
-          )}
-        </div>
+            {!filelistLoading && torrents.length === 0 ? (
+              <div className="text-xs text-muted-foreground">Niciun torrent găsit pe Filelist.</div>
+            ) : seasonGroups.length === 0 && !filelistLoading ? (
+              <div className="text-xs text-muted-foreground">Niciun torrent cu sezon detectat.</div>
+            ) : (
+              <div className="space-y-1.5">
+                {seasonGroups.map((group) => (
+                  <SeasonPanel
+                    key={group.seasonNum}
+                    showTitle={showTitle}
+                    tmdbId={item.id}
+                    group={group}
+                    downloading={downloading}
+                    onDownload={handleDownload}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
-        <WatchTogglePanel mediaType="tv" settings={watchSettings} onChange={onWatchChange} />
+        <WatchTogglePanel mediaType="tv" settings={watchSettings} isAdmin={isAdmin} onChange={onWatchChange} />
 
         {/* Următorul episod — jos, după Filelist */}
         {countdown?.status === "ok" && countdown.next && (
