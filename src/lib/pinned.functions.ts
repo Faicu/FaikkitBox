@@ -97,3 +97,16 @@ export const setPinnedItems = createServerFn({ method: "POST" })
        )`
     ).run();
   });
+
+
+export const getPinnedWatcherStatus = createServerFn({ method: "GET" }).handler(async () => {
+  const { getDb } = await import("./db");
+  const db = getDb();
+  const row = db.prepare(
+    "SELECT MAX(last_checked_at) as last_run FROM pinned_watch_state"
+  ).get() as { last_run: string | null };
+  const lastRun = row?.last_run ?? null;
+  const INTERVAL_MS = 3 * 60 * 60 * 1000;
+  const nextRun = lastRun ? new Date(new Date(lastRun).getTime() + INTERVAL_MS).toISOString() : null;
+  return { lastRun, nextRun };
+});

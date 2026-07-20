@@ -48,6 +48,7 @@ import { getCommitDetail } from "@/lib/github.functions";
 import { runSpeedtest } from "@/lib/speedtest.functions";
 import type { SpeedtestHistoryEntry } from "@/lib/speedtest.functions";
 import { formatSpeed } from "@/lib/format";
+import { getPinnedWatcherStatus } from "@/lib/pinned.functions";
 
 export const Route = createFileRoute("/tehnic")({
   head: () => ({
@@ -260,9 +261,32 @@ const PLUGINS = [
   },
 ];
 
+function PinnedWatcherNextRun({ nextRun }: { nextRun: string | null }) {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  if (!nextRun) return null;
+  const ms = new Date(nextRun).getTime() - Date.now();
+  if (ms <= 0) return <span className="text-[10px] text-emerald-400 whitespace-nowrap">în curând</span>;
+  const h = Math.floor(ms / 3_600_000);
+  const m = Math.floor((ms % 3_600_000) / 60_000);
+  const s = Math.floor((ms % 60_000) / 1000);
+  const label = h > 0 ? `${h}h ${String(m).padStart(2,"0")}m` : `${m}m ${String(s).padStart(2,"0")}s`;
+  return <span className="text-[10px] text-muted-foreground whitespace-nowrap">următoarea: {label}</span>;
+}
+
 function PluginStatusSection() {
   const { data: log } = useQuery(activityLogQuery);
   const { data: commitsData } = useQuery(commitsFromDbQuery);
+  const watcherStatusFn = useServerFn(getPinnedWatcherStatus);
+  const { data: watcherStatus } = useQuery({
+    queryKey: ["pinnedWatcherStatus"],
+    queryFn: () => watcherStatusFn(),
+    refetchInterval: 30_000,
+  });
 
   function lastActivity(type: string | null): string | null {
     if (!type || !log) return null;
@@ -283,6 +307,7 @@ function PluginStatusSection() {
       <div className="rounded-2xl border border-border bg-card divide-y divide-border/50">
         {PLUGINS.map((p) => {
           const lastTs = p.id === "github-commit-tracker" ? lastCommitSync() : lastActivity(p.activityType);
+          const isPinnedWatcher = p.id === "pinned-watcher";
           return (
             <div key={p.id} className="flex items-center gap-3 px-3 py-3">
               <div className="shrink-0">{p.icon}</div>
@@ -290,12 +315,25 @@ function PluginStatusSection() {
                 <div className="text-sm font-medium leading-tight">{p.label}</div>
                 <div className="text-[11px] text-muted-foreground">{p.description}</div>
               </div>
-              <div className="shrink-0 flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_6px_#4ade80]" />
-                {lastTs && (
-                  <span className="text-[10px] text-muted-foreground whitespace-nowrap">
-                    {relativeTime(lastTs)}
-                  </span>
+              <div className="shrink-0 flex flex-col items-end gap-0.5">
+                <div className="flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_6px_#4ade80]" />
+                  {isPinnedWatcher ? (
+                    watcherStatus?.lastRun && (
+                      <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                        {relativeTime(watcherStatus.lastRun)}
+                      </span>
+                    )
+                  ) : (
+                    lastTs && (
+                      <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                        {relativeTime(lastTs)}
+                      </span>
+                    )
+                  )}
+                </div>
+                {isPinnedWatcher && watcherStatus?.nextRun && (
+                  <PinnedWatcherNextRun nextRun={watcherStatus.nextRun} />
                 )}
               </div>
             </div>
