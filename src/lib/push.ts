@@ -18,7 +18,10 @@ export async function sendPushToAll(title: string, body: string): Promise<void> 
     const { getDb } = await import("./db");
     const db = getDb();
     const subs = db.prepare("SELECT * FROM push_subscriptions").all() as Array<{
-      id: string; endpoint: string; p256dh: string; auth: string;
+      id: string;
+      endpoint: string;
+      p256dh: string;
+      auth: string;
     }>;
 
     const payload = JSON.stringify({ title, body });
@@ -31,8 +34,9 @@ export async function sendPushToAll(title: string, body: string): Promise<void> 
             { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
             payload,
           );
-        } catch (err: any) {
-          if (err?.statusCode === 410 || err?.statusCode === 404) dead.push(sub.id);
+        } catch (err) {
+          const statusCode = (err as { statusCode?: number })?.statusCode;
+          if (statusCode === 410 || statusCode === 404) dead.push(sub.id);
         }
       }),
     );

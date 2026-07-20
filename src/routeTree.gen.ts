@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as TehnicRouteImport } from './routes/tehnic'
 import { Route as SistemRouteImport } from './routes/sistem'
 import { Route as QbitRouteImport } from './routes/qbit'
 import { Route as PlexRouteImport } from './routes/plex'
@@ -17,6 +18,11 @@ import { Route as LansariRouteImport } from './routes/lansari'
 import { Route as ImmichRouteImport } from './routes/immich'
 import { Route as IndexRouteImport } from './routes/index'
 
+const TehnicRoute = TehnicRouteImport.update({
+  id: '/tehnic',
+  path: '/tehnic',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SistemRoute = SistemRouteImport.update({
   id: '/sistem',
   path: '/sistem',
@@ -61,6 +67,7 @@ export interface FileRoutesByFullPath {
   '/plex': typeof PlexRoute
   '/qbit': typeof QbitRoute
   '/sistem': typeof SistemRoute
+  '/tehnic': typeof TehnicRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -70,6 +77,7 @@ export interface FileRoutesByTo {
   '/plex': typeof PlexRoute
   '/qbit': typeof QbitRoute
   '/sistem': typeof SistemRoute
+  '/tehnic': typeof TehnicRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -80,13 +88,29 @@ export interface FileRoutesById {
   '/plex': typeof PlexRoute
   '/qbit': typeof QbitRoute
   '/sistem': typeof SistemRoute
+  '/tehnic': typeof TehnicRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/immich' | '/lansari' | '/login' | '/plex' | '/qbit' | '/sistem'
+    | '/'
+    | '/immich'
+    | '/lansari'
+    | '/login'
+    | '/plex'
+    | '/qbit'
+    | '/sistem'
+    | '/tehnic'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/immich' | '/lansari' | '/login' | '/plex' | '/qbit' | '/sistem'
+  to:
+    | '/'
+    | '/immich'
+    | '/lansari'
+    | '/login'
+    | '/plex'
+    | '/qbit'
+    | '/sistem'
+    | '/tehnic'
   id:
     | '__root__'
     | '/'
@@ -96,6 +120,7 @@ export interface FileRouteTypes {
     | '/plex'
     | '/qbit'
     | '/sistem'
+    | '/tehnic'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -106,10 +131,18 @@ export interface RootRouteChildren {
   PlexRoute: typeof PlexRoute
   QbitRoute: typeof QbitRoute
   SistemRoute: typeof SistemRoute
+  TehnicRoute: typeof TehnicRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/tehnic': {
+      id: '/tehnic'
+      path: '/tehnic'
+      fullPath: '/tehnic'
+      preLoaderRoute: typeof TehnicRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/sistem': {
       id: '/sistem'
       path: '/sistem'
@@ -170,6 +203,7 @@ const rootRouteChildren: RootRouteChildren = {
   PlexRoute: PlexRoute,
   QbitRoute: QbitRoute,
   SistemRoute: SistemRoute,
+  TehnicRoute: TehnicRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

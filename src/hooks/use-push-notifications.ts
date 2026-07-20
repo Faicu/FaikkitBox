@@ -58,8 +58,8 @@ export function usePushNotifications() {
         },
       });
       setState("subscribed");
-    } catch (e: any) {
-      const msg = e?.message ?? String(e);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
       console.error("[push] Eroare la abonare:", msg, e);
       setError(msg);
       setState(Notification.permission === "denied" ? "denied" : "unsubscribed");

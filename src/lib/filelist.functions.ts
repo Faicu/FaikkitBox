@@ -63,17 +63,28 @@ const ALL_CATEGORIES = [...MOVIE_CATEGORIES, ...SERIES_CATEGORIES];
 
 // Filelist API poate returna categoria ca string (ex: "Movies HD") — mapăm la ID numeric
 const CATEGORY_STRING_MAP: Record<string, number> = {
-  "Movies SD": 1, "Filme SD": 1,
-  "Movies DVD": 2, "Filme DVD": 2,
-  "Movies DVD-RO": 3, "Filme DVD-RO": 3,
-  "Movies HD": 4, "Filme HD": 4,
-  "Movies 4K": 6, "Filme 4K": 6,
-  "Movies HD-RO": 19, "Filme HD-RO": 19,
-  "Movies 4K-RO": 26, "Filme 4K-RO": 26,
-  "TV-Series HD": 21, "Seriale HD": 21,
-  "TV-Series HD-RO": 22, "Seriale HD-RO": 22,
-  "TV-Series SD": 23, "Seriale SD": 23,
-  "TV-Series 4K": 27, "Seriale 4K": 27,
+  "Movies SD": 1,
+  "Filme SD": 1,
+  "Movies DVD": 2,
+  "Filme DVD": 2,
+  "Movies DVD-RO": 3,
+  "Filme DVD-RO": 3,
+  "Movies HD": 4,
+  "Filme HD": 4,
+  "Movies 4K": 6,
+  "Filme 4K": 6,
+  "Movies HD-RO": 19,
+  "Filme HD-RO": 19,
+  "Movies 4K-RO": 26,
+  "Filme 4K-RO": 26,
+  "TV-Series HD": 21,
+  "Seriale HD": 21,
+  "TV-Series HD-RO": 22,
+  "Seriale HD-RO": 22,
+  "TV-Series SD": 23,
+  "Seriale SD": 23,
+  "TV-Series 4K": 27,
+  "Seriale 4K": 27,
 };
 
 function parseCategoryId(raw: unknown): number {
@@ -105,13 +116,48 @@ function isMovieCategory(catId: number): boolean {
   return MOVIE_CATEGORIES.includes(catId);
 }
 
+interface FilelistApiTorrent {
+  id?: number | string;
+  name?: string;
+  size?: number | string;
+  seeders?: number | string;
+  leechers?: number | string;
+  times_completed?: number | string;
+  category?: number | string;
+  freeleech?: number | string;
+  internal?: number | string;
+  upload_date?: string;
+  imdb?: string;
+}
+
+interface QbitTorrentInfo {
+  hash?: string;
+  name?: string;
+  progress?: number;
+  state?: string;
+}
+
+interface DownloadLogRow {
+  id: number;
+  name: string;
+  size: number | null;
+  category: number | null;
+  category_name: string | null;
+  freeleech: number | null;
+  internal: number | null;
+  save_path: string | null;
+  downloaded_at: string;
+  completed_at: string | null;
+  torrent_hash: string | null;
+}
+
 // ---------------------------------------------------------------------------
 // Log persistent al descărcărilor
 // ---------------------------------------------------------------------------
 
 // Persistență SQLite (node:sqlite nativ) — vezi src/lib/db.ts
 
-function rowToEntry(r: any): FilelistLogEntry {
+function rowToEntry(r: DownloadLogRow): FilelistLogEntry {
   return {
     id: Number(r.id),
     name: r.name,
@@ -132,7 +178,7 @@ async function readDownloadLog(): Promise<FilelistLogEntry[]> {
     const { getDb } = await import("./db");
     const rows = getDb()
       .prepare("SELECT * FROM downloads ORDER BY downloaded_at DESC LIMIT 100")
-      .all();
+      .all() as unknown as DownloadLogRow[];
     return rows.map(rowToEntry);
   } catch {
     return [];
@@ -170,9 +216,14 @@ async function markLogEntryComplete(torrentId: number): Promise<boolean> {
   try {
     const { getDb } = await import("./db");
     const db = getDb();
-    const existing = db.prepare("SELECT completed_at FROM downloads WHERE id = ?").get(torrentId) as { completed_at: string | null } | undefined;
+    const existing = db
+      .prepare("SELECT completed_at FROM downloads WHERE id = ?")
+      .get(torrentId) as { completed_at: string | null } | undefined;
     if (existing?.completed_at) return false; // deja marcat de un alt polling loop
-    db.prepare("UPDATE downloads SET completed_at = ? WHERE id = ?").run(new Date().toISOString(), torrentId);
+    db.prepare("UPDATE downloads SET completed_at = ? WHERE id = ?").run(
+      new Date().toISOString(),
+      torrentId,
+    );
     return true;
   } catch (e) {
     console.warn("[filelist] Nu am putut actualiza log-ul la completare:", e);
@@ -197,8 +248,7 @@ export const deleteFilelistLogEntry = createServerFn({ method: "POST" })
 
       // Obținem hash-ul torrentului înainte de ștergere
       const row = db.prepare("SELECT torrent_hash FROM downloads WHERE id = ?").get(data.id) as
-        | { torrent_hash: string | null }
-        | undefined;
+        { torrent_hash: string | null } | undefined;
       const torrentHash = row?.torrent_hash ?? null;
 
       db.prepare("DELETE FROM downloads WHERE id = ?").run(data.id);
@@ -290,7 +340,7 @@ async function pollUntilComplete(
       });
       if (!res.ok) continue;
 
-      const list: any[] = await res.json();
+      const list: QbitTorrentInfo[] = await res.json();
       if (!list.length) continue;
 
       const torrent = list[0];
@@ -349,9 +399,11 @@ async function plexFindLibraryKey(type: "movie" | "show"): Promise<string | null
     const res = await fetch(`${base}/library/sections`, {
       headers: { "X-Plex-Token": token, Accept: "application/json" },
     });
-    const data = await res.json();
+    const data = (await res.json()) as {
+      MediaContainer?: { Directory?: Array<{ type?: string; key?: string }> };
+    };
     const dirs = data?.MediaContainer?.Directory ?? [];
-    const match = dirs.find((d: any) => d.type === type);
+    const match = dirs.find((d) => d.type === type);
     return match ? String(match.key) : null;
   } catch {
     return null;
@@ -412,21 +464,34 @@ if (typeof process !== "undefined" && process.env) {
 // Căutare Filelist internă (fără requireAdmin — pentru plugin-uri background)
 // ---------------------------------------------------------------------------
 
-export async function searchFilelistRaw(query: string, category: FilelistCategory): Promise<FilelistTorrent[]> {
+export async function searchFilelistRaw(
+  query: string,
+  category: FilelistCategory,
+): Promise<FilelistTorrent[]> {
   const username = process.env.FILELIST_USERNAME;
   const passkey = process.env.FILELIST_PASSKEY;
   if (!username || !passkey) return [];
-  const catIds = category === "movies" ? MOVIE_CATEGORIES : category === "series" ? SERIES_CATEGORIES : ALL_CATEGORIES;
+  const catIds =
+    category === "movies"
+      ? MOVIE_CATEGORIES
+      : category === "series"
+        ? SERIES_CATEGORIES
+        : ALL_CATEGORIES;
   const params = new URLSearchParams({
-    username, passkey, action: "search-torrents", type: "name",
-    query: query.trim(), category: catIds.join(","), output: "json",
+    username,
+    passkey,
+    action: "search-torrents",
+    type: "name",
+    query: query.trim(),
+    category: catIds.join(","),
+    output: "json",
   });
   try {
     const res = await fetch(`https://filelist.io/api.php?${params.toString()}`, {
       signal: AbortSignal.timeout(15_000),
     });
     if (!res.ok) return [];
-    const raw: any[] = await res.json();
+    const raw: FilelistApiTorrent[] = await res.json();
     if (!Array.isArray(raw)) return [];
     return raw.map((t) => ({
       id: Number(t.id),
@@ -493,7 +558,7 @@ export const searchFilelist = createServerFn({ method: "GET" })
         return { status: "error", error: `Filelist API HTTP ${res.status}`, torrents: [] };
       }
 
-      const raw: any[] = await res.json();
+      const raw: FilelistApiTorrent[] = await res.json();
 
       if (!Array.isArray(raw)) {
         return { status: "error", error: "Răspuns neașteptat de la Filelist API", torrents: [] };
@@ -522,8 +587,8 @@ export const searchFilelist = createServerFn({ method: "GET" })
       });
 
       return { status: "ok", torrents };
-    } catch (e: any) {
-      return { status: "error", error: e?.message ?? String(e), torrents: [] };
+    } catch (e) {
+      return { status: "error", error: e instanceof Error ? e.message : String(e), torrents: [] };
     }
   });
 
@@ -567,8 +632,8 @@ export const downloadFilelist = createServerFn({ method: "POST" })
     }
 
     const catId = data.categoryId || (data.categoryName ? parseCategoryId(data.categoryName) : 0);
-    const isMovie = isMovieCategory(catId) ||
-      (catId === 0 && /film|movie/i.test(data.categoryName ?? ""));
+    const isMovie =
+      isMovieCategory(catId) || (catId === 0 && /film|movie/i.test(data.categoryName ?? ""));
     const savePath = isMovie ? moviesPath : seriesPath;
 
     // 1. Descarcă fișierul .torrent de la Filelist
@@ -587,12 +652,15 @@ export const downloadFilelist = createServerFn({ method: "POST" })
         };
       }
       torrentBuffer = await dlRes.arrayBuffer();
-    } catch (e: any) {
-      return { status: "error", error: `Eroare rețea Filelist: ${e?.message ?? e}` };
+    } catch (e) {
+      return {
+        status: "error",
+        error: `Eroare rețea Filelist: ${e instanceof Error ? e.message : e}`,
+      };
     }
 
     // 2. Scrie temporar fișierul .torrent pe disk
-    const safeName = data.torrentName.replace(/[^a-z0-9_\-\. ]/gi, "_").slice(0, 80);
+    const safeName = data.torrentName.replace(/[^a-z0-9_\-. ]/gi, "_").slice(0, 80);
     const tmpPath = join(tmpdir(), `faikkitbox_${data.torrentId}_${Date.now()}.torrent`);
     await writeFile(tmpPath, Buffer.from(torrentBuffer));
 
@@ -650,7 +718,7 @@ export const downloadFilelist = createServerFn({ method: "POST" })
           },
         );
         if (listRes.ok) {
-          const list: any[] = await listRes.json();
+          const list: QbitTorrentInfo[] = await listRes.json();
           const match =
             list.find((t) =>
               String(t.name ?? "")
@@ -735,8 +803,10 @@ export async function downloadFilelistInternal(params: {
   if (!username || !passkey) return { status: "error", error: "FILELIST credentials lipsă" };
   if (!qbitUser || !qbitPass) return { status: "error", error: "qBit credentials lipsă" };
 
-  const catId = params.categoryId || (params.categoryName ? parseCategoryId(params.categoryName) : 0);
-  const isMovie = isMovieCategory(catId) || (catId === 0 && /film|movie/i.test(params.categoryName ?? ""));
+  const catId =
+    params.categoryId || (params.categoryName ? parseCategoryId(params.categoryName) : 0);
+  const isMovie =
+    isMovieCategory(catId) || (catId === 0 && /film|movie/i.test(params.categoryName ?? ""));
   const savePath = isMovie ? moviesPath : seriesPath;
 
   const dlUrl = `https://filelist.io/download.php?id=${params.torrentId}&passkey=${passkey}`;
@@ -748,11 +818,14 @@ export async function downloadFilelistInternal(params: {
     });
     if (!dlRes.ok) return { status: "error", error: `Filelist HTTP ${dlRes.status}` };
     torrentBuffer = await dlRes.arrayBuffer();
-  } catch (e: any) {
-    return { status: "error", error: `Eroare rețea Filelist: ${e?.message ?? e}` };
+  } catch (e) {
+    return {
+      status: "error",
+      error: `Eroare rețea Filelist: ${e instanceof Error ? e.message : e}`,
+    };
   }
 
-  const safeName = params.torrentName.replace(/[^a-z0-9_\-\. ]/gi, "_").slice(0, 80);
+  const safeName = params.torrentName.replace(/[^a-z0-9_\-. ]/gi, "_").slice(0, 80);
   const tmpPath = join(tmpdir(), `faikkitbox_auto_${params.torrentId}_${Date.now()}.torrent`);
   await writeFile(tmpPath, Buffer.from(torrentBuffer));
 
@@ -768,7 +841,11 @@ export async function downloadFilelistInternal(params: {
 
     const form = new FormData();
     const fileBytes = await import("node:fs/promises").then((m) => m.readFile(tmpPath));
-    form.append("torrents", new Blob([fileBytes], { type: "application/x-bittorrent" }), `${safeName}.torrent`);
+    form.append(
+      "torrents",
+      new Blob([fileBytes], { type: "application/x-bittorrent" }),
+      `${safeName}.torrent`,
+    );
     form.append("savepath", savePath);
     form.append("category", isMovie ? "filme" : "seriale");
 
@@ -785,22 +862,38 @@ export async function downloadFilelistInternal(params: {
     await new Promise((r) => setTimeout(r, 2000));
     let torrentHash: string | null = null;
     try {
-      const listRes = await fetch(`${url}/api/v2/torrents/info?sort=added_on&reverse=true&limit=5`, {
-        headers: { Cookie: cookie },
-        signal: AbortSignal.timeout(10_000),
-      });
+      const listRes = await fetch(
+        `${url}/api/v2/torrents/info?sort=added_on&reverse=true&limit=5`,
+        {
+          headers: { Cookie: cookie },
+          signal: AbortSignal.timeout(10_000),
+        },
+      );
       if (listRes.ok) {
-        const list: any[] = await listRes.json();
-        const match = list.find((t) => String(t.name ?? "").toLowerCase().includes(params.torrentName.slice(0, 20).toLowerCase())) ?? list[0];
+        const list: QbitTorrentInfo[] = await listRes.json();
+        const match =
+          list.find((t) =>
+            String(t.name ?? "")
+              .toLowerCase()
+              .includes(params.torrentName.slice(0, 20).toLowerCase()),
+          ) ?? list[0];
         torrentHash = match?.hash ?? null;
       }
-    } catch {}
+    } catch {
+      // hash rămâne null — polling-ul nu va porni pentru acest torrent
+    }
 
     const catName = params.categoryName || CATEGORY_NAMES[catId] || `Cat ${catId}`;
     if (!params.skipLog) {
-      import("./activity-log").then(({ logActivity }) =>
-        logActivity("torrent_added", `Auto-descărcat: ${params.torrentName}`, { category: catName, savePath, size: params.size })
-      ).catch(() => {});
+      import("./activity-log")
+        .then(({ logActivity }) =>
+          logActivity("torrent_added", `Auto-descărcat: ${params.torrentName}`, {
+            category: catName,
+            savePath,
+            size: params.size,
+          }),
+        )
+        .catch(() => {});
     }
     await appendDownloadLog({
       id: params.torrentId,
@@ -818,7 +911,14 @@ export async function downloadFilelistInternal(params: {
 
     if (torrentHash) {
       const plexType = isMovie ? "movie" : "show";
-      pollUntilComplete(url, cookie, torrentHash, plexType, params.torrentName, params.torrentId).catch(() => {});
+      pollUntilComplete(
+        url,
+        cookie,
+        torrentHash,
+        plexType,
+        params.torrentName,
+        params.torrentId,
+      ).catch(() => {});
     }
 
     return { status: "ok", torrentName: params.torrentName, savePath };

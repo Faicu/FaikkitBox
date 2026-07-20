@@ -17,11 +17,22 @@ export default function () {
       const res = await fetch(`${base}/status/sessions`, { headers });
       if (!res.ok) return;
 
-      const json = await res.json();
-      const sessionsMd: any[] = json?.MediaContainer?.Metadata ?? [];
+      const json = (await res.json()) as {
+        MediaContainer?: {
+          Metadata?: Array<{
+            duration?: number;
+            viewOffset?: number;
+            title?: string;
+            grandparentTitle?: string;
+            User?: { title?: string };
+            Player?: { title?: string };
+          }>;
+        };
+      };
+      const sessionsMd = json?.MediaContainer?.Metadata ?? [];
 
       await trackPlexSessions(
-        sessionsMd.map((s: any) => {
+        sessionsMd.map((s) => {
           const dur = Number(s.duration ?? 0);
           const rawOff = Number(s.viewOffset ?? 0);
           const off = dur > 1000 && rawOff > 0 && rawOff < 1000 ? rawOff * 1000 : rawOff;

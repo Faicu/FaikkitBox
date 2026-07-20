@@ -25,12 +25,7 @@ import {
   DrawerTitle,
   DrawerDescription,
 } from "@/components/ui/drawer";
-import {
-  plexQuery,
-  immichQuery,
-  qbitQuery,
-  hostQuery,
-} from "@/lib/queries";
+import { plexQuery, immichQuery, qbitQuery, hostQuery } from "@/lib/queries";
 import type { HostData } from "@/lib/services.functions";
 import { formatBytes, formatSpeed } from "@/lib/format";
 
@@ -294,7 +289,6 @@ function Overview() {
           </div>
         </DrawerContent>
       </Drawer>
-
     </PageShell>
   );
 }
@@ -410,4 +404,3 @@ function MetricButton({
     </button>
   );
 }
-

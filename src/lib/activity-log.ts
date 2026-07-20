@@ -1,5 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { randomUUID } from "node:crypto";
+import { createRequire } from "node:module";
+
+const requireSync = createRequire(import.meta.url);
 
 // ---------------------------------------------------------------------------
 // Tipuri
@@ -70,9 +73,7 @@ export async function logActivity(
   // Trimite notificare push (fire and forget) — tipurile cu titlu gol nu trimit push
   const pushTitle = PUSH_TITLES[type];
   if (pushTitle) {
-    import("./push")
-      .then(({ sendPushToAll }) => sendPushToAll(pushTitle, message))
-      .catch(() => {});
+    import("./push").then(({ sendPushToAll }) => sendPushToAll(pushTitle, message)).catch(() => {});
   }
 }
 
@@ -127,15 +128,27 @@ function fmtProgress(viewOffsetMs: number, durationMs: number): string {
 }
 
 export async function trackPlexSessions(
-  sessions: Array<{ user: string; title: string; grandparentTitle?: string; player?: string; viewOffsetMs?: number; durationMs?: number }>,
+  sessions: Array<{
+    user: string;
+    title: string;
+    grandparentTitle?: string;
+    player?: string;
+    viewOffsetMs?: number;
+    durationMs?: number;
+  }>,
 ): Promise<void> {
   const { getDb } = await import("./db");
   const db = getDb();
 
   // Citește sesiunile active din SQLite (supraviețuiesc restarturilor)
   const stored = db.prepare("SELECT * FROM plex_active_sessions").all() as Array<{
-    key: string; started_at: string; last_view_offset_ms: number; duration_ms: number;
-    user: string; title: string; grandparent_title: string | null;
+    key: string;
+    started_at: string;
+    last_view_offset_ms: number;
+    duration_ms: number;
+    user: string;
+    title: string;
+    grandparent_title: string | null;
   }>;
   const storedMap = new Map(stored.map((r) => [r.key, r]));
 
@@ -148,7 +161,7 @@ export async function trackPlexSessions(
       // Actualizăm progresul în DB
       const prev = storedMap.get(key)!;
       db.prepare(
-        `UPDATE plex_active_sessions SET last_view_offset_ms = ?, duration_ms = ? WHERE key = ?`
+        `UPDATE plex_active_sessions SET last_view_offset_ms = ?, duration_ms = ? WHERE key = ?`,
       ).run(s.viewOffsetMs ?? prev.last_view_offset_ms, s.durationMs ?? prev.duration_ms, key);
     }
   }
@@ -175,12 +188,23 @@ export async function trackPlexSessions(
       db.prepare(
         `INSERT OR REPLACE INTO plex_active_sessions
          (key, started_at, last_view_offset_ms, duration_ms, user, title, grandparent_title)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`
-      ).run(key, new Date().toISOString(), s.viewOffsetMs ?? 0, s.durationMs ?? 0, s.user, s.title, s.grandparentTitle ?? null);
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      ).run(
+        key,
+        new Date().toISOString(),
+        s.viewOffsetMs ?? 0,
+        s.durationMs ?? 0,
+        s.user,
+        s.title,
+        s.grandparentTitle ?? null,
+      );
 
       const what = s.grandparentTitle ? `${s.grandparentTitle} — ${s.title}` : s.title;
       await logActivity("plex_watch_start", `${s.user} a început vizionarea: ${what}`, {
-        user: s.user, title: s.title, grandparentTitle: s.grandparentTitle, player: s.player,
+        user: s.user,
+        title: s.title,
+        grandparentTitle: s.grandparentTitle,
+        player: s.player,
       });
     }
   }
@@ -293,13 +317,15 @@ async function logServerStartOnce(): Promise<void> {
     // Nu logăm dacă e un restart cauzat de un build recent (modificare cod)
     if (await isCodeRestart()) return;
     await logActivity("server_start", "Serverul FaikkitBox a pornit");
-  } catch {}
+  } catch {
+    // logare best-effort — nu blocăm pornirea serverului
+  }
 }
 
 function isCodeRestartSync(): boolean {
   try {
-    const { statSync } = require("node:fs");
-    const { fileURLToPath } = require("node:url");
+    const { statSync } = requireSync("node:fs") as typeof import("node:fs");
+    const { fileURLToPath } = requireSync("node:url") as typeof import("node:url");
     const buildFile = new URL("../index.mjs", import.meta.url);
     const s = statSync(fileURLToPath(buildFile));
     return Date.now() - s.mtimeMs < 10 * 60_000;
@@ -323,7 +349,9 @@ function logServerStopSync(): void {
       "Serverul FaikkitBox s-a oprit",
       null,
     );
-  } catch {}
+  } catch {
+    // logare best-effort — nu blocăm oprirea serverului
+  }
 }
 
 declare global {
@@ -335,7 +363,9 @@ let codeRestartDetected = false;
 if (typeof process !== "undefined" && process.env && !globalThis.__faikkitboxActivityInit) {
   globalThis.__faikkitboxActivityInit = true;
   // Detectăm înainte de logare dacă e restart din cod, pentru a suprima și server_stop
-  isCodeRestart().then((isCode) => { codeRestartDetected = isCode; });
+  isCodeRestart().then((isCode) => {
+    codeRestartDetected = isCode;
+  });
   logServerStartOnce();
   // "exit" rulează la orice ieșire normală — doar cod sincron (node:sqlite poate).
   let stopLogged = false;

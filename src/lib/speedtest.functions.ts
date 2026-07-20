@@ -46,7 +46,16 @@ type BinaryConfig = {
 
 function speedtestConfigs(): BinaryConfig[] {
   const configured = process.env.SPEEDTEST_BIN?.trim();
-  const ooklaArgs = ["--accept-license", "--accept-gdpr", "-f", "json", "-p", "no", "--server-id", "11494"];
+  const ooklaArgs = [
+    "--accept-license",
+    "--accept-gdpr",
+    "-f",
+    "json",
+    "-p",
+    "no",
+    "--server-id",
+    "11494",
+  ];
   const pyArgs = ["--json"];
 
   if (configured) {
@@ -152,32 +161,40 @@ export const getLastSpeedtest = createServerFn({ method: "GET" }).handler(async 
   return await readCache();
 });
 
-export const getSpeedtestHistory = createServerFn({ method: "GET" }).handler(async (): Promise<SpeedtestHistoryEntry[]> => {
-  try {
-    const { getDb } = await import("./db");
-    const db = getDb();
-    const rows = db.prepare(
-      "SELECT * FROM speedtest_history ORDER BY timestamp DESC LIMIT 30",
-    ).all() as Array<{
-      id: string; timestamp: string; download: number; upload: number;
-      ping: number; jitter: number | null; isp: string | null;
-      server_name: string | null; result_url: string | null;
-    }>;
-    return rows.map((r) => ({
-      id: r.id,
-      timestamp: r.timestamp,
-      download: r.download,
-      upload: r.upload,
-      ping: r.ping,
-      jitter: r.jitter ?? undefined,
-      isp: r.isp ?? undefined,
-      serverName: r.server_name ?? undefined,
-      resultUrl: r.result_url ?? undefined,
-    }));
-  } catch {
-    return [];
-  }
-});
+export const getSpeedtestHistory = createServerFn({ method: "GET" }).handler(
+  async (): Promise<SpeedtestHistoryEntry[]> => {
+    try {
+      const { getDb } = await import("./db");
+      const db = getDb();
+      const rows = db
+        .prepare("SELECT * FROM speedtest_history ORDER BY timestamp DESC LIMIT 30")
+        .all() as Array<{
+        id: string;
+        timestamp: string;
+        download: number;
+        upload: number;
+        ping: number;
+        jitter: number | null;
+        isp: string | null;
+        server_name: string | null;
+        result_url: string | null;
+      }>;
+      return rows.map((r) => ({
+        id: r.id,
+        timestamp: r.timestamp,
+        download: r.download,
+        upload: r.upload,
+        ping: r.ping,
+        jitter: r.jitter ?? undefined,
+        isp: r.isp ?? undefined,
+        serverName: r.server_name ?? undefined,
+        resultUrl: r.result_url ?? undefined,
+      }));
+    } catch {
+      return [];
+    }
+  },
+);
 
 export const runSpeedtest = createServerFn({ method: "POST" }).handler(
   async (): Promise<SpeedtestRunResponse> => {
@@ -199,12 +216,13 @@ export const runSpeedtest = createServerFn({ method: "POST" }).handler(
         await writeCache(result);
         await saveToHistory(result);
         return { ok: true, ...result };
-      } catch (e: any) {
-        if (e?.code === "ENOENT") {
+      } catch (e) {
+        const err = e as { code?: string; stderr?: string; stdout?: string; message?: string };
+        if (err?.code === "ENOENT") {
           continue;
         }
         hasAnyBinary = true;
-        const message = e?.stderr || e?.stdout || e?.message || String(e);
+        const message = err?.stderr || err?.stdout || err?.message || String(e);
         if (
           typeof message === "string" &&
           message.includes("is not a snap cgroup for tag snap.speedtest.speedtest")

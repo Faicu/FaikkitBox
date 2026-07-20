@@ -23,7 +23,13 @@ async function syncOnStart() {
     });
     if (!res.ok) return;
 
-    const raw: any[] = await res.json();
+    type GithubCommit = {
+      sha?: string;
+      commit?: { message?: string; author?: { name?: string; date?: string } };
+      author?: { login?: string };
+      html_url?: string;
+    };
+    const raw: GithubCommit[] = await res.json();
     if (!Array.isArray(raw)) return;
 
     const { getDb } = await import("../../src/lib/db");

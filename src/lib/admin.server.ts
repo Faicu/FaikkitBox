@@ -28,6 +28,8 @@ export function eq(a: string, b: string) {
 }
 
 export async function getSession() {
+  // Nu e un React Hook — e un helper server-side din @tanstack/react-start.
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   return useSession<AdminSession>(sessionConfig());
 }
 

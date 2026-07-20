@@ -13,6 +13,31 @@ import type { ShowStatusData } from "./services.functions";
 //    (externals.imdb), asa ca poti ajunge tot acolo cu un click.
 const TVMAZE_BASE = "https://api.tvmaze.com";
 
+interface TvmazeSearchResult {
+  show: {
+    id: number;
+    name: string;
+    premiered?: string | null;
+    network?: { name?: string } | null;
+    webChannel?: { name?: string } | null;
+    image?: { medium?: string } | null;
+    externals?: { imdb?: string | null };
+  };
+}
+
+interface TvmazeEpisode {
+  season: number;
+  number: number;
+  name?: string;
+  airstamp?: string;
+}
+
+interface TvmazeShow {
+  name: string;
+  externals?: { imdb?: string | null };
+  _embedded?: { episodes?: TvmazeEpisode[] };
+}
+
 export interface TvShowSearchResult {
   id: number;
   name: string;
@@ -32,7 +57,7 @@ export const searchTvShows = createServerFn({ method: "GET" })
         signal: AbortSignal.timeout(8000),
       });
       if (!res.ok) return [];
-      const json: any[] = await res.json();
+      const json: TvmazeSearchResult[] = await res.json();
       return json.slice(0, 8).map((r) => ({
         id: r.show.id,
         name: r.show.name,
@@ -59,13 +84,13 @@ export const getTvShowStatus = createServerFn({ method: "GET" })
         signal: AbortSignal.timeout(8000),
       });
       if (!res.ok) throw new Error(`TVmaze a raspuns ${res.status}`);
-      const show: any = await res.json();
+      const show: TvmazeShow = await res.json();
       const showName: string = show.name;
       const imdbId: string | null = show.externals?.imdb ?? null;
 
       const episodes = (show._embedded?.episodes ?? [])
-        .filter((e: any) => e.airstamp && Number(e.season) > 0)
-        .map((e: any) => ({
+        .filter((e) => e.airstamp && Number(e.season) > 0)
+        .map((e) => ({
           season: Number(e.season),
           episode: Number(e.number),
           title: e.name || `Episodul ${e.number}`,
@@ -73,9 +98,9 @@ export const getTvShowStatus = createServerFn({ method: "GET" })
         }));
 
       const now = Date.now();
-      const aired = episodes.filter((e: any) => new Date(e.airDateIso).getTime() <= now);
+      const aired = episodes.filter((e) => new Date(e.airDateIso).getTime() <= now);
       const lastAiredEp = aired.length > 0 ? aired[aired.length - 1] : null;
-      const nextEp = episodes.find((e: any) => new Date(e.airDateIso).getTime() > now) ?? null;
+      const nextEp = episodes.find((e) => new Date(e.airDateIso).getTime() > now) ?? null;
 
       let inLibrary: boolean | null = null;
       if (lastAiredEp) {

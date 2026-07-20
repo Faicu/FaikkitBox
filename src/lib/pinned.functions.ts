@@ -9,12 +9,20 @@ export interface PinnedItemDb {
   posterUrl: string | null;
 }
 
-export const getPinnedItems = createServerFn({ method: "GET" })
-  .handler(async (): Promise<PinnedItemDb[]> => {
+export const getPinnedItems = createServerFn({ method: "GET" }).handler(
+  async (): Promise<PinnedItemDb[]> => {
     const db = getDb();
     const rows = db
-      .prepare("SELECT id, media_type, title, original_title, poster_url FROM pinned_items ORDER BY sort_order ASC, added_at ASC")
-      .all() as Array<{ id: number; media_type: string; title: string; original_title: string; poster_url: string | null }>;
+      .prepare(
+        "SELECT id, media_type, title, original_title, poster_url FROM pinned_items ORDER BY sort_order ASC, added_at ASC",
+      )
+      .all() as Array<{
+      id: number;
+      media_type: string;
+      title: string;
+      original_title: string;
+      poster_url: string | null;
+    }>;
     return rows.map((r) => ({
       id: r.id,
       mediaType: r.media_type as "movie" | "tv",
@@ -22,7 +30,8 @@ export const getPinnedItems = createServerFn({ method: "GET" })
       originalTitle: r.original_title,
       posterUrl: r.poster_url,
     }));
-  });
+  },
+);
 
 export interface WatchSettings {
   id: number;
@@ -35,12 +44,23 @@ export interface WatchSettings {
   autoDownloadQuality: "1080p" | "4K" | "4K HDR";
 }
 
-export const getWatchSettings = createServerFn({ method: "GET" })
-  .handler(async (): Promise<WatchSettings[]> => {
+export const getWatchSettings = createServerFn({ method: "GET" }).handler(
+  async (): Promise<WatchSettings[]> => {
     const db = getDb();
     const rows = db
-      .prepare("SELECT id, media_type, watch_filelist, watch_filelist_season, watch_tmdb, watch_plex, auto_download, auto_download_quality FROM pinned_watch_settings")
-      .all() as Array<{ id: number; media_type: string; watch_filelist: number; watch_filelist_season: number; watch_tmdb: number; watch_plex: number; auto_download: number; auto_download_quality: string }>;
+      .prepare(
+        "SELECT id, media_type, watch_filelist, watch_filelist_season, watch_tmdb, watch_plex, auto_download, auto_download_quality FROM pinned_watch_settings",
+      )
+      .all() as Array<{
+      id: number;
+      media_type: string;
+      watch_filelist: number;
+      watch_filelist_season: number;
+      watch_tmdb: number;
+      watch_plex: number;
+      auto_download: number;
+      auto_download_quality: string;
+    }>;
     return rows.map((r) => ({
       id: r.id,
       mediaType: r.media_type as "movie" | "tv",
@@ -51,10 +71,22 @@ export const getWatchSettings = createServerFn({ method: "GET" })
       autoDownload: !!r.auto_download,
       autoDownloadQuality: (r.auto_download_quality || "1080p") as "1080p" | "4K" | "4K HDR",
     }));
-  });
+  },
+);
 
 export const setWatchSettings = createServerFn({ method: "POST" })
-  .validator((data: { id: number; mediaType: "movie" | "tv"; watchFilelist: boolean; watchFilelistSeason: boolean; watchTmdb: boolean; watchPlex: boolean; autoDownload: boolean; autoDownloadQuality: string }) => data)
+  .validator(
+    (data: {
+      id: number;
+      mediaType: "movie" | "tv";
+      watchFilelist: boolean;
+      watchFilelistSeason: boolean;
+      watchTmdb: boolean;
+      watchPlex: boolean;
+      autoDownload: boolean;
+      autoDownloadQuality: string;
+    }) => data,
+  )
   .handler(async ({ data }): Promise<void> => {
     const db = getDb();
     db.prepare(
@@ -65,11 +97,23 @@ export const setWatchSettings = createServerFn({ method: "POST" })
          watch_tmdb = excluded.watch_tmdb,
          watch_plex = excluded.watch_plex,
          auto_download = excluded.auto_download,
-         auto_download_quality = excluded.auto_download_quality`
-    ).run(data.id, data.mediaType, data.watchFilelist ? 1 : 0, data.watchFilelistSeason ? 1 : 0, data.watchTmdb ? 1 : 0, data.watchPlex ? 1 : 0, data.autoDownload ? 1 : 0, data.autoDownloadQuality);
+         auto_download_quality = excluded.auto_download_quality`,
+    ).run(
+      data.id,
+      data.mediaType,
+      data.watchFilelist ? 1 : 0,
+      data.watchFilelistSeason ? 1 : 0,
+      data.watchTmdb ? 1 : 0,
+      data.watchPlex ? 1 : 0,
+      data.autoDownload ? 1 : 0,
+      data.autoDownloadQuality,
+    );
     const anyEnabled = data.watchFilelist || data.watchTmdb || data.watchPlex;
     if (!anyEnabled) {
-      db.prepare("DELETE FROM pinned_watch_state WHERE id = ? AND media_type = ?").run(data.id, data.mediaType);
+      db.prepare("DELETE FROM pinned_watch_state WHERE id = ? AND media_type = ?").run(
+        data.id,
+        data.mediaType,
+      );
     }
   });
 
@@ -80,7 +124,7 @@ export const setPinnedItems = createServerFn({ method: "POST" })
     db.prepare("DELETE FROM pinned_items").run();
     const stmt = db.prepare(
       `INSERT INTO pinned_items (id, media_type, title, original_title, poster_url, sort_order)
-       VALUES (?, ?, ?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?)`,
     );
     data.items.forEach((item, i) => {
       stmt.run(item.id, item.mediaType, item.title, item.originalTitle, item.posterUrl ?? null, i);
@@ -89,25 +133,26 @@ export const setPinnedItems = createServerFn({ method: "POST" })
     db.prepare(
       `DELETE FROM pinned_watch_settings WHERE NOT EXISTS (
          SELECT 1 FROM pinned_items pi WHERE pi.id = pinned_watch_settings.id AND pi.media_type = pinned_watch_settings.media_type
-       )`
+       )`,
     ).run();
     db.prepare(
       `DELETE FROM pinned_watch_state WHERE NOT EXISTS (
          SELECT 1 FROM pinned_items pi WHERE pi.id = pinned_watch_state.id AND pi.media_type = pinned_watch_state.media_type
-       )`
+       )`,
     ).run();
   });
-
 
 export const getPinnedWatcherStatus = createServerFn({ method: "GET" }).handler(async () => {
   const { getDb } = await import("./db");
   const db = getDb();
-  const row = db.prepare(
-    "SELECT MAX(last_checked_at) as last_run FROM pinned_watch_state"
-  ).get() as { last_run: string | null };
+  const row = db
+    .prepare("SELECT MAX(last_checked_at) as last_run FROM pinned_watch_state")
+    .get() as { last_run: string | null };
   const lastRun = row?.last_run ?? null;
   const INTERVAL_MS = 3 * 60 * 60 * 1000;
-  const nextRun = lastRun ? new Date(new Date(lastRun).getTime() + INTERVAL_MS).toISOString() : null;
+  const nextRun = lastRun
+    ? new Date(new Date(lastRun).getTime() + INTERVAL_MS).toISOString()
+    : null;
   return { lastRun, nextRun };
 });
 

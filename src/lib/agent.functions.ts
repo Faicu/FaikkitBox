@@ -134,11 +134,12 @@ export const runAgentCommand = createServerFn({ method: "POST" })
           const { stdout, stderr } = await execFileAsync(cmd, args, { timeout: 1_800_000 });
           if (stdout) stdoutParts.push(stdout);
           if (stderr) stderrParts.push(stderr);
-        } catch (e: any) {
-          lastCode = typeof e.code === "number" ? e.code : 1;
-          if (e.stdout) stdoutParts.push(e.stdout);
-          if (e.stderr) stderrParts.push(e.stderr);
-          else stderrParts.push(e.message ?? String(e));
+        } catch (e) {
+          const err = e as { code?: number; stdout?: string; stderr?: string; message?: string };
+          lastCode = typeof err.code === "number" ? err.code : 1;
+          if (err.stdout) stdoutParts.push(err.stdout);
+          if (err.stderr) stderrParts.push(err.stderr);
+          else stderrParts.push(err.message ?? String(e));
           break;
         }
       }
@@ -156,6 +157,7 @@ export const runAgentCommand = createServerFn({ method: "POST" })
 // Logging activitate agenți (fire and forget, după execuție)
 export async function logAgentActivity(cmd: AgentCommand, ok: boolean): Promise<void> {
   const { logActivity } = await import("./activity-log");
+  type ActivityType = Parameters<typeof logActivity>[0];
   const messages: Partial<Record<AgentCommand, string>> = {
     restart_plex: "Plex a fost repornit",
     restart_immich: "Immich a fost repornit",
@@ -171,7 +173,7 @@ export async function logAgentActivity(cmd: AgentCommand, ok: boolean): Promise<
   };
   const msg = messages[cmd];
   if (!msg) return;
-  const type =
+  const type: ActivityType =
     cmd === "deploy_app"
       ? "service_update"
       : cmd.startsWith("update_")
@@ -179,5 +181,5 @@ export async function logAgentActivity(cmd: AgentCommand, ok: boolean): Promise<
         : cmd.startsWith("restart_")
           ? "service_restart"
           : "ubuntu_update";
-  await logActivity(type as any, ok ? msg : `${msg} — EȘUAT`, { cmd, ok });
+  await logActivity(type, ok ? msg : `${msg} — EȘUAT`, { cmd, ok });
 }

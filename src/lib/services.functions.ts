@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import type { Systeminformation } from "systeminformation";
 
 // ---------- Types ----------
 
@@ -183,7 +184,7 @@ function normalizeShowTitle(value: string): string {
     .trim();
 }
 
-function plexQualityFromMedia(media: any): string | null {
+function plexQualityFromMedia(media: PlexMedia | undefined): string | null {
   const res: string | undefined = media?.videoResolution;
   if (!res) return null;
   const r = String(res).toLowerCase();
@@ -242,7 +243,8 @@ function errMsg(e: unknown): string {
     const cause = (e as { cause?: unknown }).cause;
     if (cause) {
       if (cause instanceof Error) {
-        parts.push(`(${cause.message}${(cause as any).code ? ` [${(cause as any).code}]` : ""})`);
+        const code = (cause as { code?: string }).code;
+        parts.push(`(${cause.message}${code ? ` [${code}]` : ""})`);
       } else {
         parts.push(`(${String(cause)})`);
       }
@@ -258,6 +260,66 @@ interface PlexConnectionCandidate {
   uri: string;
   source: string;
   priority: number;
+}
+
+interface PlexStream {
+  streamType?: number;
+  decision?: string;
+}
+
+interface PlexMediaPart {
+  file?: string;
+  Stream?: PlexStream[];
+}
+
+interface PlexMedia {
+  videoResolution?: string;
+  bitrate?: number;
+  Part?: PlexMediaPart[];
+}
+
+interface PlexMetadataItem {
+  ratingKey?: string;
+  key?: string;
+  title?: string;
+  type?: string;
+  index?: number;
+  parentIndex?: number;
+  grandparentTitle?: string;
+  addedAt?: number;
+  viewCount?: number;
+  duration?: number;
+  viewOffset?: number;
+  thumb?: string;
+  accountID?: number;
+  viewedAt?: number;
+  Media?: PlexMedia[];
+  User?: { title?: string };
+  Player?: { title?: string; device?: string; product?: string; state?: string };
+}
+
+interface PlexDirectory {
+  key?: string;
+  title?: string;
+  type?: string;
+}
+
+interface PlexAccount {
+  id?: number;
+  name?: string;
+  title?: string;
+}
+
+interface PlexApiResponse {
+  MediaContainer?: {
+    Metadata?: PlexMetadataItem[];
+    Directory?: PlexDirectory[];
+    Account?: PlexAccount[];
+    totalSize?: number;
+    friendlyName?: string;
+    version?: string;
+    platform?: string;
+  };
 }
 
 let plexDiscoveryCache: { url: string; source: string; expiresAt: number } | null = null;
@@ -302,17 +364,17 @@ async function fetchPlexHistory(
       recentHistory: plexHistoryCache.recentHistory,
     };
   }
-  const historyJson = await fetchJson<any>(
+  const historyJson = await fetchJson<PlexApiResponse>(
     `${url}/status/sessions/history/all?sort=viewedAt:desc&X-Plex-Container-Start=0&X-Plex-Container-Size=1000`,
     { headers },
     12000,
   );
-  const entries: any[] = historyJson?.MediaContainer?.Metadata ?? [];
+  const entries: PlexMetadataItem[] = historyJson?.MediaContainer?.Metadata ?? [];
 
   const accountMap = new Map<number, string>();
   try {
-    const accountsJson = await fetchJson<any>(`${url}/accounts`, { headers }, 8000);
-    const accounts: any[] = accountsJson?.MediaContainer?.Account ?? [];
+    const accountsJson = await fetchJson<PlexApiResponse>(`${url}/accounts`, { headers }, 8000);
+    const accounts: PlexAccount[] = accountsJson?.MediaContainer?.Account ?? [];
     for (const a of accounts) {
       const id = Number(a?.id);
       const name = String(a?.name ?? a?.title ?? "").trim();
@@ -422,14 +484,14 @@ async function fetchPlexHistory(
     }
   }
 
-  const toRanked = <T extends { plays: number; lastViewedAt: number }>(
+  const toRanked = <K extends string, T extends { plays: number; lastViewedAt: number }>(
     m: Map<string, T>,
-    keyField: string,
-  ) =>
+    keyField: K,
+  ): Array<Record<K, string> & T> =>
     Array.from(m.entries())
-      .map(([k, v]) => ({ [keyField]: k, ...v }))
-      .sort((a: any, b: any) => b.plays - a.plays)
-      .slice(0, 5) as any;
+      .map(([k, v]) => ({ [keyField]: k, ...v }) as Record<K, string> & T)
+      .sort((a, b) => b.plays - a.plays)
+      .slice(0, 5);
 
   const userHistory: Record<string, PlexHistoryEntry[]> = {};
   for (const [k, list] of historyByUser.entries()) {
@@ -581,7 +643,7 @@ async function discoverPlexUrl(
 
   for (const candidate of uniqueCandidates(candidates)) {
     try {
-      await fetchJson<any>(`${candidate.uri}/`, { headers }, 5000);
+      await fetchJson<PlexApiResponse>(`${candidate.uri}/`, { headers }, 5000);
       plexDiscoveryCache = {
         url: candidate.uri,
         source: candidate.source,
@@ -614,9 +676,9 @@ export const getPlex = createServerFn({ method: "GET" }).handler(async (): Promi
     const discovered = await discoverPlexUrl(token, base);
     const url = discovered.url;
     const [rootJson, sessionsJson, libsJson, history] = await Promise.all([
-      fetchJson<any>(`${url}/`, { headers }),
-      fetchJson<any>(`${url}/status/sessions`, { headers }),
-      fetchJson<any>(`${url}/library/sections`, { headers }),
+      fetchJson<PlexApiResponse>(`${url}/`, { headers }),
+      fetchJson<PlexApiResponse>(`${url}/status/sessions`, { headers }),
+      fetchJson<PlexApiResponse>(`${url}/library/sections`, { headers }),
       fetchPlexHistory(url, headers).catch(() => ({
         topShows: [],
         topMovies: [],
@@ -634,18 +696,22 @@ export const getPlex = createServerFn({ method: "GET" }).handler(async (): Promi
     const sessionsMd = sessionsJson?.MediaContainer?.Metadata ?? [];
     const libsMd = libsJson?.MediaContainer?.Directory ?? [];
     // Combină filme și episoade, sortate după addedAt descrescător, primele 8
-    const movieLibKeys = libsMd.filter((l: any) => l.type === "movie").map((l: any) => l.key);
-    const showLibKeys = libsMd.filter((l: any) => l.type === "show").map((l: any) => l.key);
+    const movieLibKeys = libsMd
+      .filter((l: PlexDirectory) => l.type === "movie")
+      .map((l: PlexDirectory) => l.key);
+    const showLibKeys = libsMd
+      .filter((l: PlexDirectory) => l.type === "show")
+      .map((l: PlexDirectory) => l.key);
 
     const [recentMoviesJson, recentEpisodesJson] = await Promise.all([
       movieLibKeys.length > 0
-        ? fetchJson<any>(
+        ? fetchJson<PlexApiResponse>(
             `${url}/library/sections/${movieLibKeys[0]}/recentlyAdded?X-Plex-Container-Start=0&X-Plex-Container-Size=8&type=1`,
             { headers },
           ).catch(() => ({ MediaContainer: { Metadata: [] } }))
         : Promise.resolve({ MediaContainer: { Metadata: [] } }),
       showLibKeys.length > 0
-        ? fetchJson<any>(
+        ? fetchJson<PlexApiResponse>(
             `${url}/library/sections/${showLibKeys[0]}/recentlyAdded?X-Plex-Container-Start=0&X-Plex-Container-Size=8&type=4`,
             { headers },
           ).catch(() => ({ MediaContainer: { Metadata: [] } }))
@@ -656,14 +722,17 @@ export const getPlex = createServerFn({ method: "GET" }).handler(async (): Promi
       ...(recentMoviesJson?.MediaContainer?.Metadata ?? []),
       ...(recentEpisodesJson?.MediaContainer?.Metadata ?? []),
     ]
-      .sort((a: any, b: any) => Number(b.addedAt ?? 0) - Number(a.addedAt ?? 0))
+      .sort(
+        (a: PlexMetadataItem, b: PlexMetadataItem) =>
+          Number(b.addedAt ?? 0) - Number(a.addedAt ?? 0),
+      )
       .slice(0, 8);
 
     const libraries: PlexLibrary[] = await Promise.all(
-      libsMd.map(async (l: any) => {
+      libsMd.map(async (l: PlexDirectory) => {
         let count: number | null = null;
         try {
-          const r = await fetchJson<any>(
+          const r = await fetchJson<PlexApiResponse>(
             `${url}/library/sections/${l.key}/all?X-Plex-Container-Start=0&X-Plex-Container-Size=0`,
             { headers },
           );
@@ -675,12 +744,12 @@ export const getPlex = createServerFn({ method: "GET" }).handler(async (): Promi
       }),
     );
 
-    const sessions: PlexSession[] = sessionsMd.map((s: any) => {
+    const sessions: PlexSession[] = sessionsMd.map((s: PlexMetadataItem) => {
       const media = s?.Media?.[0] ?? {};
       const part = media?.Part?.[0] ?? {};
       const stream = part?.Stream ?? [];
-      const video = stream.find((x: any) => x.streamType === 1);
-      const audio = stream.find((x: any) => x.streamType === 2);
+      const video = stream.find((x: PlexStream) => x.streamType === 1);
+      const audio = stream.find((x: PlexStream) => x.streamType === 2);
       const dur = Number(s.duration ?? 0);
       const rawOff = Number(s.viewOffset ?? 0);
       // Plex returnează viewOffset în ms, dar dur e tot în ms
@@ -724,7 +793,7 @@ export const getPlex = createServerFn({ method: "GET" }).handler(async (): Promi
       platform: mc.platform,
       sessions,
       libraries,
-      recentlyAdded: recentMd.slice(0, 8).map((m: any) => {
+      recentlyAdded: recentMd.slice(0, 8).map((m: PlexMetadataItem) => {
         let title = m.title;
         if (m.grandparentTitle) {
           const season = m.parentIndex ? `S${String(m.parentIndex).padStart(2, "0")}` : null;
@@ -734,7 +803,7 @@ export const getPlex = createServerFn({ method: "GET" }).handler(async (): Promi
             ? `${m.grandparentTitle} ${epCode} — ${m.title}`
             : `${m.grandparentTitle} — ${m.title}`;
         }
-        return { title, type: m.type, addedAt: Number(m.addedAt ?? 0) };
+        return { title: title ?? "", type: m.type ?? "", addedAt: Number(m.addedAt ?? 0) };
       }),
       topShows: history.topShows,
       topMovies: history.topMovies,
@@ -796,43 +865,65 @@ export async function checkPlexHasEpisode(
     const url = discovered.url;
 
     const normalizedTargetTitle = normalizeShowTitle(showTitle);
-    const search = await fetchJson<any>(
+    const search = await fetchJson<PlexApiResponse>(
       `${url}/search?query=${encodeURIComponent(showTitle)}&type=2`,
       { headers },
       8000,
     );
-    const searchShows = (search?.MediaContainer?.Metadata ?? []).filter((r: any) => r.type === "show");
-    let show: any =
-      searchShows.find((r: any) => normalizeShowTitle(String(r.title ?? "")) === normalizedTargetTitle) ??
-      searchShows.find((r: any) => normalizeShowTitle(String(r.title ?? "")).includes(normalizedTargetTitle)) ??
-      searchShows.find((r: any) => normalizedTargetTitle.includes(normalizeShowTitle(String(r.title ?? "")))) ??
+    const searchShows = (search?.MediaContainer?.Metadata ?? []).filter(
+      (r: PlexMetadataItem) => r.type === "show",
+    );
+    let show: PlexMetadataItem | undefined =
+      searchShows.find(
+        (r: PlexMetadataItem) =>
+          normalizeShowTitle(String(r.title ?? "")) === normalizedTargetTitle,
+      ) ??
+      searchShows.find((r: PlexMetadataItem) =>
+        normalizeShowTitle(String(r.title ?? "")).includes(normalizedTargetTitle),
+      ) ??
+      searchShows.find((r: PlexMetadataItem) =>
+        normalizedTargetTitle.includes(normalizeShowTitle(String(r.title ?? ""))),
+      ) ??
       searchShows[0];
     if (!show) {
-      const all = await fetchJson<any>(`${url}/library/sections/2/all?type=2`, { headers }, 10000);
-      const libShows = (all?.MediaContainer?.Metadata ?? []).filter((r: any) => r.type === "show");
+      const all = await fetchJson<PlexApiResponse>(
+        `${url}/library/sections/2/all?type=2`,
+        { headers },
+        10000,
+      );
+      const libShows = (all?.MediaContainer?.Metadata ?? []).filter(
+        (r: PlexMetadataItem) => r.type === "show",
+      );
       show =
-        libShows.find((r: any) => normalizeShowTitle(String(r.title ?? "")) === normalizedTargetTitle) ??
-        libShows.find((r: any) => normalizeShowTitle(String(r.title ?? "")).includes(normalizedTargetTitle)) ??
-        libShows.find((r: any) => normalizedTargetTitle.includes(normalizeShowTitle(String(r.title ?? ""))));
+        libShows.find(
+          (r: PlexMetadataItem) =>
+            normalizeShowTitle(String(r.title ?? "")) === normalizedTargetTitle,
+        ) ??
+        libShows.find((r: PlexMetadataItem) =>
+          normalizeShowTitle(String(r.title ?? "")).includes(normalizedTargetTitle),
+        ) ??
+        libShows.find((r: PlexMetadataItem) =>
+          normalizedTargetTitle.includes(normalizeShowTitle(String(r.title ?? ""))),
+        );
     }
     if (!show) return false;
 
-    const seasons = await fetchJson<any>(
+    const seasons = await fetchJson<PlexApiResponse>(
       `${url}/library/metadata/${show.ratingKey}/children`,
       { headers },
       8000,
     );
     const seasonsMd = seasons?.MediaContainer?.Metadata ?? [];
-    const seasonMatch = seasonsMd.find((s: any) => Number(s.index) === season);
+    const seasonMatch = seasonsMd.find((s: PlexMetadataItem) => Number(s.index) === season);
     if (!seasonMatch) return false;
 
-    const episodes = await fetchJson<any>(
+    const episodes = await fetchJson<PlexApiResponse>(
       `${url}/library/metadata/${seasonMatch.ratingKey}/children`,
       { headers },
       8000,
     );
     const episodesMd = episodes?.MediaContainer?.Metadata ?? [];
-    return episodesMd.some((e: any) => Number(e.index) === episode);
+    return episodesMd.some((e: PlexMetadataItem) => Number(e.index) === episode);
   } catch {
     return null;
   }
@@ -840,73 +931,94 @@ export async function checkPlexHasEpisode(
 
 export const getPlexEpisodesInSeason = createServerFn({ method: "GET" })
   .validator((data: { showTitle: string; season: number }) => data)
-  .handler(async ({ data }): Promise<{ num: number; quality: string | null; watched: boolean }[]> => {
-    const token = process.env.PLEX_TOKEN;
-    const base = process.env.PLEX_URL;
-    if (!token) return [];
-    try {
-      const headers = { Accept: "application/json", "X-Plex-Token": token };
-      const discovered = await discoverPlexUrl(token, base);
-      const url = discovered.url;
+  .handler(
+    async ({ data }): Promise<{ num: number; quality: string | null; watched: boolean }[]> => {
+      const token = process.env.PLEX_TOKEN;
+      const base = process.env.PLEX_URL;
+      if (!token) return [];
+      try {
+        const headers = { Accept: "application/json", "X-Plex-Token": token };
+        const discovered = await discoverPlexUrl(token, base);
+        const url = discovered.url;
 
-      const normalizedTarget = normalizeShowTitle(data.showTitle);
+        const normalizedTarget = normalizeShowTitle(data.showTitle);
 
-      // Caută mai întâi prin search endpoint (rapid)
-      const search = await fetchJson<any>(
-        `${url}/search?query=${encodeURIComponent(data.showTitle)}&type=2`,
-        { headers },
-        8000,
-      );
-      const searchShows = (search?.MediaContainer?.Metadata ?? []).filter((r: any) => r.type === "show");
-
-      // Încearcă mai întâi potrivire normalizată din rezultatele search-ului
-      let show: any =
-        searchShows.find((r: any) => normalizeShowTitle(String(r.title ?? "")) === normalizedTarget) ??
-        searchShows.find((r: any) => normalizeShowTitle(String(r.title ?? "")).includes(normalizedTarget)) ??
-        searchShows.find((r: any) => normalizedTarget.includes(normalizeShowTitle(String(r.title ?? "")))) ??
-        searchShows[0]; // search-ul Plex e deja relevant (ex: "Casa Dragonului" pentru "House of the Dragon")
-
-      // Dacă search n-a returnat nimic, parcurge biblioteca și potrivește normalizat
-      if (!show) {
-        const allShows = await fetchJson<any>(
-          `${url}/library/sections/2/all?type=2`,
+        // Caută mai întâi prin search endpoint (rapid)
+        const search = await fetchJson<PlexApiResponse>(
+          `${url}/search?query=${encodeURIComponent(data.showTitle)}&type=2`,
           { headers },
-          10000,
+          8000,
         );
-        const libShows = (allShows?.MediaContainer?.Metadata ?? []).filter((r: any) => r.type === "show");
-        show =
-          libShows.find((r: any) => normalizeShowTitle(String(r.title ?? "")) === normalizedTarget) ??
-          libShows.find((r: any) => normalizeShowTitle(String(r.title ?? "")).includes(normalizedTarget)) ??
-          libShows.find((r: any) => normalizedTarget.includes(normalizeShowTitle(String(r.title ?? ""))));
+        const searchShows = (search?.MediaContainer?.Metadata ?? []).filter(
+          (r: PlexMetadataItem) => r.type === "show",
+        );
+
+        // Încearcă mai întâi potrivire normalizată din rezultatele search-ului
+        let show: PlexMetadataItem | undefined =
+          searchShows.find(
+            (r: PlexMetadataItem) => normalizeShowTitle(String(r.title ?? "")) === normalizedTarget,
+          ) ??
+          searchShows.find((r: PlexMetadataItem) =>
+            normalizeShowTitle(String(r.title ?? "")).includes(normalizedTarget),
+          ) ??
+          searchShows.find((r: PlexMetadataItem) =>
+            normalizedTarget.includes(normalizeShowTitle(String(r.title ?? ""))),
+          ) ??
+          searchShows[0]; // search-ul Plex e deja relevant (ex: "Casa Dragonului" pentru "House of the Dragon")
+
+        // Dacă search n-a returnat nimic, parcurge biblioteca și potrivește normalizat
+        if (!show) {
+          const allShows = await fetchJson<PlexApiResponse>(
+            `${url}/library/sections/2/all?type=2`,
+            { headers },
+            10000,
+          );
+          const libShows = (allShows?.MediaContainer?.Metadata ?? []).filter(
+            (r: PlexMetadataItem) => r.type === "show",
+          );
+          show =
+            libShows.find(
+              (r: PlexMetadataItem) =>
+                normalizeShowTitle(String(r.title ?? "")) === normalizedTarget,
+            ) ??
+            libShows.find((r: PlexMetadataItem) =>
+              normalizeShowTitle(String(r.title ?? "")).includes(normalizedTarget),
+            ) ??
+            libShows.find((r: PlexMetadataItem) =>
+              normalizedTarget.includes(normalizeShowTitle(String(r.title ?? ""))),
+            );
+        }
+
+        if (!show) return [];
+
+        const seasons = await fetchJson<PlexApiResponse>(
+          `${url}/library/metadata/${show.ratingKey}/children`,
+          { headers },
+          8000,
+        );
+        const seasonsMd = seasons?.MediaContainer?.Metadata ?? [];
+        const seasonMatch = seasonsMd.find(
+          (s: PlexMetadataItem) => Number(s.index) === data.season,
+        );
+        if (!seasonMatch) return [];
+
+        const episodes = await fetchJson<PlexApiResponse>(
+          `${url}/library/metadata/${seasonMatch.ratingKey}/children`,
+          { headers },
+          8000,
+        );
+        const episodesMd = episodes?.MediaContainer?.Metadata ?? [];
+        return episodesMd
+          .filter((e: PlexMetadataItem) => Number(e.index) > 0)
+          .map((e: PlexMetadataItem) => {
+            const quality = plexQualityFromMedia(e.Media?.[0]);
+            return { num: Number(e.index), quality, watched: Number(e.viewCount ?? 0) > 0 };
+          });
+      } catch {
+        return [];
       }
-
-      if (!show) return [];
-
-      const seasons = await fetchJson<any>(
-        `${url}/library/metadata/${show.ratingKey}/children`,
-        { headers },
-        8000,
-      );
-      const seasonsMd = seasons?.MediaContainer?.Metadata ?? [];
-      const seasonMatch = seasonsMd.find((s: any) => Number(s.index) === data.season);
-      if (!seasonMatch) return [];
-
-      const episodes = await fetchJson<any>(
-        `${url}/library/metadata/${seasonMatch.ratingKey}/children`,
-        { headers },
-        8000,
-      );
-      const episodesMd = episodes?.MediaContainer?.Metadata ?? [];
-      return episodesMd
-        .filter((e: any) => Number(e.index) > 0)
-        .map((e: any) => {
-          const quality = plexQualityFromMedia(e.Media?.[0]);
-          return { num: Number(e.index), quality, watched: Number(e.viewCount ?? 0) > 0 };
-        });
-    } catch {
-      return [];
-    }
-  });
+    },
+  );
 
 export const checkPlexHasTitle = createServerFn({ method: "GET" })
   .validator((data: { title: string; originalTitle: string; mediaType: "movie" | "tv" }) => data)
@@ -920,8 +1032,12 @@ export const checkPlexHasTitle = createServerFn({ method: "GET" })
       const url = discovered.url;
       const plexType = data.mediaType === "movie" ? 1 : 2;
 
-      for (const queryTitle of [data.title, data.originalTitle, normalizeShowTitle(data.title)].filter(Boolean)) {
-        const search = await fetchJson<any>(
+      for (const queryTitle of [
+        data.title,
+        data.originalTitle,
+        normalizeShowTitle(data.title),
+      ].filter(Boolean)) {
+        const search = await fetchJson<PlexApiResponse>(
           `${url}/search?query=${encodeURIComponent(queryTitle)}&type=${plexType}`,
           { headers },
           8000,
@@ -942,7 +1058,10 @@ export const checkPlexHasTitle = createServerFn({ method: "GET" })
 // Funcții interne exportate (fără createServerFn, pentru plugin-uri background)
 // ---------------------------------------------------------------------------
 
-export async function getPlexEpisodesInSeasonInternal(showTitle: string, season: number): Promise<{ num: number; quality: string | null; watched: boolean }[]> {
+export async function getPlexEpisodesInSeasonInternal(
+  showTitle: string,
+  season: number,
+): Promise<{ num: number; quality: string | null; watched: boolean }[]> {
   const token = process.env.PLEX_TOKEN;
   const base = process.env.PLEX_URL;
   if (!token) return [];
@@ -952,38 +1071,66 @@ export async function getPlexEpisodesInSeasonInternal(showTitle: string, season:
     const url = discovered.url;
     const normalizedTarget = normalizeShowTitle(showTitle);
 
-    const search = await fetchJson<any>(
+    const search = await fetchJson<PlexApiResponse>(
       `${url}/search?query=${encodeURIComponent(showTitle)}&type=2`,
       { headers },
       8000,
     );
-    const searchShows = (search?.MediaContainer?.Metadata ?? []).filter((r: any) => r.type === "show");
-    let show: any =
-      searchShows.find((r: any) => normalizeShowTitle(String(r.title ?? "")) === normalizedTarget) ??
-      searchShows.find((r: any) => normalizeShowTitle(String(r.title ?? "")).includes(normalizedTarget)) ??
-      searchShows.find((r: any) => normalizedTarget.includes(normalizeShowTitle(String(r.title ?? "")))) ??
+    const searchShows = (search?.MediaContainer?.Metadata ?? []).filter(
+      (r: PlexMetadataItem) => r.type === "show",
+    );
+    let show: PlexMetadataItem | undefined =
+      searchShows.find(
+        (r: PlexMetadataItem) => normalizeShowTitle(String(r.title ?? "")) === normalizedTarget,
+      ) ??
+      searchShows.find((r: PlexMetadataItem) =>
+        normalizeShowTitle(String(r.title ?? "")).includes(normalizedTarget),
+      ) ??
+      searchShows.find((r: PlexMetadataItem) =>
+        normalizedTarget.includes(normalizeShowTitle(String(r.title ?? ""))),
+      ) ??
       searchShows[0];
 
     if (!show) {
-      const allShows = await fetchJson<any>(`${url}/library/sections/2/all?type=2`, { headers }, 10000);
-      const libShows = (allShows?.MediaContainer?.Metadata ?? []).filter((r: any) => r.type === "show");
+      const allShows = await fetchJson<PlexApiResponse>(
+        `${url}/library/sections/2/all?type=2`,
+        { headers },
+        10000,
+      );
+      const libShows = (allShows?.MediaContainer?.Metadata ?? []).filter(
+        (r: PlexMetadataItem) => r.type === "show",
+      );
       show =
-        libShows.find((r: any) => normalizeShowTitle(String(r.title ?? "")) === normalizedTarget) ??
-        libShows.find((r: any) => normalizeShowTitle(String(r.title ?? "")).includes(normalizedTarget)) ??
-        libShows.find((r: any) => normalizedTarget.includes(normalizeShowTitle(String(r.title ?? ""))));
+        libShows.find(
+          (r: PlexMetadataItem) => normalizeShowTitle(String(r.title ?? "")) === normalizedTarget,
+        ) ??
+        libShows.find((r: PlexMetadataItem) =>
+          normalizeShowTitle(String(r.title ?? "")).includes(normalizedTarget),
+        ) ??
+        libShows.find((r: PlexMetadataItem) =>
+          normalizedTarget.includes(normalizeShowTitle(String(r.title ?? ""))),
+        );
     }
     if (!show) return [];
 
-    const seasons = await fetchJson<any>(`${url}/library/metadata/${show.ratingKey}/children`, { headers }, 8000);
+    const seasons = await fetchJson<PlexApiResponse>(
+      `${url}/library/metadata/${show.ratingKey}/children`,
+      { headers },
+      8000,
+    );
     const seasonsMd = seasons?.MediaContainer?.Metadata ?? [];
-    const seasonMatch = seasonsMd.find((s: any) => Number(s.index) === season);
+    const seasonMatch = seasonsMd.find((s: PlexMetadataItem) => Number(s.index) === season);
     if (!seasonMatch) return [];
 
-    const episodes = await fetchJson<any>(`${url}/library/metadata/${seasonMatch.ratingKey}/children`, { headers }, 8000);
+    const episodes = await fetchJson<PlexApiResponse>(
+      `${url}/library/metadata/${seasonMatch.ratingKey}/children`,
+      { headers },
+      8000,
+    );
     const episodesMd = episodes?.MediaContainer?.Metadata ?? [];
     return episodesMd
-      .filter((e: any) => Number(e.index) > 0)
-      .map((e: any) => ({
+      .filter((e: PlexMetadataItem) => Number(e.index) > 0)
+      .map((e: PlexMetadataItem) => ({
         num: Number(e.index),
         quality: plexQualityFromMedia(e.Media?.[0]),
         watched: Number(e.viewCount ?? 0) > 0,
@@ -993,7 +1140,11 @@ export async function getPlexEpisodesInSeasonInternal(showTitle: string, season:
   }
 }
 
-export async function checkPlexHasTitleInternal(title: string, originalTitle: string, mediaType: "movie" | "tv"): Promise<{ found: boolean; quality: string | null } | null> {
+export async function checkPlexHasTitleInternal(
+  title: string,
+  originalTitle: string,
+  mediaType: "movie" | "tv",
+): Promise<{ found: boolean; quality: string | null } | null> {
   const token = process.env.PLEX_TOKEN;
   const base = process.env.PLEX_URL;
   if (!token) return null;
@@ -1003,7 +1154,7 @@ export async function checkPlexHasTitleInternal(title: string, originalTitle: st
     const url = discovered.url;
     const plexType = mediaType === "movie" ? 1 : 2;
     for (const q of [title, originalTitle, normalizeShowTitle(title)].filter(Boolean)) {
-      const search = await fetchJson<any>(
+      const search = await fetchJson<PlexApiResponse>(
         `${url}/search?query=${encodeURIComponent(q)}&type=${plexType}`,
         { headers },
         8000,
@@ -1103,12 +1254,22 @@ export const getImmich = createServerFn({ method: "GET" }).handler(
           // reflecta doar numarul de elemente din pagina curenta (limitat de 'size'), nu
           // adevaratul total de potriviri (bug cunoscut). Numaram efectiv itemii primiti,
           // parcurgand paginile daca e nevoie.
-          let items: any[] = [];
-          let page: number | null = 1;
+          interface ImmichAsset {
+            id?: string;
+            type?: string;
+            livePhotoVideoId?: string;
+          }
+          interface ImmichSearchResponse {
+            assets?: { items?: ImmichAsset[]; nextPage?: number | string | null };
+            items?: ImmichAsset[];
+            nextPage?: number | string | null;
+          }
+          let items: ImmichAsset[] = [];
+          let page: number | string | null = 1;
           let guard = 0;
           while (page != null && guard < 20) {
             guard++;
-            const res = await fetchJson<any>(
+            const res: ImmichSearchResponse = await fetchJson<ImmichSearchResponse>(
               `${url}/api/search/metadata`,
               {
                 method: "POST",
@@ -1146,22 +1307,46 @@ export const getImmich = createServerFn({ method: "GET" }).handler(
         }
       }
 
+      interface ImmichVersion {
+        major?: number;
+        minor?: number;
+        patch?: number;
+      }
+      interface ImmichStats {
+        photos?: number;
+        videos?: number;
+        usage?: number;
+        usageByUser?: Array<{
+          userName?: string;
+          userId?: string;
+          usage?: number;
+          photos?: number;
+          videos?: number;
+        }>;
+      }
+      type ImmichJobs = Record<string, { jobCounts?: { active?: number; waiting?: number } }>;
+
       // Upload counts sunt costisitoare (search paginat) — cache 30s
       let uploadsToday: number | undefined;
       let uploadsThisWeek: number | undefined;
+      let version: ImmichVersion | null;
+      let stats: ImmichStats | null;
+      let jobs: ImmichJobs | null;
       if (immichUploadsCache && immichUploadsCache.expiresAt > Date.now()) {
         uploadsToday = immichUploadsCache.today;
         uploadsThisWeek = immichUploadsCache.week;
-        var [version, stats, jobs] = await Promise.all([
-          fetchJson<any>(`${url}/api/server/version`, { headers }).catch(() => null),
-          fetchJson<any>(`${url}/api/server/statistics`, { headers }),
-          fetchJson<any>(`${url}/api/jobs`, { headers }).catch(() => null),
+        [version, stats, jobs] = await Promise.all([
+          fetchJson<ImmichVersion>(`${url}/api/server/version`, { headers }).catch(() => null),
+          fetchJson<ImmichStats>(`${url}/api/server/statistics`, { headers }),
+          fetchJson<ImmichJobs>(`${url}/api/jobs`, { headers }).catch(() => null),
         ]);
       } else {
-        var [version, stats, jobs, freshToday, freshWeek] = await Promise.all([
-          fetchJson<any>(`${url}/api/server/version`, { headers }).catch(() => null),
-          fetchJson<any>(`${url}/api/server/statistics`, { headers }),
-          fetchJson<any>(`${url}/api/jobs`, { headers }).catch(() => null),
+        let freshToday: number | undefined;
+        let freshWeek: number | undefined;
+        [version, stats, jobs, freshToday, freshWeek] = await Promise.all([
+          fetchJson<ImmichVersion>(`${url}/api/server/version`, { headers }).catch(() => null),
+          fetchJson<ImmichStats>(`${url}/api/server/statistics`, { headers }),
+          fetchJson<ImmichJobs>(`${url}/api/jobs`, { headers }).catch(() => null),
           countSince(startOfDayIso),
           countSince(weekAgoIso),
         ]);
@@ -1176,7 +1361,7 @@ export const getImmich = createServerFn({ method: "GET" }).handler(
 
       type UsageRow = { userName: string; usage: number; photos: number; videos: number };
       const usageByUser: UsageRow[] = Array.isArray(stats?.usageByUser)
-        ? stats.usageByUser.map((u: any) => ({
+        ? stats.usageByUser.map((u) => ({
             userName: u.userName ?? u.userId ?? "user",
             usage: Number(u.usage ?? 0),
             photos: Number(u.photos ?? 0),
@@ -1186,7 +1371,7 @@ export const getImmich = createServerFn({ method: "GET" }).handler(
 
       const activeJobs = jobs
         ? Object.entries(jobs)
-            .map(([name, v]: [string, any]) => ({
+            .map(([name, v]) => ({
               name,
               active: Number(v?.jobCounts?.active ?? 0),
               waiting: Number(v?.jobCounts?.waiting ?? 0),
@@ -1207,29 +1392,17 @@ export const getImmich = createServerFn({ method: "GET" }).handler(
 
       const jobQueueDepth = activeJobs.reduce((sum, j) => sum + j.active + j.waiting, 0);
 
-      return {
-        status: "ok",
-        version: version ? `${version.major}.${version.minor}.${version.patch}` : undefined,
-        totalAssets: Number(stats?.photos ?? 0) + Number(stats?.videos ?? 0),
-        photos: Number(stats?.photos ?? 0),
-        videos: Number(stats?.videos ?? 0),
-        usageBytes: Number(stats?.usage ?? 0),
-        usageByUser,
-        activeJobs,
-        topUploaders,
-        jobQueueDepth,
-        uploadsToday,
-        uploadsThisWeek,
-      };
-
       // Tracking activitate Immich (fire and forget)
       import("./activity-log")
         .then(({ trackImmichUploads }) => trackImmichUploads(usageByUser))
         .catch(() => {});
 
       return {
-        status: "ok" as const,
-        version: versionStr,
+        status: "ok",
+        version: version ? `${version.major}.${version.minor}.${version.patch}` : undefined,
+        totalAssets: Number(stats?.photos ?? 0) + Number(stats?.videos ?? 0),
+        photos: Number(stats?.photos ?? 0),
+        videos: Number(stats?.videos ?? 0),
         usageBytes: Number(stats?.usage ?? 0),
         usageByUser,
         activeJobs,
@@ -1373,9 +1546,37 @@ export const getQbit = createServerFn({ method: "GET" }).handler(async (): Promi
       qbitFetch(url, "/api/v2/transfer/info", user, pass),
       qbitFetch(url, "/api/v2/torrents/info?sort=dlspeed&reverse=true", user, pass),
     ]);
+    interface QbitTorrentRaw {
+      hash: string;
+      name: string;
+      progress?: number;
+      dlspeed?: number;
+      upspeed?: number;
+      eta?: number;
+      state: string;
+      size?: number;
+      num_seeds?: number;
+      num_leechs?: number;
+      ratio?: number;
+      added_on?: number;
+      category?: string;
+    }
+    interface QbitTransferInfo {
+      dl_info_speed?: number;
+      up_info_speed?: number;
+      dl_rate_limit?: number;
+      up_rate_limit?: number;
+      dl_info_data?: number;
+      up_info_data?: number;
+      global_ratio?: number;
+    }
+    interface QbitMainData {
+      server_state?: { free_space_on_disk?: number; alltime_dl?: number; alltime_ul?: number };
+    }
+
     const version = (await versionRes.text()).trim();
-    const xfer = await xferRes.json();
-    const torrentsRaw: any[] = await torrentsRes.json();
+    const xfer: QbitTransferInfo = await xferRes.json();
+    const torrentsRaw: QbitTorrentRaw[] = await torrentsRes.json();
 
     // Preferences for free disk space
     let freeSpace = 0;
@@ -1383,13 +1584,15 @@ export const getQbit = createServerFn({ method: "GET" }).handler(async (): Promi
     let alltimeUp = 0;
     try {
       const mainRes = await qbitFetch(url, "/api/v2/sync/maindata", user, pass);
-      const main = await mainRes.json();
+      const main: QbitMainData = await mainRes.json();
       freeSpace = Number(main?.server_state?.free_space_on_disk ?? 0);
       alltimeDl = Number(main?.server_state?.alltime_dl ?? 0);
       alltimeUp = Number(main?.server_state?.alltime_ul ?? 0);
-    } catch {}
+    } catch {
+      // free space / alltime rămân 0 — endpoint indisponibil pe unele versiuni qBit
+    }
 
-    const torrents: QbitTorrent[] = torrentsRaw.map((t: any) => ({
+    const torrents: QbitTorrent[] = torrentsRaw.map((t) => ({
       hash: t.hash,
       name: t.name,
       progress: Number(t.progress ?? 0),
@@ -1484,7 +1687,10 @@ export const getQbit = createServerFn({ method: "GET" }).handler(async (): Promi
 // ---------- Host (systeminformation, local — nu mai trece prin Glances) ----------
 
 // Cache pentru date statice care nu se schimbă
-let staticHostCache: { osInfo: any; cpu: any } | null = null;
+let staticHostCache: {
+  osInfo: Systeminformation.OsData;
+  cpu: Systeminformation.CpuData;
+} | null = null;
 
 // Cache pentru calculul vitezei disk I/O per disc din /proc/diskstats
 interface DiskSnapshot {

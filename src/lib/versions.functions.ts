@@ -29,7 +29,7 @@ function cmp(a?: string, b?: string): boolean | undefined {
   return true;
 }
 
-async function fetchJson(url: string, init?: RequestInit, timeoutMs = 8000): Promise<any> {
+async function fetchJson(url: string, init?: RequestInit, timeoutMs = 8000): Promise<unknown> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
   const githubToken = process.env.GITHUB_TOKEN;
@@ -62,14 +62,19 @@ async function plexVersion(): Promise<ServiceVersion> {
   };
   try {
     if (base && token) {
-      const j = await fetchJson(`${base.replace(/\/$/, "")}/identity?X-Plex-Token=${token}`);
+      const j = (await fetchJson(`${base.replace(/\/$/, "")}/identity?X-Plex-Token=${token}`)) as {
+        MediaContainer?: { version?: string };
+      };
       v.current = j?.MediaContainer?.version;
     }
   } catch (e) {
     v.error = `Plex curent: ${(e as Error).message}`;
   }
   try {
-    const j = await fetchJson("https://plex.tv/api/downloads/5.json");
+    const j = (await fetchJson("https://plex.tv/api/downloads/5.json")) as {
+      computer?: { Linux?: { version?: string } };
+      nas?: { Synology?: { version?: string } };
+    };
     v.latest = j?.computer?.Linux?.version ?? j?.nas?.Synology?.version;
   } catch (e) {
     v.error = v.error ?? `Plex ultima: ${(e as Error).message}`;
@@ -87,16 +92,20 @@ async function immichVersion(): Promise<ServiceVersion> {
   };
   try {
     if (base && key) {
-      const j = await fetchJson(`${base.replace(/\/$/, "")}/api/server/version`, {
+      const j = (await fetchJson(`${base.replace(/\/$/, "")}/api/server/version`, {
         headers: { "x-api-key": key },
-      });
+      })) as { major: number; minor: number; patch: number };
       v.current = `${j.major}.${j.minor}.${j.patch}`;
     }
   } catch (e) {
     v.error = `Immich curent: ${(e as Error).message}`;
   }
   try {
-    const j = await fetchJson("https://api.github.com/repos/immich-app/immich/releases/latest");
+    const j = (await fetchJson(
+      "https://api.github.com/repos/immich-app/immich/releases/latest",
+    )) as {
+      tag_name?: string;
+    };
     v.latest = j?.tag_name;
   } catch (e) {
     v.error = v.error ?? `Immich ultima: ${(e as Error).message}`;

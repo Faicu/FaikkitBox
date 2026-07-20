@@ -26,7 +26,7 @@ export default defineEventHandler(async (event) => {
     setResponseHeader(event, "Content-Type", contentType);
     setResponseHeader(event, "Cache-Control", "public, max-age=3600");
 
-    return sendStream(event, res.body as any);
+    return sendStream(event, res.body as ReadableStream);
   } catch {
     event.node.res.statusCode = 502;
     return "Fetch error";

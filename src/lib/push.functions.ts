@@ -28,6 +28,8 @@ export const unsubscribePush = createServerFn({ method: "POST" })
 export const getPushSubscriptionCount = createServerFn({ method: "GET" }).handler(async () => {
   const { getDb } = await import("./db");
   const db = getDb();
-  const row = db.prepare("SELECT COUNT(*) as count FROM push_subscriptions").get() as { count: number };
+  const row = db.prepare("SELECT COUNT(*) as count FROM push_subscriptions").get() as {
+    count: number;
+  };
   return { count: row.count };
 });

@@ -8,7 +8,7 @@ export default defineEventHandler(async (event) => {
   if (!secret) throw createError({ statusCode: 500, message: "GITHUB_WEBHOOK_SECRET not set" });
 
   const signature = getHeader(event, "x-hub-signature-256") ?? "";
-  const body = await readRawBody(event) ?? "";
+  const body = (await readRawBody(event)) ?? "";
 
   // Verifică semnătura HMAC
   const expected = "sha256=" + createHmac("sha256", secret).update(body).digest("hex");
@@ -21,14 +21,21 @@ export default defineEventHandler(async (event) => {
   const eventType = getHeader(event, "x-github-event");
   if (eventType !== "push") return { ok: true };
 
-  let payload: any;
+  type GithubPushCommit = {
+    id?: string;
+    message?: string;
+    author?: { name?: string; username?: string };
+    timestamp?: string;
+    url?: string;
+  };
+  let payload: { commits?: GithubPushCommit[] };
   try {
     payload = JSON.parse(body);
   } catch {
     throw createError({ statusCode: 400, message: "Invalid JSON" });
   }
 
-  const commits: any[] = payload.commits ?? [];
+  const commits: GithubPushCommit[] = payload.commits ?? [];
   const repo = process.env.GITHUB_REPO ?? "";
   const db = getDb();
 

@@ -164,7 +164,9 @@ function runCleanups(database: DatabaseSync): void {
     if (version < 2) {
       // v2: adaugă coloana watch_filelist_season la pinned_watch_settings (dacă nu există)
       try {
-        database.exec("ALTER TABLE pinned_watch_settings ADD COLUMN watch_filelist_season INTEGER NOT NULL DEFAULT 0");
+        database.exec(
+          "ALTER TABLE pinned_watch_settings ADD COLUMN watch_filelist_season INTEGER NOT NULL DEFAULT 0",
+        );
         console.log("[db] Migrare v2: adăugat watch_filelist_season");
       } catch {
         // coloana există deja — ignorăm
@@ -174,13 +176,21 @@ function runCleanups(database: DatabaseSync): void {
 
     if (version < 3) {
       try {
-        database.exec("ALTER TABLE pinned_watch_settings ADD COLUMN auto_download INTEGER NOT NULL DEFAULT 0");
+        database.exec(
+          "ALTER TABLE pinned_watch_settings ADD COLUMN auto_download INTEGER NOT NULL DEFAULT 0",
+        );
         console.log("[db] Migrare v3: adăugat auto_download");
-      } catch {}
+      } catch {
+        // coloana există deja dintr-o rulare anterioară
+      }
       try {
-        database.exec("ALTER TABLE pinned_watch_settings ADD COLUMN auto_download_quality TEXT NOT NULL DEFAULT '1080p'");
+        database.exec(
+          "ALTER TABLE pinned_watch_settings ADD COLUMN auto_download_quality TEXT NOT NULL DEFAULT '1080p'",
+        );
         console.log("[db] Migrare v3: adăugat auto_download_quality");
-      } catch {}
+      } catch {
+        // coloana există deja dintr-o rulare anterioară
+      }
       database.exec("PRAGMA user_version = 3");
     }
   } catch (e) {

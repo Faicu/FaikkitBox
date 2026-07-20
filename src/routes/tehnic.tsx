@@ -270,12 +270,16 @@ function PinnedWatcherNextRun({ nextRun }: { nextRun: string | null }) {
 
   if (!nextRun) return null;
   const ms = new Date(nextRun).getTime() - Date.now();
-  if (ms <= 0) return <span className="text-[10px] text-emerald-400 whitespace-nowrap">în curând</span>;
+  if (ms <= 0)
+    return <span className="text-[10px] text-emerald-400 whitespace-nowrap">în curând</span>;
   const h = Math.floor(ms / 3_600_000);
   const m = Math.floor((ms % 3_600_000) / 60_000);
   const s = Math.floor((ms % 60_000) / 1000);
-  const label = h > 0 ? `${h}h ${String(m).padStart(2,"0")}m` : `${m}m ${String(s).padStart(2,"0")}s`;
-  return <span className="text-[10px] text-muted-foreground whitespace-nowrap">următoarea: {label}</span>;
+  const label =
+    h > 0 ? `${h}h ${String(m).padStart(2, "0")}m` : `${m}m ${String(s).padStart(2, "0")}s`;
+  return (
+    <span className="text-[10px] text-muted-foreground whitespace-nowrap">următoarea: {label}</span>
+  );
 }
 
 function PluginStatusSection() {
@@ -334,7 +338,8 @@ function PluginStatusSection() {
       </h2>
       <div className="rounded-2xl border border-border bg-card divide-y divide-border/50">
         {PLUGINS.map((p) => {
-          const lastTs = p.id === "github-commit-tracker" ? lastCommitSync() : lastActivity(p.activityType);
+          const lastTs =
+            p.id === "github-commit-tracker" ? lastCommitSync() : lastActivity(p.activityType);
           const isPinnedWatcher = p.id === "pinned-watcher";
           return (
             <div key={p.id} className="flex items-center gap-3 px-3 py-3">
@@ -348,7 +353,9 @@ function PluginStatusSection() {
                     disabled={triggerState !== "idle"}
                     className="mt-1.5 flex items-center gap-1 rounded-md border border-border bg-muted/40 px-2 py-0.5 text-[10px] text-muted-foreground transition hover:border-sky-500/40 hover:text-sky-400 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <RefreshCw className={`h-2.5 w-2.5 ${triggerState === "running" ? "animate-spin" : ""}`} />
+                    <RefreshCw
+                      className={`h-2.5 w-2.5 ${triggerState === "running" ? "animate-spin" : ""}`}
+                    />
                     {triggerState === "idle" && "Verifică acum"}
                     {triggerState === "pending" && `Se pornește în ${triggerCountdown}s…`}
                     {triggerState === "running" && "Se verifică…"}
@@ -358,19 +365,17 @@ function PluginStatusSection() {
               <div className="shrink-0 flex flex-col items-end gap-0.5">
                 <div className="flex items-center gap-1.5">
                   <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_6px_#4ade80]" />
-                  {isPinnedWatcher ? (
-                    watcherStatus?.lastRun && (
-                      <span className="text-[10px] text-muted-foreground whitespace-nowrap">
-                        {relativeTime(watcherStatus.lastRun)}
-                      </span>
-                    )
-                  ) : (
-                    lastTs && (
-                      <span className="text-[10px] text-muted-foreground whitespace-nowrap">
-                        {relativeTime(lastTs)}
-                      </span>
-                    )
-                  )}
+                  {isPinnedWatcher
+                    ? watcherStatus?.lastRun && (
+                        <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                          {relativeTime(watcherStatus.lastRun)}
+                        </span>
+                      )
+                    : lastTs && (
+                        <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                          {relativeTime(lastTs)}
+                        </span>
+                      )}
                 </div>
                 {isPinnedWatcher && watcherStatus?.nextRun && (
                   <PinnedWatcherNextRun nextRun={watcherStatus.nextRun} />
@@ -410,9 +415,21 @@ function CommitStatsSection() {
           <div className="px-3 py-4 text-xs text-muted-foreground text-center">Se încarcă...</div>
         ) : (
           <div className="grid grid-cols-3 divide-x divide-border/50">
-            <StatCell label="Total" value={String(total)} icon={<GitCommitHorizontal className="h-3.5 w-3.5 text-sky-400" />} />
-            <StatCell label="Azi" value={String(today)} icon={<Clock className="h-3.5 w-3.5 text-emerald-400" />} />
-            <StatCell label="Săptămâna" value={String(thisWeek)} icon={<Activity className="h-3.5 w-3.5 text-amber-400" />} />
+            <StatCell
+              label="Total"
+              value={String(total)}
+              icon={<GitCommitHorizontal className="h-3.5 w-3.5 text-sky-400" />}
+            />
+            <StatCell
+              label="Azi"
+              value={String(today)}
+              icon={<Clock className="h-3.5 w-3.5 text-emerald-400" />}
+            />
+            <StatCell
+              label="Săptămâna"
+              value={String(thisWeek)}
+              icon={<Activity className="h-3.5 w-3.5 text-amber-400" />}
+            />
           </div>
         )}
       </div>
@@ -475,7 +492,12 @@ function CommitDrawer({ commit, onClose }: { commit: GitHubCommit; onClose: () =
   const body = lines.slice(1);
 
   return (
-    <Drawer open onOpenChange={(o) => { if (!o) onClose(); }}>
+    <Drawer
+      open
+      onOpenChange={(o) => {
+        if (!o) onClose();
+      }}
+    >
       <DrawerContent>
         <DrawerHeader className="pb-2">
           <DrawerTitle className="flex items-center gap-2 text-base">
@@ -499,29 +521,38 @@ function CommitDrawer({ commit, onClose }: { commit: GitHubCommit; onClose: () =
           )}
 
           {isLoading && (
-            <div className="text-xs text-muted-foreground animate-pulse">Se încarcă detaliile...</div>
+            <div className="text-xs text-muted-foreground animate-pulse">
+              Se încarcă detaliile...
+            </div>
           )}
           {data?.status === "ok" && (
             <>
               <div className="flex items-center gap-4 text-xs">
                 <span className="text-muted-foreground">
-                  {data.filesChanged} fișier{data.filesChanged !== 1 ? "e" : ""} modificat{data.filesChanged !== 1 ? "e" : ""}
+                  {data.filesChanged} fișier{data.filesChanged !== 1 ? "e" : ""} modificat
+                  {data.filesChanged !== 1 ? "e" : ""}
                 </span>
                 <span className="flex items-center gap-1 text-emerald-400">
-                  <Plus className="h-3 w-3" />{data.additions}
+                  <Plus className="h-3 w-3" />
+                  {data.additions}
                 </span>
                 <span className="flex items-center gap-1 text-red-400">
-                  <Minus className="h-3 w-3" />{data.deletions}
+                  <Minus className="h-3 w-3" />
+                  {data.deletions}
                 </span>
               </div>
 
               <div className="rounded-xl border border-border divide-y divide-border/50 overflow-hidden">
                 {data.files.map((f) => (
                   <div key={f.filename} className="flex items-center gap-2 px-3 py-1.5 text-xs">
-                    <span className={`font-mono font-bold w-4 text-center shrink-0 ${statusColor(f.status)}`}>
+                    <span
+                      className={`font-mono font-bold w-4 text-center shrink-0 ${statusColor(f.status)}`}
+                    >
                       {statusLabel(f.status)}
                     </span>
-                    <span className="font-mono min-w-0 truncate text-muted-foreground flex-1">{f.filename}</span>
+                    <span className="font-mono min-w-0 truncate text-muted-foreground flex-1">
+                      {f.filename}
+                    </span>
                     <span className="shrink-0 flex items-center gap-1.5 text-[11px]">
                       {f.additions > 0 && <span className="text-emerald-400">+{f.additions}</span>}
                       {f.deletions > 0 && <span className="text-red-400">−{f.deletions}</span>}
@@ -532,7 +563,9 @@ function CommitDrawer({ commit, onClose }: { commit: GitHubCommit; onClose: () =
             </>
           )}
           {data?.status === "error" && (
-            <div className="text-xs text-red-400">Nu s-au putut încărca detaliile: {data.error}</div>
+            <div className="text-xs text-red-400">
+              Nu s-au putut încărca detaliile: {data.error}
+            </div>
           )}
 
           <a
@@ -561,11 +594,17 @@ const FILTER_GROUPS: { key: string; label: string }[] = [
 ];
 
 const TYPE_TO_GROUP: Record<string, string> = {
-  server_start: "server", server_stop: "server",
-  plex_watch_start: "plex", plex_watch_stop: "plex",
-  torrent_added: "torrente", torrent_complete: "torrente", qbit_action: "torrente",
+  server_start: "server",
+  server_stop: "server",
+  plex_watch_start: "plex",
+  plex_watch_stop: "plex",
+  torrent_added: "torrente",
+  torrent_complete: "torrente",
+  qbit_action: "torrente",
   immich_upload: "immich",
-  service_restart: "updates", service_update: "updates", ubuntu_update: "updates",
+  service_restart: "updates",
+  service_update: "updates",
+  ubuntu_update: "updates",
   pinned_update: "lansari",
 };
 
@@ -607,12 +646,17 @@ function ActivityLogSection() {
 
   const isLoading = logLoading || commitsLoading;
 
-  const filtered = filter === "all" ? timeline : timeline.filter((item) => {
-    if (item.kind === "commit") return filter === "commits";
-    return TYPE_TO_GROUP[item.entry.type] === filter;
-  });
+  const filtered =
+    filter === "all"
+      ? timeline
+      : timeline.filter((item) => {
+          if (item.kind === "commit") return filter === "commits";
+          return TYPE_TO_GROUP[item.entry.type] === filter;
+        });
 
-  useEffect(() => { setVisible(10); }, [filter]);
+  useEffect(() => {
+    setVisible(10);
+  }, [filter]);
 
   const shown = filtered.slice(0, visible);
   const hasMore = filtered.length > visible;
@@ -644,7 +688,9 @@ function ActivityLogSection() {
           )}
           {!isLoading && filtered.length === 0 && (
             <div className="px-3 py-4 text-xs text-muted-foreground text-center">
-              {filter === "all" ? "Nicio activitate înregistrată încă." : "Nicio activitate pentru acest filtru."}
+              {filter === "all"
+                ? "Nicio activitate înregistrată încă."
+                : "Nicio activitate pentru acest filtru."}
             </div>
           )}
           {shown.map((item) => {
@@ -653,7 +699,9 @@ function ActivityLogSection() {
               return (
                 <div key={entry.id} className="flex items-start gap-2.5 px-3 py-2.5">
                   <div className="mt-0.5 shrink-0">
-                    {iconMap[entry.type] ?? <Activity className="h-3.5 w-3.5 text-muted-foreground" />}
+                    {iconMap[entry.type] ?? (
+                      <Activity className="h-3.5 w-3.5 text-muted-foreground" />
+                    )}
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="text-sm leading-tight">{entry.message}</div>
@@ -719,7 +767,12 @@ function SpeedtestChart({ history }: { history: SpeedtestHistoryEntry[] }) {
   };
 
   const fmtDate = (ts: string) =>
-    new Date(ts).toLocaleDateString("ro-RO", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+    new Date(ts).toLocaleDateString("ro-RO", {
+      day: "2-digit",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
 
   return (
     <div className="space-y-3">
@@ -747,7 +800,9 @@ function SpeedtestChart({ history }: { history: SpeedtestHistoryEntry[] }) {
                   <div className="rounded-lg bg-popover border border-border px-2.5 py-1.5 text-[10px] whitespace-nowrap shadow-lg space-y-0.5">
                     <div className="text-sky-400">↓ {fmt(h.download)}</div>
                     <div className="text-emerald-400">↑ {fmt(h.upload)}</div>
-                    <div className="text-muted-foreground border-t border-border/50 pt-0.5 mt-0.5">{fmtDate(h.timestamp)}</div>
+                    <div className="text-muted-foreground border-t border-border/50 pt-0.5 mt-0.5">
+                      {fmtDate(h.timestamp)}
+                    </div>
                   </div>
                   <div className="w-1.5 h-1.5 bg-popover border-b border-r border-border rotate-45 -mt-1" />
                 </div>
@@ -758,8 +813,14 @@ function SpeedtestChart({ history }: { history: SpeedtestHistoryEntry[] }) {
         {/* Legendă + valori min/max */}
         <div className="mt-2 flex items-center justify-between text-[10px] text-muted-foreground">
           <div className="flex items-center gap-3">
-            <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-sky-500/70" />Download</span>
-            <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-emerald-500/70" />Upload</span>
+            <span className="flex items-center gap-1">
+              <span className="h-2 w-2 rounded-sm bg-sky-500/70" />
+              Download
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="h-2 w-2 rounded-sm bg-emerald-500/70" />
+              Upload
+            </span>
           </div>
           <span>max {fmt(maxAll)}</span>
         </div>
@@ -768,15 +829,7 @@ function SpeedtestChart({ history }: { history: SpeedtestHistoryEntry[] }) {
   );
 }
 
-function Metric({
-  label,
-  value,
-  icon,
-}: {
-  label: string;
-  value: string;
-  icon?: React.ReactNode;
-}) {
+function Metric({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) {
   return (
     <div className="rounded-xl border border-border bg-muted/40 px-2.5 py-2 text-center">
       {icon && <div className="flex justify-center mb-1 text-muted-foreground">{icon}</div>}

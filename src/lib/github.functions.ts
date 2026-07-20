@@ -38,6 +38,19 @@ export interface GitHubCommitDetail {
   files: GitHubCommitFile[];
 }
 
+interface GitHubApiCommit {
+  sha?: string;
+  commit?: {
+    message?: string;
+    author?: { name?: string; date?: string };
+    committer?: { date?: string };
+  };
+  author?: { login?: string };
+  html_url?: string;
+  stats?: { additions?: number; deletions?: number };
+  files?: Array<{ filename?: string; status?: string; additions?: number; deletions?: number }>;
+}
+
 const GITHUB_REPO = process.env.GITHUB_REPO ?? "Faicu/FaikkitBox";
 
 function githubHeaders(): Record<string, string> {
@@ -76,7 +89,7 @@ export const getRecentCommits = createServerFn({ method: "GET" }).handler(
         signal: AbortSignal.timeout(8000),
       });
       if (!res.ok) throw new Error(`GitHub API a răspuns ${res.status}`);
-      const raw: any[] = await res.json();
+      const raw: GitHubApiCommit[] = await res.json();
       if (!Array.isArray(raw)) throw new Error("Răspuns neașteptat de la GitHub API");
 
       const commits: GitHubCommit[] = raw.map((c) => ({
@@ -144,7 +157,7 @@ export const getCommitDetail = createServerFn({ method: "GET" })
         signal: AbortSignal.timeout(8000),
       });
       if (!res.ok) throw new Error(`GitHub API a răspuns ${res.status}`);
-      const c: any = await res.json();
+      const c: GitHubApiCommit = await res.json();
 
       return {
         status: "ok",
@@ -157,7 +170,7 @@ export const getCommitDetail = createServerFn({ method: "GET" })
         filesChanged: c.files?.length ?? 0,
         additions: c.stats?.additions ?? 0,
         deletions: c.stats?.deletions ?? 0,
-        files: (c.files ?? []).map((f: any) => ({
+        files: (c.files ?? []).map((f) => ({
           filename: String(f.filename ?? ""),
           status: String(f.status ?? "modified"),
           additions: Number(f.additions ?? 0),
@@ -203,7 +216,7 @@ export const getGitHubSyncStatus = createServerFn({ method: "GET" }).handler(
         signal: AbortSignal.timeout(8000),
       });
       if (!res.ok) throw new Error(`GitHub API ${res.status}`);
-      const commits: any[] = await res.json();
+      const commits: GitHubApiCommit[] = await res.json();
 
       const latestSha = String(commits[0]?.sha ?? "");
       const idx = commits.findIndex((c) => c.sha === deployedSha);

@@ -39,7 +39,9 @@ async function getLatestAiredTmdb(
       signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) return null;
-    const json: any = await res.json();
+    const json: {
+      last_episode_to_air?: { season_number?: number; episode_number?: number; name?: string };
+    } = await res.json();
     const last = json.last_episode_to_air;
     if (!last) return null;
     return {
@@ -65,10 +67,10 @@ export async function checkAll(): Promise<void> {
     const { getDb } = await import("../../src/lib/db");
     const { logActivity } = await import("../../src/lib/activity-log");
     const { sendPushToAll } = await import("../../src/lib/push");
-    const { searchFilelistRaw, downloadFilelistInternal } = await import("../../src/lib/filelist.functions");
-    const { getPlexEpisodesInSeasonInternal, checkPlexHasTitleInternal } = await import(
-      "../../src/lib/services.functions"
-    );
+    const { searchFilelistRaw, downloadFilelistInternal } =
+      await import("../../src/lib/filelist.functions");
+    const { getPlexEpisodesInSeasonInternal, checkPlexHasTitleInternal } =
+      await import("../../src/lib/services.functions");
 
     const db = getDb();
 
@@ -82,17 +84,17 @@ export async function checkAll(): Promise<void> {
          WHERE pw.watch_filelist = 1 OR pw.watch_tmdb = 1 OR pw.watch_plex = 1`,
       )
       .all() as Array<{
-        id: number;
-        media_type: string;
-        title: string;
-        original_title: string;
-        watch_filelist: number;
-        watch_filelist_season: number;
-        watch_tmdb: number;
-        watch_plex: number;
-        auto_download: number;
-        auto_download_quality: string;
-      }>;
+      id: number;
+      media_type: string;
+      title: string;
+      original_title: string;
+      watch_filelist: number;
+      watch_filelist_season: number;
+      watch_tmdb: number;
+      watch_plex: number;
+      auto_download: number;
+      auto_download_quality: string;
+    }>;
 
     if (items.length === 0) return;
     console.log(`[pinned-watcher] Verificare ${items.length} item(e)`);
@@ -120,7 +122,10 @@ export async function checkAll(): Promise<void> {
 
         // ── 1. Sezon curent din TMDB (necesar și pentru filtrul Filelist) ────
         let latestAired: { season: number; episode: number; title: string } | null = null;
-        if (item.media_type === "tv" && (item.watch_tmdb || item.watch_plex || item.watch_filelist_season)) {
+        if (
+          item.media_type === "tv" &&
+          (item.watch_tmdb || item.watch_plex || item.watch_filelist_season)
+        ) {
           latestAired = await getLatestAiredTmdb(item.id);
           if (latestAired) {
             const key = epKey(latestAired.season, latestAired.episode);
@@ -140,7 +145,7 @@ export async function checkAll(): Promise<void> {
         // ── 2. Filelist ──────────────────────────────────────────────────────
         if (item.watch_filelist) {
           const query = stripDiacritics(item.original_title || item.title);
-          const category = item.media_type === "movie" ? "movies" as const : "series" as const;
+          const category = item.media_type === "movie" ? ("movies" as const) : ("series" as const);
           const torrents = await searchFilelistRaw(query, category);
           const newTorrents = torrents.filter((t) => !seenTorrentIds.has(t.id));
           for (const t of newTorrents) seenTorrentIds.add(t.id);
@@ -157,12 +162,13 @@ export async function checkAll(): Promise<void> {
             if (toNotify.length > 0) {
               // Detectăm calitățile unice, în ordine
               const ORDER = ["4K HDR", "4K", "1080p", "720p", "SD"];
-              const qualitiesFound = [...new Set(toNotify.map((t) => detectTorrentQuality(t.name)))]
-                .sort((a, b) => ORDER.indexOf(a) - ORDER.indexOf(b));
-              const epLabel = latestAired
-                ? epKey(latestAired.season, latestAired.episode)
-                : "";
-              const torrentLabel = epLabel ? `${epLabel}: ${qualitiesFound.join(", ")}` : qualitiesFound.join(", ");
+              const qualitiesFound = [
+                ...new Set(toNotify.map((t) => detectTorrentQuality(t.name))),
+              ].sort((a, b) => ORDER.indexOf(a) - ORDER.indexOf(b));
+              const epLabel = latestAired ? epKey(latestAired.season, latestAired.episode) : "";
+              const torrentLabel = epLabel
+                ? `${epLabel}: ${qualitiesFound.join(", ")}`
+                : qualitiesFound.join(", ");
               changes.push(`🎞 Torrente noi: ${torrentLabel}`);
               journalEntries.push(`🎞 Torrente noi: ${torrentLabel}`);
               notifications.push({
@@ -235,7 +241,11 @@ export async function checkAll(): Promise<void> {
           }
 
           if (item.media_type === "movie") {
-            const result = await checkPlexHasTitleInternal(item.title, item.original_title, "movie");
+            const result = await checkPlexHasTitleInternal(
+              item.title,
+              item.original_title,
+              "movie",
+            );
             if (result !== null) {
               if (!isFirstRun && plexMovieFound === false && result.found) {
                 const qStr = result.quality ? ` (${result.quality})` : "";

@@ -35,9 +35,24 @@ import { filelistLogQuery } from "@/lib/queries";
 import { checkPlexHasTitle, getPlexEpisodesInSeason } from "@/lib/services.functions";
 import { searchFilelist, downloadFilelist, deleteFilelistLogEntry } from "@/lib/filelist.functions";
 import type { FilelistTorrent, FilelistCategory, FilelistLogEntry } from "@/lib/filelist.functions";
-import { searchTmdb, getTmdbDetails, getTvShowCountdown, getTmdbSeasonEpisodes } from "@/lib/tmdb.functions";
-import type { TmdbSearchResult, TmdbDetails, TvShowCountdown, TmdbEpisode } from "@/lib/tmdb.functions";
-import { getPinnedItems, setPinnedItems, getWatchSettings, setWatchSettings } from "@/lib/pinned.functions";
+import {
+  searchTmdb,
+  getTmdbDetails,
+  getTvShowCountdown,
+  getTmdbSeasonEpisodes,
+} from "@/lib/tmdb.functions";
+import type {
+  TmdbSearchResult,
+  TmdbDetails,
+  TvShowCountdown,
+  TmdbEpisode,
+} from "@/lib/tmdb.functions";
+import {
+  getPinnedItems,
+  setPinnedItems,
+  getWatchSettings,
+  setWatchSettings,
+} from "@/lib/pinned.functions";
 import type { WatchSettings } from "@/lib/pinned.functions";
 import { adminStatusQuery } from "@/lib/queries";
 import { formatBytes } from "@/lib/format";
@@ -101,8 +116,14 @@ function TorrentPickerDialog({
   onCancel: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onCancel}>
-      <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-5 space-y-3 shadow-xl" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+      onClick={onCancel}
+    >
+      <div
+        className="w-full max-w-sm rounded-2xl border border-border bg-card p-5 space-y-3 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="text-sm font-semibold">Alege torrent {label}</div>
         <div className="space-y-2">
           {torrents.map((t) => (
@@ -113,16 +134,33 @@ function TorrentPickerDialog({
             >
               <div className="text-xs font-medium break-words leading-snug">{t.name}</div>
               <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
-                <span className="flex items-center gap-1"><HardDrive className="h-3 w-3" /> {formatBytes(t.size)}</span>
-                <span className="flex items-center gap-1 text-emerald-400"><Users className="h-3 w-3" /> {t.seeders}</span>
-                {t.freeleech && <span className="flex items-center gap-1 text-yellow-400"><Zap className="h-3 w-3" /> Freeleech</span>}
-                {t.internal && <span className="flex items-center gap-1 text-purple-400"><ShieldCheck className="h-3 w-3" /> Internal</span>}
-                {t.upload_date && <span>{new Date(t.upload_date).toLocaleDateString("ro-RO")}</span>}
+                <span className="flex items-center gap-1">
+                  <HardDrive className="h-3 w-3" /> {formatBytes(t.size)}
+                </span>
+                <span className="flex items-center gap-1 text-emerald-400">
+                  <Users className="h-3 w-3" /> {t.seeders}
+                </span>
+                {t.freeleech && (
+                  <span className="flex items-center gap-1 text-yellow-400">
+                    <Zap className="h-3 w-3" /> Freeleech
+                  </span>
+                )}
+                {t.internal && (
+                  <span className="flex items-center gap-1 text-purple-400">
+                    <ShieldCheck className="h-3 w-3" /> Internal
+                  </span>
+                )}
+                {t.upload_date && (
+                  <span>{new Date(t.upload_date).toLocaleDateString("ro-RO")}</span>
+                )}
               </div>
             </button>
           ))}
         </div>
-        <button onClick={onCancel} className="w-full rounded-xl border border-border py-2 text-sm text-muted-foreground hover:bg-muted transition-colors">
+        <button
+          onClick={onCancel}
+          className="w-full rounded-xl border border-border py-2 text-sm text-muted-foreground hover:bg-muted transition-colors"
+        >
           Anulează
         </button>
       </div>
@@ -152,10 +190,10 @@ function QualityDownloadButton({
   const colorClass = inPlex
     ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/30 opacity-70 cursor-default"
     : label === "4K HDR"
-    ? "bg-purple-500/15 text-purple-400 hover:bg-purple-500/25 border-purple-500/30"
-    : label === "4K"
-    ? "bg-blue-500/15 text-blue-400 hover:bg-blue-500/25 border-blue-500/30"
-    : "bg-slate-500/15 text-slate-300 hover:bg-slate-500/25 border-slate-500/30";
+      ? "bg-purple-500/15 text-purple-400 hover:bg-purple-500/25 border-purple-500/30"
+      : label === "4K"
+        ? "bg-blue-500/15 text-blue-400 hover:bg-blue-500/25 border-blue-500/30"
+        : "bg-slate-500/15 text-slate-300 hover:bg-slate-500/25 border-slate-500/30";
 
   function handleClick() {
     if (inPlex || !available || isLoading) return;
@@ -175,10 +213,10 @@ function QualityDownloadButton({
   const titleText = inPlex
     ? `Ai deja ${label} în Plex`
     : available
-    ? torrents.length > 1
-      ? `${torrents.length} torrente disponibile — apasă pentru a alege`
-      : `${torrents[0].name} — ${formatBytes(torrents[0].size)}`
-    : `Indisponibil ${label}`;
+      ? torrents.length > 1
+        ? `${torrents.length} torrente disponibile — apasă pentru a alege`
+        : `${torrents[0].name} — ${formatBytes(torrents[0].size)}`
+      : `Indisponibil ${label}`;
 
   return (
     <>
@@ -186,7 +224,10 @@ function QualityDownloadButton({
         <TorrentPickerDialog
           label={label}
           torrents={torrents}
-          onPick={(t) => { setShowPicker(false); onDownload(t, label); }}
+          onPick={(t) => {
+            setShowPicker(false);
+            onDownload(t, label);
+          }}
           onCancel={() => setShowPicker(false)}
         />
       )}
@@ -234,20 +275,36 @@ function UnifiedSearchSection() {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    getPinnedFn({}).then(setPinned).catch(() => {});
-    getWatchFn({}).then((settings) => {
-      const map = new Map<string, WatchSettings>();
-      for (const s of settings) map.set(`${s.mediaType}-${s.id}`, s);
-      setWatchMap(map);
-    }).catch(() => {});
+    getPinnedFn({})
+      .then(setPinned)
+      .catch(() => {});
+    getWatchFn({})
+      .then((settings) => {
+        const map = new Map<string, WatchSettings>();
+        for (const s of settings) map.set(`${s.mediaType}-${s.id}`, s);
+        setWatchMap(map);
+      })
+      .catch(() => {});
   }, []);
 
   async function updateWatch(id: number, mediaType: "movie" | "tv", patch: Partial<WatchSettings>) {
     const key = `${mediaType}-${id}`;
-    const current = watchMap.get(key) ?? { id, mediaType, watchFilelist: false, watchFilelistSeason: false, watchTmdb: false, watchPlex: false, autoDownload: false, autoDownloadQuality: "1080p" as const };
+    const current = watchMap.get(key) ?? {
+      id,
+      mediaType,
+      watchFilelist: false,
+      watchFilelistSeason: false,
+      watchTmdb: false,
+      watchPlex: false,
+      autoDownload: false,
+      autoDownloadQuality: "1080p" as const,
+    };
     const next = { ...current, ...patch };
     // Dacă watchFilelist e dezactivat, dezactivăm și sub-toggle-urile
-    if (!next.watchFilelist) { next.watchFilelistSeason = false; next.autoDownload = false; }
+    if (!next.watchFilelist) {
+      next.watchFilelistSeason = false;
+      next.autoDownload = false;
+    }
     setWatchMap((m) => new Map(m).set(key, next));
     await setWatchFn({ data: next }).catch(() => {});
   }
@@ -260,7 +317,10 @@ function UnifiedSearchSection() {
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     const q = query.trim();
-    if (q.length < 2) { setResults([]); return; }
+    if (q.length < 2) {
+      setResults([]);
+      return;
+    }
     debounceRef.current = setTimeout(async () => {
       setSearching(true);
       try {
@@ -270,12 +330,23 @@ function UnifiedSearchSection() {
         setSearching(false);
       }
     }, 400);
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
   }, [query, searchFn]);
 
   function pin(item: TmdbSearchResult) {
     if (pinned.some((p) => p.id === item.id && p.mediaType === item.mediaType)) return;
-    const next = [...pinned, { id: item.id, mediaType: item.mediaType, title: item.title, originalTitle: item.originalTitle, posterUrl: item.posterUrl ?? null }];
+    const next = [
+      ...pinned,
+      {
+        id: item.id,
+        mediaType: item.mediaType,
+        title: item.title,
+        originalTitle: item.originalTitle,
+        posterUrl: item.posterUrl ?? null,
+      },
+    ];
     savePinned(next);
     setQuery("");
     setResults([]);
@@ -308,25 +379,42 @@ function UnifiedSearchSection() {
         {results.length > 0 && (
           <div className="mt-2 space-y-1.5">
             {results.map((r) => {
-              const alreadyPinned = pinned.some((p) => p.id === r.id && p.mediaType === r.mediaType);
+              const alreadyPinned = pinned.some(
+                (p) => p.id === r.id && p.mediaType === r.mediaType,
+              );
               return (
-                <div key={`${r.mediaType}-${r.id}`} className="flex items-center gap-2 rounded-xl bg-muted/60 p-2">
+                <div
+                  key={`${r.mediaType}-${r.id}`}
+                  className="flex items-center gap-2 rounded-xl bg-muted/60 p-2"
+                >
                   {r.posterUrl ? (
-                    <img src={r.posterUrl} alt="" className="h-12 w-8 rounded object-cover shrink-0" />
+                    <img
+                      src={r.posterUrl}
+                      alt=""
+                      className="h-12 w-8 rounded object-cover shrink-0"
+                    />
                   ) : (
                     <div className="h-12 w-8 rounded bg-muted shrink-0 flex items-center justify-center">
-                      {r.mediaType === "movie" ? <Film className="h-4 w-4 text-muted-foreground" /> : <Tv className="h-4 w-4 text-muted-foreground" />}
+                      {r.mediaType === "movie" ? (
+                        <Film className="h-4 w-4 text-muted-foreground" />
+                      ) : (
+                        <Tv className="h-4 w-4 text-muted-foreground" />
+                      )}
                     </div>
                   )}
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
-                      <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${r.mediaType === "movie" ? "bg-amber-500/15 text-amber-400" : "bg-blue-500/15 text-blue-400"}`}>
+                      <span
+                        className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${r.mediaType === "movie" ? "bg-amber-500/15 text-amber-400" : "bg-blue-500/15 text-blue-400"}`}
+                      >
                         {r.mediaType === "movie" ? "Film" : "Serial"}
                       </span>
                       <span className="truncate text-sm font-medium">{r.title}</span>
                     </div>
                     <div className="mt-0.5 truncate text-xs text-muted-foreground">
-                      {[r.originalTitle !== r.title ? r.originalTitle : null, r.year].filter(Boolean).join(" · ") || "—"}
+                      {[r.originalTitle !== r.title ? r.originalTitle : null, r.year]
+                        .filter(Boolean)
+                        .join(" · ") || "—"}
                     </div>
                   </div>
                   <button
@@ -345,7 +433,16 @@ function UnifiedSearchSection() {
 
       <div className="mt-3 space-y-3">
         {pinned.map((p) => {
-          const ws = watchMap.get(`${p.mediaType}-${p.id}`) ?? { id: p.id, mediaType: p.mediaType, watchFilelist: false, watchFilelistSeason: false, watchTmdb: false, watchPlex: false, autoDownload: false, autoDownloadQuality: "1080p" as const };
+          const ws = watchMap.get(`${p.mediaType}-${p.id}`) ?? {
+            id: p.id,
+            mediaType: p.mediaType,
+            watchFilelist: false,
+            watchFilelistSeason: false,
+            watchTmdb: false,
+            watchPlex: false,
+            autoDownload: false,
+            autoDownloadQuality: "1080p" as const,
+          };
           return (
             <PinnedItemCard
               key={`${p.mediaType}-${p.id}`}
@@ -366,7 +463,13 @@ function UnifiedSearchSection() {
 // Card item fixat — router spre Movie sau Show
 // ---------------------------------------------------------------------------
 
-function PinnedItemCard({ item, watchSettings, isAdmin, onWatchChange, onUnpin }: {
+function PinnedItemCard({
+  item,
+  watchSettings,
+  isAdmin,
+  onWatchChange,
+  onUnpin,
+}: {
   item: PinnedItem;
   watchSettings: WatchSettings;
   isAdmin: boolean;
@@ -389,7 +492,10 @@ function PinnedItemCard({ item, watchSettings, isAdmin, onWatchChange, onUnpin }
   // Pentru filme: checkPlexHasTitle simplu
   const { data: inPlexMovie, isLoading: plexMovieLoading } = useQuery({
     queryKey: ["plexHasTitle", item.mediaType, item.id],
-    queryFn: () => plexFn({ data: { title: item.title, originalTitle: item.originalTitle, mediaType: item.mediaType } }),
+    queryFn: () =>
+      plexFn({
+        data: { title: item.title, originalTitle: item.originalTitle, mediaType: item.mediaType },
+      }),
     staleTime: 5 * 60_000,
     enabled: item.mediaType === "movie",
   });
@@ -398,24 +504,30 @@ function PinnedItemCard({ item, watchSettings, isAdmin, onWatchChange, onUnpin }
 
   const { data: filelistData, isLoading: filelistLoading } = useQuery({
     queryKey: ["filelistForItem", item.mediaType, item.id, origTitle],
-    queryFn: () => filelistFn({ data: { query: origTitle, category: item.mediaType === "movie" ? "movies" : "series" } }),
+    queryFn: () =>
+      filelistFn({
+        data: { query: origTitle, category: item.mediaType === "movie" ? "movies" : "series" },
+      }),
     staleTime: 2 * 60_000,
     enabled: !!origTitle,
   });
 
   const { data: countdown, isLoading: countdownLoading } = useQuery({
     queryKey: ["tvCountdown", item.id],
-    queryFn: () => countdownFn({ data: { imdbId: details?.imdbId ?? null, showTitle: item.title } }),
+    queryFn: () =>
+      countdownFn({ data: { imdbId: details?.imdbId ?? null, showTitle: item.title } }),
     staleTime: 5 * 60_000,
     enabled: item.mediaType === "tv" && !!details,
   });
 
-  const latestSeasonFromTmdb = details && details.seasons.length > 0
-    ? details.seasons[details.seasons.length - 1].seasonNumber
-    : null;
-  const latestSeason = countdown?.status === "ok"
-    ? (countdown.lastAired?.season ?? latestSeasonFromTmdb)
-    : latestSeasonFromTmdb;
+  const latestSeasonFromTmdb =
+    details && details.seasons.length > 0
+      ? details.seasons[details.seasons.length - 1].seasonNumber
+      : null;
+  const latestSeason =
+    countdown?.status === "ok"
+      ? (countdown.lastAired?.season ?? latestSeasonFromTmdb)
+      : latestSeasonFromTmdb;
   const showTitleForPlex = item.originalTitle || countdown?.showName || item.title;
 
   const torrents = filelistData?.status === "ok" ? filelistData.torrents : [];
@@ -449,15 +561,17 @@ function PinnedItemCard({ item, watchSettings, isAdmin, onWatchChange, onUnpin }
   // Badge principal — agregat din toate sezoanele
   let tvPlexStatus: "complet" | "incomplet" | "lipsa" | null = null;
   if (item.mediaType === "tv" && allSeasonNums.length > 0) {
-    const allLoaded = plexSeasonQueries.every((q) => q.data !== undefined) && tmdbSeasonQueries.every((q) => q.data !== undefined);
+    const allLoaded =
+      plexSeasonQueries.every((q) => q.data !== undefined) &&
+      tmdbSeasonQueries.every((q) => q.data !== undefined);
     if (allLoaded) {
       let totalComplete = 0;
       let totalPartial = 0;
       for (let i = 0; i < allSeasonNums.length; i++) {
         const plexEps = plexSeasonQueries[i].data ?? [];
-        const tmdbEps = (tmdbSeasonQueries[i].data ?? []).filter((e: any) => e.aired);
-        const plexSet = new Set(plexEps.map((e: any) => e.num));
-        const epList = tmdbEps.length > 0 ? tmdbEps.map((e: any) => e.episodeNum) : [];
+        const tmdbEps = (tmdbSeasonQueries[i].data ?? []).filter((e) => e.aired);
+        const plexSet = new Set(plexEps.map((e) => e.num));
+        const epList = tmdbEps.length > 0 ? tmdbEps.map((e) => e.episodeNum) : [];
         if (epList.length === 0) {
           if (plexEps.length > 0) totalComplete++;
         } else if (epList.every((n: number) => plexSet.has(n))) {
@@ -538,13 +652,25 @@ function useDownload() {
         },
       });
       if (res.status === "ok") {
-        toast.success("Adăugat în qBittorrent!", { id: toastId, description: `${torrent.name} → ${res.savePath}`, duration: 6000 });
+        toast.success("Adăugat în qBittorrent!", {
+          id: toastId,
+          description: `${torrent.name} → ${res.savePath}`,
+          duration: 6000,
+        });
         qc.invalidateQueries({ queryKey: ["filelistLog"] });
       } else {
-        toast.error("Eroare la descărcare", { id: toastId, description: res.error, duration: 8000 });
+        toast.error("Eroare la descărcare", {
+          id: toastId,
+          description: res.error,
+          duration: 8000,
+        });
       }
-    } catch (e: any) {
-      toast.error("Eroare neașteptată", { id: toastId, description: e?.message ?? String(e), duration: 8000 });
+    } catch (e) {
+      toast.error("Eroare neașteptată", {
+        id: toastId,
+        description: e instanceof Error ? e.message : String(e),
+        duration: 8000,
+      });
     } finally {
       setDownloading(null);
     }
@@ -582,7 +708,8 @@ function MovieCard({
   const [confirm, setConfirm] = useState<{ torrent: FilelistTorrent; label: string } | null>(null);
 
   const imdbId = details?.imdbId ?? null;
-  const plexStatus = plexInfo?.found === true ? "complet" : plexInfo?.found === false ? "lipsa" : null;
+  const plexStatus =
+    plexInfo?.found === true ? "complet" : plexInfo?.found === false ? "lipsa" : null;
   const plexQuality = plexInfo?.quality ?? null;
 
   const t1080 = torrents.filter((t) => detectQuality(t.name).is1080p);
@@ -595,7 +722,10 @@ function MovieCard({
         <DownloadConfirmDialog
           torrent={confirm.torrent}
           label={confirm.label}
-          onConfirm={() => { handleDownload(confirm.torrent); setConfirm(null); }}
+          onConfirm={() => {
+            handleDownload(confirm.torrent);
+            setConfirm(null);
+          }}
           onCancel={() => setConfirm(null)}
         />
       )}
@@ -604,7 +734,11 @@ function MovieCard({
           {/* Header cu poster */}
           <div className="flex gap-3 p-3 pb-0">
             {item.posterUrl ? (
-              <img src={item.posterUrl} alt="" className="h-24 w-16 rounded-xl object-cover shrink-0 shadow-md" />
+              <img
+                src={item.posterUrl}
+                alt=""
+                className="h-24 w-16 rounded-xl object-cover shrink-0 shadow-md"
+              />
             ) : (
               <div className="h-24 w-16 rounded-xl bg-muted shrink-0 flex items-center justify-center">
                 <Film className="h-6 w-6 text-muted-foreground/40" />
@@ -613,20 +747,34 @@ function MovieCard({
             <div className="flex flex-col justify-between min-w-0 py-0.5 flex-1">
               <div>
                 <div className="flex items-start gap-1">
-                  <span className="font-semibold text-sm leading-tight line-clamp-2 flex-1">{item.title}</span>
-                  <button onClick={() => { onUnpin(); qc.removeQueries({ queryKey: ["tmdbDetails", "movie", item.id] }); }}
-                    className="shrink-0 text-muted-foreground hover:text-foreground mt-0.5" title="Scoate din listă">
+                  <span className="font-semibold text-sm leading-tight line-clamp-2 flex-1">
+                    {item.title}
+                  </span>
+                  <button
+                    onClick={() => {
+                      onUnpin();
+                      qc.removeQueries({ queryKey: ["tmdbDetails", "movie", item.id] });
+                    }}
+                    className="shrink-0 text-muted-foreground hover:text-foreground mt-0.5"
+                    title="Scoate din listă"
+                  >
                     <PinOff className="h-3.5 w-3.5" />
                   </button>
                 </div>
                 <div className="flex items-center gap-1.5 mt-1">
-                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400">Film</span>
+                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400">
+                    Film
+                  </span>
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 {imdbId && (
-                  <a href={`https://www.imdb.com/title/${imdbId}/`} target="_blank" rel="noreferrer"
-                    className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground">
+                  <a
+                    href={`https://www.imdb.com/title/${imdbId}/`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+                  >
                     IMDb <ExternalLink className="h-2.5 w-2.5" />
                   </a>
                 )}
@@ -634,43 +782,70 @@ function MovieCard({
             </div>
           </div>
           <div className="p-3 pt-3 space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground uppercase tracking-wide">Plex</span>
-            <div className="flex items-center gap-2">
-              {plexStatus === "complet" ? (
-                <>
-                  {plexQuality && <span className="text-[11px] text-muted-foreground">{plexQuality}</span>}
-                  <span className="flex items-center gap-1 rounded-lg bg-emerald-500/15 px-2.5 py-1 text-xs font-semibold text-emerald-400">
-                    <CheckCircle2 className="h-3.5 w-3.5" /> În bibliotecă
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground uppercase tracking-wide">Plex</span>
+              <div className="flex items-center gap-2">
+                {plexStatus === "complet" ? (
+                  <>
+                    {plexQuality && (
+                      <span className="text-[11px] text-muted-foreground">{plexQuality}</span>
+                    )}
+                    <span className="flex items-center gap-1 rounded-lg bg-emerald-500/15 px-2.5 py-1 text-xs font-semibold text-emerald-400">
+                      <CheckCircle2 className="h-3.5 w-3.5" /> În bibliotecă
+                    </span>
+                  </>
+                ) : plexStatus === "lipsa" ? (
+                  <span className="flex items-center gap-1 rounded-lg bg-muted/60 px-2.5 py-1 text-xs font-semibold text-muted-foreground">
+                    <XCircle className="h-3.5 w-3.5" /> Lipsă din Plex
                   </span>
-                </>
-              ) : plexStatus === "lipsa" ? (
-                <span className="flex items-center gap-1 rounded-lg bg-muted/60 px-2.5 py-1 text-xs font-semibold text-muted-foreground">
-                  <XCircle className="h-3.5 w-3.5" /> Lipsă din Plex
-                </span>
-              ) : (
-                <span className="h-7 w-28 animate-pulse rounded-lg bg-muted/40" />
-              )}
-            </div>
-          </div>
-          {isAdmin && (
-            <div className="border-t border-border pt-3">
-              <div className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground flex items-center gap-1">
-                <Download className="h-3 w-3" /> Descarcă de pe Filelist
-                {filelistLoading && <Loader2 className="h-3 w-3 animate-spin ml-1" />}
+                ) : (
+                  <span className="h-7 w-28 animate-pulse rounded-lg bg-muted/40" />
+                )}
               </div>
-              {!filelistLoading && torrents.length === 0 ? (
-                <div className="text-xs text-muted-foreground">Niciun torrent găsit pe Filelist.</div>
-              ) : (
-                <div className="flex gap-2">
-                  <QualityDownloadButton label="1080p" torrents={t1080} plexQuality={plexQuality} downloading={downloading} onDownload={(t, l) => setConfirm({ torrent: t, label: l })} />
-                  <QualityDownloadButton label="4K" torrents={t4k} plexQuality={plexQuality} downloading={downloading} onDownload={(t, l) => setConfirm({ torrent: t, label: l })} />
-                  <QualityDownloadButton label="4K HDR" torrents={t4kHdr} plexQuality={plexQuality} downloading={downloading} onDownload={(t, l) => setConfirm({ torrent: t, label: l })} />
-                </div>
-              )}
             </div>
-          )}
-          <WatchTogglePanel mediaType="movie" settings={watchSettings} isAdmin={isAdmin} onChange={onWatchChange} />
+            {isAdmin && (
+              <div className="border-t border-border pt-3">
+                <div className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground flex items-center gap-1">
+                  <Download className="h-3 w-3" /> Descarcă de pe Filelist
+                  {filelistLoading && <Loader2 className="h-3 w-3 animate-spin ml-1" />}
+                </div>
+                {!filelistLoading && torrents.length === 0 ? (
+                  <div className="text-xs text-muted-foreground">
+                    Niciun torrent găsit pe Filelist.
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <QualityDownloadButton
+                      label="1080p"
+                      torrents={t1080}
+                      plexQuality={plexQuality}
+                      downloading={downloading}
+                      onDownload={(t, l) => setConfirm({ torrent: t, label: l })}
+                    />
+                    <QualityDownloadButton
+                      label="4K"
+                      torrents={t4k}
+                      plexQuality={plexQuality}
+                      downloading={downloading}
+                      onDownload={(t, l) => setConfirm({ torrent: t, label: l })}
+                    />
+                    <QualityDownloadButton
+                      label="4K HDR"
+                      torrents={t4kHdr}
+                      plexQuality={plexQuality}
+                      downloading={downloading}
+                      onDownload={(t, l) => setConfirm({ torrent: t, label: l })}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+            <WatchTogglePanel
+              mediaType="movie"
+              settings={watchSettings}
+              isAdmin={isAdmin}
+              onChange={onWatchChange}
+            />
           </div>
         </div>
       </section>
@@ -701,23 +876,37 @@ function CountdownDisplay({ airDateIso }: { airDateIso: string }) {
   const seconds = totalSec % 60;
 
   if (past) {
-    return <div className="mt-1 text-sm font-medium text-emerald-400">Ar trebui să fi apărut deja</div>;
+    return (
+      <div className="mt-1 text-sm font-medium text-emerald-400">Ar trebui să fi apărut deja</div>
+    );
   }
   return (
     <>
       <div className="mt-1.5 flex items-center gap-2 tabular-nums">
-        {[{ v: days, l: "zile" }, { v: hours, l: "ore" }, { v: minutes, l: "min" }, { v: seconds, l: "sec" }].map((u) => (
+        {[
+          { v: days, l: "zile" },
+          { v: hours, l: "ore" },
+          { v: minutes, l: "min" },
+          { v: seconds, l: "sec" },
+        ].map((u) => (
           <div key={u.l} className="flex-1 rounded-xl bg-muted px-2 py-1.5 text-center">
             <div className="text-lg font-semibold leading-none">{String(u.v).padStart(2, "0")}</div>
-            <div className="mt-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">{u.l}</div>
+            <div className="mt-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+              {u.l}
+            </div>
           </div>
         ))}
       </div>
       <div className="mt-1.5 text-[11px] text-muted-foreground">
         {new Date(airDateIso).toLocaleString("ro-RO", {
-          weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit",
+          weekday: "long",
+          day: "numeric",
+          month: "long",
+          hour: "2-digit",
+          minute: "2-digit",
           timeZone: "Europe/Bucharest",
-        })}{" "}(ora României)
+        })}{" "}
+        (ora României)
       </div>
     </>
   );
@@ -732,8 +921,8 @@ interface QualitySet {
 
 interface SeasonGroup {
   seasonNum: number;
-  byQuality: QualitySet;                          // pack sezon întreg (poate fi gol)
-  episodes: Map<number, QualitySet>;              // episoade individuale (poate fi gol)
+  byQuality: QualitySet; // pack sezon întreg (poate fi gol)
+  episodes: Map<number, QualitySet>; // episoade individuale (poate fi gol)
 }
 
 function emptyQualitySet(): QualitySet {
@@ -797,29 +986,61 @@ function DownloadConfirmDialog({
   onCancel: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onCancel}>
-      <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-5 space-y-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+      onClick={onCancel}
+    >
+      <div
+        className="w-full max-w-sm rounded-2xl border border-border bg-card p-5 space-y-4 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="text-sm font-semibold">Confirmare descărcare</div>
         <div className="space-y-2 text-xs text-muted-foreground">
           <div className="font-medium text-foreground break-words">{torrent.name}</div>
           <div className="flex flex-wrap gap-x-4 gap-y-1 pt-1">
-            <span className="flex items-center gap-1"><HardDrive className="h-3 w-3" /> {formatBytes(torrent.size)}</span>
-            <span className="flex items-center gap-1 text-emerald-400"><Users className="h-3 w-3" /> {torrent.seeders} seederi</span>
-            <span className="flex items-center gap-1 text-orange-400"><Users className="h-3 w-3" /> {torrent.leechers} leecheri</span>
-            {torrent.freeleech && <span className="flex items-center gap-1 text-yellow-400"><Zap className="h-3 w-3" /> Freeleech</span>}
-            {torrent.internal && <span className="flex items-center gap-1 text-purple-400"><ShieldCheck className="h-3 w-3" /> Internal</span>}
+            <span className="flex items-center gap-1">
+              <HardDrive className="h-3 w-3" /> {formatBytes(torrent.size)}
+            </span>
+            <span className="flex items-center gap-1 text-emerald-400">
+              <Users className="h-3 w-3" /> {torrent.seeders} seederi
+            </span>
+            <span className="flex items-center gap-1 text-orange-400">
+              <Users className="h-3 w-3" /> {torrent.leechers} leecheri
+            </span>
+            {torrent.freeleech && (
+              <span className="flex items-center gap-1 text-yellow-400">
+                <Zap className="h-3 w-3" /> Freeleech
+              </span>
+            )}
+            {torrent.internal && (
+              <span className="flex items-center gap-1 text-purple-400">
+                <ShieldCheck className="h-3 w-3" /> Internal
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-1.5 pt-1">
-            <span className="rounded bg-muted px-1.5 py-0.5 font-medium">{torrent.categoryName}</span>
-            <span className="rounded bg-blue-500/15 px-1.5 py-0.5 font-medium text-blue-400">{label}</span>
-            {torrent.upload_date && <span>{new Date(torrent.upload_date).toLocaleDateString("ro-RO")}</span>}
+            <span className="rounded bg-muted px-1.5 py-0.5 font-medium">
+              {torrent.categoryName}
+            </span>
+            <span className="rounded bg-blue-500/15 px-1.5 py-0.5 font-medium text-blue-400">
+              {label}
+            </span>
+            {torrent.upload_date && (
+              <span>{new Date(torrent.upload_date).toLocaleDateString("ro-RO")}</span>
+            )}
           </div>
         </div>
         <div className="flex gap-2 pt-1">
-          <button onClick={onCancel} className="flex-1 rounded-xl border border-border py-2 text-sm text-muted-foreground hover:bg-muted transition-colors">
+          <button
+            onClick={onCancel}
+            className="flex-1 rounded-xl border border-border py-2 text-sm text-muted-foreground hover:bg-muted transition-colors"
+          >
             Anulează
           </button>
-          <button onClick={onConfirm} className="flex-1 rounded-xl bg-blue-500/20 border border-blue-500/30 py-2 text-sm font-medium text-blue-400 hover:bg-blue-500/30 transition-colors flex items-center justify-center gap-1.5">
+          <button
+            onClick={onConfirm}
+            className="flex-1 rounded-xl bg-blue-500/20 border border-blue-500/30 py-2 text-sm font-medium text-blue-400 hover:bg-blue-500/30 transition-colors flex items-center justify-center gap-1.5"
+          >
             <Download className="h-4 w-4" /> Descarcă
           </button>
         </div>
@@ -846,7 +1067,16 @@ function WatchTogglePanel({
   const anyEnabled = settings.watchFilelist || settings.watchTmdb || settings.watchPlex;
   const qualities: Array<"1080p" | "4K" | "4K HDR"> = ["1080p", "4K", "4K HDR"];
 
-  function Toggle({ toggleKey, label }: { toggleKey: keyof Pick<WatchSettings, "watchFilelist" | "watchFilelistSeason" | "watchTmdb" | "watchPlex">; label: string }) {
+  function Toggle({
+    toggleKey,
+    label,
+  }: {
+    toggleKey: keyof Pick<
+      WatchSettings,
+      "watchFilelist" | "watchFilelistSeason" | "watchTmdb" | "watchPlex"
+    >;
+    label: string;
+  }) {
     const on = settings[toggleKey] as boolean;
     return (
       <button
@@ -874,13 +1104,18 @@ function WatchTogglePanel({
       <div className="flex flex-wrap gap-2">
         {isAdmin && <Toggle toggleKey="watchFilelist" label="Torrent nou Filelist" />}
         {mediaType === "tv" && <Toggle toggleKey="watchTmdb" label="Episod nou lansat" />}
-        <Toggle toggleKey="watchPlex" label={mediaType === "tv" ? "Episod nou în Plex" : "Film adăugat în Plex"} />
+        <Toggle
+          toggleKey="watchPlex"
+          label={mediaType === "tv" ? "Episod nou în Plex" : "Film adăugat în Plex"}
+        />
       </div>
 
       {/* Rând 2: opțiuni Filelist (doar admin) */}
       {isAdmin && settings.watchFilelist && (
         <div className="flex flex-wrap gap-2 pl-3 border-l-2 border-primary/20">
-          {mediaType === "tv" && <Toggle toggleKey="watchFilelistSeason" label="Doar sezonul curent" />}
+          {mediaType === "tv" && (
+            <Toggle toggleKey="watchFilelistSeason" label="Doar sezonul curent" />
+          )}
           <button
             onClick={() => onChange({ autoDownload: !settings.autoDownload })}
             className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
@@ -920,16 +1155,18 @@ function WatchTogglePanel({
 // ---------------------------------------------------------------------------
 
 function PlexStatusBadge({ status }: { status: "complet" | "incomplet" | "lipsa" }) {
-  if (status === "complet") return (
-    <span className="flex items-center gap-1 rounded-lg bg-emerald-500/15 px-2 py-1 text-[11px] font-medium text-emerald-400">
-      <CheckCircle2 className="h-3.5 w-3.5" /> Complet în Plex
-    </span>
-  );
-  if (status === "incomplet") return (
-    <span className="flex items-center gap-1 rounded-lg bg-yellow-500/15 px-2 py-1 text-[11px] font-medium text-yellow-400">
-      <HelpCircle className="h-3.5 w-3.5" /> Lipsesc episoade
-    </span>
-  );
+  if (status === "complet")
+    return (
+      <span className="flex items-center gap-1 rounded-lg bg-emerald-500/15 px-2 py-1 text-[11px] font-medium text-emerald-400">
+        <CheckCircle2 className="h-3.5 w-3.5" /> Complet în Plex
+      </span>
+    );
+  if (status === "incomplet")
+    return (
+      <span className="flex items-center gap-1 rounded-lg bg-yellow-500/15 px-2 py-1 text-[11px] font-medium text-yellow-400">
+        <HelpCircle className="h-3.5 w-3.5" /> Lipsesc episoade
+      </span>
+    );
   return (
     <span className="flex items-center gap-1 rounded-lg bg-red-500/15 px-2 py-1 text-[11px] font-medium text-red-400">
       <XCircle className="h-3.5 w-3.5" /> Lipsă din Plex
@@ -972,21 +1209,25 @@ function SeasonPanel({
   const loading = isOpen && (plexLoading || tmdbLoading);
   // Map epNum → { quality, watched }
   const plexMap = new Map<number, { quality: string | null; watched: boolean }>(
-    (plexEpisodes ?? []).map((e) => [e.num, { quality: e.quality, watched: e.watched }])
+    (plexEpisodes ?? []).map((e) => [e.num, { quality: e.quality, watched: e.watched }]),
   );
   const airedEps: TmdbEpisode[] = (tmdbEpisodes ?? []).filter((e) => e.aired);
   const filelistEpNums = Array.from(group.episodes.keys()).sort((a, b) => a - b);
-  const episodeList: number[] = airedEps.length > 0
-    ? airedEps.map((e) => e.episodeNum)
-    : filelistEpNums;
+  const episodeList: number[] =
+    airedEps.length > 0 ? airedEps.map((e) => e.episodeNum) : filelistEpNums;
 
   const allInPlex = episodeList.length > 0 && episodeList.every((n) => plexMap.has(n));
   const someInPlex = !allInPlex && episodeList.some((n) => plexMap.has(n));
   const noneInPlex = episodeList.length > 0 && !episodeList.some((n) => plexMap.has(n));
   const missingCount = episodeList.filter((n) => !plexMap.has(n)).length;
-  const unwatchedCount = episodeList.filter((n) => plexMap.has(n) && !plexMap.get(n)!.watched).length;
+  const unwatchedCount = episodeList.filter(
+    (n) => plexMap.has(n) && !plexMap.get(n)!.watched,
+  ).length;
 
-  const hasPackTorrents = group.byQuality.t1080.length > 0 || group.byQuality.t4k.length > 0 || group.byQuality.t4kHdr.length > 0;
+  const hasPackTorrents =
+    group.byQuality.t1080.length > 0 ||
+    group.byQuality.t4k.length > 0 ||
+    group.byQuality.t4kHdr.length > 0;
   const hasEpisodeTorrents = group.episodes.size > 0;
 
   function requestDownload(t: FilelistTorrent, label: string) {
@@ -1009,7 +1250,10 @@ function SeasonPanel({
         <DownloadConfirmDialog
           torrent={confirm.torrent}
           label={confirm.label}
-          onConfirm={() => { onDownload(confirm.torrent); setConfirm(null); }}
+          onConfirm={() => {
+            onDownload(confirm.torrent);
+            setConfirm(null);
+          }}
           onCancel={() => setConfirm(null)}
         />
       )}
@@ -1021,7 +1265,11 @@ function SeasonPanel({
           <span>Sezon {String(group.seasonNum).padStart(2, "0")}</span>
           <div className="flex items-center gap-2">
             {!isOpen && closedBadge}
-            {isOpen ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+            {isOpen ? (
+              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            ) : (
+              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+            )}
           </div>
         </button>
 
@@ -1036,8 +1284,8 @@ function SeasonPanel({
             {!loading && (
               <>
                 {/* Status general */}
-                {episodeList.length > 0 && (
-                  allInPlex ? (
+                {episodeList.length > 0 &&
+                  (allInPlex ? (
                     <div className="flex items-center gap-1.5 rounded-lg bg-emerald-500/15 px-3 py-1.5 text-[11px] font-medium text-emerald-400">
                       <CheckCircle2 className="h-3.5 w-3.5" />
                       Complet — toate cele {episodeList.length} episoade sunt în Plex
@@ -1045,24 +1293,41 @@ function SeasonPanel({
                   ) : someInPlex ? (
                     <div className="flex items-center gap-1.5 rounded-lg bg-yellow-500/15 px-3 py-1.5 text-[11px] font-medium text-yellow-400">
                       <HelpCircle className="h-3.5 w-3.5" />
-                      Incomplet — {plexSet.size}/{episodeList.length} episoade în Plex, lipsesc {missingCount}
+                      Incomplet — {plexSet.size}/{episodeList.length} episoade în Plex, lipsesc{" "}
+                      {missingCount}
                     </div>
                   ) : noneInPlex ? (
                     <div className="flex items-center gap-1.5 rounded-lg bg-red-500/15 px-3 py-1.5 text-[11px] font-medium text-red-400">
                       <XCircle className="h-3.5 w-3.5" />
                       Lipsă — niciun episod în Plex
                     </div>
-                  ) : null
-                )}
+                  ) : null)}
 
                 {/* Pack sezon întreg */}
                 {hasPackTorrents && (
                   <div className="space-y-1.5">
-                    <div className="text-[11px] text-muted-foreground uppercase tracking-wide">Sezon complet (pack)</div>
+                    <div className="text-[11px] text-muted-foreground uppercase tracking-wide">
+                      Sezon complet (pack)
+                    </div>
                     <div className="flex gap-2">
-                      <QualityDownloadButton label="1080p" torrents={group.byQuality.t1080} downloading={downloading} onDownload={requestDownload} />
-                      <QualityDownloadButton label="4K" torrents={group.byQuality.t4k} downloading={downloading} onDownload={requestDownload} />
-                      <QualityDownloadButton label="4K HDR" torrents={group.byQuality.t4kHdr} downloading={downloading} onDownload={requestDownload} />
+                      <QualityDownloadButton
+                        label="1080p"
+                        torrents={group.byQuality.t1080}
+                        downloading={downloading}
+                        onDownload={requestDownload}
+                      />
+                      <QualityDownloadButton
+                        label="4K"
+                        torrents={group.byQuality.t4k}
+                        downloading={downloading}
+                        onDownload={requestDownload}
+                      />
+                      <QualityDownloadButton
+                        label="4K HDR"
+                        torrents={group.byQuality.t4kHdr}
+                        downloading={downloading}
+                        onDownload={requestDownload}
+                      />
                     </div>
                   </div>
                 )}
@@ -1070,7 +1335,11 @@ function SeasonPanel({
                 {/* Episoade individuale */}
                 {(hasEpisodeTorrents || episodeList.length > 0) && (
                   <div className="space-y-2">
-                    {hasPackTorrents && <div className="text-[11px] text-muted-foreground uppercase tracking-wide">Episoade individuale</div>}
+                    {hasPackTorrents && (
+                      <div className="text-[11px] text-muted-foreground uppercase tracking-wide">
+                        Episoade individuale
+                      </div>
+                    )}
                     {episodeList.map((epNum) => {
                       const epData = plexMap.get(epNum);
                       const inPlex = plexSet.has(epNum);
@@ -1079,8 +1348,14 @@ function SeasonPanel({
                       return (
                         <div key={epNum} className="space-y-1">
                           <div className="flex items-center gap-2">
-                            <span className="text-xs font-medium w-8 shrink-0 text-muted-foreground">E{String(epNum).padStart(2, "0")}</span>
-                            {tmdbEp && <span className="text-xs text-muted-foreground truncate flex-1">{tmdbEp.title}</span>}
+                            <span className="text-xs font-medium w-8 shrink-0 text-muted-foreground">
+                              E{String(epNum).padStart(2, "0")}
+                            </span>
+                            {tmdbEp && (
+                              <span className="text-xs text-muted-foreground truncate flex-1">
+                                {tmdbEp.title}
+                              </span>
+                            )}
                             {inPlex && (
                               <span className="shrink-0 flex items-center gap-1 text-[10px] text-emerald-400">
                                 <CheckCircle2 className="h-3 w-3" />
@@ -1095,9 +1370,27 @@ function SeasonPanel({
                           </div>
                           {q && (
                             <div className="pl-10 flex gap-1.5">
-                              <QualityDownloadButton label="1080p" torrents={q.t1080} plexQuality={epData?.quality ?? null} downloading={downloading} onDownload={requestDownload} />
-                              <QualityDownloadButton label="4K" torrents={q.t4k} plexQuality={epData?.quality ?? null} downloading={downloading} onDownload={requestDownload} />
-                              <QualityDownloadButton label="4K HDR" torrents={q.t4kHdr} plexQuality={epData?.quality ?? null} downloading={downloading} onDownload={requestDownload} />
+                              <QualityDownloadButton
+                                label="1080p"
+                                torrents={q.t1080}
+                                plexQuality={epData?.quality ?? null}
+                                downloading={downloading}
+                                onDownload={requestDownload}
+                              />
+                              <QualityDownloadButton
+                                label="4K"
+                                torrents={q.t4k}
+                                plexQuality={epData?.quality ?? null}
+                                downloading={downloading}
+                                onDownload={requestDownload}
+                              />
+                              <QualityDownloadButton
+                                label="4K HDR"
+                                torrents={q.t4kHdr}
+                                plexQuality={epData?.quality ?? null}
+                                downloading={downloading}
+                                onDownload={requestDownload}
+                              />
                             </div>
                           )}
                           {!inPlex && !q && (
@@ -1161,7 +1454,11 @@ function ShowCard({
         {/* Header cu poster */}
         <div className="flex gap-3 p-3 pb-0">
           {item.posterUrl ? (
-            <img src={item.posterUrl} alt="" className="h-24 w-16 rounded-xl object-cover shrink-0 shadow-md" />
+            <img
+              src={item.posterUrl}
+              alt=""
+              className="h-24 w-16 rounded-xl object-cover shrink-0 shadow-md"
+            />
           ) : (
             <div className="h-24 w-16 rounded-xl bg-muted shrink-0 flex items-center justify-center">
               <Tv className="h-6 w-6 text-muted-foreground/40" />
@@ -1170,21 +1467,35 @@ function ShowCard({
           <div className="flex flex-col justify-between min-w-0 py-0.5 flex-1">
             <div>
               <div className="flex items-start gap-1">
-                <span className="font-semibold text-sm leading-tight line-clamp-2 flex-1">{item.title}</span>
-                <button onClick={() => { onUnpin(); qc.removeQueries({ queryKey: ["tmdbDetails", "tv", item.id] }); }}
-                  className="shrink-0 text-muted-foreground hover:text-foreground mt-0.5" title="Scoate din listă">
+                <span className="font-semibold text-sm leading-tight line-clamp-2 flex-1">
+                  {item.title}
+                </span>
+                <button
+                  onClick={() => {
+                    onUnpin();
+                    qc.removeQueries({ queryKey: ["tmdbDetails", "tv", item.id] });
+                  }}
+                  className="shrink-0 text-muted-foreground hover:text-foreground mt-0.5"
+                  title="Scoate din listă"
+                >
                   <PinOff className="h-3.5 w-3.5" />
                 </button>
               </div>
               <div className="flex items-center gap-1.5 mt-1">
-                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-400">Serial</span>
+                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-400">
+                  Serial
+                </span>
               </div>
             </div>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 {imdbId && (
-                  <a href={`https://www.imdb.com/title/${imdbId}/`} target="_blank" rel="noreferrer"
-                    className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground">
+                  <a
+                    href={`https://www.imdb.com/title/${imdbId}/`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+                  >
                     IMDb <ExternalLink className="h-2.5 w-2.5" />
                   </a>
                 )}
@@ -1198,79 +1509,105 @@ function ShowCard({
           </div>
         </div>
         <div className="p-3 pt-3 space-y-3">
-        {/* Countdown + ultimul episod */}
-        {countdownLoading ? (
-          <div className="h-8 animate-pulse rounded-xl bg-muted" />
-        ) : countdown?.status === "ok" && countdown.lastAired ? (
-          <div>
-            <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Ultimul episod lansat</div>
-            <div className="mt-1 flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <div className="truncate font-medium text-sm">
-                  S{String(countdown.lastAired.season).padStart(2, "0")}E{String(countdown.lastAired.episode).padStart(2, "0")} — {countdown.lastAired.title}
+          {/* Countdown + ultimul episod */}
+          {countdownLoading ? (
+            <div className="h-8 animate-pulse rounded-xl bg-muted" />
+          ) : countdown?.status === "ok" && countdown.lastAired ? (
+            <div>
+              <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                Ultimul episod lansat
+              </div>
+              <div className="mt-1 flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="truncate font-medium text-sm">
+                    S{String(countdown.lastAired.season).padStart(2, "0")}E
+                    {String(countdown.lastAired.episode).padStart(2, "0")} —{" "}
+                    {countdown.lastAired.title}
+                  </div>
+                  <div className="mt-0.5 text-xs text-muted-foreground">
+                    {new Date(countdown.lastAired.airDateIso).toLocaleDateString("ro-RO", {
+                      day: "numeric",
+                      month: "long",
+                      year: "numeric",
+                      timeZone: "Europe/Bucharest",
+                    })}
+                  </div>
                 </div>
-                <div className="mt-0.5 text-xs text-muted-foreground">
-                  {new Date(countdown.lastAired.airDateIso).toLocaleDateString("ro-RO", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Bucharest" })}
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  <LibraryBadge inLibrary={countdown.lastAired.inLibrary} />
+                  {countdown.lastAired.inLibrary &&
+                    (() => {
+                      const ep = plexSeasonEps.find((e) => e.num === countdown.lastAired!.episode);
+                      if (!ep) return null;
+                      return (
+                        <>
+                          {ep.quality && (
+                            <span className="text-[10px] text-muted-foreground">{ep.quality}</span>
+                          )}
+                          {ep.watched ? (
+                            <span className="text-[10px] text-emerald-400/70">Văzut</span>
+                          ) : (
+                            <span className="flex items-center gap-0.5 text-[10px] font-medium text-orange-400">
+                              <HelpCircle className="h-3 w-3" /> Nevăzut
+                            </span>
+                          )}
+                        </>
+                      );
+                    })()}
                 </div>
               </div>
-              <div className="flex flex-col items-end gap-1 shrink-0">
-                <LibraryBadge inLibrary={countdown.lastAired.inLibrary} />
-                {countdown.lastAired.inLibrary && (() => {
-                  const ep = plexSeasonEps.find((e) => e.num === countdown.lastAired!.episode);
-                  if (!ep) return null;
-                  return (
-                    <>
-                      {ep.quality && <span className="text-[10px] text-muted-foreground">{ep.quality}</span>}
-                      {ep.watched
-                        ? <span className="text-[10px] text-emerald-400/70">Văzut</span>
-                        : <span className="flex items-center gap-0.5 text-[10px] font-medium text-orange-400"><HelpCircle className="h-3 w-3" /> Nevăzut</span>}
-                    </>
-                  );
-                })()}
+            </div>
+          ) : null}
+
+          {/* Secțiunea Filelist — doar pentru admin */}
+          {isAdmin && (
+            <div className="border-t border-border pt-3">
+              <div className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground flex items-center gap-1">
+                <Download className="h-3 w-3" /> Descarcă de pe Filelist
+                {filelistLoading && <Loader2 className="h-3 w-3 animate-spin ml-1" />}
               </div>
+              {!filelistLoading && torrents.length === 0 ? (
+                <div className="text-xs text-muted-foreground">
+                  Niciun torrent găsit pe Filelist.
+                </div>
+              ) : seasonGroups.length === 0 && !filelistLoading ? (
+                <div className="text-xs text-muted-foreground">
+                  Niciun torrent cu sezon detectat.
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  {seasonGroups.map((group) => (
+                    <SeasonPanel
+                      key={group.seasonNum}
+                      showTitle={showTitle}
+                      tmdbId={item.id}
+                      group={group}
+                      downloading={downloading}
+                      onDownload={handleDownload}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
-          </div>
-        ) : null}
+          )}
 
-        {/* Secțiunea Filelist — doar pentru admin */}
-        {isAdmin && (
-          <div className="border-t border-border pt-3">
-            <div className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground flex items-center gap-1">
-              <Download className="h-3 w-3" /> Descarcă de pe Filelist
-              {filelistLoading && <Loader2 className="h-3 w-3 animate-spin ml-1" />}
-            </div>
-            {!filelistLoading && torrents.length === 0 ? (
-              <div className="text-xs text-muted-foreground">Niciun torrent găsit pe Filelist.</div>
-            ) : seasonGroups.length === 0 && !filelistLoading ? (
-              <div className="text-xs text-muted-foreground">Niciun torrent cu sezon detectat.</div>
-            ) : (
-              <div className="space-y-1.5">
-                {seasonGroups.map((group) => (
-                  <SeasonPanel
-                    key={group.seasonNum}
-                    showTitle={showTitle}
-                    tmdbId={item.id}
-                    group={group}
-                    downloading={downloading}
-                    onDownload={handleDownload}
-                  />
-                ))}
+          <WatchTogglePanel
+            mediaType="tv"
+            settings={watchSettings}
+            isAdmin={isAdmin}
+            onChange={onWatchChange}
+          />
+
+          {/* Următorul episod — jos, după Filelist */}
+          {countdown?.status === "ok" && countdown.next && (
+            <div className="border-t border-border pt-3">
+              <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                Următorul episod — S{String(countdown.next.season).padStart(2, "0")}E
+                {String(countdown.next.episode).padStart(2, "0")}
               </div>
-            )}
-          </div>
-        )}
-
-        <WatchTogglePanel mediaType="tv" settings={watchSettings} isAdmin={isAdmin} onChange={onWatchChange} />
-
-        {/* Următorul episod — jos, după Filelist */}
-        {countdown?.status === "ok" && countdown.next && (
-          <div className="border-t border-border pt-3">
-            <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
-              Următorul episod — S{String(countdown.next.season).padStart(2, "0")}E{String(countdown.next.episode).padStart(2, "0")}
+              <CountdownDisplay airDateIso={countdown.next.airDateIso} />
             </div>
-            <CountdownDisplay airDateIso={countdown.next.airDateIso} />
-          </div>
-        )}
+          )}
         </div>
       </div>
     </section>
@@ -1312,8 +1649,8 @@ function FilelistSection() {
         } else {
           setResults(res.torrents);
         }
-      } catch (e: any) {
-        setSearchError(e?.message ?? String(e));
+      } catch (e) {
+        setSearchError(e instanceof Error ? e.message : String(e));
         setResults([]);
       } finally {
         setSearching(false);
@@ -1325,8 +1662,7 @@ function FilelistSection() {
   }, [query, category, searchFn]);
 
   const isMovie = (catId: number, catName = "") =>
-    [1, 2, 3, 4, 6, 19, 26].includes(catId) ||
-    (catId === 0 && /film|movie/i.test(catName));
+    [1, 2, 3, 4, 6, 19, 26].includes(catId) || (catId === 0 && /film|movie/i.test(catName));
 
   return (
     <section>
@@ -1512,8 +1848,7 @@ function DownloadLogSection() {
   const { data: log, isLoading } = useQuery(filelistLogQuery);
   const deleteFn = useServerFn(deleteFilelistLogEntry);
   const isMovie = (catId: number, catName = "") =>
-    [1, 2, 3, 4, 6, 19, 26].includes(catId) ||
-    (catId === 0 && /film|movie/i.test(catName));
+    [1, 2, 3, 4, 6, 19, 26].includes(catId) || (catId === 0 && /film|movie/i.test(catName));
 
   async function handleDelete(id: number, name: string, hasHash: boolean) {
     const msg = hasHash
@@ -1524,7 +1859,8 @@ function DownloadLogSection() {
     queryClient.invalidateQueries({ queryKey: ["filelistLog"] });
     if (hasHash) {
       if (res.qbitDeleted) toast.success("Torrent și fișiere șterse din qBittorrent");
-      else toast.warning("Șters din log, dar nu am putut șterge din qBittorrent (poate deja șters)");
+      else
+        toast.warning("Șters din log, dar nu am putut șterge din qBittorrent (poate deja șters)");
     }
   }
 
