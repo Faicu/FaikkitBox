@@ -148,8 +148,7 @@ async function checkAll(): Promise<void> {
             // Filtru opțional: doar sezonul curent
             if (item.watch_filelist_season && latestAired) {
               const seasonPad = String(latestAired.season).padStart(2, "0");
-              const epPad = String(latestAired.episode).padStart(2, "0");
-              const seasonRe = new RegExp(`S${seasonPad}E${epPad}`, "i");
+              const seasonRe = new RegExp(`S${seasonPad}`, "i");
               toNotify = newTorrents.filter((t) => seasonRe.test(t.name));
             }
 
