@@ -114,6 +114,7 @@ async function checkAll(): Promise<void> {
 
         const changes: string[] = [];
         const notifications: Array<{ title: string; body: string }> = [];
+        const journalEntries: string[] = [];
         let newLastAiredKey = lastAiredKey;
         let newPlexMovieFound = plexMovieFound;
 
@@ -126,6 +127,7 @@ async function checkAll(): Promise<void> {
             if (item.watch_tmdb && !isFirstRun && lastAiredKey && key !== lastAiredKey) {
               const epLabel = `${key}${latestAired.title ? ` — ${latestAired.title}` : ""}`;
               changes.push(`📅 Episod nou lansat: ${epLabel}`);
+              journalEntries.push(`📅 Episod nou lansat: ${epLabel}`);
               notifications.push({
                 title: `📅 ${item.title} — Episod nou`,
                 body: epLabel,
@@ -162,6 +164,7 @@ async function checkAll(): Promise<void> {
                 : "";
               const torrentLabel = epLabel ? `${epLabel}: ${qualitiesFound.join(", ")}` : qualitiesFound.join(", ");
               changes.push(`🎞 Torrente noi: ${torrentLabel}`);
+              journalEntries.push(`🎞 Torrente noi: ${torrentLabel}`);
               notifications.push({
                 title: `🎞 ${item.title} — Torrente noi`,
                 body: torrentLabel,
@@ -182,9 +185,11 @@ async function checkAll(): Promise<void> {
                       size: best.size,
                       freeleech: best.freeleech,
                       internal: best.internal,
+                      skipLog: true,
                     });
                     if (dlResult.status === "ok") {
                       changes.push(`⬇️ Auto-descărcat (${quality}): ${best.name}`);
+                      journalEntries.push(`⬇️ Auto-descărcat (${quality}): ${best.name}`);
                       notifications.push({
                         title: `⬇️ ${item.title} — Descărcare automată`,
                         body: `${quality}: ${best.name}`,
@@ -219,6 +224,7 @@ async function checkAll(): Promise<void> {
                 if (!isFirstRun) {
                   const qStr = ep.quality ? ` (${ep.quality})` : "";
                   changes.push(`📺 Episod nou în Plex: ${k}${qStr}`);
+                  journalEntries.push(`📺 Episod nou în Plex: ${k}${qStr}`);
                   notifications.push({
                     title: `📺 ${item.title} — în Plex`,
                     body: `${k}${qStr}`,
@@ -234,6 +240,7 @@ async function checkAll(): Promise<void> {
               if (!isFirstRun && plexMovieFound === false && result.found) {
                 const qStr = result.quality ? ` (${result.quality})` : "";
                 changes.push(`📺 Film adăugat în Plex${qStr}`);
+                journalEntries.push(`📺 Film adăugat în Plex${qStr}`);
                 notifications.push({
                   title: `📺 ${item.title} — în Plex`,
                   body: `Film disponibil${qStr}`,
@@ -271,7 +278,9 @@ async function checkAll(): Promise<void> {
         }
 
         console.log(`[pinned-watcher] "${item.title}" — ${changes.length} modificare(i)`);
-        await logActivity("pinned_update", `${item.title}: ${changes.join(" · ")}`, { title: item.title, changes });
+        for (const entry of journalEntries) {
+          await logActivity("pinned_update", `${item.title}: ${entry}`, { title: item.title });
+        }
         for (const notif of notifications) {
           await sendPushToAll(notif.title, notif.body);
         }

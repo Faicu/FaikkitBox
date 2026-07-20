@@ -722,6 +722,7 @@ export async function downloadFilelistInternal(params: {
   size?: number;
   freeleech?: boolean;
   internal?: boolean;
+  skipLog?: boolean;
 }): Promise<FilelistDownloadResult> {
   const username = process.env.FILELIST_USERNAME;
   const passkey = process.env.FILELIST_PASSKEY;
@@ -796,9 +797,11 @@ export async function downloadFilelistInternal(params: {
     } catch {}
 
     const catName = params.categoryName || CATEGORY_NAMES[catId] || `Cat ${catId}`;
-    import("./activity-log").then(({ logActivity }) =>
-      logActivity("torrent_added", `Auto-descărcat: ${params.torrentName}`, { category: catName, savePath, size: params.size })
-    ).catch(() => {});
+    if (!params.skipLog) {
+      import("./activity-log").then(({ logActivity }) =>
+        logActivity("torrent_added", `Auto-descărcat: ${params.torrentName}`, { category: catName, savePath, size: params.size })
+      ).catch(() => {});
+    }
     await appendDownloadLog({
       id: params.torrentId,
       name: params.torrentName,
