@@ -1027,8 +1027,8 @@ function SeasonPanel({
                   ) : null
                 )}
 
-                {/* Pack sezon întreg — apare dacă există și sezonul NU e complet */}
-                {hasPackTorrents && !allInPlex && (
+                {/* Pack sezon întreg */}
+                {hasPackTorrents && (
                   <div className="space-y-1.5">
                     <div className="text-[11px] text-muted-foreground uppercase tracking-wide">Sezon complet (pack)</div>
                     <div className="flex gap-2">
