@@ -60,7 +60,7 @@ interface WatchRow {
   plex_movie_found: number | null;
 }
 
-async function checkAll(): Promise<void> {
+export async function checkAll(): Promise<void> {
   try {
     const { getDb } = await import("../../src/lib/db");
     const { logActivity } = await import("../../src/lib/activity-log");

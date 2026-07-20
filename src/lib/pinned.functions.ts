@@ -110,3 +110,13 @@ export const getPinnedWatcherStatus = createServerFn({ method: "GET" }).handler(
   const nextRun = lastRun ? new Date(new Date(lastRun).getTime() + INTERVAL_MS).toISOString() : null;
   return { lastRun, nextRun };
 });
+
+export const triggerPinnedWatcherCheck = createServerFn({ method: "POST" }).handler(async () => {
+  const { requireAdmin } = await import("./admin.server");
+  await requireAdmin();
+  setTimeout(async () => {
+    const { checkAll } = await import("../../server/plugins/pinned-watcher");
+    await checkAll().catch((e) => console.warn("[trigger] checkAll eșuat:", e));
+  }, 10_000);
+  return { ok: true };
+});

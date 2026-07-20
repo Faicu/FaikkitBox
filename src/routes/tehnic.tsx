@@ -48,7 +48,7 @@ import { getCommitDetail } from "@/lib/github.functions";
 import { runSpeedtest } from "@/lib/speedtest.functions";
 import type { SpeedtestHistoryEntry } from "@/lib/speedtest.functions";
 import { formatSpeed } from "@/lib/format";
-import { getPinnedWatcherStatus } from "@/lib/pinned.functions";
+import { getPinnedWatcherStatus, triggerPinnedWatcherCheck } from "@/lib/pinned.functions";
 
 export const Route = createFileRoute("/tehnic")({
   head: () => ({
@@ -282,11 +282,39 @@ function PluginStatusSection() {
   const { data: log } = useQuery(activityLogQuery);
   const { data: commitsData } = useQuery(commitsFromDbQuery);
   const watcherStatusFn = useServerFn(getPinnedWatcherStatus);
+  const triggerFn = useServerFn(triggerPinnedWatcherCheck);
+  const queryClient = useQueryClient();
+  const [triggerState, setTriggerState] = useState<"idle" | "pending" | "running">("idle");
+  const [triggerCountdown, setTriggerCountdown] = useState(0);
+
   const { data: watcherStatus } = useQuery({
     queryKey: ["pinnedWatcherStatus"],
     queryFn: () => watcherStatusFn(),
     refetchInterval: 30_000,
   });
+
+  async function handleTrigger() {
+    if (triggerState !== "idle") return;
+    setTriggerState("pending");
+    setTriggerCountdown(10);
+    await triggerFn();
+    const interval = setInterval(() => {
+      setTriggerCountdown((c) => {
+        if (c <= 1) {
+          clearInterval(interval);
+          setTriggerState("running");
+          // Refresh status după 15s (timp să ruleze checkAll)
+          setTimeout(() => {
+            queryClient.invalidateQueries({ queryKey: ["pinnedWatcherStatus"] });
+            queryClient.invalidateQueries({ queryKey: ["activityLog"] });
+            setTriggerState("idle");
+          }, 15_000);
+          return 0;
+        }
+        return c - 1;
+      });
+    }, 1000);
+  }
 
   function lastActivity(type: string | null): string | null {
     if (!type || !log) return null;
@@ -314,6 +342,18 @@ function PluginStatusSection() {
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-medium leading-tight">{p.label}</div>
                 <div className="text-[11px] text-muted-foreground">{p.description}</div>
+                {isPinnedWatcher && (
+                  <button
+                    onClick={handleTrigger}
+                    disabled={triggerState !== "idle"}
+                    className="mt-1.5 flex items-center gap-1 rounded-md border border-border bg-muted/40 px-2 py-0.5 text-[10px] text-muted-foreground transition hover:border-sky-500/40 hover:text-sky-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <RefreshCw className={`h-2.5 w-2.5 ${triggerState === "running" ? "animate-spin" : ""}`} />
+                    {triggerState === "idle" && "Verifică acum"}
+                    {triggerState === "pending" && `Se pornește în ${triggerCountdown}s…`}
+                    {triggerState === "running" && "Se verifică…"}
+                  </button>
+                )}
               </div>
               <div className="shrink-0 flex flex-col items-end gap-0.5">
                 <div className="flex items-center gap-1.5">
