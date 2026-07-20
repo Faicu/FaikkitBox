@@ -40,6 +40,7 @@ import type { TmdbSearchResult, TmdbDetails, TvShowCountdown, TmdbEpisode } from
 import { getPinnedItems, setPinnedItems, getWatchSettings, setWatchSettings } from "@/lib/pinned.functions";
 import type { WatchSettings } from "@/lib/pinned.functions";
 import { adminStatusQuery } from "@/lib/queries";
+import { formatBytes } from "@/lib/format";
 
 export const Route = createFileRoute("/lansari")({
   head: () => ({ meta: [{ title: "Lansări — Monitor Server" }] }),
@@ -513,38 +514,13 @@ function PinnedItemCard({ item, watchSettings, isAdmin, onWatchChange, onUnpin }
 }
 
 // ---------------------------------------------------------------------------
-// MovieCard
+// Hook reutilizabil pentru descărcare torrent
 // ---------------------------------------------------------------------------
 
-function MovieCard({
-  item,
-  details,
-  plexInfo,
-  torrents,
-  filelistLoading,
-  watchSettings,
-  isAdmin,
-  onWatchChange,
-  onUnpin,
-}: {
-  item: PinnedItem;
-  details: TmdbDetails | null;
-  plexInfo: { found: boolean; quality: string | null } | null;
-  torrents: FilelistTorrent[];
-  filelistLoading: boolean;
-  watchSettings: WatchSettings;
-  isAdmin: boolean;
-  onWatchChange: (patch: Partial<WatchSettings>) => void;
-  onUnpin: () => void;
-}) {
+function useDownload() {
   const qc = useQueryClient();
   const downloadFn = useServerFn(downloadFilelist);
   const [downloading, setDownloading] = useState<number | null>(null);
-  const [confirm, setConfirm] = useState<{ torrent: FilelistTorrent; label: string } | null>(null);
-
-  const imdbId = details?.imdbId ?? null;
-  const plexStatus = plexInfo?.found === true ? "complet" : plexInfo?.found === false ? "lipsa" : null;
-  const plexQuality = plexInfo?.quality ?? null;
 
   async function handleDownload(torrent: FilelistTorrent) {
     setDownloading(torrent.id);
@@ -573,6 +549,41 @@ function MovieCard({
       setDownloading(null);
     }
   }
+
+  return { downloading, handleDownload };
+}
+
+// ---------------------------------------------------------------------------
+// MovieCard
+// ---------------------------------------------------------------------------
+
+function MovieCard({
+  item,
+  details,
+  plexInfo,
+  torrents,
+  filelistLoading,
+  watchSettings,
+  isAdmin,
+  onWatchChange,
+  onUnpin,
+}: {
+  item: PinnedItem;
+  details: TmdbDetails | null;
+  plexInfo: { found: boolean; quality: string | null } | null;
+  torrents: FilelistTorrent[];
+  filelistLoading: boolean;
+  watchSettings: WatchSettings;
+  isAdmin: boolean;
+  onWatchChange: (patch: Partial<WatchSettings>) => void;
+  onUnpin: () => void;
+}) {
+  const { downloading, handleDownload } = useDownload();
+  const [confirm, setConfirm] = useState<{ torrent: FilelistTorrent; label: string } | null>(null);
+
+  const imdbId = details?.imdbId ?? null;
+  const plexStatus = plexInfo?.found === true ? "complet" : plexInfo?.found === false ? "lipsa" : null;
+  const plexQuality = plexInfo?.quality ?? null;
 
   const t1080 = torrents.filter((t) => detectQuality(t.name).is1080p);
   const t4k = torrents.filter((t) => detectQuality(t.name).is4k);
@@ -1137,42 +1148,12 @@ function ShowCard({
   onWatchChange: (patch: Partial<WatchSettings>) => void;
   onUnpin: () => void;
 }) {
-  const qc = useQueryClient();
-  const downloadFn = useServerFn(downloadFilelist);
-  const [downloading, setDownloading] = useState<number | null>(null);
+  const { downloading, handleDownload } = useDownload();
 
   const imdbId = details?.imdbId ?? countdown?.imdbId ?? null;
   const showTitle = countdown?.showName || item.title;
 
-  async function handleDownload(torrent: FilelistTorrent) {
-    setDownloading(torrent.id);
-    const toastId = toast.loading(`Se descarcă: ${torrent.name}…`);
-    try {
-      const res = await downloadFn({
-        data: {
-          torrentId: torrent.id,
-          torrentName: torrent.name,
-          categoryId: torrent.category,
-          categoryName: torrent.categoryName,
-          size: torrent.size,
-          freeleech: torrent.freeleech,
-          internal: torrent.internal,
-        },
-      });
-      if (res.status === "ok") {
-        toast.success("Adăugat în qBittorrent!", { id: toastId, description: `${torrent.name} → ${res.savePath}`, duration: 6000 });
-        qc.invalidateQueries({ queryKey: ["filelistLog"] });
-      } else {
-        toast.error("Eroare la descărcare", { id: toastId, description: res.error, duration: 8000 });
-      }
-    } catch (e: any) {
-      toast.error("Eroare neașteptată", { id: toastId, description: e?.message ?? String(e), duration: 8000 });
-    } finally {
-      setDownloading(null);
-    }
-  }
-
-  const seasonGroups = groupTorrentsBySeasonEpisode(torrents); // torrents vine din PinnedItemCard
+  const seasonGroups = groupTorrentsBySeasonEpisode(torrents);
 
   return (
     <section>
@@ -1300,27 +1281,17 @@ function ShowCard({
 // Secțiunea FileList Search
 // ---------------------------------------------------------------------------
 
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return "0 B";
-  const k = 1024;
-  const sizes = ["B", "KB", "MB", "GB", "TB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
-}
-
 function FilelistSection() {
-  const qc = useQueryClient();
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<FilelistCategory>("all");
   const [results, setResults] = useState<FilelistTorrent[]>([]);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
-  const [downloading, setDownloading] = useState<number | null>(null);
   const [qualityFilters, setQualityFilters] = useState<Set<string>>(new Set());
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const searchFn = useServerFn(searchFilelist);
-  const downloadFn = useServerFn(downloadFilelist);
+  const { downloading, handleDownload } = useDownload();
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -1352,46 +1323,6 @@ function FilelistSection() {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, [query, category, searchFn]);
-
-  async function handleDownload(torrent: FilelistTorrent) {
-    setDownloading(torrent.id);
-    const toastId = toast.loading(`Se descarcă: ${torrent.name}…`);
-    try {
-      const res = await downloadFn({
-        data: {
-          torrentId: torrent.id,
-          torrentName: torrent.name,
-          categoryId: torrent.category,
-          categoryName: torrent.categoryName,
-          size: torrent.size,
-          freeleech: torrent.freeleech,
-          internal: torrent.internal,
-        },
-      });
-      if (res.status === "ok") {
-        toast.success(`Adăugat în qBittorrent!`, {
-          id: toastId,
-          description: `${torrent.name} → ${res.savePath}`,
-          duration: 6000,
-        });
-        qc.invalidateQueries({ queryKey: ["filelistLog"] });
-      } else {
-        toast.error("Eroare la descărcare", {
-          id: toastId,
-          description: res.error,
-          duration: 8000,
-        });
-      }
-    } catch (e: any) {
-      toast.error("Eroare neașteptată", {
-        id: toastId,
-        description: e?.message ?? String(e),
-        duration: 8000,
-      });
-    } finally {
-      setDownloading(null);
-    }
-  }
 
   const isMovie = (catId: number, catName = "") =>
     [1, 2, 3, 4, 6, 19, 26].includes(catId) ||
