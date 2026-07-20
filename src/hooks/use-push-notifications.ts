@@ -10,9 +10,11 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 }
 
 export type PushState = "unsupported" | "denied" | "subscribed" | "unsubscribed" | "loading";
+export type PushError = string | null;
 
 export function usePushNotifications() {
   const [state, setState] = useState<PushState>("loading");
+  const [error, setError] = useState<PushError>(null);
   const doSubscribe = useServerFn(subscribePush);
   const doUnsubscribe = useServerFn(unsubscribePush);
   const getKey = useServerFn(getVapidPublicKey);
@@ -36,10 +38,11 @@ export function usePushNotifications() {
 
   async function subscribe() {
     setState("loading");
+    setError(null);
     try {
       const reg = await navigator.serviceWorker.ready;
       const { publicKey } = await getKey();
-      if (!publicKey) throw new Error("No VAPID key");
+      if (!publicKey) throw new Error("Lipsește cheia VAPID de pe server");
 
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
@@ -55,7 +58,10 @@ export function usePushNotifications() {
         },
       });
       setState("subscribed");
-    } catch {
+    } catch (e: any) {
+      const msg = e?.message ?? String(e);
+      console.error("[push] Eroare la abonare:", msg, e);
+      setError(msg);
       setState(Notification.permission === "denied" ? "denied" : "unsubscribed");
     }
   }
@@ -75,5 +81,5 @@ export function usePushNotifications() {
     }
   }
 
-  return { state, subscribe, unsubscribe };
+  return { state, error, subscribe, unsubscribe };
 }

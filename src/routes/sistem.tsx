@@ -336,6 +336,9 @@ function PushNotificationsCard({ push }: { push: ReturnType<typeof usePushNotifi
           </button>
         )}
       </div>
+      {push.error && (
+        <p className="mt-2 px-1 text-xs text-red-400">Eroare: {push.error}</p>
+      )}
     </section>
   );
 }
