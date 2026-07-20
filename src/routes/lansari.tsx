@@ -1220,9 +1220,14 @@ function ShowCard({
                 {countdown.lastAired.inLibrary && (() => {
                   const ep = plexSeasonEps.find((e) => e.num === countdown.lastAired!.episode);
                   if (!ep) return null;
-                  return ep.watched
-                    ? <span className="text-[10px] text-emerald-400/70">Văzut</span>
-                    : <span className="flex items-center gap-0.5 text-[10px] font-medium text-orange-400"><HelpCircle className="h-3 w-3" /> Nevăzut</span>;
+                  return (
+                    <>
+                      {ep.quality && <span className="text-[10px] text-muted-foreground">{ep.quality}</span>}
+                      {ep.watched
+                        ? <span className="text-[10px] text-emerald-400/70">Văzut</span>
+                        : <span className="flex items-center gap-0.5 text-[10px] font-medium text-orange-400"><HelpCircle className="h-3 w-3" /> Nevăzut</span>}
+                    </>
+                  );
                 })()}
               </div>
             </div>
