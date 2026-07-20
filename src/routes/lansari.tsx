@@ -606,12 +606,22 @@ function MovieCard({
           </div>
           <div className="p-3 pt-3 space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground">Plex</span>
+            <span className="text-xs text-muted-foreground uppercase tracking-wide">Plex</span>
             <div className="flex items-center gap-2">
-              {plexStatus === "complet" && plexQuality && (
-                <span className="text-[11px] text-muted-foreground">{plexQuality}</span>
+              {plexStatus === "complet" ? (
+                <>
+                  {plexQuality && <span className="text-[11px] text-muted-foreground">{plexQuality}</span>}
+                  <span className="flex items-center gap-1 rounded-lg bg-emerald-500/15 px-2.5 py-1 text-xs font-semibold text-emerald-400">
+                    <CheckCircle2 className="h-3.5 w-3.5" /> În bibliotecă
+                  </span>
+                </>
+              ) : plexStatus === "lipsa" ? (
+                <span className="flex items-center gap-1 rounded-lg bg-muted/60 px-2.5 py-1 text-xs font-semibold text-muted-foreground">
+                  <XCircle className="h-3.5 w-3.5" /> Lipsă din Plex
+                </span>
+              ) : (
+                <span className="h-7 w-28 animate-pulse rounded-lg bg-muted/40" />
               )}
-              {plexStatus ? <PlexStatusBadge status={plexStatus} /> : <LibraryBadge inLibrary={null} />}
             </div>
           </div>
           {isAdmin && (
