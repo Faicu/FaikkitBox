@@ -43,7 +43,7 @@ const PUSH_TITLES: Record<ActivityType, string> = {
   service_update: "⬆️ Update",
   ubuntu_update: "🐧 Ubuntu",
   qbit_action: "⚙️ qBittorrent",
-  pinned_update: "🔔 Lansări",
+  pinned_update: "",
 };
 
 export async function logActivity(
@@ -67,10 +67,13 @@ export async function logActivity(
     console.warn("[activity-log] Eroare la logActivity:", e);
   }
 
-  // Trimite notificare push (fire and forget)
-  import("./push")
-    .then(({ sendPushToAll }) => sendPushToAll(PUSH_TITLES[type] ?? "FaikkitBox", message))
-    .catch(() => {});
+  // Trimite notificare push (fire and forget) — tipurile cu titlu gol nu trimit push
+  const pushTitle = PUSH_TITLES[type];
+  if (pushTitle) {
+    import("./push")
+      .then(({ sendPushToAll }) => sendPushToAll(pushTitle, message))
+      .catch(() => {});
+  }
 }
 
 // ---------------------------------------------------------------------------
