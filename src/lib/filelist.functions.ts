@@ -166,14 +166,17 @@ async function appendDownloadLog(entry: FilelistLogEntry): Promise<void> {
   }
 }
 
-async function markLogEntryComplete(torrentId: number): Promise<void> {
+async function markLogEntryComplete(torrentId: number): Promise<boolean> {
   try {
     const { getDb } = await import("./db");
-    getDb()
-      .prepare("UPDATE downloads SET completed_at = ? WHERE id = ?")
-      .run(new Date().toISOString(), torrentId);
+    const db = getDb();
+    const existing = db.prepare("SELECT completed_at FROM downloads WHERE id = ?").get(torrentId) as { completed_at: string | null } | undefined;
+    if (existing?.completed_at) return false; // deja marcat de un alt polling loop
+    db.prepare("UPDATE downloads SET completed_at = ? WHERE id = ?").run(new Date().toISOString(), torrentId);
+    return true;
   } catch (e) {
     console.warn("[filelist] Nu am putut actualiza log-ul la completare:", e);
+    return false;
   }
 }
 
@@ -302,19 +305,22 @@ async function pollUntilComplete(
           state === "stalledUP");
 
       if (isDone) {
-        console.log(`[filelist] "${torrentName}" complet — dau refresh Plex`);
-        await markLogEntryComplete(torrentId);
-        // Log activitate completare
-        import("./activity-log")
-          .then(({ logActivity }) =>
-            logActivity("torrent_complete", `Torrent descărcat complet: ${torrentName}`, {
-              torrentId,
-            }),
-          )
-          .catch(() => {});
-        const sectionKey = await plexFindLibraryKey(plexType);
-        if (sectionKey) await plexRefreshLibrary(sectionKey);
-        console.log(`[filelist] Plex refresh trimis pentru secțiunea ${sectionKey}`);
+        const wasFirst = await markLogEntryComplete(torrentId);
+        if (wasFirst) {
+          console.log(`[filelist] "${torrentName}" complet — dau refresh Plex`);
+          import("./activity-log")
+            .then(({ logActivity }) =>
+              logActivity("torrent_complete", `Torrent descărcat complet: ${torrentName}`, {
+                torrentId,
+              }),
+            )
+            .catch(() => {});
+          const sectionKey = await plexFindLibraryKey(plexType);
+          if (sectionKey) await plexRefreshLibrary(sectionKey);
+          console.log(`[filelist] Plex refresh trimis pentru secțiunea ${sectionKey}`);
+        } else {
+          console.log(`[filelist] "${torrentName}" deja marcat complet de alt loop — skip`);
+        }
         return;
       }
     } catch (e) {
