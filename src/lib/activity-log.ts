@@ -1,8 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
 import { randomUUID } from "node:crypto";
-import { createRequire } from "node:module";
-
-const requireSync = createRequire(import.meta.url);
 
 // ---------------------------------------------------------------------------
 // Tipuri
@@ -326,8 +323,12 @@ async function logServerStartOnce(): Promise<void> {
 
 function isCodeRestartSync(): boolean {
   try {
-    const { statSync } = requireSync("node:fs") as typeof import("node:fs");
-    const { fileURLToPath } = requireSync("node:url") as typeof import("node:url");
+    // require() e necesar aici (nu import dinamic) — funcția rulează sincron
+    // dintr-un handler de shutdown (process.on("exit"/"SIGTERM")).
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { statSync } = require("node:fs") as typeof import("node:fs");
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { fileURLToPath } = require("node:url") as typeof import("node:url");
     const buildFile = new URL("../index.mjs", import.meta.url);
     const s = statSync(fileURLToPath(buildFile));
     return Date.now() - s.mtimeMs < 10 * 60_000;
