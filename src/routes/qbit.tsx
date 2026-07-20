@@ -73,7 +73,7 @@ function QbitPage() {
     null,
   );
   const mutation = useMutation({
-    mutationFn: (vars: { hashes: string[] | "all"; action: "pause" | "resume" }) =>
+    mutationFn: (vars: { hashes: string[] | "all"; action: "pause" | "resume" | "delete" }) =>
       action({ data: vars }),
     onSuccess: (res, vars) => {
       if (!res.ok) {

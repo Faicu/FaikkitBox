@@ -110,6 +110,7 @@ export interface QbitTorrent {
   numLeechs: number;
   ratio: number;
   addedOn: number; // unix timestamp
+  category?: string;
 }
 
 export interface QbitData {
@@ -1605,6 +1606,7 @@ export const getQbit = createServerFn({ method: "GET" }).handler(async (): Promi
       numLeechs: Number(t.num_leechs ?? 0),
       ratio: Number(t.ratio ?? 0),
       addedOn: Number(t.added_on ?? 0),
+      category: t.category || undefined,
     }));
 
     let downloading = 0,

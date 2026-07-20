@@ -705,6 +705,7 @@ function MovieCard({
   onUnpin: () => void;
 }) {
   const { downloading, handleDownload } = useDownload();
+  const qc = useQueryClient();
   const [confirm, setConfirm] = useState<{ torrent: FilelistTorrent; label: string } | null>(null);
 
   const imdbId = details?.imdbId ?? null;
@@ -1442,6 +1443,7 @@ function ShowCard({
   onUnpin: () => void;
 }) {
   const { downloading, handleDownload } = useDownload();
+  const qc = useQueryClient();
 
   const imdbId = details?.imdbId ?? countdown?.imdbId ?? null;
   const showTitle = countdown?.showName || item.title;

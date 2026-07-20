@@ -24,6 +24,7 @@ import { StatCard } from "@/components/StatCard";
 import { ErrorCard } from "@/components/ErrorCard";
 import { CommandOutput } from "@/components/ServiceHeaderActions";
 import { logAgentActivity, runAgentCommand } from "@/lib/agent.functions";
+import type { AgentCommand, AgentResult } from "@/lib/agent.functions";
 import { adminStatusQuery, hostQuery } from "@/lib/queries";
 
 import { formatBytes, formatSpeed, formatDurationHMS } from "@/lib/format";
@@ -41,15 +42,16 @@ function HostPage() {
   const push = usePushNotifications();
 
   const runCmd = useServerFn(runAgentCommand);
-  const [lastCmd, setLastCmd] = useState<{ output: string; ok: boolean } | null>(null);
+  const [lastCmd, setLastCmd] = useState<{ cmd: AgentCommand; result: AgentResult } | null>(null);
 
   const upgrade = useMutation({
     mutationFn: async () => {
-      const result = await runCmd({ data: { command: "apt_full_upgrade" } });
-      await logAgentActivity("apt_full_upgrade", result.ok ? "success" : "error");
-      return result;
+      const cmd: AgentCommand = "apt_full_upgrade";
+      const result = await runCmd({ data: { cmd } });
+      await logAgentActivity(cmd, result.ok);
+      return { cmd, result };
     },
-    onSuccess: (result) => setLastCmd(result),
+    onSuccess: (data) => setLastCmd(data),
     onError: (err) => {
       toast.error("Eroare la actualizare");
       console.error(err);
@@ -100,7 +102,7 @@ function HostPage() {
         </div>
       }
     >
-      {lastCmd && <CommandOutput output={lastCmd.output} ok={lastCmd.ok} />}
+      {lastCmd && <CommandOutput command={lastCmd.cmd} result={lastCmd.result} />}
 
       {isAdmin && <PushNotificationsCard push={push} />}
 

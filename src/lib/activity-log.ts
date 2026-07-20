@@ -22,12 +22,14 @@ export type ActivityType =
   | "qbit_action"
   | "pinned_update";
 
+export type JsonValue = string | number | boolean | null | undefined;
+
 export interface ActivityEntry {
   id: string;
   timestamp: string; // ISO
   type: ActivityType;
   message: string;
-  meta?: Record<string, unknown>;
+  meta?: Record<string, JsonValue>;
 }
 
 // ---------------------------------------------------------------------------
@@ -52,7 +54,7 @@ const PUSH_TITLES: Record<ActivityType, string> = {
 export async function logActivity(
   type: ActivityType,
   message: string,
-  meta?: Record<string, unknown>,
+  meta?: Record<string, JsonValue>,
 ): Promise<void> {
   try {
     const { getDb } = await import("./db");

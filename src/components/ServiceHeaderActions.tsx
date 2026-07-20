@@ -10,6 +10,7 @@ import {
   type AgentResult,
 } from "@/lib/agent.functions";
 import { adminStatusQuery, versionsQuery } from "@/lib/queries";
+import type { ServiceVersion } from "@/lib/versions.functions";
 import { ServicePill } from "@/components/ServicePill";
 
 type Service = "plex" | "immich" | "qbit";
@@ -35,7 +36,9 @@ export function ServiceHeaderActions({ service, status, onRestart, onCommandResu
   const admin = useQuery(adminStatusQuery);
   const run = useServerFn(runAgentCommand);
   const config = serviceConfig[service];
-  const version = versions.data?.[service];
+  const version = (versions.data as Partial<Record<Service, ServiceVersion>> | undefined)?.[
+    service
+  ];
   const canManage = admin.data?.isAdmin === true;
 
   const mutation = useMutation({

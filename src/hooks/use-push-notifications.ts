@@ -2,11 +2,13 @@ import { useState, useEffect } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { subscribePush, unsubscribePush, getVapidPublicKey } from "@/lib/push.functions";
 
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
+function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
   const raw = atob(base64);
-  return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
+  const bytes = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+  return bytes;
 }
 
 export type PushState = "unsupported" | "denied" | "subscribed" | "unsubscribed" | "loading";
