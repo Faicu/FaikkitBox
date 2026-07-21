@@ -122,7 +122,7 @@ function TehnicPage() {
                 : "Niciun test efectuat încă."}
             </DrawerDescription>
           </DrawerHeader>
-          <div className="space-y-4 overflow-y-auto px-4 pb-6">
+          <div className="space-y-4 overflow-y-auto px-4 pb-16">
             {speedtest.data && (
               <div className="grid grid-cols-3 gap-2 text-sm">
                 <Metric
@@ -165,6 +165,10 @@ function TehnicPage() {
               </div>
             )}
 
+            {(speedtestHistory.data?.length ?? 0) > 0 && (
+              <SpeedtestChart history={speedtestHistory.data!} />
+            )}
+
             {admin.data?.isAdmin ? (
               <button
                 type="button"
@@ -192,10 +196,6 @@ function TehnicPage() {
                   {speedtestError}
                 </pre>
               </div>
-            )}
-
-            {(speedtestHistory.data?.length ?? 0) > 0 && (
-              <SpeedtestChart history={speedtestHistory.data!} />
             )}
           </div>
         </DrawerContent>
