@@ -1,6 +1,16 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { PinOff, ExternalLink, Film, CheckCircle2, XCircle, Download, Loader2 } from "lucide-react";
+import {
+  PinOff,
+  ExternalLink,
+  Film,
+  CheckCircle2,
+  XCircle,
+  Download,
+  Loader2,
+  ChevronDown,
+  ChevronRight,
+} from "lucide-react";
 
 import type { TmdbDetails } from "@/lib/tmdb.functions";
 import type { WatchSettings } from "@/lib/pinned.functions";
@@ -40,6 +50,7 @@ export function MovieCard({
   const { downloading, handleDownload } = useDownload();
   const qc = useQueryClient();
   const [confirm, setConfirm] = useState<{ torrent: FilelistTorrent; label: string } | null>(null);
+  const [isOpen, setIsOpen] = useState(false);
 
   const imdbId = details?.imdbId ?? null;
   const plexStatus =
@@ -137,49 +148,61 @@ export function MovieCard({
                 )}
               </div>
             </div>
-            {isAdmin && (
-              <div className="border-t border-border pt-3">
-                <div className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground flex items-center gap-1">
-                  <Download className="h-3 w-3" /> Descarcă de pe Filelist
-                  {filelistLoading && <Loader2 className="h-3 w-3 animate-spin ml-1" />}
-                </div>
-                {!filelistLoading && torrents.length === 0 ? (
-                  <div className="text-xs text-muted-foreground">
-                    Niciun torrent găsit pe Filelist.
-                  </div>
-                ) : (
-                  <div className="flex gap-2">
-                    <QualityDownloadButton
-                      label="1080p"
-                      torrents={t1080}
-                      plexQuality={plexQuality}
-                      downloading={downloading}
-                      onDownload={(t, l) => setConfirm({ torrent: t, label: l })}
-                    />
-                    <QualityDownloadButton
-                      label="4K"
-                      torrents={t4k}
-                      plexQuality={plexQuality}
-                      downloading={downloading}
-                      onDownload={(t, l) => setConfirm({ torrent: t, label: l })}
-                    />
-                    <QualityDownloadButton
-                      label="4K HDR"
-                      torrents={t4kHdr}
-                      plexQuality={plexQuality}
-                      downloading={downloading}
-                      onDownload={(t, l) => setConfirm({ torrent: t, label: l })}
-                    />
+            <button
+              type="button"
+              onClick={() => setIsOpen((v) => !v)}
+              className="w-full flex items-center justify-center gap-1 border-t border-border pt-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {isOpen ? "Mai puține detalii" : "Mai multe detalii"}
+              {isOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+            </button>
+            {isOpen && (
+              <>
+                {isAdmin && (
+                  <div className="border-t border-border pt-3">
+                    <div className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground flex items-center gap-1">
+                      <Download className="h-3 w-3" /> Descarcă de pe Filelist
+                      {filelistLoading && <Loader2 className="h-3 w-3 animate-spin ml-1" />}
+                    </div>
+                    {!filelistLoading && torrents.length === 0 ? (
+                      <div className="text-xs text-muted-foreground">
+                        Niciun torrent găsit pe Filelist.
+                      </div>
+                    ) : (
+                      <div className="flex gap-2">
+                        <QualityDownloadButton
+                          label="1080p"
+                          torrents={t1080}
+                          plexQuality={plexQuality}
+                          downloading={downloading}
+                          onDownload={(t, l) => setConfirm({ torrent: t, label: l })}
+                        />
+                        <QualityDownloadButton
+                          label="4K"
+                          torrents={t4k}
+                          plexQuality={plexQuality}
+                          downloading={downloading}
+                          onDownload={(t, l) => setConfirm({ torrent: t, label: l })}
+                        />
+                        <QualityDownloadButton
+                          label="4K HDR"
+                          torrents={t4kHdr}
+                          plexQuality={plexQuality}
+                          downloading={downloading}
+                          onDownload={(t, l) => setConfirm({ torrent: t, label: l })}
+                        />
+                      </div>
+                    )}
                   </div>
                 )}
-              </div>
+                <WatchTogglePanel
+                  mediaType="movie"
+                  settings={watchSettings}
+                  isAdmin={isAdmin}
+                  onChange={onWatchChange}
+                />
+              </>
             )}
-            <WatchTogglePanel
-              mediaType="movie"
-              settings={watchSettings}
-              isAdmin={isAdmin}
-              onChange={onWatchChange}
-            />
           </div>
         </div>
       </section>
