@@ -127,8 +127,7 @@ export function MovieCard({
             </div>
           </div>
           <div className="p-3 pt-3 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground uppercase tracking-wide">Plex</span>
+            <div className="flex items-center justify-end">
               <div className="flex items-center gap-2">
                 {plexStatus === "complet" ? (
                   <>
