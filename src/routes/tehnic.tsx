@@ -122,7 +122,7 @@ function TehnicPage() {
                 : "Niciun test efectuat încă."}
             </DrawerDescription>
           </DrawerHeader>
-          <div className="space-y-4 px-4 pb-6">
+          <div className="space-y-4 overflow-y-auto px-4 pb-6">
             {speedtest.data && (
               <div className="grid grid-cols-3 gap-2 text-sm">
                 <Metric
