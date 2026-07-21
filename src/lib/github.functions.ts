@@ -65,15 +65,24 @@ function githubHeaders(): Record<string, string> {
 async function upsertCommits(commits: GitHubCommit[]): Promise<void> {
   try {
     const { getDb } = await import("./db");
+    const { sendPushToAll } = await import("./push");
     const db = getDb();
     const now = new Date().toISOString();
 
+    // INSERT OR IGNORE (nu REPLACE) — ca să putem detecta commit-urile chiar noi
+    // și să trimitem notificare push, indiferent care sursă (webhook, sync la
+    // pornire sau acest polling periodic) le descoperă prima.
     const stmt = db.prepare(
-      `INSERT OR REPLACE INTO commits (sha, short_sha, message, author, date, url, fetched_at)
+      `INSERT OR IGNORE INTO commits (sha, short_sha, message, author, date, url, fetched_at)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
     );
     for (const c of commits) {
-      stmt.run(c.sha, c.shortSha, c.message, c.author, c.date, c.url, now);
+      const result = stmt.run(c.sha, c.shortSha, c.message, c.author, c.date, c.url, now);
+      if (result.changes > 0) {
+        await sendPushToAll(`📦 Commit nou — ${c.author}`, c.message).catch((err) => {
+          console.warn("[github] Trimitere push eșuată:", err);
+        });
+      }
     }
   } catch (e) {
     console.warn("[github] Upsert commits eșuat:", e);
