@@ -20,8 +20,11 @@ Număr fișiere, spațiu ocupat, coadă de joburi active.
 ### qBittorrent
 Viteze download/upload, torrente active/total, filtre pe stări, căutare în listă, acțiuni de pauză/reluare (global sau individual) și ștergere torrent + fișiere.
 
-### Sistem (Gazdă)
-CPU, memorie, swap, uptime, discuri cu viteze read/write, rețea, senzori temperatură, top procese și top I/O disc, aplicații monitorizate.
+### Sistem
+CPU, memorie, swap, uptime, discuri cu viteze read/write, rețea, senzori temperatură, top procese și top I/O disc, aplicații monitorizate, comenzi de mentenanță (update Ubuntu, restart servicii).
+
+### Tehnic
+Speedtest (rulare test nou + istoric grafic), status plugin-uri server, statistici commit-uri și jurnal de activitate (evenimente server + commit-uri GitHub).
 
 ### Lansări — filme și seriale
 Pagină dedicată cu search unificat (TMDB) pentru filme și seriale. Itemele fixate afișează:
@@ -41,17 +44,11 @@ Căutare Plex robustă: suportă titluri localizate (ex: „Casa Dragonului" gă
 ### FileList.io
 Căutare torrent direct din dashboard, trimitere în qBittorrent pe foldere separate filme/seriale, jurnal cu ultimele descărcări.
 
-### Jurnal activitate
-Timeline unificat cu evenimente server (pornire/oprire, Plex, qBit, update-uri) și commit-uri GitHub. Click pe commit pentru detalii.
-
 ### Notificări push
 Notificări web push pentru commit-uri noi pe GitHub. Funcționează fără browser deschis — se recuperează automat notificările pierdute în timpul unui restart.
 
-### Speedtest
-Card pe pagina principală cu vitezele ultimului test (Speedtest by Ookla). Rularea unui test nou necesită autentificare admin. Necesită CLI-ul `speedtest` (Ookla) în `PATH`.
-
-### Actualizări
-Pagină admin pentru verificarea versiunilor Plex/Immich și comenzi de mentenanță (update Ubuntu, restart/update servicii).
+### Verificare versiuni
+Indicator de versiune Plex/Immich (actualizat/necesită update) afișat în header-ul fiecărei pagini de serviciu, cu acțiune de restart pentru containerul Docker.
 
 ### Autentificare admin
 Acces protejat prin sesiune (user/parolă + secret de sesiune) pentru funcțiile administrative.
@@ -73,14 +70,20 @@ Acces protejat prin sesiune (user/parolă + secret de sesiune) pentru funcțiile
 
 ```
 src/
-  components/     # componente UI reutilizabile (AppHeader, BottomNav, gauge-uri, ui/ shadcn)
-  hooks/          # hook-uri React custom
-  lib/            # funcții server: Plex, Immich, qBittorrent, Filelist, TMDB, TVmaze, push, DB
-  routes/         # pagini: index, plex, immich, qbit, host, lansari, login, updates
+  components/       # componente UI reutilizabile (AppHeader, BottomNav, gauge-uri, ui/ shadcn)
+    lansari/         # componente specifice paginii Lansări
+    tehnic/          # componente specifice paginii Sistem/Tehnic
+    ui/              # componente shadcn/ui
+  hooks/            # hook-uri React custom
+  lib/              # funcții server, pe domeniu
+    services/         # Plex, Immich, qBittorrent, Host (agregare status pentru dashboard)
+    filelist/          # client qBittorrent, categorii, download, jurnal Filelist
+    *.functions.ts     # server functions TanStack (admin, github, push, tmdb, tvshows, versions...)
+  routes/           # pagini: index, plex, immich, qbit, sistem, tehnic, lansari, login
 server/
-  plugins/        # plugin-uri Nitro: Plex session tracker, GitHub commit tracker
-  routes/         # rute API: GitHub webhook, push subscription
-public/           # assets statice, Service Worker
+  plugins/          # plugin-uri Nitro: Plex session tracker, GitHub commit tracker, pinned watcher
+  routes/           # rute API: GitHub webhook, push subscription
+public/             # assets statice, Service Worker
 ```
 
 ---
