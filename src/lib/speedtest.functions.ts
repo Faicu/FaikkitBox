@@ -3,7 +3,6 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
-import { tmpdir } from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 
@@ -35,7 +34,10 @@ export type SpeedtestResult = {
 export type SpeedtestRunResponse = ({ ok: true } & SpeedtestResult) | { ok: false; error: string };
 
 function cacheFilePath() {
-  return process.env.SPEEDTEST_CACHE_FILE ?? path.join(tmpdir(), "faikkitbox-speedtest.json");
+  return (
+    process.env.SPEEDTEST_CACHE_FILE ??
+    path.join(process.cwd(), "data", "speedtest-last.json")
+  );
 }
 
 type BinaryConfig = {
@@ -157,8 +159,39 @@ async function saveToHistory(result: SpeedtestResult) {
   }
 }
 
+async function readLastFromHistory(): Promise<SpeedtestResult | null> {
+  try {
+    const { getDb } = await import("./db");
+    const db = getDb();
+    const row = db.prepare("SELECT * FROM speedtest_history ORDER BY timestamp DESC LIMIT 1").get() as
+      | {
+          timestamp: string;
+          download: number;
+          upload: number;
+          ping: number;
+          jitter: number | null;
+          isp: string | null;
+          server_name: string | null;
+          result_url: string | null;
+        }
+      | undefined;
+    if (!row) return null;
+    return {
+      timestamp: row.timestamp,
+      ping: { latency: row.ping, jitter: row.jitter ?? 0 },
+      download: row.download,
+      upload: row.upload,
+      isp: row.isp ?? undefined,
+      server: row.server_name ? { name: row.server_name } : undefined,
+      resultUrl: row.result_url ?? undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export const getLastSpeedtest = createServerFn({ method: "GET" }).handler(async () => {
-  return await readCache();
+  return (await readCache()) ?? (await readLastFromHistory());
 });
 
 export const getSpeedtestHistory = createServerFn({ method: "GET" }).handler(
