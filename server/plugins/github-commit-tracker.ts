@@ -56,10 +56,13 @@ async function syncOnStart() {
 
       // Dacă e un commit nou (nu era în DB), trimite notificare push
       if (result.changes > 0) {
-        await sendPushToAll(`📦 Commit nou — ${author}`, message).catch(() => {});
+        console.log(`[github-commit-tracker] Commit nou detectat (${sha.slice(0, 7)}), trimit push...`);
+        await sendPushToAll(`📦 Commit nou — ${author}`, message).catch((err) => {
+          console.warn("[github-commit-tracker] Trimitere push eșuată:", err);
+        });
       }
     }
-  } catch {
-    // GitHub indisponibil la pornire — ignorăm silențios
+  } catch (err) {
+    console.warn("[github-commit-tracker] Sync eșuat la pornire:", err);
   }
 }

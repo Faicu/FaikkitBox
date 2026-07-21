@@ -36,7 +36,13 @@ export async function sendPushToAll(title: string, body: string): Promise<void> 
           );
         } catch (err) {
           const statusCode = (err as { statusCode?: number })?.statusCode;
-          if (statusCode === 410 || statusCode === 404) dead.push(sub.id);
+          if (statusCode === 410 || statusCode === 404) {
+            dead.push(sub.id);
+          } else {
+            console.warn(
+              `[push] Trimitere eșuată către ${sub.endpoint.slice(-12)}: ${statusCode ?? ""} ${(err as Error)?.message ?? err}`,
+            );
+          }
         }
       }),
     );
@@ -44,7 +50,7 @@ export async function sendPushToAll(title: string, body: string): Promise<void> 
     for (const id of dead) {
       db.prepare("DELETE FROM push_subscriptions WHERE id = ?").run(id);
     }
-  } catch {
-    // Nu blocăm dacă push eșuează
+  } catch (err) {
+    console.warn("[push] sendPushToAll a eșuat:", err);
   }
 }
