@@ -6,7 +6,7 @@ import { searchFilelist } from "@/lib/filelist.functions";
 import { getTmdbDetails, getTvShowCountdown, getTmdbSeasonEpisodes } from "@/lib/tmdb.functions";
 import type { WatchSettings } from "@/lib/pinned.functions";
 import type { PinnedItem } from "./types";
-import { stripDiacritics, groupTorrentsBySeasonEpisode } from "./utils";
+import { stripDiacritics, groupTorrentsBySeasonEpisode, filterTorrentsForItem } from "./utils";
 import { MovieCard } from "./MovieCard";
 import { ShowCard } from "./ShowCard";
 
@@ -81,7 +81,9 @@ export function PinnedItemCard({
       : latestSeasonFromTmdb;
   const showTitleForPlex = item.originalTitle || countdown?.showName || item.title;
 
-  const torrents = filelistData?.status === "ok" ? filelistData.torrents : [];
+  const itemImdbId = details?.imdbId ?? countdown?.imdbId ?? null;
+  const rawTorrents = filelistData?.status === "ok" ? filelistData.torrents : [];
+  const torrents = filterTorrentsForItem(rawTorrents, origTitle, itemImdbId);
   const seasonGroups = groupTorrentsBySeasonEpisode(torrents);
   const allSeasonNums = seasonGroups.map((g) => g.seasonNum);
 

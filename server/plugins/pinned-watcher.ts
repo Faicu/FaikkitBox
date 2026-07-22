@@ -13,6 +13,19 @@ function stripDiacritics(str: string): string {
   return str.normalize("NFD").replace(/[̀-ͯ]/g, "");
 }
 
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// Match strict, pe cuvinte întregi (nu substring) — Filelist face doar căutare
+// loose după nume, deci filtrăm noi rezultatele care nu conțin titlul exact.
+function torrentMatchesTitle(name: string, title: string): boolean {
+  const words = stripDiacritics(title).trim().split(/\s+/).filter(Boolean).map(escapeRegex);
+  if (words.length === 0) return false;
+  const pattern = new RegExp(`\\b${words.join("[\\W_]+")}\\b`, "i");
+  return pattern.test(name);
+}
+
 function detectTorrentQuality(name: string): string {
   const n = name.toLowerCase();
   const is4k = /\b(4k|2160p)\b/.test(n);
@@ -147,7 +160,8 @@ export async function checkAll(): Promise<void> {
           const query = stripDiacritics(item.original_title || item.title);
           const category = item.media_type === "movie" ? ("movies" as const) : ("series" as const);
           const torrents = await searchFilelistRaw(query, category);
-          const newTorrents = torrents.filter((t) => !seenTorrentIds.has(t.id));
+          const matchedTorrents = torrents.filter((t) => torrentMatchesTitle(t.name, query));
+          const newTorrents = matchedTorrents.filter((t) => !seenTorrentIds.has(t.id));
           for (const t of newTorrents) seenTorrentIds.add(t.id);
 
           if (!isFirstRun && newTorrents.length > 0) {

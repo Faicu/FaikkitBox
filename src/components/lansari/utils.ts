@@ -9,6 +9,30 @@ export function stripDiacritics(str: string): string {
   return str.normalize("NFD").replace(/[̀-ͯ]/g, "");
 }
 
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// Match strict, pe cuvinte întregi (nu substring) — Filelist face doar căutare
+// loose după nume, deci filtrăm noi rezultatele care nu conțin titlul exact.
+export function torrentMatchesTitle(name: string, title: string): boolean {
+  const words = stripDiacritics(title).trim().split(/\s+/).filter(Boolean).map(escapeRegex);
+  if (words.length === 0) return false;
+  const pattern = new RegExp(`\\b${words.join("[\\W_]+")}\\b`, "i");
+  return pattern.test(name);
+}
+
+export function filterTorrentsForItem(
+  torrents: FilelistTorrent[],
+  title: string,
+  imdbId?: string | null,
+): FilelistTorrent[] {
+  return torrents.filter((t) => {
+    if (t.imdb && imdbId) return t.imdb === imdbId;
+    return torrentMatchesTitle(t.name, title);
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Detectare calitate torrent
 // ---------------------------------------------------------------------------
