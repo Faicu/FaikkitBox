@@ -395,12 +395,25 @@ export const downloadFilelist = createServerFn({ method: "POST" })
       form.append("savepath", savePath);
       form.append("category", isMovie ? "filme" : "seriale");
 
-      const uploadRes = await fetch(`${url}/api/v2/torrents/add`, {
+      let uploadRes = await fetch(`${url}/api/v2/torrents/add`, {
         method: "POST",
         headers: { Cookie: cookie, Referer: url, Origin: url },
         body: form,
         signal: AbortSignal.timeout(30_000),
       });
+
+      // Sesiunea SID poate expira în qBittorrent între timp; un SID expirat
+      // primește tot 403 (nu 401), deci reîncercăm o dată cu login proaspăt.
+      if (!uploadRes.ok) {
+        resetQbitCookie();
+        cookie = await qbitLogin(url, qbitUser, qbitPass);
+        uploadRes = await fetch(`${url}/api/v2/torrents/add`, {
+          method: "POST",
+          headers: { Cookie: cookie, Referer: url, Origin: url },
+          body: form,
+          signal: AbortSignal.timeout(30_000),
+        });
+      }
 
       if (!uploadRes.ok) {
         const txt = await uploadRes.text().catch(() => "");
@@ -558,12 +571,24 @@ export async function downloadFilelistInternal(params: {
     form.append("savepath", savePath);
     form.append("category", isMovie ? "filme" : "seriale");
 
-    const uploadRes = await fetch(`${url}/api/v2/torrents/add`, {
+    let uploadRes = await fetch(`${url}/api/v2/torrents/add`, {
       method: "POST",
       headers: { Cookie: cookie, Referer: url, Origin: url },
       body: form,
       signal: AbortSignal.timeout(30_000),
     });
+
+    if (!uploadRes.ok) {
+      resetQbitCookie();
+      cookie = await qbitLogin(url, qbitUser, qbitPass);
+      uploadRes = await fetch(`${url}/api/v2/torrents/add`, {
+        method: "POST",
+        headers: { Cookie: cookie, Referer: url, Origin: url },
+        body: form,
+        signal: AbortSignal.timeout(30_000),
+      });
+    }
+
     if (!uploadRes.ok) {
       return { status: "error", error: `qBit upload eșuat: HTTP ${uploadRes.status}` };
     }
