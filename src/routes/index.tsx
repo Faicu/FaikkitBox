@@ -60,7 +60,9 @@ function Overview() {
 
   return (
     <PageShell title="FaikkitBox Dashboard" subtitle="Totul în timp real">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
       <ServiceRow
+        className="sm:col-span-2"
         to="/plex"
         title="Plex"
         icon={<PlayCircle className="h-5 w-5" />}
@@ -254,6 +256,7 @@ function Overview() {
       </ServiceRow>
 
       <ServiceRow
+        className="sm:col-span-2"
         to="/sistem"
         title="Sistem"
         icon={<Cpu className="h-5 w-5" />}
@@ -263,6 +266,7 @@ function Overview() {
       >
         {host.data?.status === "ok" && <HostGauges data={host.data} />}
       </ServiceRow>
+      </div>
 
       <Drawer open={plexDrawer === "views"} onOpenChange={(o) => !o && setPlexDrawer(null)}>
         <DrawerContent className="max-h-[85vh]">
@@ -383,6 +387,7 @@ function ServiceRow({
   status,
   error,
   children,
+  className,
 }: {
   to: "/plex" | "/immich" | "/qbit" | "/sistem";
   title: string;
@@ -391,11 +396,12 @@ function ServiceRow({
   status: "ok" | "error" | "loading";
   error?: string;
   children?: React.ReactNode;
+  className?: string;
 }) {
   return (
     <Link
       to={to}
-      className="block rounded-2xl border border-border bg-card p-4 active:scale-[0.99] transition-transform"
+      className={`block rounded-2xl border border-border bg-card p-4 active:scale-[0.99] transition-transform ${className ?? ""}`}
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2.5">
