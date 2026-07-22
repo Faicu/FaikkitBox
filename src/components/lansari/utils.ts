@@ -30,10 +30,12 @@ export function filterTorrentsForItem(
   title: string,
   imdbId?: string | null,
 ): FilelistTorrent[] {
-  return torrents.filter((t) => {
-    if (t.imdb && imdbId) return t.imdb === imdbId;
-    return torrentMatchesTitle(t.name, title);
-  });
+  return torrents.reduce<FilelistTorrent[]>((acc, t) => {
+    const hasImdbCheck = !!(t.imdb && imdbId);
+    const keep = hasImdbCheck ? t.imdb === imdbId : torrentMatchesTitle(t.name, title);
+    if (keep) acc.push({ ...t, matchedByImdb: hasImdbCheck });
+    return acc;
+  }, []);
 }
 
 // ---------------------------------------------------------------------------

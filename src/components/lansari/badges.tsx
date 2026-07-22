@@ -9,6 +9,7 @@ import {
   Zap,
   HardDrive,
   ShieldCheck,
+  BadgeCheck,
 } from "lucide-react";
 
 import type { FilelistTorrent } from "@/lib/filelist.functions";
@@ -47,7 +48,15 @@ export function TorrentPickerDialog({
               onClick={() => onPick(t)}
               className="w-full text-left rounded-xl border border-border bg-muted/40 hover:bg-muted/80 p-3 space-y-1.5 transition-colors"
             >
-              <div className="text-xs font-medium break-words leading-snug">{t.name}</div>
+              <div className="flex items-start gap-1 text-xs font-medium break-words leading-snug">
+                <span className="break-words">{t.name}</span>
+                {t.matchedByImdb && (
+                  <BadgeCheck
+                    className="h-3 w-3 shrink-0 mt-0.5 text-emerald-400"
+                    title="Verificat via IMDB"
+                  />
+                )}
+              </div>
               <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
                 <span className="flex items-center gap-1">
                   <HardDrive className="h-3 w-3" /> {formatBytes(t.size)}
@@ -101,6 +110,7 @@ export function QualityDownloadButton({
   const inPlex = plexQuality === label;
   const available = torrents.length > 0;
   const isLoading = available && torrents.some((t) => downloading === t.id);
+  const imdbVerified = available && torrents.every((t) => t.matchedByImdb);
 
   const colorClass = inPlex
     ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/30 opacity-70 cursor-default"
@@ -149,9 +159,15 @@ export function QualityDownloadButton({
       <button
         onClick={handleClick}
         disabled={(!available && !inPlex) || isLoading}
-        className={`flex flex-col items-center gap-0.5 rounded-xl border px-3 py-2 text-[11px] font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${colorClass}`}
+        className={`relative flex flex-col items-center gap-0.5 rounded-xl border px-3 py-2 text-[11px] font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${colorClass}`}
         title={titleText}
       >
+        {imdbVerified && (
+          <BadgeCheck
+            className="absolute -top-1.5 -right-1.5 h-3.5 w-3.5 text-emerald-400 bg-card rounded-full"
+            title="Verificat via IMDB"
+          />
+        )}
         {isLoading ? (
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
         ) : inPlex ? (

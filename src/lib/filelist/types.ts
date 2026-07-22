@@ -11,6 +11,9 @@ export interface FilelistTorrent {
   internal: boolean;
   upload_date: string;
   imdb?: string;
+  // Setat client-side (nu vine din API) — marchează dacă rezultatul a fost
+  // confirmat prin id IMDB, vs. doar prin match strict de titlu.
+  matchedByImdb?: boolean;
 }
 
 export type FilelistCategory = "movies" | "series" | "all";
