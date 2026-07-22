@@ -41,6 +41,8 @@ export interface PlexData {
   topWatchers?: Array<{ user: string; plays: number; lastViewedAt: number }>;
   episodesToday?: number;
   activeUsersToday?: number;
+  moviesAddedLast24h?: number;
+  episodesAddedLast24h?: number;
   userHistory?: Record<string, PlexHistoryEntry[]>;
   todayViews?: PlexHistoryEntry[];
   activeUsersTodayList?: Array<{ user: string; count: number }>;
@@ -546,17 +548,25 @@ export const getPlex = createServerFn({ method: "GET" }).handler(async (): Promi
     const [recentMoviesJson, recentEpisodesJson] = await Promise.all([
       movieLibKeys.length > 0
         ? fetchJson<PlexApiResponse>(
-            `${url}/library/sections/${movieLibKeys[0]}/recentlyAdded?X-Plex-Container-Start=0&X-Plex-Container-Size=8&type=1`,
+            `${url}/library/sections/${movieLibKeys[0]}/recentlyAdded?X-Plex-Container-Start=0&X-Plex-Container-Size=100&type=1`,
             { headers },
           ).catch(() => ({ MediaContainer: { Metadata: [] } }))
         : Promise.resolve({ MediaContainer: { Metadata: [] } }),
       showLibKeys.length > 0
         ? fetchJson<PlexApiResponse>(
-            `${url}/library/sections/${showLibKeys[0]}/recentlyAdded?X-Plex-Container-Start=0&X-Plex-Container-Size=8&type=4`,
+            `${url}/library/sections/${showLibKeys[0]}/recentlyAdded?X-Plex-Container-Start=0&X-Plex-Container-Size=100&type=4`,
             { headers },
           ).catch(() => ({ MediaContainer: { Metadata: [] } }))
         : Promise.resolve({ MediaContainer: { Metadata: [] } }),
     ]);
+
+    const last24hCutoff = Math.floor(Date.now() / 1000) - 24 * 3600;
+    const moviesAddedLast24h = (recentMoviesJson?.MediaContainer?.Metadata ?? []).filter(
+      (m: PlexMetadataItem) => Number(m.addedAt ?? 0) >= last24hCutoff,
+    ).length;
+    const episodesAddedLast24h = (recentEpisodesJson?.MediaContainer?.Metadata ?? []).filter(
+      (m: PlexMetadataItem) => Number(m.addedAt ?? 0) >= last24hCutoff,
+    ).length;
 
     const recentMd = [
       ...(recentMoviesJson?.MediaContainer?.Metadata ?? []),
@@ -650,6 +660,8 @@ export const getPlex = createServerFn({ method: "GET" }).handler(async (): Promi
       topWatchers: history.topWatchers,
       episodesToday: history.episodesToday,
       activeUsersToday: history.activeUsersToday,
+      moviesAddedLast24h,
+      episodesAddedLast24h,
       userHistory: history.userHistory,
       todayViews: history.todayViews,
       activeUsersTodayList: history.activeUsersTodayList,

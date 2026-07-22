@@ -1,5 +1,6 @@
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { useState } from "react";
 import {
   History,
   Film,
@@ -22,6 +23,7 @@ export function DownloadLogSection() {
   const queryClient = useQueryClient();
   const { data: log, isLoading } = useQuery(filelistLogQuery);
   const deleteFn = useServerFn(deleteFilelistLogEntry);
+  const [visibleCount, setVisibleCount] = useState(3);
   const isMovie = (catId: number, catName = "") =>
     [1, 2, 3, 4, 6, 19, 26].includes(catId) || (catId === 0 && /film|movie/i.test(catName));
 
@@ -48,7 +50,7 @@ export function DownloadLogSection() {
       </h3>
       <div className="rounded-2xl border border-border bg-card p-3">
         <div className="divide-y divide-border/60">
-          {log.slice(0, 10).map((e: FilelistLogEntry) => (
+          {log.slice(0, visibleCount).map((e: FilelistLogEntry) => (
             <div
               key={`${e.id}-${e.downloadedAt}`}
               className="flex items-start gap-2.5 py-2 first:pt-0 last:pb-0"
@@ -120,6 +122,14 @@ export function DownloadLogSection() {
             </div>
           ))}
         </div>
+        {visibleCount < log.length && (
+          <button
+            onClick={() => setVisibleCount((c) => c + 5)}
+            className="mt-3 w-full rounded-xl bg-muted/50 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/80 hover:text-foreground transition-colors"
+          >
+            Afișează mai mult
+          </button>
+        )}
       </div>
     </div>
   );

@@ -12,6 +12,8 @@ import {
   Tv,
   Film,
   CheckCircle2,
+  Upload,
+  RefreshCw,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -48,6 +50,7 @@ function Overview() {
   const qbit = useQuery(qbitQuery);
   const host = useQuery(hostQuery);
   const [plexDrawer, setPlexDrawer] = useState<"views" | "users" | null>(null);
+  const [plexAddedMode, setPlexAddedMode] = useState<"movies" | "episodes">("movies");
 
   const stop = (fn: () => void) => (e: React.MouseEvent) => {
     e.preventDefault();
@@ -158,6 +161,30 @@ function Overview() {
                 onClick={stop(() => setPlexDrawer("users"))}
               />
             </div>
+            <div className="rounded-lg bg-muted/40 px-2.5 py-1.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                  {plexAddedMode === "movies" ? "Filme adăugate (24h)" : "Episoade adăugate (24h)"}
+                </div>
+                <button
+                  type="button"
+                  onClick={stop(() =>
+                    setPlexAddedMode((m) => (m === "movies" ? "episodes" : "movies")),
+                  )}
+                  className="shrink-0 rounded-full p-1 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                  title="Comută filme/episoade"
+                >
+                  <RefreshCw className="h-3 w-3" />
+                </button>
+              </div>
+              <div className="text-sm font-semibold tabular-nums">
+                {String(
+                  (plexAddedMode === "movies"
+                    ? plex.data.moviesAddedLast24h
+                    : plex.data.episodesAddedLast24h) ?? 0,
+                )}
+              </div>
+            </div>
           </div>
         )}
       </ServiceRow>
@@ -171,7 +198,7 @@ function Overview() {
         error={immich.data?.error}
       >
         {immich.data?.status === "ok" && (
-          <div className="grid grid-cols-3 gap-2 text-sm">
+          <div className="grid grid-cols-2 gap-2 text-sm">
             <Metric label="Fișiere" value={(immich.data.totalAssets ?? 0).toLocaleString()} />
             <Metric
               icon={<HardDrive className="h-3.5 w-3.5" />}
@@ -182,6 +209,15 @@ function Overview() {
               icon={<ListChecks className="h-3.5 w-3.5" />}
               label="Sarcini în curs"
               value={(immich.data.jobQueueDepth ?? 0).toLocaleString()}
+            />
+            <Metric
+              icon={<Upload className="h-3.5 w-3.5" />}
+              label="Încărcări azi"
+              value={
+                immich.data.uploadsToday != null
+                  ? immich.data.uploadsToday.toLocaleString()
+                  : "—"
+              }
             />
           </div>
         )}

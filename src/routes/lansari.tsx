@@ -12,7 +12,7 @@ export const Route = createFileRoute("/lansari")({
 
 function LansariPage() {
   return (
-    <PageShell title="Lansări" subtitle="Film · Serial · Filelist">
+    <PageShell title="Lansări" subtitle="Căutare, Monitorizare și Descărcare Filme/Seriale">
       <UnifiedSearchSection />
       <FilelistSection />
       <DownloadLogSection />

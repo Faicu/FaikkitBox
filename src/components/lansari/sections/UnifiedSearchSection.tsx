@@ -120,7 +120,7 @@ export function UnifiedSearchSection() {
   return (
     <section>
       <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
-        <Search className="h-3.5 w-3.5" /> Caută film sau serial
+        <Search className="h-3.5 w-3.5" /> Caută orice film sau serial
       </h2>
 
       <div className="rounded-2xl border border-border bg-card p-3">
@@ -129,7 +129,7 @@ export function UnifiedSearchSection() {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Titlu film sau serial..."
+            placeholder="Introdu titlul..."
             className="w-full rounded-xl border border-border bg-background py-2 pl-9 pr-3 text-sm outline-none focus:ring-1 focus:ring-primary"
           />
           {searching && (

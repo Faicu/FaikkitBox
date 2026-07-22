@@ -70,7 +70,7 @@ export function FilelistSection() {
   return (
     <section>
       <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
-        <Download className="h-3.5 w-3.5 text-blue-400" /> Caută pe FileList.io
+        <Download className="h-3.5 w-3.5 text-blue-400" /> Descărcare manuala de pe FileList.io
       </h2>
 
       <div className="rounded-2xl border border-border bg-card p-3 space-y-3">
@@ -81,7 +81,7 @@ export function FilelistSection() {
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Film sau serial..."
+              placeholder="Introdu titlul..."
               className="w-full rounded-xl border border-border bg-background py-2 pl-9 pr-3 text-sm outline-none focus:ring-1 focus:ring-primary"
             />
             {searching && (
@@ -105,6 +105,7 @@ export function FilelistSection() {
             [
               { label: "1080p", color: "blue" },
               { label: "4K", color: "purple" },
+              { label: "4K HDR", color: "amber" },
             ] as const
           ).map(({ label, color }) => {
             const active = qualityFilters.has(label);
@@ -115,6 +116,9 @@ export function FilelistSection() {
               purple: active
                 ? "border-purple-400/70 bg-purple-500/30 text-purple-200 shadow-sm shadow-purple-500/30"
                 : "border-purple-500/40 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 hover:text-purple-300",
+              amber: active
+                ? "border-amber-400/70 bg-amber-500/30 text-amber-200 shadow-sm shadow-amber-500/30"
+                : "border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 hover:text-amber-300",
             };
             return (
               <button
@@ -135,8 +139,8 @@ export function FilelistSection() {
           })}
           {qualityFilters.size > 0 && (
             <span className="self-center text-[11px] text-muted-foreground ml-1">
-              {qualityFilters.size === 2
-                ? "Afișez 1080p + 4K"
+              {qualityFilters.size > 1
+                ? `Afișez ${[...qualityFilters].join(" + ")}`
                 : `Afișez doar ${[...qualityFilters][0]}`}
             </span>
           )}
@@ -157,11 +161,13 @@ export function FilelistSection() {
                 ? results
                 : results.filter((t) => {
                     const name = t.name.toLowerCase();
-                    return [...qualityFilters].some((f) =>
-                      f === "4K"
-                        ? name.includes("2160p") || name.includes("4k")
-                        : name.includes("1080p"),
-                    );
+                    const is4k = name.includes("2160p") || name.includes("4k");
+                    const isHdr = /dovi|hdr10|hdr|hlg/i.test(name);
+                    return [...qualityFilters].some((f) => {
+                      if (f === "4K HDR") return is4k && isHdr;
+                      if (f === "4K") return is4k && !isHdr;
+                      return name.includes("1080p");
+                    });
                   });
             return (
               <div className="space-y-2">
