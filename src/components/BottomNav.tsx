@@ -1,23 +1,10 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import {
-  LayoutDashboard,
-  PlayCircle,
-  Flame,
-  Images,
-  Download,
-  Cpu,
-  Wrench,
-  Compass,
-} from "lucide-react";
+import { LayoutDashboard, Flame, Wrench, Compass } from "lucide-react";
 
 const baseItems = [
   { to: "/", label: "Acasă", icon: LayoutDashboard },
   { to: "/descopera", label: "Descoperă", icon: Compass },
   { to: "/lansari", label: "Lansări", icon: Flame },
-  { to: "/plex", label: "Plex", icon: PlayCircle },
-  { to: "/immich", label: "Immich", icon: Images },
-  { to: "/qbit", label: "qBit", icon: Download },
-  { to: "/sistem", label: "Sistem", icon: Cpu },
   { to: "/tehnic", label: "Tehnic", icon: Wrench },
 ] as const;
 

@@ -19,6 +19,7 @@ import { StatCard } from "@/components/StatCard";
 import { ErrorCard } from "@/components/ErrorCard";
 import { ServiceHeaderActions, CommandOutput } from "@/components/ServiceHeaderActions";
 import { useServiceRecovery } from "@/components/useServiceRecovery";
+import { TehnicSubNav } from "@/components/tehnic/TehnicSubNav";
 import {
   Drawer,
   DrawerContent,
@@ -72,6 +73,8 @@ function PlexPage() {
         />
       }
     >
+      <TehnicSubNav />
+
       {data?.status === "error" &&
         (recovering ? (
           <RecoveryNotice service="Plex" />

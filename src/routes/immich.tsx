@@ -8,6 +8,7 @@ import { StatCard } from "@/components/StatCard";
 import { ErrorCard } from "@/components/ErrorCard";
 import { ServiceHeaderActions, CommandOutput } from "@/components/ServiceHeaderActions";
 import { useServiceRecovery } from "@/components/useServiceRecovery";
+import { TehnicSubNav } from "@/components/tehnic/TehnicSubNav";
 import { immichQuery } from "@/lib/queries";
 import { formatBytes } from "@/lib/format";
 import type { AgentCommand, AgentResult } from "@/lib/agent.functions";
@@ -42,6 +43,8 @@ function ImmichPage() {
         />
       }
     >
+      <TehnicSubNav />
+
       {data?.status === "error" &&
         (recovering ? (
           <div className="rounded-2xl border border-sky-500/30 bg-sky-500/10 p-3 text-sm text-sky-300">

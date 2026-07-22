@@ -23,6 +23,7 @@ import { Meter } from "@/components/Meter";
 import { ErrorCard } from "@/components/ErrorCard";
 import { ServiceHeaderActions, CommandOutput } from "@/components/ServiceHeaderActions";
 import { useServiceRecovery } from "@/components/useServiceRecovery";
+import { TehnicSubNav } from "@/components/tehnic/TehnicSubNav";
 import { qbitQuery, adminStatusQuery } from "@/lib/queries";
 import type { AgentCommand, AgentResult } from "@/lib/agent.functions";
 import { formatBytes, formatSpeed, formatEta } from "@/lib/format";
@@ -121,6 +122,8 @@ function QbitPage() {
         />
       }
     >
+      <TehnicSubNav />
+
       {lastCmd && <CommandOutput command={lastCmd.command} result={lastCmd.result} />}
 
       {data?.status === "error" &&

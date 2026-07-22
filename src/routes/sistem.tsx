@@ -23,6 +23,7 @@ import { Meter } from "@/components/Meter";
 import { StatCard } from "@/components/StatCard";
 import { ErrorCard } from "@/components/ErrorCard";
 import { CommandOutput } from "@/components/ServiceHeaderActions";
+import { TehnicSubNav } from "@/components/tehnic/TehnicSubNav";
 import { logAgentActivity, runAgentCommand } from "@/lib/agent.functions";
 import type { AgentCommand, AgentResult } from "@/lib/agent.functions";
 import { adminStatusQuery, hostQuery } from "@/lib/queries";
@@ -102,6 +103,8 @@ function HostPage() {
         </div>
       }
     >
+      <TehnicSubNav />
+
       {lastCmd && <CommandOutput command={lastCmd.cmd} result={lastCmd.result} />}
 
       {isAdmin && <PushNotificationsCard push={push} />}

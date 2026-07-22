@@ -21,6 +21,7 @@ import { PluginStatusSection } from "@/components/tehnic/sections/PluginStatusSe
 import { CommitStatsSection } from "@/components/tehnic/sections/CommitStatsSection";
 import { ActivityLogSection } from "@/components/tehnic/sections/ActivityLogSection";
 import { SpeedtestChart } from "@/components/tehnic/sections/SpeedtestChart";
+import { TehnicSubNav } from "@/components/tehnic/TehnicSubNav";
 
 export const Route = createFileRoute("/tehnic")({
   head: () => ({
@@ -61,6 +62,8 @@ function TehnicPage() {
 
   return (
     <PageShell title="Tehnic" subtitle="Plugin-uri, statistici și diagnostice">
+      <TehnicSubNav />
+
       {/* Plugin-uri active */}
       <PluginStatusSection />
 
