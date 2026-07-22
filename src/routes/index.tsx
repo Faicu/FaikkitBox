@@ -153,13 +153,13 @@ function Overview() {
             )}
             <div className="grid grid-cols-3 gap-1.5">
               <MetricButton
-                label="Azi"
+                label="Vizionate azi"
                 value={String(plex.data.episodesToday ?? 0)}
                 onClick={stop(() => setPlexDrawer("views"))}
                 compact
               />
               <MetricButton
-                label="Utilizatori"
+                label="Utilizatori activi azi"
                 value={String(plex.data.activeUsersToday ?? 0)}
                 onClick={stop(() => setPlexDrawer("users"))}
                 compact
@@ -463,10 +463,10 @@ function MetricButton({
       className={`rounded-lg bg-muted/40 text-left transition-colors hover:bg-muted/60 active:bg-muted ${compact ? "px-2 py-1" : "px-2.5 py-1.5"}`}
     >
       <div
-        className={`flex items-center gap-1 uppercase tracking-wide text-muted-foreground ${compact ? "text-[9px]" : "text-[10px]"}`}
+        className={`flex items-start gap-1 uppercase tracking-wide leading-tight text-muted-foreground ${compact ? "text-[9px]" : "text-[10px]"}`}
       >
         {icon}
-        {label}
+        <span>{label}</span>
       </div>
       <div className="text-sm font-semibold tabular-nums">{value}</div>
     </button>
