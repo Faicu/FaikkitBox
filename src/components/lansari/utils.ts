@@ -13,13 +13,16 @@ function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-// Match strict, pe cuvinte întregi (nu substring) — Filelist face doar căutare
-// loose după nume, deci filtrăm noi rezultatele care nu conțin titlul exact.
+// Match strict, ancorat la începutul numelui — Filelist face doar căutare
+// loose (substring) după nume, iar torrentele urmează convenția
+// "Titlu.SxxExx..."/"Titlu.Anul...", deci titlul trebuie să apară chiar la
+// început, nu doar oriunde în nume (altfel "Lucky" prinde și
+// "I.Got.Lucky.Survival.Stories...").
 export function torrentMatchesTitle(name: string, title: string): boolean {
   const words = stripDiacritics(title).trim().split(/\s+/).filter(Boolean).map(escapeRegex);
   if (words.length === 0) return false;
-  const pattern = new RegExp(`\\b${words.join("[\\W_]+")}\\b`, "i");
-  return pattern.test(name);
+  const pattern = new RegExp(`^${words.join("[\\W_]+")}\\b`, "i");
+  return pattern.test(stripDiacritics(name).trim());
 }
 
 export function filterTorrentsForItem(
