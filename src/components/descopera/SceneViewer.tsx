@@ -7,8 +7,17 @@ import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/u
 import { getTmdbVideos } from "@/lib/tmdb.discover.functions";
 import type { DiscoverTitle } from "@/lib/tmdb.discover.functions";
 import { getTmdbDetails } from "@/lib/tmdb.functions";
+import { FilelistCheckButton } from "./FilelistCheckButton";
 
-export function SceneViewer({ item, onClose }: { item: DiscoverTitle; onClose: () => void }) {
+export function SceneViewer({
+  item,
+  isAdmin,
+  onClose,
+}: {
+  item: DiscoverTitle;
+  isAdmin: boolean;
+  onClose: () => void;
+}) {
   const videosFn = useServerFn(getTmdbVideos);
   const detailsFn = useServerFn(getTmdbDetails);
   const [videoIndex, setVideoIndex] = useState(0);
@@ -82,6 +91,8 @@ export function SceneViewer({ item, onClose }: { item: DiscoverTitle; onClose: (
               </a>
             )}
           </div>
+
+          <FilelistCheckButton title={item.title} mediaType={item.mediaType} isAdmin={isAdmin} />
         </div>
       </DrawerContent>
     </Drawer>

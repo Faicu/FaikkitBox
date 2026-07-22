@@ -7,21 +7,15 @@ import { getDiscoverTitles } from "@/lib/tmdb.discover.functions";
 import type { DiscoverMediaType, DiscoverSort, DiscoverTitle } from "@/lib/tmdb.discover.functions";
 import { SceneViewer } from "./SceneViewer";
 
-const sortTabs: { value: DiscoverSort; label: string }[] = [
-  { value: "trending", label: "Trending" },
-  { value: "popular_all_time", label: "Populare all-time" },
-  { value: "newest", label: "Cele mai noi" },
-];
-
-const mediaTabs: { value: DiscoverMediaType | "all"; label: string }[] = [
-  { value: "all", label: "Tot" },
-  { value: "movie", label: "Filme" },
-  { value: "tv", label: "Seriale" },
-];
-
-export function DiscoverGrid() {
-  const [sort, setSort] = useState<DiscoverSort>("trending");
-  const [media, setMedia] = useState<DiscoverMediaType | "all">("all");
+export function DiscoverGrid({
+  sort,
+  media,
+  isAdmin,
+}: {
+  sort: DiscoverSort;
+  media: DiscoverMediaType | "all";
+  isAdmin: boolean;
+}) {
   const [selected, setSelected] = useState<DiscoverTitle | null>(null);
 
   const discoverFn = useServerFn(getDiscoverTitles);
@@ -59,40 +53,6 @@ export function DiscoverGrid() {
 
   return (
     <div className="space-y-4">
-      <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1">
-        {sortTabs.map((tab) => (
-          <button
-            key={tab.value}
-            type="button"
-            onClick={() => setSort(tab.value)}
-            className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-              sort === tab.value
-                ? "bg-primary text-primary-foreground"
-                : "bg-muted/60 text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="flex gap-1.5">
-        {mediaTabs.map((tab) => (
-          <button
-            key={tab.value}
-            type="button"
-            onClick={() => setMedia(tab.value)}
-            className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-              media === tab.value
-                ? "bg-primary text-primary-foreground"
-                : "bg-muted/60 text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
       {isLoading ? (
         <div className="grid grid-cols-3 gap-3">
           {Array.from({ length: 9 }).map((_, i) => (
@@ -147,7 +107,9 @@ export function DiscoverGrid() {
         </div>
       )}
 
-      {selected && <SceneViewer item={selected} onClose={() => setSelected(null)} />}
+      {selected && (
+        <SceneViewer item={selected} isAdmin={isAdmin} onClose={() => setSelected(null)} />
+      )}
     </div>
   );
 }
