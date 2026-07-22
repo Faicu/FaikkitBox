@@ -149,41 +149,44 @@ function Overview() {
                 <div className="mt-0.5 text-sm font-semibold">Nimeni</div>
               </div>
             )}
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-1.5">
               <MetricButton
-                label="Vizionate Azi"
+                label="Azi"
                 value={String(plex.data.episodesToday ?? 0)}
                 onClick={stop(() => setPlexDrawer("views"))}
+                compact
               />
               <MetricButton
-                label="Utilizatori activi azi"
+                label="Utilizatori"
                 value={String(plex.data.activeUsersToday ?? 0)}
                 onClick={stop(() => setPlexDrawer("users"))}
+                compact
               />
-            </div>
-            <div className="rounded-lg bg-muted/40 px-2.5 py-1.5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                  {plexAddedMode === "movies" ? "Filme adăugate (24h)" : "Episoade adăugate (24h)"}
-                </div>
-                <button
-                  type="button"
-                  onClick={stop(() =>
-                    setPlexAddedMode((m) => (m === "movies" ? "episodes" : "movies")),
-                  )}
-                  className="shrink-0 rounded-full p-1 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                  title="Comută filme/episoade"
-                >
-                  <RefreshCw className="h-3 w-3" />
-                </button>
-              </div>
-              <div className="text-sm font-semibold tabular-nums">
-                {String(
-                  (plexAddedMode === "movies"
-                    ? plex.data.moviesAddedLast24h
-                    : plex.data.episodesAddedLast24h) ?? 0,
+              <button
+                type="button"
+                onClick={stop(() =>
+                  setPlexAddedMode((m) => (m === "movies" ? "episodes" : "movies")),
                 )}
-              </div>
+                className="rounded-lg bg-muted/40 px-2 py-1 text-left transition-colors hover:bg-muted/60 active:bg-muted"
+                title="Comută filme/episoade adăugate (24h)"
+              >
+                <div className="flex items-center gap-1 text-[9px] uppercase tracking-wide text-muted-foreground">
+                  {plexAddedMode === "movies" ? (
+                    <Film className="h-3 w-3 text-amber-400" />
+                  ) : (
+                    <Tv className="h-3 w-3 text-blue-400" />
+                  )}
+                  24h
+                  <RefreshCw className="h-2.5 w-2.5 ml-auto" />
+                </div>
+                <div className="text-sm font-semibold tabular-nums">
+                  {String(
+                    (plexAddedMode === "movies"
+                      ? plex.data.moviesAddedLast24h
+                      : plex.data.episodesAddedLast24h) ?? 0,
+                  )}
+                </div>
+              </button>
             </div>
           </div>
         )}
@@ -198,26 +201,33 @@ function Overview() {
         error={immich.data?.error}
       >
         {immich.data?.status === "ok" && (
-          <div className="grid grid-cols-2 gap-2 text-sm">
-            <Metric label="Fișiere" value={(immich.data.totalAssets ?? 0).toLocaleString()} />
+          <div className="grid grid-cols-4 gap-1.5 text-sm">
             <Metric
-              icon={<HardDrive className="h-3.5 w-3.5" />}
+              label="Fișiere"
+              value={(immich.data.totalAssets ?? 0).toLocaleString()}
+              compact
+            />
+            <Metric
+              icon={<HardDrive className="h-3 w-3" />}
               label="Spațiu"
               value={formatBytes(immich.data.usageBytes ?? 0)}
+              compact
             />
             <Metric
-              icon={<ListChecks className="h-3.5 w-3.5" />}
-              label="Sarcini în curs"
+              icon={<ListChecks className="h-3 w-3" />}
+              label="Sarcini"
               value={(immich.data.jobQueueDepth ?? 0).toLocaleString()}
+              compact
             />
             <Metric
-              icon={<Upload className="h-3.5 w-3.5" />}
-              label="Încărcări azi"
+              icon={<Upload className="h-3 w-3" />}
+              label="Azi"
               value={
                 immich.data.uploadsToday != null
                   ? immich.data.uploadsToday.toLocaleString()
                   : "—"
               }
+              compact
             />
           </div>
         )}
@@ -403,10 +413,22 @@ function ServiceRow({
   );
 }
 
-function Metric({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) {
+function Metric({
+  label,
+  value,
+  icon,
+  compact,
+}: {
+  label: string;
+  value: string;
+  icon?: React.ReactNode;
+  compact?: boolean;
+}) {
   return (
-    <div className="rounded-lg bg-muted/40 px-2.5 py-1.5">
-      <div className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+    <div className={`rounded-lg bg-muted/40 ${compact ? "px-2 py-1" : "px-2.5 py-1.5"}`}>
+      <div
+        className={`flex items-center gap-1 uppercase tracking-wide text-muted-foreground ${compact ? "text-[9px]" : "text-[10px]"}`}
+      >
         {icon}
         {label}
       </div>
@@ -420,19 +442,23 @@ function MetricButton({
   value,
   icon,
   onClick,
+  compact,
 }: {
   label: string;
   value: string;
   icon?: React.ReactNode;
   onClick: (e: React.MouseEvent) => void;
+  compact?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="rounded-lg bg-muted/40 px-2.5 py-1.5 text-left transition-colors hover:bg-muted/60 active:bg-muted"
+      className={`rounded-lg bg-muted/40 text-left transition-colors hover:bg-muted/60 active:bg-muted ${compact ? "px-2 py-1" : "px-2.5 py-1.5"}`}
     >
-      <div className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+      <div
+        className={`flex items-center gap-1 uppercase tracking-wide text-muted-foreground ${compact ? "text-[9px]" : "text-[10px]"}`}
+      >
         {icon}
         {label}
       </div>
