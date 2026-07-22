@@ -397,7 +397,7 @@ export const downloadFilelist = createServerFn({ method: "POST" })
 
       const uploadRes = await fetch(`${url}/api/v2/torrents/add`, {
         method: "POST",
-        headers: { Cookie: cookie },
+        headers: { Cookie: cookie, Referer: url, Origin: url },
         body: form,
         signal: AbortSignal.timeout(30_000),
       });
@@ -560,7 +560,7 @@ export async function downloadFilelistInternal(params: {
 
     const uploadRes = await fetch(`${url}/api/v2/torrents/add`, {
       method: "POST",
-      headers: { Cookie: cookie },
+      headers: { Cookie: cookie, Referer: url, Origin: url },
       body: form,
       signal: AbortSignal.timeout(30_000),
     });
