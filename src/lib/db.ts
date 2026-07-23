@@ -126,6 +126,15 @@ export function getDb(): DatabaseSync {
       plex_movie_found INTEGER,
       PRIMARY KEY (id, media_type)
     );
+
+    CREATE TABLE IF NOT EXISTS error_log (
+      id TEXT PRIMARY KEY,
+      timestamp TEXT NOT NULL,
+      source TEXT NOT NULL,
+      message TEXT NOT NULL,
+      stack TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_error_log_timestamp ON error_log(timestamp DESC);
   `);
 
   // Migrare din JSON (o singură dată, la prima pornire cu SQLite)

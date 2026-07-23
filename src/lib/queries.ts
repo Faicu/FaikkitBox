@@ -5,6 +5,7 @@ import { getAdminStatus } from "./admin.functions";
 import { getVersions } from "./versions.functions";
 import { getLastSpeedtest, getSpeedtestHistory } from "./speedtest.functions";
 import { getActivityLog } from "./activity-log";
+import { getErrorLogs } from "./error-log";
 import { getFilelistDownloadLog } from "./filelist.functions";
 import { getRecentCommits, getCommitsFromDb, getGitHubSyncStatus } from "./github.functions";
 
@@ -57,6 +58,14 @@ export const activityLogQuery = queryOptions({
   queryFn: () => getActivityLog(),
   refetchInterval: 5_000,
   staleTime: 2_000,
+  ...keepPrev,
+});
+
+export const errorLogQuery = queryOptions({
+  queryKey: ["errorLog"],
+  queryFn: () => getErrorLogs(),
+  refetchInterval: 15_000,
+  staleTime: 5_000,
   ...keepPrev,
 });
 

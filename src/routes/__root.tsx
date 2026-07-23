@@ -15,6 +15,7 @@ import { BottomNav } from "../components/BottomNav";
 import { Toaster } from "../components/ui/sonner";
 import { useAutoReload } from "../hooks/use-auto-reload";
 import { onUpdateDetected } from "../lib/update-signal";
+import { logClientError } from "../lib/error-log";
 import { toast } from "sonner";
 
 function NotFoundComponent() {
@@ -41,6 +42,7 @@ function NotFoundComponent() {
 
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   console.error(error);
+  logClientError({ data: { message: error.message, stack: error.stack } }).catch(() => {});
   const router = useRouter();
 
   return (
@@ -162,6 +164,22 @@ function AutoReloadWatcher() {
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").catch(() => {});
     }
+  }, []);
+
+  useEffect(() => {
+    const reportError = (error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      const stack = error instanceof Error ? error.stack : undefined;
+      logClientError({ data: { message, stack } }).catch(() => {});
+    };
+    const onError = (event: ErrorEvent) => reportError(event.error ?? event.message);
+    const onRejection = (event: PromiseRejectionEvent) => reportError(event.reason);
+    window.addEventListener("error", onError);
+    window.addEventListener("unhandledrejection", onRejection);
+    return () => {
+      window.removeEventListener("error", onError);
+      window.removeEventListener("unhandledrejection", onRejection);
+    };
   }, []);
 
   useEffect(() => {

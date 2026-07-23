@@ -20,6 +20,7 @@ import { Metric } from "@/components/tehnic/Metric";
 import { PluginStatusSection } from "@/components/tehnic/sections/PluginStatusSection";
 import { CommitStatsSection } from "@/components/tehnic/sections/CommitStatsSection";
 import { ActivityLogSection } from "@/components/tehnic/sections/ActivityLogSection";
+import { ErrorLogSection } from "@/components/tehnic/sections/ErrorLogSection";
 import { SpeedtestChart } from "@/components/tehnic/sections/SpeedtestChart";
 import { TehnicSubNav } from "@/components/tehnic/TehnicSubNav";
 
@@ -203,6 +204,9 @@ function TehnicPage() {
           </div>
         </DrawerContent>
       </Drawer>
+
+      {/* Erori aplicație */}
+      <ErrorLogSection />
 
       {/* Jurnal activitate */}
       <ActivityLogSection />
