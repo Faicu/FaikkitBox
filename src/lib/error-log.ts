@@ -50,7 +50,7 @@ export const getErrorLogs = createServerFn({ method: "GET" }).handler(
       .prepare(
         "SELECT id, timestamp, source, message, stack FROM error_log ORDER BY timestamp DESC LIMIT 500",
       )
-      .all() as ErrorLogEntry[];
+      .all() as unknown as ErrorLogEntry[];
     return rows;
   },
 );
