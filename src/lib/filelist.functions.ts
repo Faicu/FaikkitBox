@@ -5,5 +5,5 @@
 export * from "./filelist/types";
 export * from "./filelist/categories";
 export * from "./filelist/log";
-export * from "./filelist/qbit-client";
+export * from "./qbit-client";
 export * from "./filelist/download";

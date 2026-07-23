@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import type { FilelistLogEntry, DownloadLogRow } from "./types";
-import { qbitLogin } from "./qbit-client";
+import { qbitLogin } from "../qbit-client";
 
 // ---------------------------------------------------------------------------
 // Log persistent al descărcărilor

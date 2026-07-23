@@ -18,7 +18,7 @@ import {
   parseCategoryId,
   isMovieCategory,
 } from "./categories";
-import { qbitLogin, qbitEnsureCookie, resetQbitCookie } from "./qbit-client";
+import { qbitLogin, qbitEnsureCookie, resetQbitCookie } from "../qbit-client";
 import { readDownloadLog, appendDownloadLog, markLogEntryComplete } from "./log";
 
 // ---------------------------------------------------------------------------
@@ -94,10 +94,22 @@ async function plexRefreshLibrary(sectionKey: string): Promise<void> {
   const base = process.env.PLEX_URL ?? "http://127.0.0.1:32400";
   const token = process.env.PLEX_TOKEN;
   if (!token) return;
-  await fetch(`${base}/library/sections/${sectionKey}/refresh`, {
-    method: "GET",
-    headers: { "X-Plex-Token": token, Accept: "application/json" },
-  }).catch(() => {});
+  try {
+    const res = await fetch(`${base}/library/sections/${sectionKey}/refresh`, {
+      method: "GET",
+      headers: { "X-Plex-Token": token, Accept: "application/json" },
+    });
+    if (!res.ok) {
+      const err = new Error(`Plex refresh HTTP ${res.status} pentru secțiunea ${sectionKey}`);
+      console.warn(`[filelist] ${err.message}`);
+      const { logError } = await import("../error-log");
+      logError("server-fn", err);
+    }
+  } catch (e) {
+    console.warn(`[filelist] Eroare Plex refresh:`, e);
+    const { logError } = await import("../error-log");
+    logError("server-fn", e);
+  }
 }
 
 async function plexFindLibraryKey(type: "movie" | "show"): Promise<string | null> {
@@ -108,13 +120,22 @@ async function plexFindLibraryKey(type: "movie" | "show"): Promise<string | null
     const res = await fetch(`${base}/library/sections`, {
       headers: { "X-Plex-Token": token, Accept: "application/json" },
     });
+    if (!res.ok) {
+      console.warn(`[filelist] Plex library sections HTTP ${res.status}`);
+      const { logError } = await import("../error-log");
+      logError("server-fn", new Error(`Plex library sections HTTP ${res.status}`));
+      return null;
+    }
     const data = (await res.json()) as {
       MediaContainer?: { Directory?: Array<{ type?: string; key?: string }> };
     };
     const dirs = data?.MediaContainer?.Directory ?? [];
     const match = dirs.find((d) => d.type === type);
     return match ? String(match.key) : null;
-  } catch {
+  } catch (e) {
+    console.warn(`[filelist] Eroare la găsirea secțiunii Plex:`, e);
+    const { logError } = await import("../error-log");
+    logError("server-fn", e);
     return null;
   }
 }
@@ -305,206 +326,7 @@ export const searchFilelist = createServerFn({ method: "GET" })
 // Server function: descarcă torrent și trimite la qBittorrent
 // ---------------------------------------------------------------------------
 
-export const downloadFilelist = createServerFn({ method: "POST" })
-  .validator(
-    (data: {
-      torrentId: number;
-      torrentName: string;
-      categoryId: number;
-      categoryName?: string;
-      size?: number;
-      freeleech?: boolean;
-      internal?: boolean;
-    }) => ({
-      ...data,
-      torrentId: Number(data.torrentId),
-      categoryId: Number(data.categoryId),
-      size: data.size !== undefined ? Number(data.size) : undefined,
-    }),
-  )
-  .handler(async ({ data }): Promise<FilelistDownloadResult> => {
-    const { requireAdmin } = await import("../admin.server");
-    await requireAdmin();
-    const username = process.env.FILELIST_USERNAME;
-    const passkey = process.env.FILELIST_PASSKEY;
-    const qbitBase = process.env.QBIT_URL ?? "http://192.168.1.192:25556";
-    const qbitUser = process.env.QBIT_USERNAME;
-    const qbitPass = process.env.QBIT_PASSWORD;
-    const moviesPath = process.env.MEDIA_MOVIES_PATH ?? "/media/ssd2tb/Filme";
-    const seriesPath = process.env.MEDIA_SERIES_PATH ?? "/media/ssd2tb/Seriale";
-
-    if (!username || !passkey) {
-      return { status: "error", error: "FILELIST_USERNAME / FILELIST_PASSKEY nu sunt configurate" };
-    }
-    if (!qbitUser || !qbitPass) {
-      return { status: "error", error: "QBIT_USERNAME / QBIT_PASSWORD nu sunt configurate" };
-    }
-
-    const catId = data.categoryId || (data.categoryName ? parseCategoryId(data.categoryName) : 0);
-    const isMovie =
-      isMovieCategory(catId) || (catId === 0 && /film|movie/i.test(data.categoryName ?? ""));
-    const savePath = isMovie ? moviesPath : seriesPath;
-
-    // 1. Descarcă fișierul .torrent de la Filelist
-    // Filelist API nu are endpoint de download — se folosește download.php cu passkey
-    const dlUrl = `https://filelist.io/download.php?id=${data.torrentId}&passkey=${passkey}`;
-    let torrentBuffer: ArrayBuffer;
-    try {
-      const dlRes = await fetch(dlUrl, {
-        signal: AbortSignal.timeout(20_000),
-        headers: { "User-Agent": "Mozilla/5.0 (compatible; FaikkitBox/1.0)" },
-      });
-      if (!dlRes.ok) {
-        return {
-          status: "error",
-          error: `Eroare la descărcarea torrentului: HTTP ${dlRes.status}`,
-        };
-      }
-      torrentBuffer = await dlRes.arrayBuffer();
-    } catch (e) {
-      return {
-        status: "error",
-        error: `Eroare rețea Filelist: ${e instanceof Error ? e.message : e}`,
-      };
-    }
-
-    // 2. Scrie temporar fișierul .torrent pe disk
-    const safeName = data.torrentName.replace(/[^a-z0-9_\-. ]/gi, "_").slice(0, 80);
-    const tmpPath = join(tmpdir(), `faikkitbox_${data.torrentId}_${Date.now()}.torrent`);
-    await writeFile(tmpPath, Buffer.from(torrentBuffer));
-
-    try {
-      // 3. Autentifică-te la qBittorrent
-      const url = qbitBase.replace(/\/$/, "");
-      let cookie: string;
-      try {
-        cookie = await qbitEnsureCookie(url, qbitUser, qbitPass);
-      } catch {
-        resetQbitCookie();
-        cookie = await qbitLogin(url, qbitUser, qbitPass);
-      }
-
-      // 4. Trimite torrentul la qBittorrent cu save path corect
-      const form = new FormData();
-      const fileBytes = await import("node:fs/promises").then((m) => m.readFile(tmpPath));
-      form.append(
-        "torrents",
-        new Blob([fileBytes], { type: "application/x-bittorrent" }),
-        `${safeName}.torrent`,
-      );
-      form.append("savepath", savePath);
-      form.append("category", isMovie ? "filme" : "seriale");
-
-      let uploadRes = await fetch(`${url}/api/v2/torrents/add`, {
-        method: "POST",
-        headers: { Cookie: cookie, Referer: url, Origin: url },
-        body: form,
-        signal: AbortSignal.timeout(30_000),
-      });
-
-      // Sesiunea SID poate expira în qBittorrent între timp; un SID expirat
-      // primește tot 403 (nu 401), deci reîncercăm o dată cu login proaspăt.
-      if (!uploadRes.ok) {
-        resetQbitCookie();
-        cookie = await qbitLogin(url, qbitUser, qbitPass);
-        uploadRes = await fetch(`${url}/api/v2/torrents/add`, {
-          method: "POST",
-          headers: { Cookie: cookie, Referer: url, Origin: url },
-          body: form,
-          signal: AbortSignal.timeout(30_000),
-        });
-      }
-
-      if (!uploadRes.ok) {
-        const txt = await uploadRes.text().catch(() => "");
-        return {
-          status: "error",
-          error: `qBittorrent upload eșuat: HTTP ${uploadRes.status} ${txt.slice(0, 120)}`,
-        };
-      }
-
-      const uploadText = await uploadRes.text();
-      if (!uploadText.includes("Ok")) {
-        console.warn("qBit upload răspuns neașteptat:", uploadText);
-      }
-
-      // 5. Găsește hash-ul torrentului proaspăt adăugat
-      await new Promise((r) => setTimeout(r, 2000));
-      let torrentHash: string | null = null;
-      try {
-        const listRes = await fetch(
-          `${url}/api/v2/torrents/info?sort=added_on&reverse=true&limit=5`,
-          {
-            headers: { Cookie: cookie },
-            signal: AbortSignal.timeout(10_000),
-          },
-        );
-        if (listRes.ok) {
-          const list: QbitTorrentInfo[] = await listRes.json();
-          const match =
-            list.find((t) =>
-              String(t.name ?? "")
-                .toLowerCase()
-                .includes(data.torrentName.slice(0, 20).toLowerCase()),
-            ) ?? list[0];
-          torrentHash = match?.hash ?? null;
-        }
-      } catch (e) {
-        console.warn("[filelist] Nu am putut obține hash-ul torrentului:", e);
-      }
-
-      // 6. Loghează descărcarea imediat (completedAt null = în curs)
-      const catId = Number(data.categoryId);
-      const catName = data.categoryName || CATEGORY_NAMES[catId] || `Cat ${catId}`;
-
-      // Log activitate
-      import("../activity-log")
-        .then(({ logActivity }) =>
-          logActivity("torrent_added", `Torrent adăugat: ${data.torrentName}`, {
-            category: catName,
-            savePath,
-            size: data.size,
-          }),
-        )
-        .catch(() => {});
-      await appendDownloadLog({
-        id: data.torrentId,
-        name: data.torrentName,
-        size: data.size ?? 0,
-        category: catId,
-        categoryName: catName,
-        freeleech: data.freeleech ?? false,
-        internal: data.internal ?? false,
-        savePath,
-        downloadedAt: new Date().toISOString(),
-        completedAt: null,
-        torrentHash: torrentHash ?? undefined,
-      });
-
-      // 7. Pornește polling background — refresh Plex și marchează complet DOAR la final
-      const plexType = isMovie ? "movie" : "show";
-      if (torrentHash) {
-        pollUntilComplete(
-          url,
-          cookie,
-          torrentHash,
-          plexType,
-          data.torrentName,
-          data.torrentId,
-        ).catch((e) => console.error("[filelist] Eroare polling:", e));
-      } else {
-        console.warn("[filelist] Hash nedisponibil — Plex nu va fi refreshuit automat");
-      }
-
-      return { status: "ok", torrentName: data.torrentName, savePath };
-    } finally {
-      // Curăță fișierul temporar
-      await unlink(tmpPath).catch(() => {});
-    }
-  });
-
-// Versiune internă pentru plugin (fără requireAdmin)
-export async function downloadFilelistInternal(params: {
+interface DownloadFilelistParams {
   torrentId: number;
   torrentName: string;
   categoryId: number;
@@ -513,7 +335,14 @@ export async function downloadFilelistInternal(params: {
   freeleech?: boolean;
   internal?: boolean;
   skipLog?: boolean;
-}): Promise<FilelistDownloadResult> {
+}
+
+// Implementare comună pentru descărcare + upload la qBittorrent, folosită atât
+// de server function-ul public (downloadFilelist) cât și de fluxul intern de
+// auto-descărcare din plugin-uri (downloadFilelistInternal).
+async function downloadFilelistCore(
+  params: DownloadFilelistParams,
+): Promise<FilelistDownloadResult> {
   const username = process.env.FILELIST_USERNAME;
   const passkey = process.env.FILELIST_PASSKEY;
   const qbitBase = process.env.QBIT_URL ?? "http://192.168.1.192:25556";
@@ -522,15 +351,20 @@ export async function downloadFilelistInternal(params: {
   const moviesPath = process.env.MEDIA_MOVIES_PATH ?? "/media/ssd2tb/Filme";
   const seriesPath = process.env.MEDIA_SERIES_PATH ?? "/media/ssd2tb/Seriale";
 
-  if (!username || !passkey) return { status: "error", error: "FILELIST credentials lipsă" };
-  if (!qbitUser || !qbitPass) return { status: "error", error: "qBit credentials lipsă" };
+  if (!username || !passkey) {
+    return { status: "error", error: "FILELIST_USERNAME / FILELIST_PASSKEY nu sunt configurate" };
+  }
+  if (!qbitUser || !qbitPass) {
+    return { status: "error", error: "QBIT_USERNAME / QBIT_PASSWORD nu sunt configurate" };
+  }
 
-  const catId =
-    params.categoryId || (params.categoryName ? parseCategoryId(params.categoryName) : 0);
+  const catId = params.categoryId || (params.categoryName ? parseCategoryId(params.categoryName) : 0);
   const isMovie =
     isMovieCategory(catId) || (catId === 0 && /film|movie/i.test(params.categoryName ?? ""));
   const savePath = isMovie ? moviesPath : seriesPath;
 
+  // 1. Descarcă fișierul .torrent de la Filelist
+  // Filelist API nu are endpoint de download — se folosește download.php cu passkey
   const dlUrl = `https://filelist.io/download.php?id=${params.torrentId}&passkey=${passkey}`;
   let torrentBuffer: ArrayBuffer;
   try {
@@ -538,7 +372,9 @@ export async function downloadFilelistInternal(params: {
       signal: AbortSignal.timeout(20_000),
       headers: { "User-Agent": "Mozilla/5.0 (compatible; FaikkitBox/1.0)" },
     });
-    if (!dlRes.ok) return { status: "error", error: `Filelist HTTP ${dlRes.status}` };
+    if (!dlRes.ok) {
+      return { status: "error", error: `Eroare la descărcarea torrentului: HTTP ${dlRes.status}` };
+    }
     torrentBuffer = await dlRes.arrayBuffer();
   } catch (e) {
     return {
@@ -547,11 +383,13 @@ export async function downloadFilelistInternal(params: {
     };
   }
 
+  // 2. Scrie temporar fișierul .torrent pe disk
   const safeName = params.torrentName.replace(/[^a-z0-9_\-. ]/gi, "_").slice(0, 80);
-  const tmpPath = join(tmpdir(), `faikkitbox_auto_${params.torrentId}_${Date.now()}.torrent`);
+  const tmpPath = join(tmpdir(), `faikkitbox_${params.torrentId}_${Date.now()}.torrent`);
   await writeFile(tmpPath, Buffer.from(torrentBuffer));
 
   try {
+    // 3. Autentifică-te la qBittorrent
     const url = qbitBase.replace(/\/$/, "");
     let cookie: string;
     try {
@@ -561,8 +399,9 @@ export async function downloadFilelistInternal(params: {
       cookie = await qbitLogin(url, qbitUser, qbitPass);
     }
 
+    // 4. Trimite torrentul la qBittorrent cu save path corect
     const form = new FormData();
-    const fileBytes = await import("node:fs/promises").then((m) => m.readFile(tmpPath));
+    const fileBytes = await readFile(tmpPath);
     form.append(
       "torrents",
       new Blob([fileBytes], { type: "application/x-bittorrent" }),
@@ -578,6 +417,8 @@ export async function downloadFilelistInternal(params: {
       signal: AbortSignal.timeout(30_000),
     });
 
+    // Sesiunea SID poate expira în qBittorrent între timp; un SID expirat
+    // primește tot 403 (nu 401), deci reîncercăm o dată cu login proaspăt.
     if (!uploadRes.ok) {
       resetQbitCookie();
       cookie = await qbitLogin(url, qbitUser, qbitPass);
@@ -590,9 +431,21 @@ export async function downloadFilelistInternal(params: {
     }
 
     if (!uploadRes.ok) {
-      return { status: "error", error: `qBit upload eșuat: HTTP ${uploadRes.status}` };
+      const txt = await uploadRes.text().catch(() => "");
+      return {
+        status: "error",
+        error: `qBittorrent upload eșuat: HTTP ${uploadRes.status} ${txt.slice(0, 120)}`,
+      };
     }
 
+    const uploadText = await uploadRes.text();
+    if (!uploadText.includes("Ok")) {
+      console.warn("qBit upload răspuns neașteptat:", uploadText);
+      const { logError } = await import("../error-log");
+      logError("server-fn", new Error(`qBit upload răspuns neașteptat: ${uploadText.slice(0, 200)}`));
+    }
+
+    // 5. Găsește hash-ul torrentului proaspăt adăugat
     await new Promise((r) => setTimeout(r, 2000));
     let torrentHash: string | null = null;
     try {
@@ -613,19 +466,23 @@ export async function downloadFilelistInternal(params: {
           ) ?? list[0];
         torrentHash = match?.hash ?? null;
       }
-    } catch {
-      // hash rămâne null — polling-ul nu va porni pentru acest torrent
+    } catch (e) {
+      console.warn("[filelist] Nu am putut obține hash-ul torrentului:", e);
     }
 
+    // 6. Loghează descărcarea imediat (completedAt null = în curs)
     const catName = params.categoryName || CATEGORY_NAMES[catId] || `Cat ${catId}`;
+
     if (!params.skipLog) {
       import("../activity-log")
         .then(({ logActivity }) =>
-          logActivity("torrent_added", `Auto-descărcat: ${params.torrentName}`, {
-            category: catName,
-            savePath,
-            size: params.size,
-          }),
+          logActivity(
+            "torrent_added",
+            params.skipLog === false
+              ? `Torrent adăugat: ${params.torrentName}`
+              : `Auto-descărcat: ${params.torrentName}`,
+            { category: catName, savePath, size: params.size },
+          ),
         )
         .catch(() => {});
     }
@@ -643,8 +500,9 @@ export async function downloadFilelistInternal(params: {
       torrentHash: torrentHash ?? undefined,
     });
 
+    // 7. Pornește polling background — refresh Plex și marchează complet DOAR la final
+    const plexType = isMovie ? "movie" : "show";
     if (torrentHash) {
-      const plexType = isMovie ? "movie" : "show";
       pollUntilComplete(
         url,
         cookie,
@@ -652,11 +510,44 @@ export async function downloadFilelistInternal(params: {
         plexType,
         params.torrentName,
         params.torrentId,
-      ).catch(() => {});
+      ).catch((e) => console.error("[filelist] Eroare polling:", e));
+    } else {
+      console.warn("[filelist] Hash nedisponibil — Plex nu va fi refreshuit automat");
     }
 
     return { status: "ok", torrentName: params.torrentName, savePath };
   } finally {
+    // Curăță fișierul temporar
     await unlink(tmpPath).catch(() => {});
   }
+}
+
+export const downloadFilelist = createServerFn({ method: "POST" })
+  .validator(
+    (data: {
+      torrentId: number;
+      torrentName: string;
+      categoryId: number;
+      categoryName?: string;
+      size?: number;
+      freeleech?: boolean;
+      internal?: boolean;
+    }) => ({
+      ...data,
+      torrentId: Number(data.torrentId),
+      categoryId: Number(data.categoryId),
+      size: data.size !== undefined ? Number(data.size) : undefined,
+    }),
+  )
+  .handler(async ({ data }): Promise<FilelistDownloadResult> => {
+    const { requireAdmin } = await import("../admin.server");
+    await requireAdmin();
+    return downloadFilelistCore({ ...data, skipLog: false });
+  });
+
+// Versiune internă pentru plugin (fără requireAdmin)
+export async function downloadFilelistInternal(
+  params: DownloadFilelistParams,
+): Promise<FilelistDownloadResult> {
+  return downloadFilelistCore(params);
 }
