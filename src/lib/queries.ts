@@ -1,5 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
-import { getPlex, getImmich, getQbit, getHost, getShowStatus } from "./services.functions";
+import { getPlex, getImmich, getQbit, getHost } from "./services.functions";
 import type { PlexData } from "./services.functions";
 import { getAdminStatus } from "./admin.functions";
 import { getVersions } from "./versions.functions";
@@ -76,13 +76,6 @@ export const filelistLogQuery = queryOptions({
   staleTime: 5_000,
   refetchOnWindowFocus: true,
   ...keepPrev,
-});
-
-export const showStatusQuery = queryOptions({
-  queryKey: ["showStatus"],
-  queryFn: () => getShowStatus(),
-  refetchInterval: 60_000,
-  staleTime: 30_000,
 });
 
 export const adminStatusQuery = queryOptions({

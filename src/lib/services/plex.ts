@@ -9,7 +9,6 @@ export {
   checkPlexHasTitle,
   getPlexEpisodesInSeasonInternal,
   checkPlexHasTitleInternal,
-  getShowStatus,
 } from "./plex-library";
 
 // ---------- Types ----------

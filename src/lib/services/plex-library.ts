@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { fetchJson, errMsg, type ServiceStatus } from "./shared";
+import { fetchJson, type ServiceStatus } from "./shared";
 import {
   discoverPlexUrl,
   normalizeShowTitle,
@@ -249,83 +249,3 @@ export async function checkPlexHasTitleInternal(
   }
 }
 
-// ---------- House of the Dragon - Sezonul 3 ----------
-//
-// HBO nu are un API public pentru orarul de difuzare, deci calendarul e
-// codat manual, pe baza orarului oficial confirmat (Duminica 9pm ET / 21:00,
-// UTC-4 in perioada iunie-august, ora de vara SUA). Titlurile episoadelor
-// necunoscute la data scrierii sunt generice ("Episodul N") - actualizeaza-le
-// aici pe masura ce HBO le confirma.
-const HOTD_S3_EPISODES: Array<{ episode: number; title: string; airDateIso: string }> = [
-  { episode: 1, title: "Salt and Sea, Fire and Blood", airDateIso: "2026-06-22T01:00:00Z" },
-  { episode: 2, title: "Queen's Landing", airDateIso: "2026-06-29T01:00:00Z" },
-  { episode: 3, title: "Episodul 3", airDateIso: "2026-07-06T01:00:00Z" },
-  { episode: 4, title: "Episodul 4", airDateIso: "2026-07-13T01:00:00Z" },
-  { episode: 5, title: "Episodul 5", airDateIso: "2026-07-20T01:00:00Z" },
-  { episode: 6, title: "Episodul 6", airDateIso: "2026-07-27T01:00:00Z" },
-  { episode: 7, title: "Episodul 7", airDateIso: "2026-08-03T01:00:00Z" },
-  { episode: 8, title: "Episodul 8 (finalul sezonului)", airDateIso: "2026-08-10T01:00:00Z" },
-];
-const HOTD_SEASON = 3;
-const HOTD_SHOW_TITLE = "House of the Dragon";
-// ---------- Cămătarii - Sezonul 1 ----------
-//
-// Difuzat pe PRO TV luni de la 23:30 EEST (= 20:30 UTC), incepand cu 25 mai 2026.
-// Premiera (25 mai) a avut Ep1 pe TV + Ep1 SI Ep2 pe VOYO in aceeasi zi (VOYO a
-// lansat 2 episoade deodata la lansare). De la Ep3 incolo, VOYO ramane cu o
-// saptamana inaintea difuzarii TV, cadenta saptamanala, luni.
-// TV:   Ep1=25 mai, Ep2=1 iun, Ep3=8 iun, Ep4=15 iun, Ep5=22 iun, Ep6=29 iun, Ep7=6 iul, Ep8=13 iul
-// VOYO: Ep1=25 mai, Ep2=25 mai, Ep3=1 iun, Ep4=8 iun, Ep5=15 iun, Ep6=22 iun, Ep7=29 iun, Ep8=6 iul
-//
-// ATENTIE: numarul total de episoade (8) si data finalului nu au putut fi
-// confirmate dintr-o sursa oficiala la data scrierii - verificat manual pe
-// VOYO/Plex daca sezonul chiar se termina la Ep8, altfel ajusteaza mai jos.
-
-async function buildShowStatus(
-  showTitle: string,
-  season: number,
-  episodes: Array<{ episode: number; title: string; airDateIso: string }>,
-): Promise<ShowStatusData> {
-  try {
-    const now = Date.now();
-    const aired = episodes.filter((e) => new Date(e.airDateIso).getTime() <= now);
-    const lastAiredEp = aired.length > 0 ? aired[aired.length - 1] : null;
-    const nextEp = episodes.find((e) => new Date(e.airDateIso).getTime() > now) ?? null;
-
-    let inLibrary: boolean | null = null;
-    if (lastAiredEp) {
-      inLibrary = await checkPlexHasEpisode(showTitle, season, lastAiredEp.episode);
-    }
-
-    return {
-      status: "ok",
-      show: `${showTitle} — Sezonul ${season}`,
-      lastAired: lastAiredEp
-        ? {
-            season,
-            episode: lastAiredEp.episode,
-            title: lastAiredEp.title,
-            airDateIso: lastAiredEp.airDateIso,
-            inLibrary,
-          }
-        : null,
-      next: nextEp
-        ? { season, episode: nextEp.episode, title: nextEp.title, airDateIso: nextEp.airDateIso }
-        : null,
-    };
-  } catch (e) {
-    return {
-      status: "error",
-      error: errMsg(e),
-      show: `${showTitle} — Sezonul ${season}`,
-      lastAired: null,
-      next: null,
-    };
-  }
-}
-
-export const getShowStatus = createServerFn({ method: "GET" }).handler(
-  async (): Promise<ShowStatusData> => {
-    return await buildShowStatus(HOTD_SHOW_TITLE, HOTD_SEASON, HOTD_S3_EPISODES);
-  },
-);
