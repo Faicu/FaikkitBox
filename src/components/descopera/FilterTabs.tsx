@@ -1,3 +1,4 @@
+import { Search } from "lucide-react";
 import type { DiscoverMediaType, DiscoverSort } from "@/lib/tmdb.discover.functions";
 
 const sortTabs: { value: DiscoverSort; label: string }[] = [
@@ -15,16 +16,30 @@ const mediaTabs: { value: DiscoverMediaType | "all"; label: string }[] = [
 export function FilterTabs({
   sort,
   media,
+  query,
   onSortChange,
   onMediaChange,
+  onQueryChange,
 }: {
   sort: DiscoverSort;
   media: DiscoverMediaType | "all";
+  query: string;
   onSortChange: (v: DiscoverSort) => void;
   onMediaChange: (v: DiscoverMediaType | "all") => void;
+  onQueryChange: (v: string) => void;
 }) {
   return (
     <div className="space-y-2">
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <input
+          value={query}
+          onChange={(e) => onQueryChange(e.target.value)}
+          placeholder="Caută un titlu..."
+          className="w-full rounded-xl border border-border bg-background py-2 pl-9 pr-3 text-sm outline-none focus:ring-1 focus:ring-primary"
+        />
+      </div>
+
       <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1">
         {sortTabs.map((tab) => (
           <button

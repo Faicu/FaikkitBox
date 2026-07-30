@@ -61,13 +61,19 @@ async function fetchDiscoverPage(
   return (json.results ?? []).filter((r) => r.poster_path).map((r) => mapItem(mediaType, r));
 }
 
+export interface DiscoverPageResult {
+  items: DiscoverTitle[];
+  degraded: boolean;
+}
+
 export const getDiscoverTitles = createServerFn({ method: "GET" })
   .validator((data: { mediaType: DiscoverMediaType; sort: DiscoverSort; page?: number }) => data)
-  .handler(async ({ data }): Promise<DiscoverTitle[]> => {
+  .handler(async ({ data }): Promise<DiscoverPageResult> => {
     try {
-      return await fetchDiscoverPage(data.mediaType, data.sort, data.page ?? 1);
+      const items = await fetchDiscoverPage(data.mediaType, data.sort, data.page ?? 1);
+      return { items, degraded: false };
     } catch {
-      return [];
+      return { items: [], degraded: true };
     }
   });
 
@@ -120,9 +126,14 @@ export interface FeedClip extends DiscoverTitle {
   videoKey: string;
 }
 
+export interface FeedClipsResult {
+  clips: FeedClip[];
+  degraded: boolean;
+}
+
 export const getFeedClips = createServerFn({ method: "GET" })
   .validator((data: { mediaType: DiscoverMediaType | "all"; sort: DiscoverSort }) => data)
-  .handler(async ({ data }): Promise<FeedClip[]> => {
+  .handler(async ({ data }): Promise<FeedClipsResult> => {
     try {
       const mediaTypes: DiscoverMediaType[] = data.mediaType === "all" ? ["movie", "tv"] : [data.mediaType];
       // pagină aleatorie (1-5) din discover/trending, ca feed-ul să nu fie identic la fiecare vizită
@@ -152,8 +163,8 @@ export const getFeedClips = createServerFn({ method: "GET" })
         const j = Math.floor(Math.random() * (i + 1));
         [clips[i], clips[j]] = [clips[j], clips[i]];
       }
-      return clips;
+      return { clips, degraded: false };
     } catch {
-      return [];
+      return { clips: [], degraded: true };
     }
   });

@@ -14,8 +14,13 @@ import {
 
 import { searchFilelist } from "@/lib/filelist.functions";
 import type { FilelistCategory, FilelistTorrent } from "@/lib/filelist.functions";
+import { isMovieCategory } from "@/lib/filelist/categories";
 import { formatBytes } from "@/lib/format";
 import { useDownload } from "../hooks";
+import { detectQuality } from "../utils";
+import { DownloadConfirmDialog } from "../DownloadConfirmDialog";
+
+type SortBy = "relevance" | "seeders" | "size";
 
 // ---------------------------------------------------------------------------
 // Secțiunea FileList Search
@@ -28,6 +33,8 @@ export function FilelistSection() {
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [qualityFilters, setQualityFilters] = useState<Set<string>>(new Set());
+  const [sortBy, setSortBy] = useState<SortBy>("relevance");
+  const [confirmTorrent, setConfirmTorrent] = useState<FilelistTorrent | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const searchFn = useServerFn(searchFilelist);
@@ -63,9 +70,6 @@ export function FilelistSection() {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, [query, category, searchFn]);
-
-  const isMovie = (catId: number, catName = "") =>
-    [1, 2, 3, 4, 6, 19, 26].includes(catId) || (catId === 0 && /film|movie/i.test(catName));
 
   return (
     <section>
@@ -144,6 +148,15 @@ export function FilelistSection() {
                 : `Afișez doar ${[...qualityFilters][0]}`}
             </span>
           )}
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as SortBy)}
+            className="ml-auto rounded-lg border border-border bg-background px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-primary"
+          >
+            <option value="relevance">Relevanță</option>
+            <option value="seeders">Seederi</option>
+            <option value="size">Mărime</option>
+          </select>
         </div>
 
         {/* Eroare căutare */}
@@ -156,19 +169,23 @@ export function FilelistSection() {
         {/* Rezultate */}
         {results.length > 0 &&
           (() => {
-            const displayed =
+            const filtered =
               qualityFilters.size === 0
                 ? results
                 : results.filter((t) => {
-                    const name = t.name.toLowerCase();
-                    const is4k = name.includes("2160p") || name.includes("4k");
-                    const isHdr = /dovi|hdr10|hdr|hlg/i.test(name);
+                    const q = detectQuality(t.name);
                     return [...qualityFilters].some((f) => {
-                      if (f === "4K HDR") return is4k && isHdr;
-                      if (f === "4K") return is4k && !isHdr;
-                      return name.includes("1080p");
+                      if (f === "4K HDR") return q.is4kHdr;
+                      if (f === "4K") return q.is4k;
+                      return q.is1080p;
                     });
                   });
+            const displayed =
+              sortBy === "relevance"
+                ? filtered
+                : [...filtered].sort((a, b) =>
+                    sortBy === "seeders" ? b.seeders - a.seeders : b.size - a.size,
+                  );
             return (
               <div className="space-y-2">
                 <div className="text-[11px] text-muted-foreground px-0.5">
@@ -182,7 +199,7 @@ export function FilelistSection() {
                   >
                     {/* Tip */}
                     <div className="mt-0.5 shrink-0">
-                      {isMovie(t.category) ? (
+                      {isMovieCategory(t.category) ? (
                         <Film className="h-4 w-4 text-amber-400" />
                       ) : (
                         <Tv className="h-4 w-4 text-blue-400" />
@@ -223,17 +240,17 @@ export function FilelistSection() {
 
                     {/* Buton download */}
                     <button
-                      onClick={() => handleDownload(t)}
+                      onClick={() => setConfirmTorrent(t)}
                       disabled={downloading === t.id}
                       className="shrink-0 flex items-center gap-1 rounded-lg bg-blue-500/15 px-2.5 py-1.5 text-[11px] font-medium text-blue-400 hover:bg-blue-500/25 disabled:opacity-50 transition-colors"
-                      title={`Descarcă în ${isMovie(t.category) ? "Filme" : "Seriale"}`}
+                      title={`Descarcă în ${isMovieCategory(t.category) ? "Filme" : "Seriale"}`}
                     >
                       {downloading === t.id ? (
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
                       ) : (
                         <Download className="h-3.5 w-3.5" />
                       )}
-                      {isMovie(t.category) ? "Film" : "Serial"}
+                      {isMovieCategory(t.category) ? "Film" : "Serial"}
                     </button>
                   </div>
                 ))}
@@ -248,6 +265,18 @@ export function FilelistSection() {
           </div>
         )}
       </div>
+
+      {confirmTorrent && (
+        <DownloadConfirmDialog
+          torrent={confirmTorrent}
+          label={isMovieCategory(confirmTorrent.category) ? "Film" : "Serial"}
+          onConfirm={() => {
+            handleDownload(confirmTorrent);
+            setConfirmTorrent(null);
+          }}
+          onCancel={() => setConfirmTorrent(null)}
+        />
+      )}
     </section>
   );
 }

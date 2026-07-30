@@ -24,6 +24,7 @@ function DescoperaPage() {
   const [mode, setMode] = useState<"grid" | "feed">("grid");
   const [sort, setSort] = useState<DiscoverSort>("trending");
   const [media, setMedia] = useState<DiscoverMediaType | "all">("all");
+  const [searchQuery, setSearchQuery] = useState("");
 
   return (
     <PageShell title="Descoperă" subtitle="Filme · Seriale · Trailere">
@@ -52,10 +53,17 @@ function DescoperaPage() {
         </button>
       </div>
 
-      <FilterTabs sort={sort} media={media} onSortChange={setSort} onMediaChange={setMedia} />
+      <FilterTabs
+        sort={sort}
+        media={media}
+        query={searchQuery}
+        onSortChange={setSort}
+        onMediaChange={setMedia}
+        onQueryChange={setSearchQuery}
+      />
 
       {mode === "grid" ? (
-        <DiscoverGrid sort={sort} media={media} isAdmin={isAdmin} />
+        <DiscoverGrid sort={sort} media={media} isAdmin={isAdmin} searchQuery={searchQuery} />
       ) : (
         <FeedView sort={sort} media={media} isAdmin={isAdmin} />
       )}

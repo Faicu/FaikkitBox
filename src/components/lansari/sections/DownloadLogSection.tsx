@@ -17,21 +17,33 @@ import { toast } from "sonner";
 import { filelistLogQuery } from "@/lib/queries";
 import { deleteFilelistLogEntry } from "@/lib/filelist.functions";
 import type { FilelistLogEntry } from "@/lib/filelist.functions";
+import { isMovieCategory } from "@/lib/filelist/categories";
 import { formatBytes } from "@/lib/format";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 
 export function DownloadLogSection() {
   const queryClient = useQueryClient();
   const { data: log, isLoading } = useQuery(filelistLogQuery);
   const deleteFn = useServerFn(deleteFilelistLogEntry);
   const [visibleCount, setVisibleCount] = useState(3);
-  const isMovie = (catId: number, catName = "") =>
-    [1, 2, 3, 4, 6, 19, 26].includes(catId) || (catId === 0 && /film|movie/i.test(catName));
+  const [pendingDelete, setPendingDelete] = useState<{
+    id: number;
+    name: string;
+    hasHash: boolean;
+  } | null>(null);
 
-  async function handleDelete(id: number, name: string, hasHash: boolean) {
-    const msg = hasHash
-      ? `Ștergi torrentul din log, din qBittorrent și fișierele de pe disk?\n\n${name}`
-      : `Ștergi intrarea din log?\n\n${name}`;
-    if (!confirm(msg)) return;
+  async function confirmDelete() {
+    if (!pendingDelete) return;
+    const { id, hasHash } = pendingDelete;
     const res = await deleteFn({ data: { id } });
     queryClient.invalidateQueries({ queryKey: ["filelistLog"] });
     if (hasHash) {
@@ -39,6 +51,7 @@ export function DownloadLogSection() {
       else
         toast.warning("Șters din log, dar nu am putut șterge din qBittorrent (poate deja șters)");
     }
+    setPendingDelete(null);
   }
 
   if (isLoading || !log || log.length === 0) return null;
@@ -56,7 +69,7 @@ export function DownloadLogSection() {
               className="flex items-start gap-2.5 py-2 first:pt-0 last:pb-0"
             >
               <div className="mt-0.5 shrink-0">
-                {isMovie(e.category, e.categoryName) ? (
+                {isMovieCategory(e.category) ? (
                   <Film className="h-4 w-4 text-amber-400" />
                 ) : (
                   <Tv className="h-4 w-4 text-blue-400" />
@@ -113,7 +126,9 @@ export function DownloadLogSection() {
                 </div>
               </div>
               <button
-                onClick={() => handleDelete(e.id, e.name, !!e.torrentHash)}
+                onClick={() =>
+                  setPendingDelete({ id: e.id, name: e.name, hasHash: !!e.torrentHash })
+                }
                 className="shrink-0 mt-0.5 rounded-lg p-1.5 text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-colors"
                 title={e.torrentHash ? "Șterge din log + qBit + disk" : "Șterge din log"}
               >
@@ -131,6 +146,25 @@ export function DownloadLogSection() {
           </button>
         )}
       </div>
+
+      <AlertDialog open={!!pendingDelete} onOpenChange={(open) => !open && setPendingDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {pendingDelete?.hasHash ? "Ștergere completă" : "Ștergere din log"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingDelete?.hasHash
+                ? `Ștergi torrentul din log, din qBittorrent și fișierele de pe disk?\n\n${pendingDelete.name}`
+                : `Ștergi intrarea din log?\n\n${pendingDelete?.name}`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Anulează</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete}>Șterge</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

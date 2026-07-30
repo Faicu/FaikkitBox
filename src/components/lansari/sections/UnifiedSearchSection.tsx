@@ -1,17 +1,12 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { Search, Pin, Loader2, Film, Tv } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 
-import { adminStatusQuery } from "@/lib/queries";
+import { adminStatusQuery, pinnedItemsQuery } from "@/lib/queries";
 import { searchTmdb } from "@/lib/tmdb.functions";
 import type { TmdbSearchResult } from "@/lib/tmdb.functions";
-import {
-  getPinnedItems,
-  setPinnedItems,
-  getWatchSettings,
-  setWatchSettings,
-} from "@/lib/pinned.functions";
+import { setPinnedItems, getWatchSettings, setWatchSettings } from "@/lib/pinned.functions";
 import type { WatchSettings } from "@/lib/pinned.functions";
 import type { PinnedItem } from "../types";
 import { PinnedItemCard } from "../PinnedItemCard";
@@ -23,22 +18,19 @@ import { PinnedItemCard } from "../PinnedItemCard";
 export function UnifiedSearchSection() {
   const { data: adminData } = useQuery(adminStatusQuery);
   const isAdmin = !!adminData?.isAdmin;
-  const [pinned, setPinned] = useState<PinnedItem[]>([]);
+  const queryClient = useQueryClient();
+  const { data: pinned = [] } = useQuery(pinnedItemsQuery);
   const [watchMap, setWatchMap] = useState<Map<string, WatchSettings>>(new Map());
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<TmdbSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
   const searchFn = useServerFn(searchTmdb);
-  const getPinnedFn = useServerFn(getPinnedItems);
   const setPinnedFn = useServerFn(setPinnedItems);
   const getWatchFn = useServerFn(getWatchSettings);
   const setWatchFn = useServerFn(setWatchSettings);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    getPinnedFn({})
-      .then(setPinned)
-      .catch(() => {});
     getWatchFn({})
       .then((settings) => {
         const map = new Map<string, WatchSettings>();
@@ -71,8 +63,8 @@ export function UnifiedSearchSection() {
   }
 
   async function savePinned(list: PinnedItem[]) {
-    setPinned(list);
     await setPinnedFn({ data: { items: list } }).catch(() => {});
+    await queryClient.invalidateQueries({ queryKey: ["pinnedItems"] });
   }
 
   useEffect(() => {

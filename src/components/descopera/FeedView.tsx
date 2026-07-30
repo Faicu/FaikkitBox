@@ -100,7 +100,34 @@ export function FeedView({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const cardRefs = useRef<(HTMLDivElement | null)[]>([]);
 
-  const clips = query.data ?? [];
+  const degraded = query.data?.degraded ?? false;
+  const clips = ((): FeedClip[] => {
+    const all = query.data?.clips ?? [];
+    let seen = new Set<string>();
+    try {
+      seen = new Set(JSON.parse(sessionStorage.getItem("feedSeenClips") ?? "[]"));
+    } catch {
+      seen = new Set();
+    }
+    const unseen = all.filter((c) => !seen.has(`${c.mediaType}-${c.id}`));
+    return unseen.length > 0 ? unseen : all;
+  })();
+
+  useEffect(() => {
+    if (clips.length === 0) return;
+    const active = clips[activeIndex];
+    if (!active) return;
+    let seen: string[] = [];
+    try {
+      seen = JSON.parse(sessionStorage.getItem("feedSeenClips") ?? "[]");
+    } catch {
+      seen = [];
+    }
+    const key = `${active.mediaType}-${active.id}`;
+    if (!seen.includes(key)) {
+      sessionStorage.setItem("feedSeenClips", JSON.stringify([...seen, key]));
+    }
+  }, [activeIndex, clips]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -126,8 +153,11 @@ export function FeedView({
 
   if (query.isLoading) {
     return (
-      <div className="flex h-[70vh] items-center justify-center text-muted-foreground">
-        <Loader2 className="h-6 w-6 animate-spin" />
+      <div className="flex h-[calc(100dvh-13rem)] items-center justify-center rounded-2xl border border-border bg-black/60">
+        <div className="flex flex-col items-center gap-2 text-muted-foreground">
+          <Loader2 className="h-6 w-6 animate-spin" />
+          <span className="text-xs">Se încarcă clipurile...</span>
+        </div>
       </div>
     );
   }
@@ -135,7 +165,9 @@ export function FeedView({
   if (clips.length === 0) {
     return (
       <div className="rounded-xl border border-border bg-card p-6 text-center text-sm text-muted-foreground">
-        Niciun clip disponibil pentru filtrele curente.
+        {degraded
+          ? "Serviciul TMDB este indisponibil momentan. Încearcă din nou mai târziu."
+          : "Niciun clip disponibil pentru filtrele curente."}
       </div>
     );
   }

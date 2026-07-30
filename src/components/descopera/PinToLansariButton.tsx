@@ -3,7 +3,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Check, Loader2, Pin } from "lucide-react";
 
-import { addPinnedItem, getPinnedItems } from "@/lib/pinned.functions";
+import { addPinnedItem } from "@/lib/pinned.functions";
+import { pinnedItemsQuery } from "@/lib/queries";
 import type { DiscoverMediaType } from "@/lib/tmdb.discover.functions";
 
 export function PinToLansariButton({
@@ -22,15 +23,10 @@ export function PinToLansariButton({
   isAdmin: boolean;
 }) {
   const queryClient = useQueryClient();
-  const getPinnedFn = useServerFn(getPinnedItems);
   const addPinnedFn = useServerFn(addPinnedItem);
   const [pinning, setPinning] = useState(false);
 
-  const pinnedQuery = useQuery({
-    queryKey: ["pinnedItems"],
-    queryFn: () => getPinnedFn(),
-    enabled: isAdmin,
-  });
+  const pinnedQuery = useQuery({ ...pinnedItemsQuery, enabled: isAdmin });
 
   if (!isAdmin) return null;
 

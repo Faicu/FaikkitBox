@@ -8,6 +8,7 @@ import { getActivityLog } from "./activity-log";
 import { getErrorLogs } from "./error-log";
 import { getFilelistDownloadLog } from "./filelist.functions";
 import { getRecentCommits, getCommitsFromDb, getGitHubSyncStatus } from "./github.functions";
+import { getPinnedItems } from "./pinned.functions";
 
 // Interval de bază pentru statistici live (Plex/Immich/qBit/Host)
 const REFRESH_MS = 1000;
@@ -128,4 +129,10 @@ export const speedtestHistoryQuery = queryOptions({
   queryKey: ["speedtestHistory"],
   queryFn: () => getSpeedtestHistory(),
   staleTime: 60_000,
+});
+
+export const pinnedItemsQuery = queryOptions({
+  queryKey: ["pinnedItems"],
+  queryFn: () => getPinnedItems(),
+  staleTime: 10_000,
 });
