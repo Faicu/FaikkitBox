@@ -153,3 +153,59 @@ npm install
 npm run build
 sudo systemctl restart faikkitbox
 ```
+
+---
+
+## Note tehnice pentru dezvoltare
+
+Secțiune orientată spre a face modificări corecte rapid, nu spre a documenta fiecare fișier — pentru detalii complete, citește codul.
+
+### Arhitectură — TanStack Start, nu Next.js
+
+Rutele NU sunt în `src/app/`, ci în `src/routes/*.tsx`, definite cu `createFileRoute("/cale")({ component, head, ... })`. Fiecare fișier de rută = o pagină. `src/routes/__root.tsx` e layout-ul rădăcină (providers, shell global).
+
+Logica de server (DB, fetch extern, fișiere, comenzi shell) trăiește în `src/lib/*.functions.ts`, ca `createServerFn`:
+
+```ts
+export const getSomething = createServerFn({ method: "GET" })
+  .validator((data: { id: number }) => data)
+  .handler(async ({ data }) => { /* rulează doar pe server */ });
+```
+
+În componente client, se apelează fie direct (SSR/loader), fie prin `useServerFn(fn)` din `@tanstack/react-start` când e nevoie într-un event handler (`onClick`, etc.) — vezi orice `sections/*.tsx` din `lansari/`. Handler-ele `.handler()` pot `await import(...)` module server-only (ex. `admin.server.ts`) ca să nu ajungă în bundle-ul client.
+
+### TanStack Query — convenția queryOptions
+
+Toate query-urile refolosite în mai multe componente sunt definite **o singură dată** ca `queryOptions(...)` în `src/lib/queries.ts` (queryKey, queryFn, staleTime, refetchInterval), și importate cu `useQuery(xQuery)` oriunde e nevoie. **Nu duplica un query inline cu același `queryKey`** dacă poate fi definit în `queries.ts` — am avut o bilă exact din cauza asta (`pinnedItemsQuery`, vezi mai jos) și a produs cache desincronizat între pagini.
+
+Pattern de invalidare după mutație:
+```ts
+await someMutationServerFn({ data: ... });
+queryClient.invalidateQueries({ queryKey: ["cheia"] });
+```
+
+Pentru liste ce se încarcă incremental (ex. `DiscoverGrid`), se folosește `useInfiniteQuery` cu `initialPageParam`/`getNextPageParam`, nu paginare manuală cu state.
+
+### Domenii principale în `src/lib/`
+
+| Domeniu | Fișiere | Note |
+|---|---|---|
+| Pinned items (Lansări) | `pinned.functions.ts` | Tabelă SQLite `pinned_items`. `setPinnedItems` = full-replace (folosit de UI-ul de căutare din Lansări), `addPinnedItem` = insert unic (folosit de `PinToLansariButton` din Descoperă). Ambele trebuie să invalideze `["pinnedItems"]` (`pinnedItemsQuery` din `queries.ts`) ca să rămână sincron între pagini. |
+| Filelist | `filelist.functions.ts` (barrel) + `filelist/{types,categories,download,log}.ts` | `categories.ts` are `isMovieCategory`/`MOVIE_CATEGORIES`/`SERIES_CATEGORIES` — **nu reimplementa** verificarea film/serial pe alte fișiere. `download.ts` face upload în qBittorrent + poll în fundal (până la 48h, la 30s) + refresh bibliotecă Plex la finalizare. |
+| qBittorrent client | `qbit-client.ts` | Autentificare cu cache SID; dacă apar erori 403 la upload, verifică header-ele Referer/Origin și expirarea SID-ului (deja rezolvat o dată, vezi istoricul git). |
+| TMDB | `tmdb.functions.ts` (search/details/countdown/episoade), `tmdb.discover.functions.ts` (trending/popular/newest + feed clipuri video), `tmdb-client.ts` (fetch helper cu token Bearer) | Funcțiile de discover întorc `{ items/clips, degraded }` — `degraded: true` înseamnă eroare TMDB înghițită în try/catch, nu listă goală legitimă. Păstrează distincția asta când adaugi UI nou pe aceste date. |
+| Servicii dashboard | `services/{plex,immich,qbittorrent,host,plex-library,shared}.ts` + `services.functions.ts` | Agregă statusul pentru pagina principală și pentru status Plex per-item din Lansări (`checkPlexHasTitle`, `getPlexEpisodesInSeason`). |
+| Auth admin | `admin.functions.ts` + `admin.server.ts` | Sesiune cookie-based (`getSession()`), fără JWT. `adminStatusQuery` e cache-uit 30s — dacă testezi login/logout și nu vezi schimbarea imediat, e din cauza staleTime, nu un bug. |
+| DB | `db.ts` | SQLite nativ (`node:sqlite`, Node 22.5+), un singur fișier la `/opt/faikkitbox/data/faikkitbox.db` (override cu `FAIKKITBOX_DB_PATH`). Fără ORM/migrations tool — schema se creează cu `CREATE TABLE IF NOT EXISTS` direct în `db.ts`; orice tabelă nouă se adaugă acolo. |
+
+### Componente Lansări/Descoperă — puncte de refolosit
+
+- `src/components/lansari/utils.ts` — `detectQuality(name)` (1080p/4K/4K HDR din numele torrentului), `groupTorrentsBySeasonEpisode`, `filterTorrentsForItem`, `stripDiacritics`. Orice logică nouă de parsare a numelui de torrent ar trebui să treacă prin aici, nu regex inline în componente.
+- `src/components/lansari/DownloadConfirmDialog.tsx` — dialogul standard de confirmare descărcare (folosit din `MovieCard`, `ShowCard`, `FilelistSection`). Orice buton nou de download ar trebui să treacă prin el, nu să descarce direct.
+- `src/components/lansari/hooks.ts` — `useDownload()` (upload qBittorrent + toast + invalidare `filelistLog`), `useCountdown(targetIso)`.
+- `src/components/ui/alert-dialog.tsx` — wrapper Radix deja stilizat; folosește-l pentru orice confirmare distructivă în loc de `window.confirm()`.
+- Pagina Descoperă are două moduri (`grid`/`feed`) cu componente separate (`DiscoverGrid.tsx`, `FeedView.tsx`) care share doar `FilterTabs`, `PinToLansariButton`, `FilelistCheckButton`. Dacă adaugi un filtru nou, verifică dacă trebuie propagat în ambele moduri.
+
+### Workflow obligatoriu
+
+Vezi `CLAUDE.md` la rădăcina proiectului — orice modificare de cod trebuie urmată de `npm run build` → commit → `git push origin main` → `systemctl restart faikkitbox`, în această ordine, înainte de a considera o sarcină finalizată.
