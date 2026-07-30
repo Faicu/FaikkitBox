@@ -8,6 +8,7 @@ import { getTmdbVideos } from "@/lib/tmdb.discover.functions";
 import type { DiscoverTitle } from "@/lib/tmdb.discover.functions";
 import { getTmdbDetails } from "@/lib/tmdb.functions";
 import { FilelistCheckButton } from "./FilelistCheckButton";
+import { PinToLansariButton } from "./PinToLansariButton";
 
 export function SceneViewer({
   item,
@@ -92,7 +93,17 @@ export function SceneViewer({
             )}
           </div>
 
-          <FilelistCheckButton title={item.title} mediaType={item.mediaType} isAdmin={isAdmin} />
+          <div className="flex flex-wrap items-center gap-2">
+            <FilelistCheckButton title={item.title} mediaType={item.mediaType} isAdmin={isAdmin} />
+            <PinToLansariButton
+              id={item.id}
+              title={item.title}
+              originalTitle={detailsQuery.data?.originalTitle ?? item.title}
+              posterUrl={item.posterUrl}
+              mediaType={item.mediaType}
+              isAdmin={isAdmin}
+            />
+          </div>
         </div>
       </DrawerContent>
     </Drawer>

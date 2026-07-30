@@ -7,6 +7,7 @@ import { getFeedClips } from "@/lib/tmdb.discover.functions";
 import type { DiscoverMediaType, DiscoverSort, FeedClip } from "@/lib/tmdb.discover.functions";
 import { getTmdbDetails } from "@/lib/tmdb.functions";
 import { FilelistCheckButton } from "./FilelistCheckButton";
+import { PinToLansariButton } from "./PinToLansariButton";
 
 function FeedCard({
   clip,
@@ -52,8 +53,16 @@ function FeedCard({
               {clip.mediaType === "movie" ? "Film" : "Serial"}
               {clip.year && ` · ${clip.year}`}
             </div>
-            <div className="mt-2">
+            <div className="mt-2 flex flex-wrap items-center gap-2">
               <FilelistCheckButton title={clip.title} mediaType={clip.mediaType} isAdmin={isAdmin} />
+              <PinToLansariButton
+                id={clip.id}
+                title={clip.title}
+                originalTitle={detailsQuery.data?.originalTitle ?? clip.title}
+                posterUrl={clip.posterUrl}
+                mediaType={clip.mediaType}
+                isAdmin={isAdmin}
+              />
             </div>
           </div>
           {imdbId && (
