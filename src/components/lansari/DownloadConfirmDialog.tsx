@@ -1,4 +1,4 @@
-import { Download, Users, Zap, HardDrive, ShieldCheck } from "lucide-react";
+import { Download, Users, Zap, HardDrive, ShieldCheck, ExternalLink } from "lucide-react";
 
 import type { FilelistTorrent } from "@/lib/filelist.functions";
 import { formatBytes } from "@/lib/format";
@@ -64,6 +64,16 @@ export function DownloadConfirmDialog({
           </div>
         </div>
         <div className="flex gap-2 pt-1">
+          <a
+            href={`https://filelist.io/details.php?id=${torrent.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="flex items-center justify-center rounded-xl border border-border px-3 py-2 text-sm text-muted-foreground hover:bg-muted transition-colors"
+            title="Vezi pe filelist.io"
+          >
+            <ExternalLink className="h-4 w-4" />
+          </a>
           <button
             onClick={onCancel}
             className="flex-1 rounded-xl border border-border py-2 text-sm text-muted-foreground hover:bg-muted transition-colors"
