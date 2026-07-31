@@ -44,7 +44,7 @@ export function ServiceHeaderActions({ service, status, onRestart, onCommandResu
   const mutation = useMutation({
     mutationFn: (command: AgentCommand) => run({ data: { cmd: command } }),
     onMutate: (command) => {
-      if (command === config.restartCmd) onRestart?.();
+      if (command === config.restartCmd || command === config.updateCmd) onRestart?.();
     },
     onSuccess: (result, command) => {
       logAgentActivity(command, result.ok).catch(() => {});
