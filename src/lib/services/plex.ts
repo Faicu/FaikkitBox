@@ -284,9 +284,9 @@ export const getPlex = createServerFn({ method: "GET" }).handler(async (): Promi
     const discovered = await discoverPlexUrl(token, base);
     const url = discovered.url;
     const [rootJson, sessionsJson, libsJson, history] = await Promise.all([
-      fetchJson<PlexApiResponse>(`${url}/`, { headers }),
-      fetchJson<PlexApiResponse>(`${url}/status/sessions`, { headers }),
-      fetchJson<PlexApiResponse>(`${url}/library/sections`, { headers }),
+      fetchJson<PlexApiResponse>(`${url}/`, { headers }).catch(() => null),
+      fetchJson<PlexApiResponse>(`${url}/status/sessions`, { headers }).catch(() => null),
+      fetchJson<PlexApiResponse>(`${url}/library/sections`, { headers }).catch(() => null),
       fetchPlexHistory(url, headers).catch(() => ({
         topShows: [],
         topMovies: [],
@@ -299,6 +299,11 @@ export const getPlex = createServerFn({ method: "GET" }).handler(async (): Promi
         recentHistory: [],
       })),
     ]);
+
+    // Eșec total (nu doar o cerere izolată) — tratăm ca eroare, nu ca date parțiale
+    if (!rootJson && !sessionsJson && !libsJson) {
+      throw new Error("Plex nu a răspuns la nicio cerere");
+    }
 
     const mc = rootJson?.MediaContainer ?? {};
     const sessionsMd = sessionsJson?.MediaContainer?.Metadata ?? [];

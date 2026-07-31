@@ -1,6 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
 import { getPlex, getImmich, getQbit, getHost } from "./services.functions";
-import type { PlexData } from "./services.functions";
 import { getAdminStatus } from "./admin.functions";
 import { getVersions } from "./versions.functions";
 import { getLastSpeedtest, getSpeedtestHistory } from "./speedtest.functions";
@@ -19,13 +18,9 @@ const keepPrev = { placeholderData: <T>(prev: T) => prev };
 export const plexQuery = queryOptions({
   queryKey: ["plex"],
   queryFn: () => getPlex(),
-  refetchInterval: (query) => {
-    const data = query.state.data as PlexData | undefined;
-    // Polling mai rapid (3s) când sunt sesiuni active, altfel 1s de bază
-    return data?.sessions?.length ? 3_000 : REFRESH_MS;
-  },
+  refetchInterval: 3_000,
   refetchIntervalInBackground: false,
-  staleTime: 0,
+  staleTime: 3_000,
   ...keepPrev,
 });
 
