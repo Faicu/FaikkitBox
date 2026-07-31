@@ -227,7 +227,13 @@ export const checkPlexHasTitle = createServerFn({ method: "GET" })
     try {
       const headers = { Accept: "application/json", "X-Plex-Token": token };
       const discovered = await discoverPlexUrl(token, base);
-      return await findByTitle(discovered.url, headers, data.title, data.originalTitle, data.mediaType);
+      return await findByTitle(
+        discovered.url,
+        headers,
+        data.title,
+        data.originalTitle,
+        data.mediaType,
+      );
     } catch {
       return null;
     }
@@ -269,4 +275,3 @@ export async function checkPlexHasTitleInternal(
     return null;
   }
 }
-

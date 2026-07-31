@@ -62,10 +62,30 @@ export const clearErrorLogs = createServerFn({ method: "POST" }).handler(async (
   getDb().exec("DELETE FROM error_log");
 });
 
+// Limitare per-IP: max 20 rapoarte de eroare client pe minut, indiferent de mesaj
+// — logError are deja o dedublare per (sursă+mesaj), dar aceea poate fi ocolită
+// variind mesajul; asta limitează volumul total de la o singură sursă.
+const clientErrorHits = new Map<string, { count: number; windowStart: number }>();
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX = 20;
+const MAX_MESSAGE_LEN = 2000;
+const MAX_STACK_LEN = 8000;
+
 export const logClientError = createServerFn({ method: "POST" })
   .validator((data: { message: string; stack?: string }) => data)
   .handler(async ({ data }) => {
-    const err = new Error(data.message);
-    if (data.stack) err.stack = data.stack;
+    const { getRequestIP } = await import("@tanstack/react-start/server");
+    const ip = getRequestIP() ?? "unknown";
+    const now = Date.now();
+    const hit = clientErrorHits.get(ip);
+    if (!hit || now - hit.windowStart > RATE_LIMIT_WINDOW_MS) {
+      clientErrorHits.set(ip, { count: 1, windowStart: now });
+    } else {
+      hit.count++;
+      if (hit.count > RATE_LIMIT_MAX) return;
+    }
+
+    const err = new Error(data.message.slice(0, MAX_MESSAGE_LEN));
+    if (data.stack) err.stack = data.stack.slice(0, MAX_STACK_LEN);
     logError("client", err);
   });

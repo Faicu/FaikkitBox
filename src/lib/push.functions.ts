@@ -8,6 +8,8 @@ export const getVapidPublicKey = createServerFn({ method: "GET" }).handler(() =>
 export const subscribePush = createServerFn({ method: "POST" })
   .validator((d: { endpoint: string; p256dh: string; auth: string }) => d)
   .handler(async ({ data }) => {
+    const { requireAdmin } = await import("./admin.server");
+    await requireAdmin();
     const { getDb } = await import("./db");
     const db = getDb();
     db.prepare(
@@ -19,6 +21,8 @@ export const subscribePush = createServerFn({ method: "POST" })
 export const unsubscribePush = createServerFn({ method: "POST" })
   .validator((d: { endpoint: string }) => d)
   .handler(async ({ data }) => {
+    const { requireAdmin } = await import("./admin.server");
+    await requireAdmin();
     const { getDb } = await import("./db");
     const db = getDb();
     db.prepare("DELETE FROM push_subscriptions WHERE endpoint = ?").run(data.endpoint);
@@ -26,6 +30,8 @@ export const unsubscribePush = createServerFn({ method: "POST" })
   });
 
 export const getPushSubscriptionCount = createServerFn({ method: "GET" }).handler(async () => {
+  const { requireAdmin } = await import("./admin.server");
+  await requireAdmin();
   const { getDb } = await import("./db");
   const db = getDb();
   const row = db.prepare("SELECT COUNT(*) as count FROM push_subscriptions").get() as {

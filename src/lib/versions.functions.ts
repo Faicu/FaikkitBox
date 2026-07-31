@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { fetchJson as sharedFetchJson } from "./services/shared";
 
 export type ServiceVersion = {
   name: "Plex" | "Immich" | "qBittorrent";
@@ -29,28 +30,23 @@ function cmp(a?: string, b?: string): boolean | undefined {
   return true;
 }
 
-async function fetchJson(url: string, init?: RequestInit, timeoutMs = 8000): Promise<unknown> {
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+function fetchJson(url: string, init?: RequestInit, timeoutMs = 8000): Promise<unknown> {
   const githubToken = process.env.GITHUB_TOKEN;
   const extraHeaders: Record<string, string> =
     githubToken && url.includes("api.github.com") ? { Authorization: `Bearer ${githubToken}` } : {};
-  try {
-    const res = await fetch(url, {
+  return sharedFetchJson(
+    url,
+    {
       ...init,
-      signal: ctrl.signal,
       headers: {
         accept: "application/json",
         "user-agent": "faikkitbox-monitor/1.0",
         ...extraHeaders,
         ...(init?.headers ?? {}),
       },
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
-  } finally {
-    clearTimeout(t);
-  }
+    },
+    timeoutMs,
+  );
 }
 
 async function plexVersion(): Promise<ServiceVersion> {

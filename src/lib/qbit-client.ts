@@ -36,25 +36,33 @@ export function resetQbitCookie(): void {
   qbitCookie = null;
 }
 
-// GET cu autentificare automată și un singur retry la 401/403 (SID expirat).
-export async function qbitGet(
+// Rulează un fetch autentificat cu cookie-ul curent și, dacă serverul respinge
+// cu 401/403 (SID expirat), face un singur retry cu un cookie proaspăt.
+async function qbitFetchWithRetry(
   url: string,
-  path: string,
   user: string,
   pass: string,
+  doFetch: (cookie: string) => Promise<Response>,
 ): Promise<Response> {
   const cookie = await qbitEnsureCookie(url, user, pass);
-  let res = await fetch(`${url}${path}`, { headers: { Cookie: cookie, Referer: url } });
+  let res = await doFetch(cookie);
   if (res.status === 401 || res.status === 403) {
     resetQbitCookie();
     const fresh = await qbitLogin(url, user, pass);
-    res = await fetch(`${url}${path}`, { headers: { Cookie: fresh, Referer: url } });
+    res = await doFetch(fresh);
   }
   return res;
 }
 
+// GET cu autentificare automată și un singur retry la 401/403 (SID expirat).
+export function qbitGet(url: string, path: string, user: string, pass: string): Promise<Response> {
+  return qbitFetchWithRetry(url, user, pass, (cookie) =>
+    fetch(`${url}${path}`, { headers: { Cookie: cookie, Referer: url } }),
+  );
+}
+
 // POST form-urlencoded cu autentificare automată și un singur retry la 401/403.
-export async function qbitPostForm(
+export function qbitPostForm(
   url: string,
   path: string,
   user: string,
@@ -62,7 +70,7 @@ export async function qbitPostForm(
   form: Record<string, string>,
 ): Promise<Response> {
   const body = new URLSearchParams(form);
-  const doFetch = (cookie: string) =>
+  return qbitFetchWithRetry(url, user, pass, (cookie) =>
     fetch(`${url}${path}`, {
       method: "POST",
       headers: {
@@ -72,13 +80,6 @@ export async function qbitPostForm(
         "Content-Type": "application/x-www-form-urlencoded",
       },
       body,
-    });
-  const cookie = await qbitEnsureCookie(url, user, pass);
-  let res = await doFetch(cookie);
-  if (res.status === 401 || res.status === 403) {
-    resetQbitCookie();
-    const fresh = await qbitLogin(url, user, pass);
-    res = await doFetch(fresh);
-  }
-  return res;
+    }),
+  );
 }

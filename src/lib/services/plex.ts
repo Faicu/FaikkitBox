@@ -1,6 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
 import { fetchJson, errMsg, type ServiceStatus } from "./shared";
-import { discoverPlexUrl, type PlexApiResponse, type PlexMetadataItem, type PlexStream } from "./plex-shared";
+import {
+  discoverPlexUrl,
+  type PlexApiResponse,
+  type PlexMetadataItem,
+  type PlexStream,
+} from "./plex-shared";
 
 export type { ShowEpisodeInfo, ShowStatusData } from "./plex-library";
 export {
@@ -71,6 +76,11 @@ export interface PlexHistoryEntry {
 }
 
 // ---------- Istoric vizionare (agregare + cache) ----------
+
+// Numărul de iteme dintr-o bibliotecă se schimbă rar — cache 5 minute per secțiune,
+// ca să nu refacem cereri "Size=0" la fiecare poll de 10s.
+const libraryCountCache = new Map<string, { count: number | null; expiresAt: number }>();
+const LIBRARY_COUNT_TTL_MS = 5 * 60 * 1000;
 
 let plexHistoryCache: {
   url: string;
@@ -404,6 +414,16 @@ export const getPlex = createServerFn({ method: "GET" }).handler(async (): Promi
 
     const libraries: PlexLibrary[] = await Promise.all(
       libsMd.map(async (l: PlexDirectoryLike) => {
+        const cacheKey = `${url}:${l.key}`;
+        const cached = libraryCountCache.get(cacheKey);
+        if (cached && cached.expiresAt > Date.now()) {
+          return {
+            key: String(l.key),
+            title: String(l.title),
+            type: String(l.type),
+            count: cached.count,
+          };
+        }
         let count: number | null = null;
         try {
           const r = await fetchJson<PlexApiResponse>(
@@ -414,6 +434,7 @@ export const getPlex = createServerFn({ method: "GET" }).handler(async (): Promi
         } catch {
           count = null;
         }
+        libraryCountCache.set(cacheKey, { count, expiresAt: Date.now() + LIBRARY_COUNT_TTL_MS });
         return { key: String(l.key), title: String(l.title), type: String(l.type), count };
       }),
     );

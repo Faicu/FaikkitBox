@@ -88,6 +88,8 @@ export const setWatchSettings = createServerFn({ method: "POST" })
     }) => data,
   )
   .handler(async ({ data }): Promise<void> => {
+    const { requireAdmin } = await import("./admin.server");
+    await requireAdmin();
     const db = getDb();
     db.prepare(
       `INSERT INTO pinned_watch_settings (id, media_type, watch_filelist, watch_filelist_season, watch_tmdb, watch_plex, auto_download, auto_download_quality) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -120,6 +122,8 @@ export const setWatchSettings = createServerFn({ method: "POST" })
 export const addPinnedItem = createServerFn({ method: "POST" })
   .validator((data: PinnedItemDb) => data)
   .handler(async ({ data }): Promise<{ added: boolean }> => {
+    const { requireAdmin } = await import("./admin.server");
+    await requireAdmin();
     const db = getDb();
     const exists = db
       .prepare("SELECT 1 FROM pinned_items WHERE id = ? AND media_type = ?")
@@ -145,6 +149,8 @@ export const addPinnedItem = createServerFn({ method: "POST" })
 export const setPinnedItems = createServerFn({ method: "POST" })
   .validator((data: { items: PinnedItemDb[] }) => data)
   .handler(async ({ data }): Promise<void> => {
+    const { requireAdmin } = await import("./admin.server");
+    await requireAdmin();
     const db = getDb();
     db.prepare("DELETE FROM pinned_items").run();
     const stmt = db.prepare(

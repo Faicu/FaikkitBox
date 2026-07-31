@@ -170,13 +170,15 @@ export function UnifiedSearchSection() {
                         .join(" · ") || "—"}
                     </div>
                   </div>
-                  <button
-                    onClick={() => pin(r)}
-                    disabled={alreadyPinned}
-                    className="flex shrink-0 items-center gap-1 rounded-lg bg-primary/15 px-2 py-1 text-[11px] font-medium text-primary disabled:opacity-40"
-                  >
-                    <Pin className="h-3.5 w-3.5" /> {alreadyPinned ? "Fixat" : "Fixează"}
-                  </button>
+                  {isAdmin && (
+                    <button
+                      onClick={() => pin(r)}
+                      disabled={alreadyPinned}
+                      className="flex shrink-0 items-center gap-1 rounded-lg bg-primary/15 px-2 py-1 text-[11px] font-medium text-primary disabled:opacity-40"
+                    >
+                      <Pin className="h-3.5 w-3.5" /> {alreadyPinned ? "Fixat" : "Fixează"}
+                    </button>
+                  )}
                 </div>
               );
             })}

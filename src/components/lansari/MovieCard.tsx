@@ -95,16 +95,18 @@ export function MovieCard({
                   <span className="font-semibold text-sm leading-tight line-clamp-2 flex-1">
                     {item.title}
                   </span>
-                  <button
-                    onClick={() => {
-                      onUnpin();
-                      qc.removeQueries({ queryKey: ["tmdbDetails", "movie", item.id] });
-                    }}
-                    className="shrink-0 text-muted-foreground hover:text-foreground mt-0.5"
-                    title="Scoate din listă"
-                  >
-                    <PinOff className="h-3.5 w-3.5" />
-                  </button>
+                  {isAdmin && (
+                    <button
+                      onClick={() => {
+                        onUnpin();
+                        qc.removeQueries({ queryKey: ["tmdbDetails", "movie", item.id] });
+                      }}
+                      className="shrink-0 text-muted-foreground hover:text-foreground mt-0.5"
+                      title="Scoate din listă"
+                    >
+                      <PinOff className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </div>
                 <div className="flex items-center gap-1.5 mt-1">
                   <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400">
@@ -153,7 +155,11 @@ export function MovieCard({
               className="w-full flex items-center justify-center gap-1 border-t border-border pt-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
               {isOpen ? "Mai puține detalii" : "Mai multe detalii"}
-              {isOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+              {isOpen ? (
+                <ChevronDown className="h-3.5 w-3.5" />
+              ) : (
+                <ChevronRight className="h-3.5 w-3.5" />
+              )}
             </button>
             {isOpen && (
               <>
@@ -194,12 +200,14 @@ export function MovieCard({
                     )}
                   </div>
                 )}
-                <WatchTogglePanel
-                  mediaType="movie"
-                  settings={watchSettings}
-                  isAdmin={isAdmin}
-                  onChange={onWatchChange}
-                />
+                {isAdmin && (
+                  <WatchTogglePanel
+                    mediaType="movie"
+                    settings={watchSettings}
+                    isAdmin={isAdmin}
+                    onChange={onWatchChange}
+                  />
+                )}
               </>
             )}
           </div>

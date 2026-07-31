@@ -45,6 +45,9 @@ const PUSH_TITLES: Record<ActivityType, string> = {
   service_update: "⬆️ Update",
   ubuntu_update: "🐧 Ubuntu",
   qbit_action: "⚙️ qBittorrent",
+  // Gol intenționat: pinned-watcher.ts trimite singur push-uri cu titluri/emoji
+  // mai specifice pentru evenimentele de pinned_update, deci logActivity nu
+  // trebuie să mai trimită unul generic pentru acest tip.
   pinned_update: "",
 };
 
