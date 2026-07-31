@@ -100,14 +100,16 @@ async function findShowByTitle(
   return show;
 }
 
-async function episodesInSeason(
+// Găsește serialul după titlu și întoarce lista brută de episoade dintr-un
+// sezon dat — comun pentru episodesInSeason și hasEpisode.
+async function findSeasonEpisodes(
   url: string,
   headers: Record<string, string>,
   showTitle: string,
   season: number,
-): Promise<{ num: number; quality: string | null; watched: boolean }[]> {
+): Promise<PlexMetadataItem[] | null> {
   const show = await findShowByTitle(url, headers, showTitle);
-  if (!show) return [];
+  if (!show) return null;
 
   const seasons = await fetchJson<PlexApiResponse>(
     `${url}/library/metadata/${show.ratingKey}/children`,
@@ -116,14 +118,24 @@ async function episodesInSeason(
   );
   const seasonsMd = seasons?.MediaContainer?.Metadata ?? [];
   const seasonMatch = seasonsMd.find((s: PlexMetadataItem) => Number(s.index) === season);
-  if (!seasonMatch) return [];
+  if (!seasonMatch) return null;
 
   const episodes = await fetchJson<PlexApiResponse>(
     `${url}/library/metadata/${seasonMatch.ratingKey}/children`,
     { headers },
     8000,
   );
-  const episodesMd = episodes?.MediaContainer?.Metadata ?? [];
+  return episodes?.MediaContainer?.Metadata ?? [];
+}
+
+async function episodesInSeason(
+  url: string,
+  headers: Record<string, string>,
+  showTitle: string,
+  season: number,
+): Promise<{ num: number; quality: string | null; watched: boolean }[]> {
+  const episodesMd = await findSeasonEpisodes(url, headers, showTitle, season);
+  if (!episodesMd) return [];
   return episodesMd
     .filter((e: PlexMetadataItem) => Number(e.index) > 0)
     .map((e: PlexMetadataItem) => ({
@@ -140,24 +152,8 @@ async function hasEpisode(
   season: number,
   episode: number,
 ): Promise<boolean> {
-  const show = await findShowByTitle(url, headers, showTitle);
-  if (!show) return false;
-
-  const seasons = await fetchJson<PlexApiResponse>(
-    `${url}/library/metadata/${show.ratingKey}/children`,
-    { headers },
-    8000,
-  );
-  const seasonsMd = seasons?.MediaContainer?.Metadata ?? [];
-  const seasonMatch = seasonsMd.find((s: PlexMetadataItem) => Number(s.index) === season);
-  if (!seasonMatch) return false;
-
-  const episodes = await fetchJson<PlexApiResponse>(
-    `${url}/library/metadata/${seasonMatch.ratingKey}/children`,
-    { headers },
-    8000,
-  );
-  const episodesMd = episodes?.MediaContainer?.Metadata ?? [];
+  const episodesMd = await findSeasonEpisodes(url, headers, showTitle, season);
+  if (!episodesMd) return false;
   return episodesMd.some((e: PlexMetadataItem) => Number(e.index) === episode);
 }
 
