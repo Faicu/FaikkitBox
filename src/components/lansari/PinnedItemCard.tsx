@@ -72,7 +72,7 @@ export function PinnedItemCard({
   });
 
   const latestSeasonFromTmdb =
-    details && details.seasons.length > 0
+    details?.seasons && details.seasons.length > 0
       ? details.seasons[details.seasons.length - 1].seasonNumber
       : null;
   const latestSeason =
