@@ -116,7 +116,13 @@ function TehnicPage() {
         )}
       </button>
 
-      <Drawer open={speedtestDrawer} onOpenChange={setSpeedtestDrawer}>
+      <Drawer
+        open={speedtestDrawer}
+        onOpenChange={(open) => {
+          setSpeedtestDrawer(open);
+          if (open) setSpeedtestError(null);
+        }}
+      >
         <DrawerContent className="max-h-[85vh]">
           <DrawerHeader className="text-left">
             <DrawerTitle>Speedtest</DrawerTitle>

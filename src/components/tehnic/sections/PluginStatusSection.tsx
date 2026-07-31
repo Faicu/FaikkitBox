@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Box, GitCommitHorizontal, PlayCircle, Bell, RefreshCw } from "lucide-react";
+import { toast } from "sonner";
 
-import { activityLogQuery, commitsFromDbQuery } from "@/lib/queries";
+import { activityLogQuery, adminStatusQuery, commitsFromDbQuery } from "@/lib/queries";
 import { getPinnedWatcherStatus, triggerPinnedWatcherCheck } from "@/lib/pinned.functions";
 import { PinnedWatcherNextRun } from "../PinnedWatcherNextRun";
 import { relativeTime } from "../utils";
@@ -33,6 +34,8 @@ const PLUGINS = [
 ];
 
 export function PluginStatusSection() {
+  const { data: adminData } = useQuery(adminStatusQuery);
+  const isAdmin = !!adminData?.isAdmin;
   const { data: log } = useQuery(activityLogQuery);
   const { data: commitsData } = useQuery(commitsFromDbQuery);
   const watcherStatusFn = useServerFn(getPinnedWatcherStatus);
@@ -40,6 +43,18 @@ export function PluginStatusSection() {
   const queryClient = useQueryClient();
   const [triggerState, setTriggerState] = useState<"idle" | "pending" | "running">("idle");
   const [triggerCountdown, setTriggerCountdown] = useState(0);
+  const timersRef = useRef<{
+    interval?: ReturnType<typeof setInterval>;
+    timeout?: ReturnType<typeof setTimeout>;
+  }>({});
+
+  useEffect(() => {
+    const timers = timersRef.current;
+    return () => {
+      if (timers.interval) clearInterval(timers.interval);
+      if (timers.timeout) clearTimeout(timers.timeout);
+    };
+  }, []);
 
   const { data: watcherStatus } = useQuery({
     queryKey: ["pinnedWatcherStatus"],
@@ -51,14 +66,20 @@ export function PluginStatusSection() {
     if (triggerState !== "idle") return;
     setTriggerState("pending");
     setTriggerCountdown(10);
-    await triggerFn();
-    const interval = setInterval(() => {
+    try {
+      await triggerFn();
+    } catch (e) {
+      toast.error((e as Error).message);
+      setTriggerState("idle");
+      return;
+    }
+    timersRef.current.interval = setInterval(() => {
       setTriggerCountdown((c) => {
         if (c <= 1) {
-          clearInterval(interval);
+          if (timersRef.current.interval) clearInterval(timersRef.current.interval);
           setTriggerState("running");
           // Refresh status după 15s (timp să ruleze checkAll)
-          setTimeout(() => {
+          timersRef.current.timeout = setTimeout(() => {
             queryClient.invalidateQueries({ queryKey: ["pinnedWatcherStatus"] });
             queryClient.invalidateQueries({ queryKey: ["activityLog"] });
             setTriggerState("idle");
@@ -97,7 +118,7 @@ export function PluginStatusSection() {
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-medium leading-tight">{p.label}</div>
                 <div className="text-[11px] text-muted-foreground">{p.description}</div>
-                {isPinnedWatcher && (
+                {isPinnedWatcher && isAdmin && (
                   <button
                     onClick={handleTrigger}
                     disabled={triggerState !== "idle"}
