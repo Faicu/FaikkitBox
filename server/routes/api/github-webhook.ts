@@ -54,10 +54,12 @@ export default defineEventHandler(async (event) => {
     const date = c.timestamp ?? now;
     const url = c.url ?? `https://github.com/${repo}/commit/${sha}`;
 
-    stmt.run(sha, sha.slice(0, 7), message, author, date, url, now);
-    await sendPushToAll(`📦 Commit nou — ${author}`, message).catch((err) => {
-      console.warn("[github-webhook] Trimitere push eșuată:", err);
-    });
+    const result = stmt.run(sha, sha.slice(0, 7), message, author, date, url, now);
+    if (result.changes > 0) {
+      await sendPushToAll(`📦 Commit nou — ${author}`, message).catch((err) => {
+        console.warn("[github-webhook] Trimitere push eșuată:", err);
+      });
+    }
   }
 
   return { ok: true, processed: commits.length };

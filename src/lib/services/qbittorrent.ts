@@ -67,9 +67,19 @@ export const qbitAction = createServerFn({ method: "POST" })
         data.action === "pause" ? "/api/v2/torrents/pause" : "/api/v2/torrents/resume";
       const fallback = data.action === "pause" ? "/api/v2/torrents/stop" : "/api/v2/torrents/start";
       let res = await qbitPostForm(url, primary, user, pass, { hashes: hashesStr });
+      let primaryError: string | undefined;
+      // /torrents/pause și /resume nu mai există în qBittorrent 5.x (404) —
+      // în acel caz încercăm API-ul vechi /stop, /start. Orice alt eșec
+      // (ex. 401/403/500) e raportat direct, fără fallback silențios.
       if (!res.ok) {
-        res = await qbitPostForm(url, fallback, user, pass, { hashes: hashesStr });
+        if (res.status === 404) {
+          res = await qbitPostForm(url, fallback, user, pass, { hashes: hashesStr });
+        } else {
+          const t = await res.text().catch(() => "");
+          primaryError = `HTTP ${res.status} ${t.slice(0, 120)}`;
+        }
       }
+      if (primaryError) return { ok: false, error: primaryError };
       if (!res.ok) {
         const t = await res.text().catch(() => "");
         return { ok: false, error: `HTTP ${res.status} ${t.slice(0, 120)}` };

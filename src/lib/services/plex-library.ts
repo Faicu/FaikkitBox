@@ -29,6 +29,25 @@ export interface ShowStatusData {
   next: ShowEpisodeInfo | null;
 }
 
+// Cache scurt pentru key-ul secțiunii TV Shows, ca să nu interogăm
+// /library/sections la fiecare căutare de fallback.
+let showSectionCache: { url: string; key: string; expiresAt: number } | null = null;
+
+async function findShowSectionKey(
+  url: string,
+  headers: Record<string, string>,
+): Promise<string | undefined> {
+  if (showSectionCache && showSectionCache.url === url && showSectionCache.expiresAt > Date.now()) {
+    return showSectionCache.key;
+  }
+  const sections = await fetchJson<PlexApiResponse>(`${url}/library/sections`, { headers }, 8000);
+  const dirs = sections?.MediaContainer?.Directory ?? [];
+  const showSection = dirs.find((d) => d.type === "show");
+  if (!showSection?.key) return undefined;
+  showSectionCache = { url, key: showSection.key, expiresAt: Date.now() + 5 * 60 * 1000 };
+  return showSection.key;
+}
+
 async function findShowByTitle(
   url: string,
   headers: Record<string, string>,
@@ -57,8 +76,10 @@ async function findShowByTitle(
     searchShows[0];
 
   if (!show) {
+    const sectionKey = await findShowSectionKey(url, headers);
+    if (!sectionKey) return undefined;
     const allShows = await fetchJson<PlexApiResponse>(
-      `${url}/library/sections/2/all?type=2`,
+      `${url}/library/sections/${sectionKey}/all?type=2`,
       { headers },
       10000,
     );
