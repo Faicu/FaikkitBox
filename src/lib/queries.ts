@@ -1,5 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
-import { getPlex, getImmich, getQbit, getHost } from "./services.functions";
+import { getPlex, getPlexSessions, getImmich, getQbit, getHost } from "./services.functions";
 import { getAdminStatus } from "./admin.functions";
 import { getVersions } from "./versions.functions";
 import { getLastSpeedtest, getSpeedtestHistory } from "./speedtest.functions";
@@ -18,9 +18,19 @@ const keepPrev = { placeholderData: <T>(prev: T) => prev };
 export const plexQuery = queryOptions({
   queryKey: ["plex"],
   queryFn: () => getPlex(),
-  refetchInterval: 3_000,
+  refetchInterval: 10_000,
   refetchIntervalInBackground: false,
-  staleTime: 3_000,
+  staleTime: 10_000,
+  ...keepPrev,
+});
+
+// "Cine vizionează acum" — cerere separată, rapidă (doar /status/sessions)
+export const plexSessionsQuery = queryOptions({
+  queryKey: ["plexSessions"],
+  queryFn: () => getPlexSessions(),
+  refetchInterval: 1_000,
+  refetchIntervalInBackground: false,
+  staleTime: 1_000,
   ...keepPrev,
 });
 

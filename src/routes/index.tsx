@@ -27,7 +27,7 @@ import {
   DrawerTitle,
   DrawerDescription,
 } from "@/components/ui/drawer";
-import { plexQuery, immichQuery, qbitQuery, hostQuery } from "@/lib/queries";
+import { plexQuery, plexSessionsQuery, immichQuery, qbitQuery, hostQuery } from "@/lib/queries";
 import type { HostData } from "@/lib/services.functions";
 import { formatBytes, formatSpeed } from "@/lib/format";
 
@@ -46,6 +46,8 @@ export const Route = createFileRoute("/")({
 
 function Overview() {
   const plex = useQuery(plexQuery);
+  const plexSessions = useQuery(plexSessionsQuery);
+  const sessions = plexSessions.data?.status === "ok" ? plexSessions.data.sessions : plex.data?.sessions;
   const immich = useQuery(immichQuery);
   const qbit = useQuery(qbitQuery);
   const host = useQuery(hostQuery);
@@ -72,9 +74,9 @@ function Overview() {
       >
         {plex.data?.status === "ok" && (
           <div className="space-y-2 text-sm">
-            {plex.data.sessions.length > 0 ? (
+            {(sessions?.length ?? 0) > 0 ? (
               <div className="space-y-1.5">
-                {plex.data.sessions.map((s, i) => {
+                {sessions!.map((s, i) => {
                   const pct =
                     s.durationMs > 0 ? Math.round((s.viewOffsetMs / s.durationMs) * 100) : 0;
                   const fmt = (ms: number) => {

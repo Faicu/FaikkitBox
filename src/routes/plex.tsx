@@ -27,7 +27,7 @@ import {
   DrawerTitle,
   DrawerDescription,
 } from "@/components/ui/drawer";
-import { plexQuery } from "@/lib/queries";
+import { plexQuery, plexSessionsQuery } from "@/lib/queries";
 import { formatMsWithSeconds } from "@/lib/format";
 import type { PlexHistoryEntry } from "@/lib/services.functions";
 import type { AgentCommand, AgentResult } from "@/lib/agent.functions";
@@ -47,6 +47,8 @@ function libIcon(type: string) {
 
 function PlexPage() {
   const { data, isLoading } = useQuery(plexQuery);
+  const plexSessions = useQuery(plexSessionsQuery);
+  const sessions = plexSessions.data?.status === "ok" ? plexSessions.data.sessions : data?.sessions;
   const status = isLoading ? "loading" : (data?.status ?? "error");
   const { recovering, startRecovery } = useServiceRecovery(data?.status);
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
@@ -86,15 +88,15 @@ function PlexPage() {
         <>
           <section>
             <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Se redă acum ({data.sessions.length})
+              Se redă acum ({sessions?.length ?? 0})
             </h2>
-            {data.sessions.length === 0 ? (
+            {(sessions?.length ?? 0) === 0 ? (
               <div className="rounded-2xl border border-border bg-card p-4 text-sm text-muted-foreground">
                 Nimic în redare momentan.
               </div>
             ) : (
               <div className="space-y-2">
-                {data.sessions.map((s, i) => {
+                {sessions!.map((s, i) => {
                   const pct = s.durationMs > 0 ? (s.viewOffsetMs / s.durationMs) * 100 : 0;
                   const remaining = s.durationMs - s.viewOffsetMs;
                   const isPaused = s.playerState === "paused";

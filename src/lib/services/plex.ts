@@ -264,6 +264,59 @@ async function fetchPlexHistory(
   return result;
 }
 
+// ---------- Sesiuni (mapare comună) ----------
+
+function mapPlexSessions(sessionsMd: PlexMetadataItem[]): PlexSession[] {
+  return sessionsMd.map((s: PlexMetadataItem) => {
+    const media = s?.Media?.[0] ?? {};
+    const part = media?.Part?.[0] ?? {};
+    const stream = part?.Stream ?? [];
+    const video = stream.find((x: PlexStream) => x.streamType === 1);
+    const audio = stream.find((x: PlexStream) => x.streamType === 2);
+    const dur = Number(s.duration ?? 0);
+    const rawOff = Number(s.viewOffset ?? 0);
+    // Plex returnează viewOffset în ms, dar dur e tot în ms
+    // Dacă dur > 1000 și off < 1000 și off > 0, probabil off e în secunde
+    const off = dur > 1000 && rawOff > 0 && rawOff < 1000 ? rawOff * 1000 : rawOff;
+    return {
+      title: s.title ?? "Unknown",
+      grandparentTitle: s.grandparentTitle,
+      type: s.type ?? "",
+      user: s?.User?.title ?? "?",
+      device: s?.Player?.device ?? s?.Player?.product ?? "?",
+      player: s?.Player?.title ?? "?",
+      playerState: s?.Player?.state ?? "playing",
+      progress: dur > 0 ? off / dur : 0,
+      viewOffsetMs: off,
+      durationMs: dur,
+      videoDecision: video?.decision,
+      audioDecision: audio?.decision,
+      bitrateKbps: Number(media?.bitrate ?? 0) || undefined,
+      thumbPath: s.thumb,
+    };
+  });
+}
+
+// ---------- Doar sesiuni curente (rapid — pentru "cine vizionează acum") ----------
+
+export const getPlexSessions = createServerFn({ method: "GET" }).handler(
+  async (): Promise<{ status: ServiceStatus; error?: string; sessions: PlexSession[] }> => {
+    const token = process.env.PLEX_TOKEN;
+    if (!token) {
+      return { status: "error", error: "PLEX_TOKEN not configured", sessions: [] };
+    }
+    const headers = { Accept: "application/json", "X-Plex-Token": token };
+    try {
+      const { url } = await discoverPlexUrl(token, process.env.PLEX_URL);
+      const sessionsJson = await fetchJson<PlexApiResponse>(`${url}/status/sessions`, { headers });
+      const sessionsMd = sessionsJson?.MediaContainer?.Metadata ?? [];
+      return { status: "ok", sessions: mapPlexSessions(sessionsMd) };
+    } catch (e) {
+      return { status: "error", error: errMsg(e), sessions: [] };
+    }
+  },
+);
+
 // ---------- Status live (sesiuni, biblioteci, recent added) ----------
 
 export const getPlex = createServerFn({ method: "GET" }).handler(async (): Promise<PlexData> => {
@@ -365,34 +418,7 @@ export const getPlex = createServerFn({ method: "GET" }).handler(async (): Promi
       }),
     );
 
-    const sessions: PlexSession[] = sessionsMd.map((s: PlexMetadataItem) => {
-      const media = s?.Media?.[0] ?? {};
-      const part = media?.Part?.[0] ?? {};
-      const stream = part?.Stream ?? [];
-      const video = stream.find((x: PlexStream) => x.streamType === 1);
-      const audio = stream.find((x: PlexStream) => x.streamType === 2);
-      const dur = Number(s.duration ?? 0);
-      const rawOff = Number(s.viewOffset ?? 0);
-      // Plex returnează viewOffset în ms, dar dur e tot în ms
-      // Dacă dur > 1000 și off < 1000 și off > 0, probabil off e în secunde
-      const off = dur > 1000 && rawOff > 0 && rawOff < 1000 ? rawOff * 1000 : rawOff;
-      return {
-        title: s.title ?? "Unknown",
-        grandparentTitle: s.grandparentTitle,
-        type: s.type ?? "",
-        user: s?.User?.title ?? "?",
-        device: s?.Player?.device ?? s?.Player?.product ?? "?",
-        player: s?.Player?.title ?? "?",
-        playerState: s?.Player?.state ?? "playing",
-        progress: dur > 0 ? off / dur : 0,
-        viewOffsetMs: off,
-        durationMs: dur,
-        videoDecision: video?.decision,
-        audioDecision: audio?.decision,
-        bitrateKbps: Number(media?.bitrate ?? 0) || undefined,
-        thumbPath: s.thumb,
-      };
-    });
+    const sessions: PlexSession[] = mapPlexSessions(sessionsMd);
 
     // Tracking activitate Plex
     const { trackPlexSessions } = await import("../activity-log");
