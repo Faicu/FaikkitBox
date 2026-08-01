@@ -9,6 +9,7 @@ import type { DiscoverTitle } from "@/lib/tmdb.discover.functions";
 import { getTmdbDetails } from "@/lib/tmdb.functions";
 import { FilelistCheckButton } from "./FilelistCheckButton";
 import { PinToLansariButton } from "./PinToLansariButton";
+import { PlexLibraryStatus } from "./PlexLibraryStatus";
 
 export function SceneViewer({
   item,
@@ -94,6 +95,11 @@ export function SceneViewer({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <PlexLibraryStatus
+              title={item.title}
+              originalTitle={detailsQuery.data?.originalTitle ?? item.title}
+              mediaType={item.mediaType}
+            />
             <FilelistCheckButton title={item.title} mediaType={item.mediaType} isAdmin={isAdmin} />
             <PinToLansariButton
               id={item.id}
