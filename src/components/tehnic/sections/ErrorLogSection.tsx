@@ -120,8 +120,8 @@ export function ErrorLogSection() {
           <DrawerHeader className="text-left">
             <DrawerTitle>Erori aplicație</DrawerTitle>
             <DrawerDescription>
-              {allEntries.length} tip(uri) de erori distincte (server, SSR, browser) — grupate,
-              cu contor de apariții.
+              {allEntries.length} tip(uri) de erori distincte (server, SSR, browser) — grupate, cu
+              contor de apariții.
             </DrawerDescription>
           </DrawerHeader>
           <div className="space-y-2 overflow-y-auto px-4 pb-16">
@@ -196,9 +196,7 @@ export function ErrorLogSection() {
                       </span>
                     )}
                   </div>
-                  <span className="shrink-0 text-muted-foreground">
-                    {relativeTime(e.lastSeen)}
-                  </span>
+                  <span className="shrink-0 text-muted-foreground">{relativeTime(e.lastSeen)}</span>
                 </div>
                 <div className="mt-1.5 break-words font-medium text-foreground">{e.message}</div>
                 {e.count > 1 && (

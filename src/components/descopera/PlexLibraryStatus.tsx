@@ -18,8 +18,7 @@ export function PlexLibraryStatus({
 
   const query = useQuery({
     queryKey: ["plexHasTitle", mediaType, title, originalTitle],
-    queryFn: () =>
-      checkFn({ data: { title, originalTitle, mediaType } }),
+    queryFn: () => checkFn({ data: { title, originalTitle, mediaType } }),
   });
 
   if (query.isLoading) {

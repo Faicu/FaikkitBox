@@ -25,7 +25,8 @@ function matchInfoText(torrent: FilelistTorrent): string | null {
   text += ".";
 
   if (torrent.matchedVia === "imdb") {
-    text += " Cel mai fiabil criteriu — potrivire exactă pe ID-ul IMDB, indiferent cum e denumită lansarea.";
+    text +=
+      " Cel mai fiabil criteriu — potrivire exactă pe ID-ul IMDB, indiferent cum e denumită lansarea.";
   } else {
     text += ` Torrentul a fost identificat prin potrivire de text în numele lansării (nu are ID IMDB pe Filelist${
       torrent.imdb ? ", deși are unul asociat: " + torrent.imdb : ""

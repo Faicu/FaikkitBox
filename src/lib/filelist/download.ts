@@ -389,10 +389,13 @@ export async function checkFilelistForItemInternal(data: {
 
     for (const q of nameQueries) {
       if (found.length > 0) break;
-      const via: "original_title" | "english_title" = q === original ? "original_title" : "english_title";
+      const via: "original_title" | "english_title" =
+        q === original ? "original_title" : "english_title";
       const byName = await searchFilelistRaw(q, category, "name");
       found = byName
-        .filter((t) => torrentMatchesTitle(t.name, original) || torrentMatchesTitle(t.name, english))
+        .filter(
+          (t) => torrentMatchesTitle(t.name, original) || torrentMatchesTitle(t.name, english),
+        )
         .map((t) => ({
           ...t,
           matchedByImdb: !!(t.imdb && data.imdbId && t.imdb === data.imdbId),
@@ -467,7 +470,8 @@ async function downloadFilelistCore(
     return { status: "error", error: "QBIT_USERNAME / QBIT_PASSWORD nu sunt configurate" };
   }
 
-  const catId = params.categoryId || (params.categoryName ? parseCategoryId(params.categoryName) : 0);
+  const catId =
+    params.categoryId || (params.categoryName ? parseCategoryId(params.categoryName) : 0);
   const isMovie =
     isMovieCategory(catId) || (catId === 0 && /film|movie/i.test(params.categoryName ?? ""));
   const savePath = isMovie ? moviesPath : seriesPath;
