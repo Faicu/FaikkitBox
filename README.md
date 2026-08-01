@@ -30,16 +30,35 @@ Speedtest (rulare test nou + istoric grafic), status plugin-uri server, statisti
 Pagină dedicată cu search unificat (TMDB) pentru filme și seriale. Itemele fixate afișează:
 
 - **Poster** din TMDB
-- **Status Plex** — `Complet` / `Incomplet` / `Lipsă` cu culori (verde/galben/roșu)
-  - Pentru **filme**: afișează și calitatea existentă în bibliotecă (ex: `1080p · Complet`)
-  - Pentru **seriale**: statusul reflectă *doar ultimul sezon lansat*, nu întreaga serie
-- **Download de pe Filelist** — butoane pe calități (`1080p`, `4K`, `4K HDR`) cu confirmare înainte de descărcare
+- **Status Plex**
+  - Pentru **filme**: `Complet în Plex` (+ calitatea) / `Lipsă din Plex` — badge unic, `PlexStatusBadge` (`src/components/lansari/PlexStatusBadge.tsx`)
+  - Pentru **seriale**: badge cu 6 stări posibile, calculate în `computeTvPlexStatus` (`src/components/lansari/plex-status.ts`) și afișate tot cu `PlexStatusBadge` — vezi detalii mai jos
+- **Download de pe Filelist** — butoane pe calități (`1080p`, `4K`, `4K HDR`) cu confirmare înainte de descărcare; pornește doar la deschiderea „Mai multe detalii" pe card, nu automat pentru toate itemele fixate (contul Filelist are limită orară de cereri)
   - Seriale: grupate pe sezoane cu accordion; suportă atât pack-uri întregi (S01) cât și episoade individuale (S01E01) în același sezon
   - Per-episod: status Plex individual cu badge `În bibliotecă`
 - **Countdown** până la următorul episod (zile/ore/min/sec) cu data și ora exactă (ora României)
 - **Ultimul episod lansat** cu status Plex
 
 Căutare Plex robustă: suportă titluri localizate (ex: „Casa Dragonului" găsit prin „House of the Dragon") și titluri cu diacritice (ex: „Cămătarii") prin fallback la parcurgerea întregii biblioteci.
+
+#### Badge-uri Plex pentru seriale
+
+Definite în **`src/components/lansari/plex-status.ts`** (tipul `TvPlexStatus` + funcția pură `computeTvPlexStatus`) și randate de componenta **`src/components/lansari/PlexStatusBadge.tsx`**. Sunt folosite din `ShowCard.tsx` (badge principal, pe cardul restrâns) și `SeasonPanel.tsx` (badge pe secțiunea de sezon expandată).
+
+6 stări posibile, în ordinea de prioritate (prima condiție adevărată câștigă):
+
+| # | Stare | Când apare |
+|---|---|---|
+| 1 | **Episod nou disponibil** | Ultimul episod lansat are sub 24h și încă lipsește din Plex. Prioritate maximă — e temporar și urgent. |
+| 2 | **Complet în Plex** | Toate sezoanele și toate episoadele deja apărute există în Plex. |
+| 3 | **Incomplet (ultimul sezon)** | Lipsește cel puțin un episod chiar din ultimul sezon. Mai specific decât starea 5, deci are prioritate peste ea. |
+| 4 | **Complet (ultimul sezon)** | Ultimul sezon e complet în Plex — nu contează dacă sezoane/episoade anterioare lipsesc, parțial sau total. |
+| 5 | **Lipsesc episoade** | Fallback generic, pentru cazuri ambigue (nu ar trebui să apară în practică). |
+| 6 | **Lipsă din Plex** | Niciun episod din serial nu există în bibliotecă. |
+
+Pentru starea 1, `computeTvPlexStatus` primește `lastAired` din `getTvShowCountdown` (`src/lib/tmdb.functions.ts`), care are deja câmpul `inLibrary` calculat prin verificare directă pe Plex pentru acel episod exact — nu se recalculează separat.
+
+Pentru filme, `MovieCard.tsx` folosește aceeași componentă `PlexStatusBadge` cu doar 2 stări (`complet` / `lipsa`), pe baza rezultatului simplu `checkPlexHasTitle`.
 
 ### FileList.io
 Căutare torrent direct din dashboard, trimitere în qBittorrent pe foldere separate filme/seriale, jurnal cu ultimele descărcări.
@@ -191,7 +210,7 @@ Pentru liste ce se încarcă incremental (ex. `DiscoverGrid`), se folosește `us
 | Domeniu | Fișiere | Note |
 |---|---|---|
 | Pinned items (Lansări) | `pinned.functions.ts` | Tabelă SQLite `pinned_items`. `setPinnedItems` = full-replace (folosit de UI-ul de căutare din Lansări), `addPinnedItem` = insert unic (folosit de `PinToLansariButton` din Descoperă). Ambele trebuie să invalideze `["pinnedItems"]` (`pinnedItemsQuery` din `queries.ts`) ca să rămână sincron între pagini. |
-| Filelist | `filelist.functions.ts` (barrel) + `filelist/{types,categories,download,log}.ts` | `categories.ts` are `isMovieCategory`/`MOVIE_CATEGORIES`/`SERIES_CATEGORIES` — **nu reimplementa** verificarea film/serial pe alte fișiere. `download.ts` face upload în qBittorrent + poll în fundal (până la 48h, la 30s) + refresh bibliotecă Plex la finalizare. |
+| Filelist | `filelist.functions.ts` (barrel) + `filelist/{types,categories,download,match,log}.ts` | `categories.ts` are `isMovieCategory`/`MOVIE_CATEGORIES`/`SERIES_CATEGORIES` — **nu reimplementa** verificarea film/serial pe alte fișiere. `download.ts` face upload în qBittorrent + poll în fundal (până la 48h, la 30s) + refresh bibliotecă Plex la finalizare. `match.ts` are `torrentMatchesTitle`/`stripDiacritics` — matching nume torrent ↔ titlu TMDB. `checkFilelistForItemInternal` (`download.ts`) e **sursa unică** pentru „există pe Filelist?": caută secvențial IMDB ID → titlu original → titlu englez, se oprește la primul rezultat, cu cache 10 min (contul Filelist are limită orară de cereri). E folosită din 3 locuri — nu duplica logica de căutare/matching în altă parte: `FilelistCheckButton.tsx` (Descoperă, la click), `PinnedItemCard.tsx` (Lansări, la deschiderea „Mai multe detalii"), `server/plugins/pinned-watcher.ts` (job automat la 3 ore, doar pentru itemele cu toggle „Torrent nou Filelist" activat). |
 | qBittorrent client | `qbit-client.ts` | Autentificare cu cache SID; dacă apar erori 403 la upload, verifică header-ele Referer/Origin și expirarea SID-ului (deja rezolvat o dată, vezi istoricul git). |
 | TMDB | `tmdb.functions.ts` (search/details/countdown/episoade), `tmdb.discover.functions.ts` (trending/popular/newest + feed clipuri video), `tmdb-client.ts` (fetch helper cu token Bearer) | Funcțiile de discover întorc `{ items/clips, degraded }` — `degraded: true` înseamnă eroare TMDB înghițită în try/catch, nu listă goală legitimă. Păstrează distincția asta când adaugi UI nou pe aceste date. |
 | Servicii dashboard | `services/{plex,immich,qbittorrent,host,plex-library,shared}.ts` + `services.functions.ts` | Agregă statusul pentru pagina principală și pentru status Plex per-item din Lansări (`checkPlexHasTitle`, `getPlexEpisodesInSeason`). |
@@ -200,7 +219,8 @@ Pentru liste ce se încarcă incremental (ex. `DiscoverGrid`), se folosește `us
 
 ### Componente Lansări/Descoperă — puncte de refolosit
 
-- `src/components/lansari/utils.ts` — `detectQuality(name)` (1080p/4K/4K HDR din numele torrentului), `groupTorrentsBySeasonEpisode`, `filterTorrentsForItem`, `stripDiacritics`. Orice logică nouă de parsare a numelui de torrent ar trebui să treacă prin aici, nu regex inline în componente.
+- `src/components/lansari/utils.ts` — `detectQuality(name)` (1080p/4K/4K HDR din numele torrentului), `groupTorrentsBySeasonEpisode`. Orice logică nouă de parsare a numelui de torrent ar trebui să treacă prin aici, nu regex inline în componente. (Matching-ul torrent ↔ titlu e în `src/lib/filelist/match.ts`, folosit server-side de `checkFilelistForItemInternal`.)
+- `src/components/lansari/plex-status.ts` + `PlexStatusBadge.tsx` — logica (funcție pură) și, respectiv, componenta pentru badge-ul de status Plex al serialelor (6 stări). Orice modificare a priorității stărilor se face în `plex-status.ts`, nu inline în `PinnedItemCard.tsx`/`ShowCard.tsx`.
 - `src/components/lansari/DownloadConfirmDialog.tsx` — dialogul standard de confirmare descărcare (folosit din `MovieCard`, `ShowCard`, `FilelistSection`). Orice buton nou de download ar trebui să treacă prin el, nu să descarce direct.
 - `src/components/lansari/hooks.ts` — `useDownload()` (upload qBittorrent + toast + invalidare `filelistLog`), `useCountdown(targetIso)`.
 - `src/components/ui/alert-dialog.tsx` — wrapper Radix deja stilizat; folosește-l pentru orice confirmare distructivă în loc de `window.confirm()`.

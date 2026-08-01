@@ -5,7 +5,6 @@ import {
   ExternalLink,
   Film,
   CheckCircle2,
-  XCircle,
   Download,
   Loader2,
   ChevronDown,
@@ -19,6 +18,7 @@ import type { PinnedItem } from "./types";
 import { detectQuality } from "./utils";
 import { useDownload } from "./hooks";
 import { QualityDownloadButton } from "./badges";
+import { PlexStatusBadge } from "./PlexStatusBadge";
 import { DownloadConfirmDialog } from "./DownloadConfirmDialog";
 import { WatchTogglePanel } from "./WatchTogglePanel";
 
@@ -141,9 +141,7 @@ export function MovieCard({
                       </span>
                     </>
                   ) : plexStatus === "lipsa" ? (
-                    <span className="flex items-center gap-1 rounded-lg bg-muted/60 px-2.5 py-1 text-xs font-semibold text-muted-foreground">
-                      <XCircle className="h-3.5 w-3.5" /> Lipsă din Plex
-                    </span>
+                    <PlexStatusBadge status="lipsa" />
                   ) : (
                     <span className="h-7 w-28 animate-pulse rounded-lg bg-muted/40" />
                   )}
