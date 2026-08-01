@@ -63,7 +63,12 @@ export function PinnedItemCard({
   });
 
   const itemImdbId = details?.imdbId ?? countdown?.imdbId ?? null;
-  const itemOriginalTitle = details?.originalTitle || item.originalTitle || item.title;
+  // Pentru căutarea pe Filelist preferăm titlul literal/romanizat (ex.
+  // "Gunche"), nu original_title brut din TMDB (rămâne în scriptul nativ,
+  // ex. "군체", inutil ca text de căutare) — vezi findLiteralTitle în
+  // tmdb.functions.ts.
+  const itemOriginalTitle =
+    details?.literalTitle || details?.originalTitle || item.originalTitle || item.title;
 
   // checkFilelistForItem caută întâi după IMDB ID, apoi titlul original,
   // apoi titlul afișat — aceeași sursă unică folosită și de Descoperă.

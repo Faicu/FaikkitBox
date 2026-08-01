@@ -102,7 +102,9 @@ export function SceneViewer({
             />
             <FilelistCheckButton
               title={item.title}
-              originalTitle={detailsQuery.data?.originalTitle ?? item.title}
+              originalTitle={
+                detailsQuery.data?.literalTitle ?? detailsQuery.data?.originalTitle ?? item.title
+              }
               imdbId={imdbId}
               mediaType={item.mediaType}
               isAdmin={isAdmin}

@@ -33,8 +33,7 @@ function mapItem(mediaType: DiscoverMediaType, r: TmdbApiDiscoverItem): Discover
     id: r.id,
     mediaType,
     title: mediaType === "movie" ? (r.title ?? r.name ?? "") : (r.name ?? r.title ?? ""),
-    year:
-      (mediaType === "movie" ? r.release_date : r.first_air_date)?.slice(0, 4) || null,
+    year: (mediaType === "movie" ? r.release_date : r.first_air_date)?.slice(0, 4) || null,
     posterUrl: r.poster_path ? `https://image.tmdb.org/t/p/w342${r.poster_path}` : null,
     voteAverage: typeof r.vote_average === "number" ? r.vote_average : null,
   };
@@ -135,7 +134,8 @@ export const getFeedClips = createServerFn({ method: "GET" })
   .validator((data: { mediaType: DiscoverMediaType | "all"; sort: DiscoverSort }) => data)
   .handler(async ({ data }): Promise<FeedClipsResult> => {
     try {
-      const mediaTypes: DiscoverMediaType[] = data.mediaType === "all" ? ["movie", "tv"] : [data.mediaType];
+      const mediaTypes: DiscoverMediaType[] =
+        data.mediaType === "all" ? ["movie", "tv"] : [data.mediaType];
       // pagină aleatorie (1-5) din discover/trending, ca feed-ul să nu fie identic la fiecare vizită
       const page = 1 + Math.floor(Math.random() * 5);
 

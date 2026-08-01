@@ -35,8 +35,7 @@ export type SpeedtestRunResponse = ({ ok: true } & SpeedtestResult) | { ok: fals
 
 function cacheFilePath() {
   return (
-    process.env.SPEEDTEST_CACHE_FILE ??
-    path.join(process.cwd(), "data", "speedtest-last.json")
+    process.env.SPEEDTEST_CACHE_FILE ?? path.join(process.cwd(), "data", "speedtest-last.json")
   );
 }
 
@@ -163,7 +162,9 @@ async function readLastFromHistory(): Promise<SpeedtestResult | null> {
   try {
     const { getDb } = await import("./db");
     const db = getDb();
-    const row = db.prepare("SELECT * FROM speedtest_history ORDER BY timestamp DESC LIMIT 1").get() as
+    const row = db
+      .prepare("SELECT * FROM speedtest_history ORDER BY timestamp DESC LIMIT 1")
+      .get() as
       | {
           timestamp: string;
           download: number;

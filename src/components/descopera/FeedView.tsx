@@ -56,7 +56,9 @@ function FeedCard({
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <FilelistCheckButton
                 title={clip.title}
-                originalTitle={detailsQuery.data?.originalTitle ?? clip.title}
+                originalTitle={
+                  detailsQuery.data?.literalTitle ?? detailsQuery.data?.originalTitle ?? clip.title
+                }
                 imdbId={imdbId}
                 mediaType={clip.mediaType}
                 isAdmin={isAdmin}

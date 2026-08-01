@@ -18,11 +18,18 @@ interface TmdbApiSearchResponse {
   results?: TmdbApiSearchResult[];
 }
 
+interface TmdbApiAlternativeTitle {
+  iso_3166_1?: string;
+  title?: string;
+  type?: string;
+}
+
 interface TmdbApiMovie {
   title?: string;
   original_title?: string;
   external_ids?: { imdb_id?: string | null };
   imdb_id?: string | null;
+  alternative_titles?: { titles?: TmdbApiAlternativeTitle[] };
 }
 
 interface TmdbApiSeasonSummary {
@@ -37,6 +44,18 @@ interface TmdbApiTvShow {
   external_ids?: { imdb_id?: string | null };
   status?: string | null;
   seasons?: TmdbApiSeasonSummary[];
+  alternative_titles?: { results?: TmdbApiAlternativeTitle[] };
+}
+
+// TMDB marchează cu type "literal title" romanizarea/transliterarea folosită
+// efectiv pe scenă (Filelist, grupuri de release) pentru producții cu titlu
+// original în alt alfabet — spre deosebire de original_title/original_name,
+// care rămâne mereu în scriptul nativ (ex. coreeană, "군체"), inutilizabil ca
+// text de căutare. Ex: pentru "Colony" (2026), original_title TMDB e "군체",
+// dar pe Filelist lansarea e denumită "Gunche" — exact "literal title" de mai
+// jos, ceea ce IMDB afișează drept "titlu original".
+function findLiteralTitle(titles: TmdbApiAlternativeTitle[] | undefined): string | null {
+  return titles?.find((t) => t.type === "literal title")?.title ?? null;
 }
 
 interface TmdbApiEpisode {
@@ -116,6 +135,11 @@ export interface TmdbDetails {
   mediaType: "movie" | "tv";
   title: string;
   originalTitle: string;
+  // Titlul romanizat/literal (ex. "Gunche" pentru 군체) — ce arată IMDB drept
+  // "titlu original" și ce folosesc grupurile de release pe Filelist. Null
+  // dacă TMDB n-are un titlu marcat "literal title" pentru producția asta
+  // (frecvent pentru titluri deja în alfabet latin).
+  literalTitle: string | null;
   imdbId: string | null;
   // doar pentru tv:
   tvStatus: string | null;
@@ -128,20 +152,21 @@ export const getTmdbDetails = createServerFn({ method: "GET" })
     try {
       if (data.mediaType === "movie") {
         const movie = await tmdbFetch<TmdbApiMovie>(
-          `/movie/${data.id}?append_to_response=external_ids`,
+          `/movie/${data.id}?append_to_response=external_ids,alternative_titles`,
         );
         return {
           id: data.id,
           mediaType: "movie",
           title: movie.title ?? movie.original_title ?? "",
           originalTitle: movie.original_title ?? movie.title ?? "",
+          literalTitle: findLiteralTitle(movie.alternative_titles?.titles),
           imdbId: movie.external_ids?.imdb_id ?? movie.imdb_id ?? null,
           tvStatus: null,
           seasons: [],
         };
       } else {
         const show = await tmdbFetch<TmdbApiTvShow>(
-          `/tv/${data.id}?append_to_response=external_ids`,
+          `/tv/${data.id}?append_to_response=external_ids,alternative_titles`,
         );
         const seasons = (show.seasons ?? [])
           .filter((s) => s.season_number > 0)
@@ -155,6 +180,7 @@ export const getTmdbDetails = createServerFn({ method: "GET" })
           mediaType: "tv",
           title: show.name ?? show.original_name ?? "",
           originalTitle: show.original_name ?? show.name ?? "",
+          literalTitle: findLiteralTitle(show.alternative_titles?.results),
           imdbId: show.external_ids?.imdb_id ?? null,
           tvStatus: show.status ?? null,
           seasons,
@@ -166,6 +192,7 @@ export const getTmdbDetails = createServerFn({ method: "GET" })
         mediaType: data.mediaType,
         title: "",
         originalTitle: "",
+        literalTitle: null,
         imdbId: null,
         tvStatus: null,
         seasons: [],

@@ -17,21 +17,39 @@ const ITEM_INTERVAL_MS = 3 * 60 * 60 * 1000; // 3 ore — cadența reală per it
 const POLL_INTERVAL_MS = 10 * 60 * 1000; // 10 min — cât de des verificăm ce a expirat
 const TMDB_BASE = "https://api.themoviedb.org/3";
 
-// IMDB ID-ul TMDB al itemului — necesar pentru checkFilelistForItemInternal,
-// care caută prioritar direct după IMDB ID (cel mai fiabil criteriu).
-async function getImdbId(tmdbId: number, mediaType: "movie" | "tv"): Promise<string | null> {
+// IMDB ID + titlul literal/romanizat (ex. "Gunche" pentru 군체 — ce arată
+// IMDB drept titlu original, folosit efectiv în numele lansărilor de pe
+// Filelist) — un singur apel TMDB (append_to_response), necesar pentru
+// checkFilelistForItemInternal, care caută prioritar după IMDB ID, apoi
+// titlul original literal, apoi cel englez.
+async function getTmdbFilelistHints(
+  tmdbId: number,
+  mediaType: "movie" | "tv",
+): Promise<{ imdbId: string | null; literalTitle: string | null }> {
   const key = process.env.TMDB_API_KEY;
-  if (!key) return null;
+  const empty = { imdbId: null, literalTitle: null };
+  if (!key) return empty;
   try {
-    const res = await fetch(`${TMDB_BASE}/${mediaType}/${tmdbId}/external_ids`, {
-      headers: { Authorization: `Bearer ${key}`, Accept: "application/json" },
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!res.ok) return null;
-    const json: { imdb_id?: string | null } = await res.json();
-    return json.imdb_id ?? null;
+    const res = await fetch(
+      `${TMDB_BASE}/${mediaType}/${tmdbId}?append_to_response=external_ids,alternative_titles`,
+      {
+        headers: { Authorization: `Bearer ${key}`, Accept: "application/json" },
+        signal: AbortSignal.timeout(8000),
+      },
+    );
+    if (!res.ok) return empty;
+    const json: {
+      external_ids?: { imdb_id?: string | null };
+      alternative_titles?: {
+        titles?: Array<{ type?: string; title?: string }>;
+        results?: Array<{ type?: string; title?: string }>;
+      };
+    } = await res.json();
+    const altTitles = json.alternative_titles?.titles ?? json.alternative_titles?.results ?? [];
+    const literalTitle = altTitles.find((t) => t.type === "literal title")?.title ?? null;
+    return { imdbId: json.external_ids?.imdb_id ?? null, literalTitle };
   } catch {
-    return null;
+    return empty;
   }
 }
 
@@ -181,10 +199,10 @@ export async function checkAll(force = false): Promise<void> {
         // ── 2. Filelist ──────────────────────────────────────────────────────
         if (item.watch_filelist) {
           const mediaType = item.media_type as "movie" | "tv";
-          const imdbId = await getImdbId(item.id, mediaType);
+          const { imdbId, literalTitle } = await getTmdbFilelistHints(item.id, mediaType);
           const result = await checkFilelistForItemInternal({
             title: item.title,
-            originalTitle: item.original_title || item.title,
+            originalTitle: literalTitle || item.original_title || item.title,
             imdbId,
             mediaType,
           });

@@ -47,7 +47,8 @@ export const Route = createFileRoute("/")({
 function Overview() {
   const plex = useQuery(plexQuery);
   const plexSessions = useQuery(plexSessionsQuery);
-  const sessions = plexSessions.data?.status === "ok" ? plexSessions.data.sessions : plex.data?.sessions;
+  const sessions =
+    plexSessions.data?.status === "ok" ? plexSessions.data.sessions : plex.data?.sessions;
   const immich = useQuery(immichQuery);
   const qbit = useQuery(qbitQuery);
   const host = useQuery(hostQuery);
@@ -63,211 +64,209 @@ function Overview() {
   return (
     <PageShell title="FaikkitBox Dashboard" subtitle="Totul în timp real">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-      <ServiceRow
-        className="sm:col-span-2"
-        to="/plex"
-        title="Plex"
-        icon={<PlayCircle className="h-5 w-5" />}
-        accent="text-amber-400"
-        status={plex.isLoading ? "loading" : (plex.data?.status ?? "error")}
-        error={plex.data?.error}
-      >
-        {plex.data?.status === "ok" && (
-          <div className="space-y-2 text-sm">
-            {(sessions?.length ?? 0) > 0 ? (
-              <div className="space-y-1.5">
-                {sessions!.map((s, i) => {
-                  const pct =
-                    s.durationMs > 0 ? Math.round((s.viewOffsetMs / s.durationMs) * 100) : 0;
-                  const fmt = (ms: number) => {
-                    const t = Math.floor(ms / 1000);
-                    const h = Math.floor(t / 3600);
-                    const m = Math.floor((t % 3600) / 60);
-                    const sec = t % 60;
-                    return h > 0
-                      ? `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`
-                      : `${m}:${String(sec).padStart(2, "0")}`;
-                  };
-                  const isEpisode = !!s.grandparentTitle;
-                  return (
-                    <div key={i} className="rounded-lg bg-muted/40 px-2.5 py-2 space-y-1.5">
-                      <div className="flex items-start gap-2">
-                        {s.thumbPath && (
-                          <img
-                            src={`/api/plex-thumb?path=${encodeURIComponent(s.thumbPath)}`}
-                            className="h-14 w-10 rounded object-cover shrink-0 bg-muted"
-                            loading="lazy"
-                            alt=""
-                          />
-                        )}
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5">
-                            <div className="truncate text-sm font-semibold leading-tight">
-                              {isEpisode ? s.grandparentTitle : s.title}
-                            </div>
-                            {s.playerState === "paused" ? (
-                              <span className="shrink-0 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-400">
-                                ⏸ Pauză
-                              </span>
-                            ) : (
-                              <span className="shrink-0 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400">
-                                ▶ Redare
-                              </span>
-                            )}
-                          </div>
-                          {isEpisode && (
-                            <div className="truncate text-[11px] text-muted-foreground">
-                              {s.title}
-                            </div>
-                          )}
-                          <div className="text-[11px] text-muted-foreground">
-                            {s.user} · {s.player}
-                          </div>
-                        </div>
-                      </div>
-                      {s.durationMs > 0 && (
-                        <div className="space-y-0.5">
-                          <div className="h-1 w-full rounded-full bg-muted overflow-hidden">
-                            <div
-                              className="h-full rounded-full bg-amber-400 transition-all"
-                              style={{ width: `${pct}%` }}
+        <ServiceRow
+          className="sm:col-span-2"
+          to="/plex"
+          title="Plex"
+          icon={<PlayCircle className="h-5 w-5" />}
+          accent="text-amber-400"
+          status={plex.isLoading ? "loading" : (plex.data?.status ?? "error")}
+          error={plex.data?.error}
+        >
+          {plex.data?.status === "ok" && (
+            <div className="space-y-2 text-sm">
+              {(sessions?.length ?? 0) > 0 ? (
+                <div className="space-y-1.5">
+                  {sessions!.map((s, i) => {
+                    const pct =
+                      s.durationMs > 0 ? Math.round((s.viewOffsetMs / s.durationMs) * 100) : 0;
+                    const fmt = (ms: number) => {
+                      const t = Math.floor(ms / 1000);
+                      const h = Math.floor(t / 3600);
+                      const m = Math.floor((t % 3600) / 60);
+                      const sec = t % 60;
+                      return h > 0
+                        ? `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`
+                        : `${m}:${String(sec).padStart(2, "0")}`;
+                    };
+                    const isEpisode = !!s.grandparentTitle;
+                    return (
+                      <div key={i} className="rounded-lg bg-muted/40 px-2.5 py-2 space-y-1.5">
+                        <div className="flex items-start gap-2">
+                          {s.thumbPath && (
+                            <img
+                              src={`/api/plex-thumb?path=${encodeURIComponent(s.thumbPath)}`}
+                              className="h-14 w-10 rounded object-cover shrink-0 bg-muted"
+                              loading="lazy"
+                              alt=""
                             />
-                          </div>
-                          <div className="flex justify-between text-[10px] text-muted-foreground">
-                            <span>{fmt(s.viewOffsetMs)}</span>
-                            <span>{pct}%</span>
-                            <span>{fmt(s.durationMs)}</span>
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5">
+                              <div className="truncate text-sm font-semibold leading-tight">
+                                {isEpisode ? s.grandparentTitle : s.title}
+                              </div>
+                              {s.playerState === "paused" ? (
+                                <span className="shrink-0 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-400">
+                                  ⏸ Pauză
+                                </span>
+                              ) : (
+                                <span className="shrink-0 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400">
+                                  ▶ Redare
+                                </span>
+                              )}
+                            </div>
+                            {isEpisode && (
+                              <div className="truncate text-[11px] text-muted-foreground">
+                                {s.title}
+                              </div>
+                            )}
+                            <div className="text-[11px] text-muted-foreground">
+                              {s.user} · {s.player}
+                            </div>
                           </div>
                         </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="rounded-lg bg-muted/40 px-2.5 py-1.5">
-                <div className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                  <Users className="h-3.5 w-3.5" />
-                  Se uită acum
+                        {s.durationMs > 0 && (
+                          <div className="space-y-0.5">
+                            <div className="h-1 w-full rounded-full bg-muted overflow-hidden">
+                              <div
+                                className="h-full rounded-full bg-amber-400 transition-all"
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                            <div className="flex justify-between text-[10px] text-muted-foreground">
+                              <span>{fmt(s.viewOffsetMs)}</span>
+                              <span>{pct}%</span>
+                              <span>{fmt(s.durationMs)}</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
-                <div className="mt-0.5 text-sm font-semibold">Nimeni</div>
-              </div>
-            )}
-            <div className="grid grid-cols-3 gap-1.5">
-              <MetricButton
-                label="Vizionate azi"
-                value={String(plex.data.episodesToday ?? 0)}
-                onClick={stop(() => setPlexDrawer("views"))}
-                compact
-              />
-              <MetricButton
-                label="Utilizatori activi azi"
-                value={String(plex.data.activeUsersToday ?? 0)}
-                onClick={stop(() => setPlexDrawer("users"))}
-                compact
-              />
-              <button
-                type="button"
-                onClick={stop(() =>
-                  setPlexAddedMode((m) => (m === "movies" ? "episodes" : "movies")),
-                )}
-                className="rounded-lg bg-muted/40 px-2 py-1 text-left transition-colors hover:bg-muted/60 active:bg-muted"
-                title="Comută filme/episoade adăugate (24h)"
-              >
-                <div className="flex items-center gap-1 text-[9px] uppercase tracking-wide text-muted-foreground">
-                  {plexAddedMode === "movies" ? (
-                    <Film className="h-3 w-3 text-amber-400" />
-                  ) : (
-                    <Tv className="h-3 w-3 text-blue-400" />
+              ) : (
+                <div className="rounded-lg bg-muted/40 px-2.5 py-1.5">
+                  <div className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                    <Users className="h-3.5 w-3.5" />
+                    Se uită acum
+                  </div>
+                  <div className="mt-0.5 text-sm font-semibold">Nimeni</div>
+                </div>
+              )}
+              <div className="grid grid-cols-3 gap-1.5">
+                <MetricButton
+                  label="Vizionate azi"
+                  value={String(plex.data.episodesToday ?? 0)}
+                  onClick={stop(() => setPlexDrawer("views"))}
+                  compact
+                />
+                <MetricButton
+                  label="Utilizatori activi azi"
+                  value={String(plex.data.activeUsersToday ?? 0)}
+                  onClick={stop(() => setPlexDrawer("users"))}
+                  compact
+                />
+                <button
+                  type="button"
+                  onClick={stop(() =>
+                    setPlexAddedMode((m) => (m === "movies" ? "episodes" : "movies")),
                   )}
-                  24h
-                  <RefreshCw className="h-2.5 w-2.5 ml-auto" />
-                </div>
-                <div className="text-sm font-semibold tabular-nums">
-                  {String(
-                    (plexAddedMode === "movies"
-                      ? plex.data.moviesAddedLast24h
-                      : plex.data.episodesAddedLast24h) ?? 0,
-                  )}
-                </div>
-              </button>
+                  className="rounded-lg bg-muted/40 px-2 py-1 text-left transition-colors hover:bg-muted/60 active:bg-muted"
+                  title="Comută filme/episoade adăugate (24h)"
+                >
+                  <div className="flex items-center gap-1 text-[9px] uppercase tracking-wide text-muted-foreground">
+                    {plexAddedMode === "movies" ? (
+                      <Film className="h-3 w-3 text-amber-400" />
+                    ) : (
+                      <Tv className="h-3 w-3 text-blue-400" />
+                    )}
+                    24h
+                    <RefreshCw className="h-2.5 w-2.5 ml-auto" />
+                  </div>
+                  <div className="text-sm font-semibold tabular-nums">
+                    {String(
+                      (plexAddedMode === "movies"
+                        ? plex.data.moviesAddedLast24h
+                        : plex.data.episodesAddedLast24h) ?? 0,
+                    )}
+                  </div>
+                </button>
+              </div>
             </div>
-          </div>
-        )}
-      </ServiceRow>
+          )}
+        </ServiceRow>
 
-      <ServiceRow
-        to="/immich"
-        title="Immich"
-        icon={<Images className="h-5 w-5" />}
-        accent="text-purple-400"
-        status={immich.isLoading ? "loading" : (immich.data?.status ?? "error")}
-        error={immich.data?.error}
-      >
-        {immich.data?.status === "ok" && (
-          <div className="grid grid-cols-4 gap-1.5 text-sm">
-            <Metric
-              label="Fișiere"
-              value={(immich.data.totalAssets ?? 0).toLocaleString()}
-              compact
-            />
-            <Metric
-              icon={<HardDrive className="h-3 w-3" />}
-              label="Spațiu"
-              value={formatBytes(immich.data.usageBytes ?? 0)}
-              compact
-            />
-            <Metric
-              icon={<ListChecks className="h-3 w-3" />}
-              label="Sarcini"
-              value={(immich.data.jobQueueDepth ?? 0).toLocaleString()}
-              compact
-            />
-            <Metric
-              icon={<Upload className="h-3 w-3" />}
-              label="Azi"
-              value={
-                immich.data.uploadsToday != null
-                  ? immich.data.uploadsToday.toLocaleString()
-                  : "—"
-              }
-              compact
-            />
-          </div>
-        )}
-      </ServiceRow>
+        <ServiceRow
+          to="/immich"
+          title="Immich"
+          icon={<Images className="h-5 w-5" />}
+          accent="text-purple-400"
+          status={immich.isLoading ? "loading" : (immich.data?.status ?? "error")}
+          error={immich.data?.error}
+        >
+          {immich.data?.status === "ok" && (
+            <div className="grid grid-cols-4 gap-1.5 text-sm">
+              <Metric
+                label="Fișiere"
+                value={(immich.data.totalAssets ?? 0).toLocaleString()}
+                compact
+              />
+              <Metric
+                icon={<HardDrive className="h-3 w-3" />}
+                label="Spațiu"
+                value={formatBytes(immich.data.usageBytes ?? 0)}
+                compact
+              />
+              <Metric
+                icon={<ListChecks className="h-3 w-3" />}
+                label="Sarcini"
+                value={(immich.data.jobQueueDepth ?? 0).toLocaleString()}
+                compact
+              />
+              <Metric
+                icon={<Upload className="h-3 w-3" />}
+                label="Azi"
+                value={
+                  immich.data.uploadsToday != null ? immich.data.uploadsToday.toLocaleString() : "—"
+                }
+                compact
+              />
+            </div>
+          )}
+        </ServiceRow>
 
-      <ServiceRow
-        to="/qbit"
-        title="qBittorrent"
-        icon={<Download className="h-5 w-5" />}
-        accent="text-sky-400"
-        status={qbit.isLoading ? "loading" : (qbit.data?.status ?? "error")}
-        error={qbit.data?.error}
-      >
-        {qbit.data?.status === "ok" && (
-          <div className="grid grid-cols-3 gap-2 text-sm">
-            <Metric label="↓" value={formatSpeed(qbit.data.dlSpeed)} />
-            <Metric label="↑" value={formatSpeed(qbit.data.upSpeed)} />
-            <Metric
-              label="Active"
-              value={`${qbit.data.counts.downloading + qbit.data.counts.seeding} / ${qbit.data.counts.total}`}
-            />
-          </div>
-        )}
-      </ServiceRow>
+        <ServiceRow
+          to="/qbit"
+          title="qBittorrent"
+          icon={<Download className="h-5 w-5" />}
+          accent="text-sky-400"
+          status={qbit.isLoading ? "loading" : (qbit.data?.status ?? "error")}
+          error={qbit.data?.error}
+        >
+          {qbit.data?.status === "ok" && (
+            <div className="grid grid-cols-3 gap-2 text-sm">
+              <Metric label="↓" value={formatSpeed(qbit.data.dlSpeed)} />
+              <Metric label="↑" value={formatSpeed(qbit.data.upSpeed)} />
+              <Metric
+                label="Active"
+                value={`${qbit.data.counts.downloading + qbit.data.counts.seeding} / ${qbit.data.counts.total}`}
+              />
+            </div>
+          )}
+        </ServiceRow>
 
-      <ServiceRow
-        className="sm:col-span-2"
-        to="/sistem"
-        title="Sistem"
-        icon={<Cpu className="h-5 w-5" />}
-        accent="text-emerald-400"
-        status={host.isLoading ? "loading" : (host.data?.status ?? "error")}
-        error={host.data?.error}
-      >
-        {host.data?.status === "ok" && <HostGauges data={host.data} />}
-      </ServiceRow>
+        <ServiceRow
+          className="sm:col-span-2"
+          to="/sistem"
+          title="Sistem"
+          icon={<Cpu className="h-5 w-5" />}
+          accent="text-emerald-400"
+          status={host.isLoading ? "loading" : (host.data?.status ?? "error")}
+          error={host.data?.error}
+        >
+          {host.data?.status === "ok" && <HostGauges data={host.data} />}
+        </ServiceRow>
       </div>
 
       <Drawer open={plexDrawer === "views"} onOpenChange={(o) => !o && setPlexDrawer(null)}>
