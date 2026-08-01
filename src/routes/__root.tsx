@@ -16,6 +16,7 @@ import { Toaster } from "../components/ui/sonner";
 import { useAutoReload } from "../hooks/use-auto-reload";
 import { onUpdateDetected } from "../lib/update-signal";
 import { logClientError } from "../lib/error-log";
+import { installClientErrorCapture, withoutClientCapture } from "../lib/client-error-capture";
 import { toast } from "sonner";
 
 function NotFoundComponent() {
@@ -41,7 +42,7 @@ function NotFoundComponent() {
 }
 
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
-  console.error(error);
+  withoutClientCapture(() => console.error(error));
   logClientError({ data: { message: error.message, stack: error.stack } }).catch(() => {});
   const router = useRouter();
 
@@ -176,9 +177,17 @@ function AutoReloadWatcher() {
     const onRejection = (event: PromiseRejectionEvent) => reportError(event.reason);
     window.addEventListener("error", onError);
     window.addEventListener("unhandledrejection", onRejection);
+
+    // Captează și orice console.warn/console.error explicit din cod client
+    // (nu doar excepțiile neprinse de mai sus) — ex. cereri eșuate tratate
+    // cu try/catch + console.warn, care altfel nu ajung niciodată în
+    // "Erori aplicație".
+    const restoreConsole = installClientErrorCapture();
+
     return () => {
       window.removeEventListener("error", onError);
       window.removeEventListener("unhandledrejection", onRejection);
+      restoreConsole();
     };
   }, []);
 

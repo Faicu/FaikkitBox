@@ -3,6 +3,12 @@ import "./lib/error-capture";
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 import { logError } from "./lib/error-log";
+import { installConsoleErrorCapture, withoutConsoleCapture } from "./lib/console-capture";
+
+// Instalată o singură dată, cât mai devreme în ciclul de viață al
+// procesului — captează automat orice console.warn/error din toată
+// aplicația (server functions, plugin-uri de fundal) spre "Erori aplicație".
+installConsoleErrorCapture();
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -32,7 +38,7 @@ async function normalizeCatastrophicSsrResponse(response: Response): Promise<Res
   }
 
   const originalError = consumeLastCapturedError() ?? new Error(`h3 swallowed SSR error: ${body}`);
-  console.error(originalError);
+  withoutConsoleCapture(() => console.error(originalError));
   logError("ssr", originalError);
   return new Response(renderErrorPage(), {
     status: 500,
@@ -47,7 +53,7 @@ export default {
       const response = await handler.fetch(request, env, ctx);
       return await normalizeCatastrophicSsrResponse(response);
     } catch (error) {
-      console.error(error);
+      withoutConsoleCapture(() => console.error(error));
       logError("ssr", error);
       return new Response(renderErrorPage(), {
         status: 500,

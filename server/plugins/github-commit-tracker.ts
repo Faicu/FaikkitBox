@@ -3,6 +3,9 @@
 // Acoperă cazul în care webhook-ul a picat în timpul unui restart.
 
 export default function () {
+  import("../../src/lib/console-capture").then(({ installConsoleErrorCapture }) =>
+    installConsoleErrorCapture(),
+  );
   setTimeout(syncOnStart, 6_000);
 }
 

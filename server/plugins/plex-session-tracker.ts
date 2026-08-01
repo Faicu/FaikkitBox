@@ -1,4 +1,8 @@
 export default function () {
+  import("../../src/lib/console-capture").then(({ installConsoleErrorCapture }) =>
+    installConsoleErrorCapture(),
+  );
+
   const INTERVAL_MS = 30_000;
 
   async function poll() {

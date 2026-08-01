@@ -101,15 +101,10 @@ async function plexRefreshLibrary(sectionKey: string): Promise<void> {
       headers: { "X-Plex-Token": token, Accept: "application/json" },
     });
     if (!res.ok) {
-      const err = new Error(`Plex refresh HTTP ${res.status} pentru secțiunea ${sectionKey}`);
-      console.warn(`[filelist] ${err.message}`);
-      const { logError } = await import("../error-log");
-      logError("server-fn", err);
+      console.warn(`[filelist] Plex refresh HTTP ${res.status} pentru secțiunea ${sectionKey}`);
     }
   } catch (e) {
     console.warn(`[filelist] Eroare Plex refresh:`, e);
-    const { logError } = await import("../error-log");
-    logError("server-fn", e);
   }
 }
 
@@ -123,8 +118,6 @@ async function plexFindLibraryKey(type: "movie" | "show"): Promise<string | null
     });
     if (!res.ok) {
       console.warn(`[filelist] Plex library sections HTTP ${res.status}`);
-      const { logError } = await import("../error-log");
-      logError("server-fn", new Error(`Plex library sections HTTP ${res.status}`));
       return null;
     }
     const data = (await res.json()) as {
@@ -135,8 +128,6 @@ async function plexFindLibraryKey(type: "movie" | "show"): Promise<string | null
     return match ? String(match.key) : null;
   } catch (e) {
     console.warn(`[filelist] Eroare la găsirea secțiunii Plex:`, e);
-    const { logError } = await import("../error-log");
-    logError("server-fn", e);
     return null;
   }
 }
@@ -548,8 +539,6 @@ async function downloadFilelistCore(
     const uploadText = await uploadRes.text();
     if (!uploadText.includes("Ok")) {
       console.warn("qBit upload răspuns neașteptat:", uploadText);
-      const { logError } = await import("../error-log");
-      logError("server-fn", new Error(`qBit upload răspuns neașteptat: ${uploadText.slice(0, 200)}`));
     }
 
     // 5. Găsește hash-ul torrentului proaspăt adăugat

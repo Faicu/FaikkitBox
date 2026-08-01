@@ -243,17 +243,12 @@ export async function checkAll(force = false): Promise<void> {
                         body: `${quality}: ${best.name}`,
                       });
                     } else {
-                      console.warn(`[pinned-watcher] Auto-download eșuat: ${dlResult.error}`);
-                      const { logError } = await import("../../src/lib/error-log");
-                      logError(
-                        "server-fn",
-                        new Error(`[pinned-watcher] Auto-download eșuat pentru "${item.title}": ${dlResult.error}`),
+                      console.warn(
+                        `[pinned-watcher] Auto-download eșuat pentru "${item.title}": ${dlResult.error}`,
                       );
                     }
                   } catch (e) {
                     console.warn("[pinned-watcher] Eroare auto-download:", e);
-                    const { logError } = await import("../../src/lib/error-log");
-                    logError("server-fn", e);
                   }
                 } else {
                   console.log(`[pinned-watcher] Auto-download: niciun torrent ${quality} găsit`);
@@ -345,8 +340,6 @@ export async function checkAll(force = false): Promise<void> {
         }
       } catch (e) {
         console.warn(`[pinned-watcher] Eroare la "${item.title}":`, e);
-        const { logError } = await import("../../src/lib/error-log");
-        logError("server-fn", e);
       }
     }
 
@@ -357,12 +350,16 @@ export async function checkAll(force = false): Promise<void> {
     }
   } catch (e) {
     console.warn("[pinned-watcher] Eroare generală:", e);
-    const { logError } = await import("../../src/lib/error-log");
-    logError("server-fn", e);
   }
 }
 
 export default function () {
+  // Idempotent — garantează că patch-ul de captare console.warn/error e
+  // instalat indiferent de ordinea de încărcare față de src/server.ts.
+  import("../../src/lib/console-capture").then(({ installConsoleErrorCapture }) =>
+    installConsoleErrorCapture(),
+  );
+
   setTimeout(() => {
     checkAll().catch((e) => console.warn("[pinned-watcher] Prima rulare eșuată:", e));
   }, 30_000);

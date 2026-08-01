@@ -2,6 +2,7 @@ import { createStart, createMiddleware } from "@tanstack/react-start";
 
 import { renderErrorPage } from "./lib/error-page";
 import { logError } from "./lib/error-log";
+import { withoutConsoleCapture } from "./lib/console-capture";
 
 const errorMiddleware = createMiddleware().server(async ({ next }) => {
   try {
@@ -10,7 +11,7 @@ const errorMiddleware = createMiddleware().server(async ({ next }) => {
     if (error != null && typeof error === "object" && "statusCode" in error) {
       throw error;
     }
-    console.error(error);
+    withoutConsoleCapture(() => console.error(error));
     logError("server-fn", error);
     return new Response(renderErrorPage(), {
       status: 500,
