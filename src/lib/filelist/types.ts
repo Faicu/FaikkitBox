@@ -11,9 +11,18 @@ export interface FilelistTorrent {
   internal: boolean;
   upload_date: string;
   imdb?: string;
-  // Setat client-side (nu vine din API) — marchează dacă rezultatul a fost
-  // confirmat prin id IMDB, vs. doar prin match strict de titlu.
+  // Setat de checkFilelistForItemInternal (nu vine din API Filelist) —
+  // marchează dacă rezultatul a fost confirmat prin id IMDB, vs. doar prin
+  // match strict de titlu.
   matchedByImdb?: boolean;
+  // Criteriul care a găsit efectiv acest torrent — imdb (cel mai fiabil),
+  // titlul original (limba de origine) sau titlul englez/internațional, în
+  // ordinea în care checkFilelistForItemInternal le încearcă. Absent pentru
+  // rezultate care nu trec prin acel flux (ex. căutarea manuală din
+  // secțiunea Filelist a paginii Lansări).
+  matchedVia?: "imdb" | "original_title" | "english_title";
+  // Textul exact folosit ca query pentru criteriul de mai sus.
+  matchedQuery?: string;
 }
 
 export type FilelistCategory = "movies" | "series" | "all";

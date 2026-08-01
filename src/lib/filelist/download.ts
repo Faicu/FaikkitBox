@@ -379,15 +379,26 @@ export async function checkFilelistForItemInternal(data: {
 
     if (data.imdbId) {
       const byImdb = await searchFilelistRaw(data.imdbId, category, "imdb");
-      found = byImdb.map((t) => ({ ...t, matchedByImdb: true }));
+      found = byImdb.map((t) => ({
+        ...t,
+        matchedByImdb: true,
+        matchedVia: "imdb",
+        matchedQuery: data.imdbId ?? undefined,
+      }));
     }
 
     for (const q of nameQueries) {
       if (found.length > 0) break;
+      const via: "original_title" | "english_title" = q === original ? "original_title" : "english_title";
       const byName = await searchFilelistRaw(q, category, "name");
       found = byName
         .filter((t) => torrentMatchesTitle(t.name, original) || torrentMatchesTitle(t.name, english))
-        .map((t) => ({ ...t, matchedByImdb: !!(t.imdb && data.imdbId && t.imdb === data.imdbId) }));
+        .map((t) => ({
+          ...t,
+          matchedByImdb: !!(t.imdb && data.imdbId && t.imdb === data.imdbId),
+          matchedVia: via,
+          matchedQuery: q,
+        }));
     }
 
     found.sort((a, b) => {

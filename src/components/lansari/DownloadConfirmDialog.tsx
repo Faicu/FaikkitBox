@@ -1,7 +1,39 @@
-import { Download, Users, Zap, HardDrive, ShieldCheck, ExternalLink } from "lucide-react";
+import { useState } from "react";
+import { Download, Users, Zap, HardDrive, ShieldCheck, ExternalLink, Info } from "lucide-react";
 
 import type { FilelistTorrent } from "@/lib/filelist.functions";
 import { formatBytes } from "@/lib/format";
+
+// ---------------------------------------------------------------------------
+// Explicație text pentru criteriul care a găsit torrentul — vezi
+// checkFilelistForItemInternal (src/lib/filelist/download.ts) pentru logica
+// de căutare (IMDB ID → titlu original → titlu englez).
+// ---------------------------------------------------------------------------
+
+function matchInfoText(torrent: FilelistTorrent): string | null {
+  if (!torrent.matchedVia) return null;
+
+  const criteriuLabel =
+    torrent.matchedVia === "imdb"
+      ? "IMDB ID"
+      : torrent.matchedVia === "original_title"
+        ? "titlul original"
+        : "titlul englez/internațional";
+
+  let text = `Găsit pe Filelist prin ${criteriuLabel}`;
+  if (torrent.matchedQuery) text += `: "${torrent.matchedQuery}"`;
+  text += ".";
+
+  if (torrent.matchedVia === "imdb") {
+    text += " Cel mai fiabil criteriu — potrivire exactă pe ID-ul IMDB, indiferent cum e denumită lansarea.";
+  } else {
+    text += ` Torrentul a fost identificat prin potrivire de text în numele lansării (nu are ID IMDB pe Filelist${
+      torrent.imdb ? ", deși are unul asociat: " + torrent.imdb : ""
+    }).`;
+  }
+
+  return text;
+}
 
 // ---------------------------------------------------------------------------
 // Dialog confirmare download
@@ -18,6 +50,9 @@ export function DownloadConfirmDialog({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const [showInfo, setShowInfo] = useState(false);
+  const infoText = matchInfoText(torrent);
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
@@ -63,6 +98,24 @@ export function DownloadConfirmDialog({
             )}
           </div>
         </div>
+
+        {infoText && (
+          <div className="space-y-2">
+            <button
+              type="button"
+              onClick={() => setShowInfo((v) => !v)}
+              className="flex items-center gap-1.5 text-xs font-medium text-blue-400 hover:text-blue-300"
+            >
+              <Info className="h-3.5 w-3.5" /> Info Căutare
+            </button>
+            {showInfo && (
+              <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-3 text-xs text-muted-foreground">
+                {infoText}
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="flex gap-2 pt-1">
           <a
             href={`https://filelist.io/details.php?id=${torrent.id}`}
