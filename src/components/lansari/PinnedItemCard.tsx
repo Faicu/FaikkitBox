@@ -120,7 +120,6 @@ export function PinnedItemCard({
 
   // Status per sezon — din aceleași date ca SeasonPanel
   const plexSeasonEps = plexSeasonQueries[allSeasonNums.indexOf(latestSeason ?? -1)]?.data;
-  const tmdbSeasonEps = tmdbSeasonQueries[allSeasonNums.indexOf(latestSeason ?? -1)]?.data;
   const plexSeasonLoading = plexSeasonQueries.some((q) => q.isLoading);
   const tmdbSeasonLoading = tmdbSeasonQueries.some((q) => q.isLoading);
 

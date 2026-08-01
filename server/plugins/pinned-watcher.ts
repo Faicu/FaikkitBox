@@ -14,7 +14,7 @@
 // ---------------------------------------------------------------------------
 
 const ITEM_INTERVAL_MS = 3 * 60 * 60 * 1000; // 3 ore — cadența reală per item
-const POLL_INTERVAL_MS = 15 * 60 * 1000; // 15 min — cât de des verificăm ce a expirat
+const POLL_INTERVAL_MS = 10 * 60 * 1000; // 10 min — cât de des verificăm ce a expirat
 const TMDB_BASE = "https://api.themoviedb.org/3";
 
 // IMDB ID-ul TMDB al itemului — necesar pentru checkFilelistForItemInternal,
@@ -84,7 +84,11 @@ interface WatchRow {
   plex_movie_found: number | null;
 }
 
-export async function checkAll(): Promise<void> {
+// `force` = true ignoră gate-ul de 3 ore per item — folosit de butonul manual
+// "Rulează acum" din Tehnic (triggerPinnedWatcherCheck), ca declanșarea
+// explicită a adminului să chiar verifice tot, nu doar itemele care oricum
+// erau deja due.
+export async function checkAll(force = false): Promise<void> {
   try {
     const { getDb } = await import("../../src/lib/db");
     const { logActivity } = await import("../../src/lib/activity-log");
@@ -119,7 +123,8 @@ export async function checkAll(): Promise<void> {
     }>;
 
     if (items.length === 0) return;
-    console.log(`[pinned-watcher] Verificare ${items.length} item(e)`);
+
+    let dueCount = 0;
 
     for (const item of items) {
       try {
@@ -129,10 +134,12 @@ export async function checkAll(): Promise<void> {
 
         // Cadență strictă de 3 ore per item, persistată în DB — supraviețuiește
         // restart-urilor serviciului (nu se bazează pe un timer în memorie).
-        if (stateRow?.last_checked_at) {
+        if (!force && stateRow?.last_checked_at) {
           const elapsedMs = Date.now() - new Date(stateRow.last_checked_at).getTime();
           if (elapsedMs < ITEM_INTERVAL_MS) continue;
         }
+
+        dueCount++;
 
         const isFirstRun = !stateRow || stateRow.last_checked_at === null;
         const seenTorrentIds = new Set<number>(JSON.parse(stateRow?.seen_torrent_ids || "[]"));
@@ -332,6 +339,12 @@ export async function checkAll(): Promise<void> {
       } catch (e) {
         console.warn(`[pinned-watcher] Eroare la "${item.title}":`, e);
       }
+    }
+
+    if (dueCount > 0) {
+      console.log(
+        `[pinned-watcher] Verificate ${dueCount}/${items.length} item(e)${force ? " (forțat)" : ""}`,
+      );
     }
   } catch (e) {
     console.warn("[pinned-watcher] Eroare generală:", e);

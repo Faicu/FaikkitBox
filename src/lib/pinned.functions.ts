@@ -176,14 +176,30 @@ export const setPinnedItems = createServerFn({ method: "POST" })
 export const getPinnedWatcherStatus = createServerFn({ method: "GET" }).handler(async () => {
   const { getDb } = await import("./db");
   const db = getDb();
-  const row = db
+
+  const lastRow = db
     .prepare("SELECT MAX(last_checked_at) as last_run FROM pinned_watch_state")
     .get() as { last_run: string | null };
-  const lastRun = row?.last_run ?? null;
-  const INTERVAL_MS = 3 * 60 * 60 * 1000;
-  const nextRun = lastRun
-    ? new Date(new Date(lastRun).getTime() + INTERVAL_MS).toISOString()
+  const lastRun = lastRow?.last_run ?? null;
+
+  // pinned-watcher verifică fiecare item la propria lui cadență de 3 ore
+  // (vezi pinned-watcher.ts), nu pe toate simultan — deci "următoarea
+  // rulare" reală e cea mai apropiată, adică primul item care devine
+  // eligibil (MIN, nu MAX), și doar dintre itemele efectiv urmărite.
+  const nextRow = db
+    .prepare(
+      `SELECT MIN(pws.last_checked_at) as earliest
+       FROM pinned_watch_state pws
+       JOIN pinned_watch_settings pw ON pw.id = pws.id AND pw.media_type = pws.media_type
+       WHERE (pw.watch_filelist = 1 OR pw.watch_tmdb = 1 OR pw.watch_plex = 1)
+         AND pws.last_checked_at IS NOT NULL`,
+    )
+    .get() as { earliest: string | null };
+  const ITEM_INTERVAL_MS = 3 * 60 * 60 * 1000;
+  const nextRun = nextRow?.earliest
+    ? new Date(new Date(nextRow.earliest).getTime() + ITEM_INTERVAL_MS).toISOString()
     : null;
+
   return { lastRun, nextRun };
 });
 
@@ -192,7 +208,7 @@ export const triggerPinnedWatcherCheck = createServerFn({ method: "POST" }).hand
   await requireAdmin();
   setTimeout(async () => {
     const { checkAll } = await import("../../server/plugins/pinned-watcher");
-    await checkAll().catch((e) => console.warn("[trigger] checkAll eșuat:", e));
+    await checkAll(true).catch((e) => console.warn("[trigger] checkAll eșuat:", e));
   }, 10_000);
   return { ok: true };
 });
