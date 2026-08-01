@@ -198,6 +198,7 @@ if (typeof process !== "undefined" && process.env) {
 export async function searchFilelistRaw(
   query: string,
   category: FilelistCategory,
+  type: "name" | "imdb" = "name",
 ): Promise<FilelistTorrent[]> {
   const username = process.env.FILELIST_USERNAME;
   const passkey = process.env.FILELIST_PASSKEY;
@@ -212,7 +213,7 @@ export async function searchFilelistRaw(
     username,
     passkey,
     action: "search-torrents",
-    type: "name",
+    type,
     query: query.trim(),
     category: catIds.join(","),
     output: "json",
@@ -325,11 +326,11 @@ export const searchFilelist = createServerFn({ method: "GET" })
 
 // ---------------------------------------------------------------------------
 // Server function: verificare unificată "există pe Filelist?" — sursă unică
-// folosită atât de Descoperă cât și de Lansări. Caută întâi după titlul
-// original (limba de origine — convenția Filelist pentru majoritatea
-// torrentelor), apoi, dacă nu găsește nimic, după titlul englez/internațional.
-// Rezultatele sunt confirmate prin IMDB ID când e disponibil (cel mai
-// fiabil), altfel prin match strict de titlu.
+// folosită atât de Descoperă cât și de Lansări. Caută întâi direct după IMDB
+// ID (cel mai fiabil — funcționează chiar și când numele lansării nu conține
+// niciunul dintre titluri, ex. titluri coreene romanizate diferit de
+// original_title din TMDB), apoi după titlul original și titlul
+// englez/internațional, în această ordine, ca fallback prin match de nume.
 // ---------------------------------------------------------------------------
 
 export const checkFilelistForItem = createServerFn({ method: "GET" })
@@ -358,17 +359,18 @@ export const checkFilelistForItem = createServerFn({ method: "GET" })
     const original = stripDiacritics(data.originalTitle || "").trim();
     const english = stripDiacritics(data.title || "").trim();
 
-    const queries = [original, english].filter(
+    const nameQueries = [original, english].filter(
       (q, i, arr) => q.length > 0 && arr.indexOf(q) === i,
     );
-    if (queries.length === 0) return { status: "ok", torrents: [] };
+    if (nameQueries.length === 0 && !data.imdbId) return { status: "ok", torrents: [] };
 
     try {
-      const resultsByQuery = await Promise.all(
-        queries.map((q) => searchFilelistRaw(q, category)),
-      );
+      const [imdbResults, ...nameResults] = await Promise.all([
+        data.imdbId ? searchFilelistRaw(data.imdbId, category, "imdb") : Promise.resolve([]),
+        ...nameQueries.map((q) => searchFilelistRaw(q, category, "name")),
+      ]);
       const merged = new Map<number, FilelistTorrent>();
-      for (const torrents of resultsByQuery) {
+      for (const torrents of [imdbResults, ...nameResults]) {
         for (const t of torrents) if (!merged.has(t.id)) merged.set(t.id, t);
       }
 
