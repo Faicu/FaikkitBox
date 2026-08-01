@@ -32,6 +32,8 @@ export function MovieCard({
   plexInfo,
   torrents,
   filelistLoading,
+  isOpen,
+  onToggleOpen,
   watchSettings,
   isAdmin,
   onWatchChange,
@@ -42,6 +44,8 @@ export function MovieCard({
   plexInfo: { found: boolean; quality: string | null } | null;
   torrents: FilelistTorrent[];
   filelistLoading: boolean;
+  isOpen: boolean;
+  onToggleOpen: () => void;
   watchSettings: WatchSettings;
   isAdmin: boolean;
   onWatchChange: (patch: Partial<WatchSettings>) => void;
@@ -50,7 +54,6 @@ export function MovieCard({
   const { downloading, handleDownload } = useDownload();
   const qc = useQueryClient();
   const [confirm, setConfirm] = useState<{ torrent: FilelistTorrent; label: string } | null>(null);
-  const [isOpen, setIsOpen] = useState(false);
 
   const imdbId = details?.imdbId ?? null;
   const plexStatus =
@@ -151,7 +154,7 @@ export function MovieCard({
           <div className="p-3 pt-3 space-y-3">
             <button
               type="button"
-              onClick={() => setIsOpen((v) => !v)}
+              onClick={onToggleOpen}
               className="w-full flex items-center justify-center gap-1 border-t border-border pt-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
               {isOpen ? "Mai puține detalii" : "Mai multe detalii"}

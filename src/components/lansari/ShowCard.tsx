@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Tv,
@@ -30,6 +29,8 @@ export function ShowCard({
   plexSeasonEps,
   torrents,
   filelistLoading,
+  isOpen,
+  onToggleOpen,
   countdown,
   countdownLoading,
   watchSettings,
@@ -44,6 +45,8 @@ export function ShowCard({
   plexSeasonEps: { num: number; quality: string | null; watched: boolean }[];
   torrents: FilelistTorrent[];
   filelistLoading: boolean;
+  isOpen: boolean;
+  onToggleOpen: () => void;
   countdown: TvShowCountdown | null;
   countdownLoading: boolean;
   watchSettings: WatchSettings;
@@ -53,7 +56,6 @@ export function ShowCard({
 }) {
   const { downloading, handleDownload } = useDownload();
   const qc = useQueryClient();
-  const [isOpen, setIsOpen] = useState(false);
 
   const imdbId = details?.imdbId ?? countdown?.imdbId ?? null;
   const showTitle = countdown?.showName || item.title;
@@ -124,7 +126,7 @@ export function ShowCard({
         </div>
         <button
           type="button"
-          onClick={() => setIsOpen((v) => !v)}
+          onClick={onToggleOpen}
           className="w-full flex items-center justify-center gap-1 border-t border-border mt-3 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
         >
           {isOpen ? "Mai puține detalii" : "Mai multe detalii"}

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery, useQueries } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 
@@ -6,7 +7,6 @@ import { checkFilelistForItem } from "@/lib/filelist.functions";
 import { getTmdbDetails, getTvShowCountdown, getTmdbSeasonEpisodes } from "@/lib/tmdb.functions";
 import type { WatchSettings } from "@/lib/pinned.functions";
 import type { PinnedItem } from "./types";
-import { groupTorrentsBySeasonEpisode } from "./utils";
 import { MovieCard } from "./MovieCard";
 import { ShowCard } from "./ShowCard";
 
@@ -27,6 +27,8 @@ export function PinnedItemCard({
   onWatchChange: (patch: Partial<WatchSettings>) => void;
   onUnpin: () => void;
 }) {
+  const [isOpen, setIsOpen] = useState(false);
+
   const detailsFn = useServerFn(getTmdbDetails);
   const plexFn = useServerFn(checkPlexHasTitle);
   const plexSeasonFn = useServerFn(getPlexEpisodesInSeason);
@@ -62,9 +64,11 @@ export function PinnedItemCard({
   const itemImdbId = details?.imdbId ?? countdown?.imdbId ?? null;
   const itemOriginalTitle = details?.originalTitle || item.originalTitle || item.title;
 
-  // checkFilelistForItem caută întâi după titlul original (convenția
-  // Filelist), apoi după titlul afișat, și confirmă rezultatele prin IMDB ID
-  // când e disponibil — aceeași sursă unică folosită și de Descoperă.
+  // checkFilelistForItem caută întâi după IMDB ID, apoi titlul original,
+  // apoi titlul afișat — aceeași sursă unică folosită și de Descoperă.
+  // Contul Filelist are o limită orară de cereri, deci verificarea pornește
+  // doar când utilizatorul deschide "Mai multe detalii" la card, nu automat
+  // pentru toate itemele fixate la încărcarea paginii.
   const { data: filelistData, isLoading: filelistLoading } = useQuery({
     queryKey: ["filelistForItem", item.mediaType, item.id, itemOriginalTitle, itemImdbId],
     queryFn: () =>
@@ -77,7 +81,7 @@ export function PinnedItemCard({
         },
       }),
     staleTime: 2 * 60_000,
-    enabled: !!(item.title || itemOriginalTitle),
+    enabled: isOpen && !!(item.title || itemOriginalTitle),
   });
 
   const latestSeasonFromTmdb =
@@ -91,8 +95,9 @@ export function PinnedItemCard({
   const showTitleForPlex = item.originalTitle || countdown?.showName || item.title;
 
   const torrents = filelistData?.status === "ok" ? filelistData.torrents : [];
-  const seasonGroups = groupTorrentsBySeasonEpisode(torrents);
-  const allSeasonNums = seasonGroups.map((g) => g.seasonNum);
+  // Sezoanele verificate în Plex pentru badge-ul principal vin din TMDB, nu
+  // din Filelist — independent de starea "Mai multe detalii" a cardului.
+  const allSeasonNums = (details?.seasons ?? []).map((s) => s.seasonNumber);
 
   // Plex + TMDB pentru TOATE sezoanele detectate — pentru badge-ul principal
   const plexSeasonQueries = useQueries({
@@ -159,7 +164,9 @@ export function PinnedItemCard({
         details={details ?? null}
         plexInfo={inPlexMovie ?? null}
         torrents={torrents}
-        filelistLoading={filelistLoading}
+        filelistLoading={isOpen && filelistLoading}
+        isOpen={isOpen}
+        onToggleOpen={() => setIsOpen((v) => !v)}
         watchSettings={watchSettings}
         isAdmin={isAdmin}
         onWatchChange={onWatchChange}
@@ -176,7 +183,9 @@ export function PinnedItemCard({
       tvPlexLoading={plexSeasonLoading || tmdbSeasonLoading || countdownLoading}
       plexSeasonEps={plexSeasonEps ?? []}
       torrents={torrents}
-      filelistLoading={filelistLoading}
+      filelistLoading={isOpen && filelistLoading}
+      isOpen={isOpen}
+      onToggleOpen={() => setIsOpen((v) => !v)}
       countdown={countdown ?? null}
       countdownLoading={countdownLoading}
       watchSettings={watchSettings}
