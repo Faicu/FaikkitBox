@@ -51,7 +51,10 @@ export function PinnedItemCard({
     enabled: item.mediaType === "movie",
   });
 
-  const origTitle = stripDiacritics(details?.originalTitle || item.originalTitle || item.title);
+  // Titlul afișat (ex. "Colony"), nu cel original (ex. "Gunche") — torrentele
+  // de pe Filelist sunt denumite după titlul englez/internațional, nu după
+  // titlul original în limba de origine.
+  const origTitle = stripDiacritics(item.title || details?.originalTitle || item.originalTitle);
 
   const { data: filelistData, isLoading: filelistLoading } = useQuery({
     queryKey: ["filelistForItem", item.mediaType, item.id, origTitle],
