@@ -40,6 +40,15 @@ function safeStringify(v: unknown): string {
   }
 }
 
+// Avertismentele runtime ale Node.js (ex. "(node:12345) ExperimentalWarning:
+// SQLite is an experimental feature...") trec tot prin console.error intern,
+// dar nu sunt erori ale aplicației — apar la fiecare pornire a procesului și
+// ar polua widgetul fără informație utilă.
+function isNodeRuntimeWarning(args: unknown[]): boolean {
+  const first = args[0];
+  return typeof first === "string" && /^\(node:\d+\)/.test(first);
+}
+
 export function installConsoleErrorCapture(): void {
   if (installed) return;
   installed = true;
@@ -51,7 +60,7 @@ export function installConsoleErrorCapture(): void {
     originalError(...args);
     // Gardă de reintrare: dacă logError() însuși (via getDb()) declanșează
     // un console.warn/error în timpul inițializării DB, nu vrem buclă.
-    if (suppressDepth > 0) return;
+    if (suppressDepth > 0 || isNodeRuntimeWarning(args)) return;
     suppressDepth++;
     try {
       logError("server-fn", toError(args));
@@ -62,7 +71,7 @@ export function installConsoleErrorCapture(): void {
 
   console.warn = (...args: unknown[]) => {
     originalWarn(...args);
-    if (suppressDepth > 0) return;
+    if (suppressDepth > 0 || isNodeRuntimeWarning(args)) return;
     suppressDepth++;
     try {
       logError("server-fn", toError(args));
