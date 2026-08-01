@@ -369,6 +369,9 @@ export const checkFilelistForItem = createServerFn({ method: "GET" })
         data.imdbId ? searchFilelistRaw(data.imdbId, category, "imdb") : Promise.resolve([]),
         ...nameQueries.map((q) => searchFilelistRaw(q, category, "name")),
       ]);
+      console.log(
+        `[filelist-check] title="${data.title}" originalTitle="${data.originalTitle}" imdbId=${data.imdbId} category=${category} -> imdbResults=${imdbResults.length} nameResults=${nameResults.map((r) => r.length).join(",")}`,
+      );
       const merged = new Map<number, FilelistTorrent>();
       for (const torrents of [imdbResults, ...nameResults]) {
         for (const t of torrents) if (!merged.has(t.id)) merged.set(t.id, t);
@@ -383,6 +386,7 @@ export const checkFilelistForItem = createServerFn({ method: "GET" })
           matched.push({ ...t, matchedByImdb });
         }
       }
+      console.log(`[filelist-check] merged=${merged.size} matched=${matched.length}`);
 
       matched.sort((a, b) => {
         const da = a.upload_date ? new Date(a.upload_date).getTime() : 0;
