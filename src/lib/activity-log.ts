@@ -368,7 +368,21 @@ declare global {
 
 let codeRestartDetected = false;
 
-if (typeof process !== "undefined" && process.env && !globalThis.__faikkitboxActivityInit) {
+// Rulează doar când modulul e încărcat din build-ul real (.output/server/...),
+// nu din sursă (ex. `npx tsx src/lib/*.ts` pentru un script de test) — altfel
+// isCodeRestart() de mai jos rezolvă greșit calea "../index.mjs" (relativă la
+// src/lib/, unde acel fișier nu există), catch-ul întoarce implicit false, iar
+// scriptul efemer ajunge să logheze fals "Serverul FaikkitBox a pornit/s-a
+// oprit" în Jurnalul de Activitate la fiecare rulare — asta a poluat jurnalul
+// în timpul testării manuale a acestui fișier.
+const isRealServerBuild = import.meta.url.includes("/.output/");
+
+if (
+  isRealServerBuild &&
+  typeof process !== "undefined" &&
+  process.env &&
+  !globalThis.__faikkitboxActivityInit
+) {
   globalThis.__faikkitboxActivityInit = true;
   // Detectăm înainte de logare dacă e restart din cod, pentru a suprima și server_stop
   isCodeRestart().then((isCode) => {
