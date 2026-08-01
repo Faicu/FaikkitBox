@@ -75,9 +75,8 @@ async function pollUntilComplete(
               }),
             )
             .catch(() => {});
-          const sectionKey = await plexFindLibraryKey(plexType);
-          if (sectionKey) await plexRefreshLibrary(sectionKey);
-          console.log(`[filelist] Plex refresh trimis pentru secțiunea ${sectionKey}`);
+          await refreshPlexLibrary(plexType);
+          console.log(`[filelist] Plex refresh trimis pentru "${plexType}"`);
         } else {
           console.log(`[filelist] "${torrentName}" deja marcat complet de alt loop — skip`);
         }
@@ -91,7 +90,7 @@ async function pollUntilComplete(
   console.warn(`[filelist] Timeout polling pentru "${torrentName}" după 48h`);
 }
 
-async function plexRefreshLibrary(sectionKey: string): Promise<void> {
+async function plexRefreshLibraryBySection(sectionKey: string): Promise<void> {
   const base = process.env.PLEX_URL ?? "http://127.0.0.1:32400";
   const token = process.env.PLEX_TOKEN;
   if (!token) return;
@@ -108,14 +107,17 @@ async function plexRefreshLibrary(sectionKey: string): Promise<void> {
   }
 }
 
-// Rescanează secțiunea Plex corespunzătoare categoriei unui torrent — folosit
-// atât la finalizarea unei descărcări (pollUntilComplete), cât și la
-// ștergerea unei intrări din jurnal (deleteFilelistLogEntry, log.ts), ca
-// biblioteca Plex să reflecte imediat fișierele șterse de pe disk.
-export async function refreshPlexLibraryForCategory(category: number): Promise<void> {
-  const plexType = isMovieCategory(category) ? "movie" : "show";
+// Rescanează secțiunea Plex (filme sau seriale) — SINGURUL loc care declanșează
+// refresh Plex din tot modulul Filelist. Folosit atât la finalizarea unei
+// descărcări (pollUntilComplete), cât și la ștergerea unei intrări din jurnal
+// (deleteFilelistLogEntry, log.ts, via refreshPlexLibraryForCategory).
+export async function refreshPlexLibrary(plexType: "movie" | "show"): Promise<void> {
   const sectionKey = await plexFindLibraryKey(plexType);
-  if (sectionKey) await plexRefreshLibrary(sectionKey);
+  if (sectionKey) await plexRefreshLibraryBySection(sectionKey);
+}
+
+export async function refreshPlexLibraryForCategory(category: number): Promise<void> {
+  return refreshPlexLibrary(isMovieCategory(category) ? "movie" : "show");
 }
 
 async function plexFindLibraryKey(type: "movie" | "show"): Promise<string | null> {
