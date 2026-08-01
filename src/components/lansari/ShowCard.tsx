@@ -17,7 +17,7 @@ import type { FilelistTorrent } from "@/lib/filelist.functions";
 import type { PinnedItem } from "./types";
 import { groupTorrentsBySeasonEpisode } from "./utils";
 import { useDownload } from "./hooks";
-import { PlexStatusBadge, CountdownDisplay, LibraryBadge } from "./badges";
+import { PlexStatusBadge, CountdownDisplay, LibraryBadge, type TvPlexStatus } from "./badges";
 import { WatchTogglePanel } from "./WatchTogglePanel";
 import { SeasonPanel } from "./SeasonPanel";
 
@@ -40,7 +40,7 @@ export function ShowCard({
 }: {
   item: PinnedItem;
   details: TmdbDetails | null;
-  tvPlexStatus: "complet" | "incomplet" | "lipsa" | null;
+  tvPlexStatus: TvPlexStatus | null;
   tvPlexLoading: boolean;
   plexSeasonEps: { num: number; quality: string | null; watched: boolean }[];
   torrents: FilelistTorrent[];

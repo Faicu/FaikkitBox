@@ -7,6 +7,7 @@ import { checkFilelistForItem } from "@/lib/filelist.functions";
 import { getTmdbDetails, getTvShowCountdown, getTmdbSeasonEpisodes } from "@/lib/tmdb.functions";
 import type { WatchSettings } from "@/lib/pinned.functions";
 import type { PinnedItem } from "./types";
+import type { TvPlexStatus } from "./badges";
 import { MovieCard } from "./MovieCard";
 import { ShowCard } from "./ShowCard";
 
@@ -123,8 +124,9 @@ export function PinnedItemCard({
   const plexSeasonLoading = plexSeasonQueries.some((q) => q.isLoading);
   const tmdbSeasonLoading = tmdbSeasonQueries.some((q) => q.isLoading);
 
-  // Badge principal — agregat din toate sezoanele
-  let tvPlexStatus: "complet" | "incomplet" | "lipsa" | null = null;
+  // Badge principal — agregat din toate sezoanele. Vezi ordinea de
+  // priorități documentată în badges.tsx (PlexStatusBadge).
+  let tvPlexStatus: TvPlexStatus | null = null;
   if (item.mediaType === "tv" && allSeasonNums.length > 0) {
     const allLoaded =
       plexSeasonQueries.every((q) => q.data !== undefined) &&
@@ -132,22 +134,45 @@ export function PinnedItemCard({
     if (allLoaded) {
       let totalComplete = 0;
       let totalPartial = 0;
+      let anyPresent = false;
+      let lastSeasonComplete = true;
+      const lastSeasonIdx = allSeasonNums.indexOf(latestSeason ?? -1);
+
       for (let i = 0; i < allSeasonNums.length; i++) {
         const plexEps = plexSeasonQueries[i].data ?? [];
         const tmdbEps = (tmdbSeasonQueries[i].data ?? []).filter((e) => e.aired);
         const plexSet = new Set(plexEps.map((e) => e.num));
         const epList = tmdbEps.length > 0 ? tmdbEps.map((e) => e.episodeNum) : [];
-        if (epList.length === 0) {
-          if (plexEps.length > 0) totalComplete++;
-        } else if (epList.every((n: number) => plexSet.has(n))) {
-          totalComplete++;
-        } else if (epList.some((n: number) => plexSet.has(n))) {
-          totalPartial++;
-        }
+        if (plexEps.length > 0) anyPresent = true;
+
+        const seasonComplete =
+          epList.length === 0 ? plexEps.length > 0 : epList.every((n: number) => plexSet.has(n));
+        const seasonPartial =
+          epList.length > 0 && !seasonComplete && epList.some((n: number) => plexSet.has(n));
+
+        if (seasonComplete) totalComplete++;
+        else if (seasonPartial) totalPartial++;
+
+        if (i === lastSeasonIdx) lastSeasonComplete = seasonComplete;
       }
-      if (totalComplete === allSeasonNums.length) tvPlexStatus = "complet";
-      else if (totalComplete > 0 || totalPartial > 0) tvPlexStatus = "incomplet";
-      else tvPlexStatus = "lipsa";
+
+      const overallComplete = totalComplete === allSeasonNums.length;
+
+      // Episod apărut de mai puțin de 24h și încă lipsă din Plex —
+      // prioritar peste orice alt status, e info temporară și urgentă.
+      const lastAired = countdown?.status === "ok" ? countdown.lastAired : null;
+      const hoursSinceAired = lastAired
+        ? (Date.now() - new Date(lastAired.airDateIso).getTime()) / 3_600_000
+        : Infinity;
+      const newEpisodeUnavailable =
+        !!lastAired && lastAired.inLibrary === false && hoursSinceAired >= 0 && hoursSinceAired < 24;
+
+      if (!anyPresent) tvPlexStatus = "lipsa";
+      else if (newEpisodeUnavailable) tvPlexStatus = "episod_nou";
+      else if (overallComplete) tvPlexStatus = "complet";
+      else if (!lastSeasonComplete) tvPlexStatus = "incomplet_ultim_sezon";
+      else if (lastSeasonComplete) tvPlexStatus = "complet_ultim_sezon";
+      else tvPlexStatus = "incomplet";
     }
   }
 
