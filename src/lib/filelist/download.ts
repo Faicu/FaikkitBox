@@ -20,6 +20,7 @@ import {
 } from "./categories";
 import { qbitLogin, qbitEnsureCookie, resetQbitCookie } from "../qbit-client";
 import { readDownloadLog, appendDownloadLog, markLogEntryComplete } from "./log";
+import { stripDiacritics, torrentMatchesTitle } from "./match";
 
 // ---------------------------------------------------------------------------
 // Background polling: verifică progresul torrentului și refresh Plex la final
@@ -317,6 +318,77 @@ export const searchFilelist = createServerFn({ method: "GET" })
       });
 
       return { status: "ok", torrents };
+    } catch (e) {
+      return { status: "error", error: e instanceof Error ? e.message : String(e), torrents: [] };
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// Server function: verificare unificată "există pe Filelist?" — sursă unică
+// folosită atât de Descoperă cât și de Lansări. Caută întâi după titlul
+// original (limba de origine — convenția Filelist pentru majoritatea
+// torrentelor), apoi, dacă nu găsește nimic, după titlul englez/internațional.
+// Rezultatele sunt confirmate prin IMDB ID când e disponibil (cel mai
+// fiabil), altfel prin match strict de titlu.
+// ---------------------------------------------------------------------------
+
+export const checkFilelistForItem = createServerFn({ method: "GET" })
+  .validator(
+    (data: {
+      title: string;
+      originalTitle: string;
+      imdbId?: string | null;
+      mediaType: "movie" | "tv";
+    }) => data,
+  )
+  .handler(async ({ data }): Promise<FilelistSearchResult> => {
+    const { requireAdmin } = await import("../admin.server");
+    await requireAdmin();
+    const username = process.env.FILELIST_USERNAME;
+    const passkey = process.env.FILELIST_PASSKEY;
+    if (!username || !passkey) {
+      return {
+        status: "error",
+        error: "FILELIST_USERNAME / FILELIST_PASSKEY nu sunt configurate în .env",
+        torrents: [],
+      };
+    }
+
+    const category: FilelistCategory = data.mediaType === "movie" ? "movies" : "series";
+    const original = stripDiacritics(data.originalTitle || "").trim();
+    const english = stripDiacritics(data.title || "").trim();
+
+    const queries = [original, english].filter(
+      (q, i, arr) => q.length > 0 && arr.indexOf(q) === i,
+    );
+    if (queries.length === 0) return { status: "ok", torrents: [] };
+
+    try {
+      const resultsByQuery = await Promise.all(
+        queries.map((q) => searchFilelistRaw(q, category)),
+      );
+      const merged = new Map<number, FilelistTorrent>();
+      for (const torrents of resultsByQuery) {
+        for (const t of torrents) if (!merged.has(t.id)) merged.set(t.id, t);
+      }
+
+      const matched: FilelistTorrent[] = [];
+      for (const t of merged.values()) {
+        const matchedByImdb = !!(t.imdb && data.imdbId && t.imdb === data.imdbId);
+        const matchedByTitle =
+          torrentMatchesTitle(t.name, original) || torrentMatchesTitle(t.name, english);
+        if (matchedByImdb || matchedByTitle) {
+          matched.push({ ...t, matchedByImdb });
+        }
+      }
+
+      matched.sort((a, b) => {
+        const da = a.upload_date ? new Date(a.upload_date).getTime() : 0;
+        const db = b.upload_date ? new Date(b.upload_date).getTime() : 0;
+        return db - da;
+      });
+
+      return { status: "ok", torrents: matched };
     } catch (e) {
       return { status: "error", error: e instanceof Error ? e.message : String(e), torrents: [] };
     }

@@ -100,7 +100,13 @@ export function SceneViewer({
               originalTitle={detailsQuery.data?.originalTitle ?? item.title}
               mediaType={item.mediaType}
             />
-            <FilelistCheckButton title={item.title} mediaType={item.mediaType} isAdmin={isAdmin} />
+            <FilelistCheckButton
+              title={item.title}
+              originalTitle={detailsQuery.data?.originalTitle ?? item.title}
+              imdbId={imdbId}
+              mediaType={item.mediaType}
+              isAdmin={isAdmin}
+            />
             <PinToLansariButton
               id={item.id}
               title={item.title}

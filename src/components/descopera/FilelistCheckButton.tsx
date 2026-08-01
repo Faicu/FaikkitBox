@@ -3,26 +3,29 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Search, Loader2 } from "lucide-react";
 
-import { searchFilelist } from "@/lib/filelist.functions";
+import { checkFilelistForItem } from "@/lib/filelist.functions";
 import { detectQuality } from "@/components/lansari/utils";
 import type { DiscoverMediaType } from "@/lib/tmdb.discover.functions";
 
 export function FilelistCheckButton({
   title,
+  originalTitle,
+  imdbId,
   mediaType,
   isAdmin,
 }: {
   title: string;
+  originalTitle: string;
+  imdbId: string | null;
   mediaType: DiscoverMediaType;
   isAdmin: boolean;
 }) {
   const [checked, setChecked] = useState(false);
-  const searchFn = useServerFn(searchFilelist);
+  const checkFn = useServerFn(checkFilelistForItem);
 
   const query = useQuery({
-    queryKey: ["filelistCheck", mediaType, title],
-    queryFn: () =>
-      searchFn({ data: { query: title, category: mediaType === "movie" ? "movies" : "series" } }),
+    queryKey: ["filelistCheck", mediaType, title, originalTitle, imdbId],
+    queryFn: () => checkFn({ data: { title, originalTitle, imdbId, mediaType } }),
     enabled: checked,
   });
 

@@ -54,7 +54,13 @@ function FeedCard({
               {clip.year && ` · ${clip.year}`}
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-2">
-              <FilelistCheckButton title={clip.title} mediaType={clip.mediaType} isAdmin={isAdmin} />
+              <FilelistCheckButton
+                title={clip.title}
+                originalTitle={detailsQuery.data?.originalTitle ?? clip.title}
+                imdbId={imdbId}
+                mediaType={clip.mediaType}
+                isAdmin={isAdmin}
+              />
               <PinToLansariButton
                 id={clip.id}
                 title={clip.title}

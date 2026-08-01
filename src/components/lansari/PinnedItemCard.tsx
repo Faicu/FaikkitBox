@@ -2,11 +2,11 @@ import { useQuery, useQueries } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 
 import { checkPlexHasTitle, getPlexEpisodesInSeason } from "@/lib/services.functions";
-import { searchFilelist } from "@/lib/filelist.functions";
+import { checkFilelistForItem } from "@/lib/filelist.functions";
 import { getTmdbDetails, getTvShowCountdown, getTmdbSeasonEpisodes } from "@/lib/tmdb.functions";
 import type { WatchSettings } from "@/lib/pinned.functions";
 import type { PinnedItem } from "./types";
-import { stripDiacritics, groupTorrentsBySeasonEpisode, filterTorrentsForItem } from "./utils";
+import { groupTorrentsBySeasonEpisode } from "./utils";
 import { MovieCard } from "./MovieCard";
 import { ShowCard } from "./ShowCard";
 
@@ -31,7 +31,7 @@ export function PinnedItemCard({
   const plexFn = useServerFn(checkPlexHasTitle);
   const plexSeasonFn = useServerFn(getPlexEpisodesInSeason);
   const tmdbSeasonFn = useServerFn(getTmdbSeasonEpisodes);
-  const filelistFn = useServerFn(searchFilelist);
+  const filelistFn = useServerFn(checkFilelistForItem);
   const countdownFn = useServerFn(getTvShowCountdown);
 
   const { data: details, isLoading: detailsLoading } = useQuery({
@@ -51,27 +51,33 @@ export function PinnedItemCard({
     enabled: item.mediaType === "movie",
   });
 
-  // Titlul afișat (ex. "Colony"), nu cel original (ex. "Gunche") — torrentele
-  // de pe Filelist sunt denumite după titlul englez/internațional, nu după
-  // titlul original în limba de origine.
-  const origTitle = stripDiacritics(item.title || details?.originalTitle || item.originalTitle);
-
-  const { data: filelistData, isLoading: filelistLoading } = useQuery({
-    queryKey: ["filelistForItem", item.mediaType, item.id, origTitle],
-    queryFn: () =>
-      filelistFn({
-        data: { query: origTitle, category: item.mediaType === "movie" ? "movies" : "series" },
-      }),
-    staleTime: 2 * 60_000,
-    enabled: !!origTitle,
-  });
-
   const { data: countdown, isLoading: countdownLoading } = useQuery({
     queryKey: ["tvCountdown", item.id],
     queryFn: () =>
       countdownFn({ data: { imdbId: details?.imdbId ?? null, showTitle: item.title } }),
     staleTime: 5 * 60_000,
     enabled: item.mediaType === "tv" && !!details,
+  });
+
+  const itemImdbId = details?.imdbId ?? countdown?.imdbId ?? null;
+  const itemOriginalTitle = details?.originalTitle || item.originalTitle || item.title;
+
+  // checkFilelistForItem caută întâi după titlul original (convenția
+  // Filelist), apoi după titlul afișat, și confirmă rezultatele prin IMDB ID
+  // când e disponibil — aceeași sursă unică folosită și de Descoperă.
+  const { data: filelistData, isLoading: filelistLoading } = useQuery({
+    queryKey: ["filelistForItem", item.mediaType, item.id, itemOriginalTitle, itemImdbId],
+    queryFn: () =>
+      filelistFn({
+        data: {
+          title: item.title,
+          originalTitle: itemOriginalTitle,
+          imdbId: itemImdbId,
+          mediaType: item.mediaType,
+        },
+      }),
+    staleTime: 2 * 60_000,
+    enabled: !!(item.title || itemOriginalTitle),
   });
 
   const latestSeasonFromTmdb =
@@ -84,9 +90,7 @@ export function PinnedItemCard({
       : latestSeasonFromTmdb;
   const showTitleForPlex = item.originalTitle || countdown?.showName || item.title;
 
-  const itemImdbId = details?.imdbId ?? countdown?.imdbId ?? null;
-  const rawTorrents = filelistData?.status === "ok" ? filelistData.torrents : [];
-  const torrents = filterTorrentsForItem(rawTorrents, origTitle, itemImdbId);
+  const torrents = filelistData?.status === "ok" ? filelistData.torrents : [];
   const seasonGroups = groupTorrentsBySeasonEpisode(torrents);
   const allSeasonNums = seasonGroups.map((g) => g.seasonNum);
 

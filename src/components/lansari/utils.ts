@@ -2,43 +2,6 @@ import type { FilelistTorrent } from "@/lib/filelist.functions";
 import type { QualitySet, SeasonGroup } from "./types";
 
 // ---------------------------------------------------------------------------
-// Utilitar: elimină diacriticele pentru căutări externe (Filelist nu le suportă)
-// ---------------------------------------------------------------------------
-
-export function stripDiacritics(str: string): string {
-  return str.normalize("NFD").replace(/[̀-ͯ]/g, "");
-}
-
-function escapeRegex(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-// Match strict, ancorat la începutul numelui — Filelist face doar căutare
-// loose (substring) după nume, iar torrentele urmează convenția
-// "Titlu.SxxExx..."/"Titlu.Anul...", deci titlul trebuie să apară chiar la
-// început, nu doar oriunde în nume (altfel "Lucky" prinde și
-// "I.Got.Lucky.Survival.Stories...").
-export function torrentMatchesTitle(name: string, title: string): boolean {
-  const words = stripDiacritics(title).trim().split(/\s+/).filter(Boolean).map(escapeRegex);
-  if (words.length === 0) return false;
-  const pattern = new RegExp(`^${words.join("[\\W_]+")}\\b`, "i");
-  return pattern.test(stripDiacritics(name).trim());
-}
-
-export function filterTorrentsForItem(
-  torrents: FilelistTorrent[],
-  title: string,
-  imdbId?: string | null,
-): FilelistTorrent[] {
-  return torrents.reduce<FilelistTorrent[]>((acc, t) => {
-    const hasImdbCheck = !!(t.imdb && imdbId);
-    const keep = hasImdbCheck ? t.imdb === imdbId : torrentMatchesTitle(t.name, title);
-    if (keep) acc.push({ ...t, matchedByImdb: hasImdbCheck });
-    return acc;
-  }, []);
-}
-
-// ---------------------------------------------------------------------------
 // Detectare calitate torrent
 // ---------------------------------------------------------------------------
 
