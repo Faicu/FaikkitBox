@@ -1,12 +1,20 @@
 // ---------------------------------------------------------------------------
-// Plugin: verifică periodic (la 3 ore) itemele fixate cu watch activat.
+// Plugin: verifică periodic itemele fixate cu watch activat, la exact 3 ore
+// per item — indiferent de restart-uri ale serviciului.
 // Detectează: torrente noi pe Filelist, episoade noi lansate (TMDB),
 // episoade/filme noi apărute în Plex.
 // Fiecare tip de notificare are toggle independent per item.
 // Prima rulare per item = baseline (fără notificări).
+//
+// Bucla internă (setInterval) rulează des (POLL_INTERVAL_MS), dar pentru
+// fiecare item se uită la `last_checked_at` din pinned_watch_state (SQLite)
+// și sare peste el dacă n-au trecut ITEM_INTERVAL_MS — nu ținem un timer în
+// memorie (s-ar reseta la fiecare restart), ci folosim timestamp-ul deja
+// persistat per item.
 // ---------------------------------------------------------------------------
 
-const INTERVAL_MS = 3 * 60 * 60 * 1000; // 3 ore
+const ITEM_INTERVAL_MS = 3 * 60 * 60 * 1000; // 3 ore — cadența reală per item
+const POLL_INTERVAL_MS = 15 * 60 * 1000; // 15 min — cât de des verificăm ce a expirat
 const TMDB_BASE = "https://api.themoviedb.org/3";
 
 // IMDB ID-ul TMDB al itemului — necesar pentru checkFilelistForItemInternal,
@@ -118,6 +126,13 @@ export async function checkAll(): Promise<void> {
         const stateRow = db
           .prepare("SELECT * FROM pinned_watch_state WHERE id = ? AND media_type = ?")
           .get(item.id, item.media_type) as WatchRow | undefined;
+
+        // Cadență strictă de 3 ore per item, persistată în DB — supraviețuiește
+        // restart-urilor serviciului (nu se bazează pe un timer în memorie).
+        if (stateRow?.last_checked_at) {
+          const elapsedMs = Date.now() - new Date(stateRow.last_checked_at).getTime();
+          if (elapsedMs < ITEM_INTERVAL_MS) continue;
+        }
 
         const isFirstRun = !stateRow || stateRow.last_checked_at === null;
         const seenTorrentIds = new Set<number>(JSON.parse(stateRow?.seen_torrent_ids || "[]"));
@@ -330,5 +345,5 @@ export default function () {
 
   setInterval(() => {
     checkAll().catch((e) => console.warn("[pinned-watcher] Rulare periodică eșuată:", e));
-  }, INTERVAL_MS);
+  }, POLL_INTERVAL_MS);
 }
