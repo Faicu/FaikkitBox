@@ -340,6 +340,19 @@ export const searchFilelist = createServerFn({ method: "GET" })
 
 const filelistCheckCache = new Map<string, { expiresAt: number; result: FilelistSearchResult }>();
 const FILELIST_CHECK_CACHE_TTL = 10 * 60_000;
+const FILELIST_CHECK_CACHE_SWEEP_THRESHOLD = 500;
+
+// Intrările expirate se elimină lazy — doar când o cheie e recitită. Fără
+// măturare, un cache uitat ar crește nemărginit pe termen lung (titluri
+// distincte verificate o singură dată rămân în memorie la infinit). Măturăm
+// când Map-ul devine suficient de mare încât să merite costul unei treceri.
+function sweepExpiredFilelistCache(): void {
+  if (filelistCheckCache.size < FILELIST_CHECK_CACHE_SWEEP_THRESHOLD) return;
+  const now = Date.now();
+  for (const [key, entry] of filelistCheckCache) {
+    if (entry.expiresAt <= now) filelistCheckCache.delete(key);
+  }
+}
 
 export async function checkFilelistForItemInternal(data: {
   title: string;
@@ -393,6 +406,7 @@ export async function checkFilelistForItemInternal(data: {
     });
 
     const result: FilelistSearchResult = { status: "ok", torrents: found };
+    sweepExpiredFilelistCache();
     filelistCheckCache.set(cacheKey, { expiresAt: Date.now() + FILELIST_CHECK_CACHE_TTL, result });
     return result;
   } catch (e) {

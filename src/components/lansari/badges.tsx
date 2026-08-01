@@ -51,10 +51,9 @@ export function TorrentPickerDialog({
               <div className="flex items-start gap-1 text-xs font-medium break-words leading-snug">
                 <span className="break-words">{t.name}</span>
                 {t.matchedByImdb && (
-                  <BadgeCheck
-                    className="h-3 w-3 shrink-0 mt-0.5 text-emerald-400"
-                    title="Verificat via IMDB"
-                  />
+                  <span title="Verificat via IMDB" className="shrink-0 mt-0.5">
+                    <BadgeCheck className="h-3 w-3 text-emerald-400" />
+                  </span>
                 )}
               </div>
               <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
@@ -163,10 +162,12 @@ export function QualityDownloadButton({
         title={titleText}
       >
         {imdbVerified && (
-          <BadgeCheck
-            className="absolute -top-1.5 -right-1.5 h-3.5 w-3.5 text-emerald-400 bg-card rounded-full"
+          <span
             title="Verificat via IMDB"
-          />
+            className="absolute -top-1.5 -right-1.5 rounded-full bg-card"
+          >
+            <BadgeCheck className="h-3.5 w-3.5 text-emerald-400" />
+          </span>
         )}
         {isLoading ? (
           <Loader2 className="h-3.5 w-3.5 animate-spin" />

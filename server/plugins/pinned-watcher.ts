@@ -244,9 +244,16 @@ export async function checkAll(force = false): Promise<void> {
                       });
                     } else {
                       console.warn(`[pinned-watcher] Auto-download eșuat: ${dlResult.error}`);
+                      const { logError } = await import("../../src/lib/error-log");
+                      logError(
+                        "server-fn",
+                        new Error(`[pinned-watcher] Auto-download eșuat pentru "${item.title}": ${dlResult.error}`),
+                      );
                     }
                   } catch (e) {
                     console.warn("[pinned-watcher] Eroare auto-download:", e);
+                    const { logError } = await import("../../src/lib/error-log");
+                    logError("server-fn", e);
                   }
                 } else {
                   console.log(`[pinned-watcher] Auto-download: niciun torrent ${quality} găsit`);
@@ -338,6 +345,8 @@ export async function checkAll(force = false): Promise<void> {
         }
       } catch (e) {
         console.warn(`[pinned-watcher] Eroare la "${item.title}":`, e);
+        const { logError } = await import("../../src/lib/error-log");
+        logError("server-fn", e);
       }
     }
 
@@ -348,6 +357,8 @@ export async function checkAll(force = false): Promise<void> {
     }
   } catch (e) {
     console.warn("[pinned-watcher] Eroare generală:", e);
+    const { logError } = await import("../../src/lib/error-log");
+    logError("server-fn", e);
   }
 }
 
