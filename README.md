@@ -134,6 +134,7 @@ cp .env.example .env
 | `SPEEDTEST_BIN` | (opțional) Cale completă binar `speedtest` (util dacă snap nu rulează din systemd) |
 | `PORT` | Port server (implicit `3000`) |
 | `NODE_ENV` | Mediu de rulare (`production` în producție) |
+| `NODE_OPTIONS` | (opțional) `--disable-warning=ExperimentalWarning` — suprimă avertismentul Node la fiecare pornire pentru `node:sqlite` (`src/lib/db.ts`), fără să ascundă alte avertismente (ex. deprecation la upgrade de Node) |
 
 **Nu comite niciodată `.env` în git.**
 
