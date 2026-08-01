@@ -9,21 +9,22 @@
 const INTERVAL_MS = 3 * 60 * 60 * 1000; // 3 ore
 const TMDB_BASE = "https://api.themoviedb.org/3";
 
-function stripDiacritics(str: string): string {
-  return str.normalize("NFD").replace(/[̀-ͯ]/g, "");
-}
-
-function escapeRegex(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-// Match strict, pe cuvinte întregi (nu substring) — Filelist face doar căutare
-// loose după nume, deci filtrăm noi rezultatele care nu conțin titlul exact.
-function torrentMatchesTitle(name: string, title: string): boolean {
-  const words = stripDiacritics(title).trim().split(/\s+/).filter(Boolean).map(escapeRegex);
-  if (words.length === 0) return false;
-  const pattern = new RegExp(`\\b${words.join("[\\W_]+")}\\b`, "i");
-  return pattern.test(name);
+// IMDB ID-ul TMDB al itemului — necesar pentru checkFilelistForItemInternal,
+// care caută prioritar direct după IMDB ID (cel mai fiabil criteriu).
+async function getImdbId(tmdbId: number, mediaType: "movie" | "tv"): Promise<string | null> {
+  const key = process.env.TMDB_API_KEY;
+  if (!key) return null;
+  try {
+    const res = await fetch(`${TMDB_BASE}/${mediaType}/${tmdbId}/external_ids`, {
+      headers: { Authorization: `Bearer ${key}`, Accept: "application/json" },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) return null;
+    const json: { imdb_id?: string | null } = await res.json();
+    return json.imdb_id ?? null;
+  } catch {
+    return null;
+  }
 }
 
 function detectTorrentQuality(name: string): string {
@@ -80,7 +81,7 @@ export async function checkAll(): Promise<void> {
     const { getDb } = await import("../../src/lib/db");
     const { logActivity } = await import("../../src/lib/activity-log");
     const { sendPushToAll } = await import("../../src/lib/push");
-    const { searchFilelistRaw, downloadFilelistInternal } =
+    const { checkFilelistForItemInternal, downloadFilelistInternal } =
       await import("../../src/lib/filelist.functions");
     const { getPlexEpisodesInSeasonInternal, checkPlexHasTitleInternal } =
       await import("../../src/lib/services.functions");
@@ -157,10 +158,15 @@ export async function checkAll(): Promise<void> {
 
         // ── 2. Filelist ──────────────────────────────────────────────────────
         if (item.watch_filelist) {
-          const query = stripDiacritics(item.original_title || item.title);
-          const category = item.media_type === "movie" ? ("movies" as const) : ("series" as const);
-          const torrents = await searchFilelistRaw(query, category);
-          const matchedTorrents = torrents.filter((t) => torrentMatchesTitle(t.name, query));
+          const mediaType = item.media_type as "movie" | "tv";
+          const imdbId = await getImdbId(item.id, mediaType);
+          const result = await checkFilelistForItemInternal({
+            title: item.title,
+            originalTitle: item.original_title || item.title,
+            imdbId,
+            mediaType,
+          });
+          const matchedTorrents = result.status === "ok" ? result.torrents : [];
           const newTorrents = matchedTorrents.filter((t) => !seenTorrentIds.has(t.id));
           for (const t of newTorrents) seenTorrentIds.add(t.id);
 

@@ -16,7 +16,8 @@ import type { TmdbEpisode } from "@/lib/tmdb.functions";
 import type { FilelistTorrent } from "@/lib/filelist.functions";
 import type { SeasonGroup } from "./types";
 import { DownloadConfirmDialog } from "./DownloadConfirmDialog";
-import { QualityDownloadButton, PlexStatusBadge } from "./badges";
+import { QualityDownloadButton } from "./badges";
+import { PlexStatusBadge } from "./PlexStatusBadge";
 
 // SeasonPanel — accordion cu ambele moduri + confirmare download + status Plex complet
 export function SeasonPanel({

@@ -325,19 +325,80 @@ export const searchFilelist = createServerFn({ method: "GET" })
   });
 
 // ---------------------------------------------------------------------------
-// Server function: verificare unificată "există pe Filelist?" — sursă unică
-// folosită atât de Descoperă cât și de Lansări. Caută secvențial — se
-// oprește la primul rezultat găsit — întâi direct după IMDB ID (cel mai
-// fiabil — funcționează chiar și când numele lansării nu conține niciunul
-// dintre titluri, ex. titluri coreene romanizate diferit de original_title
-// din TMDB), apoi după titlul original, apoi după titlul englez/
-// internațional. Contul Filelist are o limită orară de cereri, iar Lansări
-// verifică automat toate itemele fixate — un cache scurt (10 min) evită să
-// repetăm aceleași căutări la fiecare încărcare de pagină.
+// Verificare unificată "există pe Filelist?" — sursă unică de adevăr,
+// folosită din toate cele 3 locuri care interoghează Filelist: butonul
+// "Verifică pe Filelist" din Descoperă, "Mai multe detalii" pe un card fixat
+// din Lansări, și job-ul de fundal pinned-watcher (notificări automate la 3
+// ore). Caută secvențial — se oprește la primul rezultat găsit — întâi
+// direct după IMDB ID (cel mai fiabil — funcționează chiar și când numele
+// lansării nu conține niciunul dintre titluri, ex. titluri coreene
+// romanizate diferit de original_title din TMDB), apoi după titlul original,
+// apoi după titlul englez/internațional. Contul Filelist are o limită orară
+// de cereri — un cache scurt (10 min) evită să repetăm aceleași căutări la
+// apeluri repetate în fereastra respectivă.
 // ---------------------------------------------------------------------------
 
 const filelistCheckCache = new Map<string, { expiresAt: number; result: FilelistSearchResult }>();
 const FILELIST_CHECK_CACHE_TTL = 10 * 60_000;
+
+export async function checkFilelistForItemInternal(data: {
+  title: string;
+  originalTitle: string;
+  imdbId?: string | null;
+  mediaType: "movie" | "tv";
+}): Promise<FilelistSearchResult> {
+  const username = process.env.FILELIST_USERNAME;
+  const passkey = process.env.FILELIST_PASSKEY;
+  if (!username || !passkey) {
+    return {
+      status: "error",
+      error: "FILELIST_USERNAME / FILELIST_PASSKEY nu sunt configurate în .env",
+      torrents: [],
+    };
+  }
+
+  const category: FilelistCategory = data.mediaType === "movie" ? "movies" : "series";
+  const original = stripDiacritics(data.originalTitle || "").trim();
+  const english = stripDiacritics(data.title || "").trim();
+
+  const cacheKey = `${category}|${data.imdbId ?? ""}|${original}|${english}`;
+  const cached = filelistCheckCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.result;
+
+  const nameQueries = [original, english].filter(
+    (q, i, arr) => q.length > 0 && arr.indexOf(q) === i,
+  );
+  if (nameQueries.length === 0 && !data.imdbId) return { status: "ok", torrents: [] };
+
+  try {
+    let found: FilelistTorrent[] = [];
+
+    if (data.imdbId) {
+      const byImdb = await searchFilelistRaw(data.imdbId, category, "imdb");
+      found = byImdb.map((t) => ({ ...t, matchedByImdb: true }));
+    }
+
+    for (const q of nameQueries) {
+      if (found.length > 0) break;
+      const byName = await searchFilelistRaw(q, category, "name");
+      found = byName
+        .filter((t) => torrentMatchesTitle(t.name, original) || torrentMatchesTitle(t.name, english))
+        .map((t) => ({ ...t, matchedByImdb: !!(t.imdb && data.imdbId && t.imdb === data.imdbId) }));
+    }
+
+    found.sort((a, b) => {
+      const da = a.upload_date ? new Date(a.upload_date).getTime() : 0;
+      const db = b.upload_date ? new Date(b.upload_date).getTime() : 0;
+      return db - da;
+    });
+
+    const result: FilelistSearchResult = { status: "ok", torrents: found };
+    filelistCheckCache.set(cacheKey, { expiresAt: Date.now() + FILELIST_CHECK_CACHE_TTL, result });
+    return result;
+  } catch (e) {
+    return { status: "error", error: e instanceof Error ? e.message : String(e), torrents: [] };
+  }
+}
 
 export const checkFilelistForItem = createServerFn({ method: "GET" })
   .validator(
@@ -351,57 +412,7 @@ export const checkFilelistForItem = createServerFn({ method: "GET" })
   .handler(async ({ data }): Promise<FilelistSearchResult> => {
     const { requireAdmin } = await import("../admin.server");
     await requireAdmin();
-    const username = process.env.FILELIST_USERNAME;
-    const passkey = process.env.FILELIST_PASSKEY;
-    if (!username || !passkey) {
-      return {
-        status: "error",
-        error: "FILELIST_USERNAME / FILELIST_PASSKEY nu sunt configurate în .env",
-        torrents: [],
-      };
-    }
-
-    const category: FilelistCategory = data.mediaType === "movie" ? "movies" : "series";
-    const original = stripDiacritics(data.originalTitle || "").trim();
-    const english = stripDiacritics(data.title || "").trim();
-
-    const cacheKey = `${category}|${data.imdbId ?? ""}|${original}|${english}`;
-    const cached = filelistCheckCache.get(cacheKey);
-    if (cached && cached.expiresAt > Date.now()) return cached.result;
-
-    const nameQueries = [original, english].filter(
-      (q, i, arr) => q.length > 0 && arr.indexOf(q) === i,
-    );
-    if (nameQueries.length === 0 && !data.imdbId) return { status: "ok", torrents: [] };
-
-    try {
-      let found: FilelistTorrent[] = [];
-
-      if (data.imdbId) {
-        const byImdb = await searchFilelistRaw(data.imdbId, category, "imdb");
-        found = byImdb.map((t) => ({ ...t, matchedByImdb: true }));
-      }
-
-      for (const q of nameQueries) {
-        if (found.length > 0) break;
-        const byName = await searchFilelistRaw(q, category, "name");
-        found = byName
-          .filter((t) => torrentMatchesTitle(t.name, original) || torrentMatchesTitle(t.name, english))
-          .map((t) => ({ ...t, matchedByImdb: !!(t.imdb && data.imdbId && t.imdb === data.imdbId) }));
-      }
-
-      found.sort((a, b) => {
-        const da = a.upload_date ? new Date(a.upload_date).getTime() : 0;
-        const db = b.upload_date ? new Date(b.upload_date).getTime() : 0;
-        return db - da;
-      });
-
-      const result: FilelistSearchResult = { status: "ok", torrents: found };
-      filelistCheckCache.set(cacheKey, { expiresAt: Date.now() + FILELIST_CHECK_CACHE_TTL, result });
-      return result;
-    } catch (e) {
-      return { status: "error", error: e instanceof Error ? e.message : String(e), torrents: [] };
-    }
+    return checkFilelistForItemInternal(data);
   });
 
 // ---------------------------------------------------------------------------

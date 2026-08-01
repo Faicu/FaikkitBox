@@ -17,7 +17,9 @@ import type { FilelistTorrent } from "@/lib/filelist.functions";
 import type { PinnedItem } from "./types";
 import { groupTorrentsBySeasonEpisode } from "./utils";
 import { useDownload } from "./hooks";
-import { PlexStatusBadge, CountdownDisplay, LibraryBadge, type TvPlexStatus } from "./badges";
+import { CountdownDisplay, LibraryBadge } from "./badges";
+import { PlexStatusBadge } from "./PlexStatusBadge";
+import type { TvPlexStatus } from "./plex-status";
 import { WatchTogglePanel } from "./WatchTogglePanel";
 import { SeasonPanel } from "./SeasonPanel";
 
