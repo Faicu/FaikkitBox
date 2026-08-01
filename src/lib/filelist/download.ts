@@ -108,6 +108,16 @@ async function plexRefreshLibrary(sectionKey: string): Promise<void> {
   }
 }
 
+// Rescanează secțiunea Plex corespunzătoare categoriei unui torrent — folosit
+// atât la finalizarea unei descărcări (pollUntilComplete), cât și la
+// ștergerea unei intrări din jurnal (deleteFilelistLogEntry, log.ts), ca
+// biblioteca Plex să reflecte imediat fișierele șterse de pe disk.
+export async function refreshPlexLibraryForCategory(category: number): Promise<void> {
+  const plexType = isMovieCategory(category) ? "movie" : "show";
+  const sectionKey = await plexFindLibraryKey(plexType);
+  if (sectionKey) await plexRefreshLibrary(sectionKey);
+}
+
 async function plexFindLibraryKey(type: "movie" | "show"): Promise<string | null> {
   const base = process.env.PLEX_URL ?? "http://127.0.0.1:32400";
   const token = process.env.PLEX_TOKEN;
@@ -389,8 +399,12 @@ export async function checkFilelistForItemInternal(data: {
 
     for (const q of nameQueries) {
       if (found.length > 0) break;
-      const via: "original_title" | "english_title" =
-        q === original ? "original_title" : "english_title";
+      const via: "original_title" | "english_title" | "titles_match" =
+        original && original === english
+          ? "titles_match"
+          : q === original
+            ? "original_title"
+            : "english_title";
       const byName = await searchFilelistRaw(q, category, "name");
       found = byName
         .filter(

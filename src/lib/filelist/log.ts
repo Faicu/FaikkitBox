@@ -97,14 +97,19 @@ export const deleteFilelistLogEntry = createServerFn({ method: "POST" })
       const { getDb } = await import("../db");
       const db = getDb();
 
-      // Obținem hash-ul torrentului înainte de ștergere
-      const row = db.prepare("SELECT torrent_hash FROM downloads WHERE id = ?").get(data.id) as
-        { torrent_hash: string | null } | undefined;
+      // Obținem hash-ul + categoria torrentului înainte de ștergere (categoria
+      // ne trebuie după ștergere, ca să știm ce secțiune Plex să rescanăm)
+      const row = db
+        .prepare("SELECT torrent_hash, category FROM downloads WHERE id = ?")
+        .get(data.id) as { torrent_hash: string | null; category: number | null } | undefined;
       const torrentHash = row?.torrent_hash ?? null;
+      const category = row?.category ?? null;
 
       db.prepare("DELETE FROM downloads WHERE id = ?").run(data.id);
 
-      // Ștergem și din qBittorrent (cu fișierele de pe disk)
+      // Ștergem și din qBittorrent (cu fișierele de pe disk) — înainte de
+      // rescanarea Plex de mai jos, ca fișierele să fie deja șterse de pe
+      // disk când Plex face scanarea, nu invers.
       let qbitDeleted = false;
       if (torrentHash) {
         try {
@@ -122,6 +127,13 @@ export const deleteFilelistLogEntry = createServerFn({ method: "POST" })
         } catch (e) {
           console.warn("[filelist] Nu am putut șterge din qBit:", e);
         }
+      }
+
+      // Rescanează biblioteca Plex (filme sau seriale, după categorie) — ca
+      // fișierul șters să dispară din Plex fără să aștepți scanarea automată.
+      if (category !== null) {
+        const { refreshPlexLibraryForCategory } = await import("./download");
+        refreshPlexLibraryForCategory(category).catch(() => {});
       }
 
       return { ok: true, qbitDeleted };

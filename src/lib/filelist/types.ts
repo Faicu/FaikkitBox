@@ -20,7 +20,10 @@ export interface FilelistTorrent {
   // ordinea în care checkFilelistForItemInternal le încearcă. Absent pentru
   // rezultate care nu trec prin acel flux (ex. căutarea manuală din
   // secțiunea Filelist a paginii Lansări).
-  matchedVia?: "imdb" | "original_title" | "english_title";
+  // "titles_match" = titlul original și cel englez/internațional sunt
+  // identice pentru acest titlu (ex. producții deja în limba engleză) — nu
+  // are sens să pretindem că unul a "câștigat" în fața celuilalt.
+  matchedVia?: "imdb" | "original_title" | "english_title" | "titles_match";
   // Textul exact folosit ca query pentru criteriul de mai sus.
   matchedQuery?: string;
 }

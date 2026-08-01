@@ -13,6 +13,16 @@ import { formatBytes } from "@/lib/format";
 function matchInfoText(torrent: FilelistTorrent): string | null {
   if (!torrent.matchedVia) return null;
 
+  if (torrent.matchedVia === "titles_match") {
+    let text = "Titlul original și titlul englez/internațional sunt identice pentru acest titlu";
+    if (torrent.matchedQuery) text += `: "${torrent.matchedQuery}"`;
+    text +=
+      ". Găsit pe Filelist prin potrivire de text în numele lansării (nu are ID IMDB pe Filelist" +
+      (torrent.imdb ? ", deși are unul asociat: " + torrent.imdb : "") +
+      ").";
+    return text;
+  }
+
   const criteriuLabel =
     torrent.matchedVia === "imdb"
       ? "IMDB ID"
