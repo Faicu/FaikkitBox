@@ -202,6 +202,37 @@ function runCleanups(database: DatabaseSync): void {
       }
       database.exec("PRAGMA user_version = 3");
     }
+
+    if (version < 4) {
+      // v4: error_log capătă grupare (count/last_seen) și nivel (warn/error)
+      try {
+        database.exec("ALTER TABLE error_log ADD COLUMN level TEXT NOT NULL DEFAULT 'error'");
+        console.log("[db] Migrare v4: adăugat error_log.level");
+      } catch {
+        // coloana există deja dintr-o rulare anterioară
+      }
+      try {
+        database.exec("ALTER TABLE error_log ADD COLUMN count INTEGER NOT NULL DEFAULT 1");
+        console.log("[db] Migrare v4: adăugat error_log.count");
+      } catch {
+        // coloana există deja dintr-o rulare anterioară
+      }
+      try {
+        database.exec("ALTER TABLE error_log ADD COLUMN last_seen TEXT");
+        database.exec("UPDATE error_log SET last_seen = timestamp WHERE last_seen IS NULL");
+        console.log("[db] Migrare v4: adăugat error_log.last_seen");
+      } catch {
+        // coloana există deja dintr-o rulare anterioară
+      }
+      try {
+        database.exec(
+          "CREATE INDEX IF NOT EXISTS idx_error_log_group ON error_log(source, level, message)",
+        );
+      } catch {
+        // există deja
+      }
+      database.exec("PRAGMA user_version = 4");
+    }
   } catch (e) {
     console.warn("[db] Curățare eșuată:", e);
   }

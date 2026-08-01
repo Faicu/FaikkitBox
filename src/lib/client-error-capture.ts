@@ -5,7 +5,7 @@
 // window.onerror/unhandledrejection din __root.tsx (acelea prind doar
 // excepțiile neprinse, nu erorile tratate explicit cu try/catch).
 
-import { logClientError } from "./error-log";
+import { logClientError, type ErrorLevel } from "./error-log";
 
 let installed = false;
 let suppressDepth = 0;
@@ -22,7 +22,7 @@ export function withoutClientCapture<T>(fn: () => T): T {
   }
 }
 
-function report(args: unknown[]): void {
+function report(args: unknown[], level: ErrorLevel): void {
   if (suppressDepth > 0) return;
   suppressDepth++;
   try {
@@ -30,7 +30,7 @@ function report(args: unknown[]): void {
     const message =
       found?.message ?? args.map((a) => (typeof a === "string" ? a : String(a))).join(" ");
     const stack = found?.stack;
-    logClientError({ data: { message, stack } }).catch(() => {});
+    logClientError({ data: { message, stack, level } }).catch(() => {});
   } finally {
     suppressDepth--;
   }
@@ -45,11 +45,11 @@ export function installClientErrorCapture(): () => void {
 
   console.error = (...args: unknown[]) => {
     originalError(...args);
-    report(args);
+    report(args, "error");
   };
   console.warn = (...args: unknown[]) => {
     originalWarn(...args);
-    report(args);
+    report(args, "warn");
   };
 
   restoreFns = () => {

@@ -12,6 +12,7 @@ import {
   Bell,
   Activity,
   GitCommitHorizontal,
+  AlertTriangle,
 } from "lucide-react";
 
 import { activityLogQuery, recentCommitsQuery, commitsFromDbQuery } from "@/lib/queries";
@@ -33,6 +34,7 @@ const FILTER_GROUPS: { key: string; label: string }[] = [
   { key: "updates", label: "Updates" },
   { key: "commits", label: "Commits" },
   { key: "lansari", label: "Lansări" },
+  { key: "erori", label: "Erori" },
 ];
 
 const TYPE_TO_GROUP: Record<string, string> = {
@@ -48,6 +50,7 @@ const TYPE_TO_GROUP: Record<string, string> = {
   service_update: "updates",
   ubuntu_update: "updates",
   pinned_update: "lansari",
+  app_error: "erori",
 };
 
 export function ActivityLogSection() {
@@ -71,6 +74,7 @@ export function ActivityLogSection() {
     ubuntu_update: <Package className="h-3.5 w-3.5 text-orange-400" />,
     qbit_action: <Download className="h-3.5 w-3.5 text-sky-400" />,
     pinned_update: <Bell className="h-3.5 w-3.5 text-sky-400" />,
+    app_error: <AlertTriangle className="h-3.5 w-3.5 text-red-400" />,
   };
 
   const timeline: TimelineItem[] = [

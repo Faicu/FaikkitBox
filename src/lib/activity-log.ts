@@ -17,7 +17,8 @@ export type ActivityType =
   | "service_update"
   | "ubuntu_update"
   | "qbit_action"
-  | "pinned_update";
+  | "pinned_update"
+  | "app_error";
 
 export type JsonValue = string | number | boolean | null | undefined;
 
@@ -49,6 +50,7 @@ const PUSH_TITLES: Record<ActivityType, string> = {
   // mai specifice pentru evenimentele de pinned_update, deci logActivity nu
   // trebuie să mai trimită unul generic pentru acest tip.
   pinned_update: "",
+  app_error: "⚠️ Eroare aplicație",
 };
 
 export async function logActivity(

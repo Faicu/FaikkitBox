@@ -63,7 +63,7 @@ export function installConsoleErrorCapture(): void {
     if (suppressDepth > 0 || isNodeRuntimeWarning(args)) return;
     suppressDepth++;
     try {
-      logError("server-fn", toError(args));
+      logError("server-fn", toError(args), "error");
     } finally {
       suppressDepth--;
     }
@@ -74,7 +74,7 @@ export function installConsoleErrorCapture(): void {
     if (suppressDepth > 0 || isNodeRuntimeWarning(args)) return;
     suppressDepth++;
     try {
-      logError("server-fn", toError(args));
+      logError("server-fn", toError(args), "warn");
     } finally {
       suppressDepth--;
     }
