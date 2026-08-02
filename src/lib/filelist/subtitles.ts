@@ -17,12 +17,54 @@
 
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { join, dirname, basename, extname } from "node:path";
+import iconv from "iconv-lite";
 import { qbitGet, qbitListFiles, qbitRenameFile, type QbitFileInfo } from "../qbit-client";
 import { searchSubtitles, downloadSubtitle, type OpenSubtitlesResult } from "../opensubtitles-client";
 
 const execFileAsync = promisify(execFile);
+
+// Plex citește .srt-urile externe ca UTF-8, fără detecție de encoding —
+// subtitrările românești vechi (mai ales cele care vin direct în torrent,
+// nu de pe OpenSubtitles) sunt frecvent Windows-1250, ceea ce corupe
+// diacriticele în Plex. Verificăm strict dacă bytes-ii sunt deja UTF-8
+// valid; dacă nu, presupunem Windows-1250 (cea mai comună codare pentru
+// subtitrări românești salvate din Notepad pe Windows) și convertim.
+const FALLBACK_ENCODING = "windows-1250";
+
+function isValidUtf8(buf: Buffer): boolean {
+  try {
+    new TextDecoder("utf-8", { fatal: true }).decode(buf);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function decodeToUtf8Text(buf: Buffer): { text: string; wasConverted: boolean } {
+  if (isValidUtf8(buf)) return { text: buf.toString("utf8"), wasConverted: false };
+  return { text: iconv.decode(buf, FALLBACK_ENCODING), wasConverted: true };
+}
+
+// Verifică (și corectează, dacă e cazul) encoding-ul unui .srt deja scris pe
+// disc — folosit pentru fișierele care vin cu torrentul (nu descărcate de
+// noi, deci nu le controlăm bytes-ii din start). Scrierea se face direct pe
+// disc, în afara API-ului qBittorrent: schimbă doar conținutul, nu calea,
+// deci nu afectează evidența fișierelor din qBittorrent (spre deosebire de
+// redenumire, care trebuie mereu prin API).
+async function ensureUtf8SrtOnDisk(absPath: string): Promise<boolean> {
+  try {
+    const buf = await readFile(absPath);
+    const { text, wasConverted } = decodeToUtf8Text(buf);
+    if (!wasConverted) return false;
+    await writeFile(absPath, text, "utf8");
+    return true;
+  } catch (e) {
+    console.warn(`[subtitles] Verificare/conversie UTF-8 eșuată pentru ${absPath}:`, e);
+    return false;
+  }
+}
 
 const MEDIA_EXTENSIONS = [".mkv", ".mp4", ".avi", ".m2ts", ".ts", ".wmv", ".mov"];
 const ROMANIAN_LANG_CODES = ["ro", "rum", "ron"];
@@ -40,6 +82,7 @@ interface EnsureRomanianSubtitleParams {
 export type SubtitleOutcome =
   | "already_embedded"
   | "renamed_srt"
+  | "reencoded_srt"
   | "downloaded_opensubtitles"
   | "downloaded_opensubtitles_approximate"
   | "multiple_srt_skipped"
@@ -103,19 +146,16 @@ export async function ensureRomanianSubtitle(
   const srtFiles = files.filter((f) => f.name.toLowerCase().endsWith(".srt"));
 
   // Caz 2: exact un .srt în torrent, deja identificabil ca subtitrarea
-  // filmului/episodului — doar trebuie redenumit după convenția Plex.
+  // filmului/episodului — trebuie redenumit după convenția Plex (dacă e
+  // cazul) și verificat/convertit la UTF-8 (dacă e cazul) — altfel Plex
+  // afișează diacriticele corupte, indiferent dacă numele e corect.
   if (srtFiles.length === 1) {
     const current = srtFiles[0];
-    if (current.name !== targetSrtRelPath) {
+    const needsRename = current.name !== targetSrtRelPath;
+    if (needsRename) {
       try {
         await qbitRenameFile(qbitUrl, torrentHash, current.name, targetSrtRelPath, qbitUser, qbitPass);
         console.log(`[subtitles] "${torrentName}": .srt redenumit → ${targetSrtRelPath}`);
-        return item(
-          torrentName,
-          "renamed_srt",
-          `.srt redenumit din "${current.name}" în "${targetSrtRelPath}" ca Plex să-l recunoască drept română`,
-          { path: targetSrtRelPath },
-        );
       } catch (e) {
         console.warn(`[subtitles] "${torrentName}": redenumire .srt eșuată:`, e);
         return item(
@@ -125,7 +165,29 @@ export async function ensureRomanianSubtitle(
         );
       }
     }
-    return item(torrentName, "already_embedded", "are deja un .srt denumit corect pentru Plex");
+
+    const finalAbsPath = join(savePath, targetSrtRelPath);
+    const wasReencoded = await ensureUtf8SrtOnDisk(finalAbsPath);
+    if (wasReencoded) {
+      console.log(`[subtitles] "${torrentName}": .srt convertit la UTF-8 → ${targetSrtRelPath}`);
+    }
+
+    if (!needsRename && !wasReencoded) {
+      return item(torrentName, "already_embedded", "are deja un .srt denumit corect și codat UTF-8");
+    }
+
+    const parts: string[] = [];
+    if (needsRename) {
+      parts.push(`.srt redenumit din "${current.name}" în "${targetSrtRelPath}" ca Plex să-l recunoască drept română`);
+    }
+    if (wasReencoded) {
+      parts.push(
+        "conținutul a fost convertit la UTF-8 (era codat altfel — diacriticele ar fi apărut corupte în Plex)",
+      );
+    }
+    return item(torrentName, needsRename ? "renamed_srt" : "reencoded_srt", parts.join("; "), {
+      path: targetSrtRelPath,
+    });
   }
 
   // Mai multe .srt-uri — probabil deja există unul cu limba corectă marcată
@@ -174,13 +236,17 @@ export async function ensureRomanianSubtitle(
 
   const destPath = join(savePath, mediaDir === "." ? "" : mediaDir, `${mediaBaseName}.ro.srt`);
   try {
-    await writeFile(destPath, content, "utf8");
+    const { text, wasConverted } = decodeToUtf8Text(content);
+    await writeFile(destPath, text, "utf8");
+    const encodingNote = wasConverted
+      ? " (conținutul original nu era UTF-8, a fost convertit — altfel diacriticele apăreau corupte în Plex)"
+      : "";
     if (best.confident) {
       console.log(`[subtitles] "${torrentName}": subtitrare OpenSubtitles salvată → ${destPath}`);
       return item(
         torrentName,
         "downloaded_opensubtitles",
-        `subtitrare descărcată de pe OpenSubtitles (release "${best.result.release}", potrivire sursă+rezoluție confirmată) → ${destPath}`,
+        `subtitrare descărcată de pe OpenSubtitles (release "${best.result.release}", potrivire sursă+rezoluție confirmată) → ${destPath}${encodingNote}`,
         { release: best.result.release, path: destPath },
       );
     } else {
@@ -190,7 +256,7 @@ export async function ensureRomanianSubtitle(
       return item(
         torrentName,
         "downloaded_opensubtitles_approximate",
-        `subtitrare aproximativă descărcată de pe OpenSubtitles (release "${best.result.release}", fără potrivire clară de sursă/rezoluție) → ${destPath} — verifică sincronizarea`,
+        `subtitrare aproximativă descărcată de pe OpenSubtitles (release "${best.result.release}", fără potrivire clară de sursă/rezoluție) → ${destPath} — verifică sincronizarea${encodingNote}`,
         { release: best.result.release, path: destPath },
       );
     }
@@ -217,6 +283,7 @@ export type SubtitleRunTrigger = "download" | "backfill";
 // seriale) trebuie declanșat refresh Plex.
 export const CORRECTED_OUTCOMES: SubtitleOutcome[] = [
   "renamed_srt",
+  "reencoded_srt",
   "downloaded_opensubtitles",
   "downloaded_opensubtitles_approximate",
 ];

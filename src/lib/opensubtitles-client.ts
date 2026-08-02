@@ -109,8 +109,13 @@ export async function searchSubtitles(
 }
 
 // Descarcă conținutul unei subtitrări identificate prin fileId (returnat de
-// searchSubtitles). Returnează null la orice eroare.
-export async function downloadSubtitle(fileId: number): Promise<string | null> {
+// searchSubtitles). Întoarce bytes bruți (Buffer), nu text — fișierele .srt
+// de pe OpenSubtitles nu sunt garantat UTF-8 (frecvent Windows-1250/ISO-8859-2
+// la subtitrări românești), deci decodarea/conversia se face separat
+// (ensureUtf8Srt, src/lib/filelist/subtitles.ts) după ce avem bytes-ii exacți
+// — un `.text()` aici ar presupune greșit UTF-8 și ar corupe diacriticele.
+// Returnează null la orice eroare.
+export async function downloadSubtitle(fileId: number): Promise<Buffer | null> {
   const key = apiKey();
   if (!key) return null;
 
@@ -133,7 +138,7 @@ export async function downloadSubtitle(fileId: number): Promise<string | null> {
 
     const fileRes = await fetch(data.link, { signal: AbortSignal.timeout(20_000) });
     if (!fileRes.ok) return null;
-    return await fileRes.text();
+    return Buffer.from(await fileRes.arrayBuffer());
   } catch {
     return null;
   }

@@ -19,6 +19,7 @@ interface SubtitleRunItemMeta {
 
 const CORRECTED_OUTCOMES = new Set([
   "renamed_srt",
+  "reencoded_srt",
   "downloaded_opensubtitles",
   "downloaded_opensubtitles_approximate",
 ]);
