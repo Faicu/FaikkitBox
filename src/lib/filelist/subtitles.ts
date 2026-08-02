@@ -23,6 +23,7 @@ import iconv from "iconv-lite";
 import { qbitGet, qbitListFiles, qbitRenameFile } from "../qbit-client";
 import { searchSubtitles, downloadSubtitle, type OpenSubtitlesResult } from "../opensubtitles-client";
 import { type SubtitleOutcome, CORRECTED_OUTCOMES, OK_OUTCOMES, SHORT_LABELS } from "./subtitle-outcomes";
+import { lookupTitleByImdbId } from "../tmdb-title-lookup";
 
 export type { SubtitleOutcome };
 
@@ -86,6 +87,11 @@ interface EnsureRomanianSubtitleParams {
 // rulare, fie o descărcare, fie un backfill întreg) se face în logSubtitleRun.
 export interface SubtitleRunItem {
   torrentName: string;
+  // Titlul filmului/serialului (via TMDB, pornind de la IMDb id) — folosit
+  // pentru afișare în jurnal/push, în loc de numele tehnic al lansării
+  // (ex. "The.Death.of.Robin.Hood.2026.1080p.AMZN.WEB-DL..."). Cade pe
+  // torrentName când nu avem IMDb id sau căutarea TMDB eșuează.
+  displayTitle: string;
   outcome: SubtitleOutcome;
   detail: string;
   release?: string;
@@ -94,11 +100,12 @@ export interface SubtitleRunItem {
 
 function item(
   torrentName: string,
+  displayTitle: string,
   outcome: SubtitleOutcome,
   detail: string,
   extra?: { release?: string; path?: string },
 ): SubtitleRunItem {
-  return { torrentName, outcome, detail, ...extra };
+  return { torrentName, displayTitle, outcome, detail, ...extra };
 }
 
 export async function ensureRomanianSubtitle(
@@ -106,17 +113,19 @@ export async function ensureRomanianSubtitle(
 ): Promise<SubtitleRunItem> {
   const { qbitUrl, qbitUser, qbitPass, torrentHash, torrentName } = params;
 
-  const [files, savePath] = await Promise.all([
+  const [files, savePath, tmdbTitle] = await Promise.all([
     qbitListFiles(qbitUrl, torrentHash, qbitUser, qbitPass),
     getTorrentSavePath(qbitUrl, torrentHash, qbitUser, qbitPass),
+    params.imdbId ? lookupTitleByImdbId(params.imdbId) : Promise.resolve(null),
   ]);
+  const displayTitle = tmdbTitle ?? torrentName;
   if (!files.length || !savePath) {
-    return item(torrentName, "no_media_file", "nu am putut lista fișierele torrentului în qBittorrent");
+    return item(torrentName, displayTitle, "no_media_file", "nu am putut lista fișierele torrentului în qBittorrent");
   }
 
   const mediaFiles = files.filter((f) => MEDIA_EXTENSIONS.includes(extname(f.name).toLowerCase()));
   if (!mediaFiles.length) {
-    return item(torrentName, "no_media_file", "niciun fișier media recunoscut în torrent");
+    return item(torrentName, displayTitle, "no_media_file", "niciun fișier media recunoscut în torrent");
   }
   // Torrent cu mai multe episoade ("season pack") — nu avem cum să știm
   // sigur cărui episod îi aparține un .srt găsit, iar asocierea greșită
@@ -125,6 +134,7 @@ export async function ensureRomanianSubtitle(
   if (mediaFiles.length > 1) {
     return item(
       torrentName,
+      displayTitle,
       "season_pack_skipped",
       `torrent cu ${mediaFiles.length} fișiere media (probabil pachet de episoade) — sar peste, nu pot asocia sigur subtitrarea cu episodul corect`,
     );
@@ -140,6 +150,7 @@ export async function ensureRomanianSubtitle(
   if (hasEmbeddedRomanian) {
     return item(
       torrentName,
+      displayTitle,
       "already_embedded",
       "are deja subtitrare română încorporată în fișierul media — nimic de făcut",
     );
@@ -162,6 +173,7 @@ export async function ensureRomanianSubtitle(
         console.warn(`[subtitles] "${torrentName}": redenumire .srt eșuată:`, e);
         return item(
           torrentName,
+          displayTitle,
           "download_failed",
           `redenumirea .srt a eșuat: ${e instanceof Error ? e.message : e}`,
         );
@@ -175,7 +187,7 @@ export async function ensureRomanianSubtitle(
     }
 
     if (!needsRename && !wasReencoded) {
-      return item(torrentName, "srt_already_ok", "are deja un .srt denumit corect și codat UTF-8");
+      return item(torrentName, displayTitle, "srt_already_ok", "are deja un .srt denumit corect și codat UTF-8");
     }
 
     const parts: string[] = [];
@@ -185,7 +197,7 @@ export async function ensureRomanianSubtitle(
     if (wasReencoded) {
       parts.push("conținut convertit la UTF-8 (era codat altfel — diacriticele ar fi ieșit corupte în Plex)");
     }
-    return item(torrentName, needsRename ? "renamed_srt" : "reencoded_srt", parts.join("; "), {
+    return item(torrentName, displayTitle, needsRename ? "renamed_srt" : "reencoded_srt", parts.join("; "), {
       path: targetSrtRelPath,
     });
   }
@@ -195,6 +207,7 @@ export async function ensureRomanianSubtitle(
   if (srtFiles.length > 1) {
     return item(
       torrentName,
+      displayTitle,
       "multiple_srt_skipped",
       `conține ${srtFiles.length} fișiere .srt — sar peste, posibil deja etichetate corect pe limbi`,
     );
@@ -205,6 +218,7 @@ export async function ensureRomanianSubtitle(
     console.warn(`[subtitles] "${torrentName}": fără IMDb id, nu pot căuta pe OpenSubtitles`);
     return item(
       torrentName,
+      displayTitle,
       "no_imdb",
       "fără subtitrare și fără IMDb id disponibil — nu pot căuta pe OpenSubtitles",
     );
@@ -214,6 +228,7 @@ export async function ensureRomanianSubtitle(
   if (!results.length) {
     return item(
       torrentName,
+      displayTitle,
       "no_subtitle_found",
       `niciun rezultat pe OpenSubtitles pentru IMDb ${params.imdbId}`,
     );
@@ -221,7 +236,7 @@ export async function ensureRomanianSubtitle(
 
   const best = pickBestSubtitle(results, torrentName);
   if (!best) {
-    return item(torrentName, "no_subtitle_found", "niciun rezultat OpenSubtitles utilizabil");
+    return item(torrentName, displayTitle, "no_subtitle_found", "niciun rezultat OpenSubtitles utilizabil");
   }
 
   const content = await downloadSubtitle(best.result.fileId);
@@ -229,6 +244,7 @@ export async function ensureRomanianSubtitle(
     console.warn(`[subtitles] "${torrentName}": descărcare OpenSubtitles eșuată`);
     return item(
       torrentName,
+      displayTitle,
       "download_failed",
       `descărcarea subtitrării de pe OpenSubtitles (release "${best.result.release}") a eșuat`,
     );
@@ -243,6 +259,7 @@ export async function ensureRomanianSubtitle(
       console.log(`[subtitles] "${torrentName}": subtitrare OpenSubtitles salvată → ${destPath}`);
       return item(
         torrentName,
+        displayTitle,
         "downloaded_opensubtitles",
         `subtitrare descărcată de pe OpenSubtitles, release „${best.result.release}" (potrivire sursă+rezoluție confirmată)${encodingNote}`,
         { release: best.result.release, path: destPath },
@@ -253,6 +270,7 @@ export async function ensureRomanianSubtitle(
       );
       return item(
         torrentName,
+        displayTitle,
         "downloaded_opensubtitles_approximate",
         `subtitrare aproximativă descărcată de pe OpenSubtitles, release „${best.result.release}" (fără potrivire clară de sursă/rezoluție — verifică sincronizarea)${encodingNote}`,
         { release: best.result.release, path: destPath },
@@ -262,6 +280,7 @@ export async function ensureRomanianSubtitle(
     console.warn(`[subtitles] "${torrentName}": scriere .srt eșuată:`, e);
     return item(
       torrentName,
+      displayTitle,
       "download_failed",
       `scrierea subtitrării descărcate pe disk a eșuat: ${e instanceof Error ? e.message : e}`,
     );
@@ -291,7 +310,7 @@ export async function logSubtitleRun(
 
   const message =
     trigger === "download"
-      ? `${items[0].torrentName}: ${SHORT_LABELS[items[0].outcome]}`
+      ? `${items[0].displayTitle}: ${SHORT_LABELS[items[0].outcome]}`
       : `Backfill subtitrări: ${items.length} verificate — ${corrected} corectate, ${ok} deja ok, ${rest} sărite/eșuate`;
 
   // La o descărcare unică, dacă n-a fost nevoie de nicio intervenție
@@ -314,6 +333,7 @@ export async function logSubtitleRun(
         byOutcome: Object.entries(byOutcome).map(([outcome, count]) => ({ outcome, count })),
         items: items.map((it) => ({
           torrentName: it.torrentName,
+          displayTitle: it.displayTitle,
           outcome: it.outcome,
           detail: it.detail,
           release: it.release,

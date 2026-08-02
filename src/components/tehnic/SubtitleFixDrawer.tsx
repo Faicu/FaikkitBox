@@ -16,6 +16,7 @@ import {
 
 interface SubtitleRunItemMeta {
   torrentName: string;
+  displayTitle?: string;
   outcome: string;
   detail: string;
   release?: string;
@@ -105,7 +106,14 @@ export function SubtitleFixDrawer({
                 <div key={`${it.torrentName}-${i}`} className="flex items-start gap-2 px-3 py-2 text-xs">
                   {outcomeIcon(it.outcome)}
                   <div className="min-w-0 flex-1">
-                    <div className="font-medium break-words text-foreground">{it.torrentName}</div>
+                    <div className="font-medium break-words text-foreground">
+                      {it.displayTitle || it.torrentName}
+                    </div>
+                    {it.displayTitle && it.displayTitle !== it.torrentName && (
+                      <div className="mt-0.5 text-[10px] text-muted-foreground/70 break-words font-mono">
+                        {it.torrentName}
+                      </div>
+                    )}
                     <div className="mt-0.5 text-muted-foreground break-words">{it.detail}</div>
                   </div>
                 </div>
