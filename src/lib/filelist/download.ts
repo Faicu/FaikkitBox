@@ -21,7 +21,11 @@ import {
 import { qbitLogin, qbitEnsureCookie, resetQbitCookie } from "../qbit-client";
 import { readDownloadLog, appendDownloadLog, markLogEntryComplete } from "./log";
 import { stripDiacritics, torrentMatchesTitle } from "./match";
-import { ensureRomanianSubtitle } from "./subtitles";
+// Import dinamic (nu static) — subtitles.ts foloseşte node:child_process/node:util
+// pentru ffprobe, care nu trebuie să ajungă în bundle-ul de client. download.ts
+// e statically importat de filelist.functions.ts, folosit și din componente
+// client (hooks.ts, DownloadLogSection.tsx), deci orice import static de aici
+// se poate scurge în bundle-ul browserului.
 
 // ---------------------------------------------------------------------------
 // Background polling: verifică progresul torrentului și refresh Plex la final
@@ -79,15 +83,20 @@ async function pollUntilComplete(
               }),
             )
             .catch(() => {});
-          await ensureRomanianSubtitle({
-            qbitUrl,
-            cookie,
-            qbitUser,
-            qbitPass,
-            torrentHash,
-            torrentName,
-            imdbId,
-          }).catch((e) => console.warn(`[filelist] Eroare subtitrare pentru "${torrentName}":`, e));
+          try {
+            const { ensureRomanianSubtitle } = await import("./subtitles");
+            await ensureRomanianSubtitle({
+              qbitUrl,
+              cookie,
+              qbitUser,
+              qbitPass,
+              torrentHash,
+              torrentName,
+              imdbId,
+            });
+          } catch (e) {
+            console.warn(`[filelist] Eroare subtitrare pentru "${torrentName}":`, e);
+          }
           await refreshPlexLibrary(plexType);
           console.log(`[filelist] Plex refresh trimis pentru "${plexType}"`);
         } else {
@@ -743,6 +752,7 @@ export const backfillSubtitles = createServerFn({ method: "POST" }).handler(
 
     const log = await readDownloadLog();
     const entries = log.filter((e) => e.completedAt !== null && e.torrentHash);
+    const { ensureRomanianSubtitle } = await import("./subtitles");
 
     let processed = 0;
     let skipped = 0;
