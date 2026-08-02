@@ -236,10 +236,20 @@ export async function checkAll(force = false): Promise<void> {
                 body: torrentLabel,
               });
 
-              // Auto-download: cel mai bun torrent din calitatea dorită
+              // Auto-download: cel mai bun torrent din calitatea dorită —
+              // DOAR dintre cele confirmate prin IMDb ID (matchedByImdb).
+              // Torrentele găsite doar prin potrivire de text pe titlu pot fi
+              // alt film/serial cu nume asemănător (ex. un documentar
+              // "making of" al aceluiași titlu) — prea riscant pentru o
+              // descărcare pornită fără confirmare umană.
               if (item.auto_download) {
                 const quality = item.auto_download_quality || "1080p";
-                const candidates = toNotify.filter((t) => detectTorrentQuality(t.name) === quality);
+                const unconfirmedExists = toNotify.some(
+                  (t) => detectTorrentQuality(t.name) === quality && !t.matchedByImdb,
+                );
+                const candidates = toNotify.filter(
+                  (t) => detectTorrentQuality(t.name) === quality && t.matchedByImdb,
+                );
                 const best = candidates.sort((a, b) => b.seeders - a.seeders)[0];
                 if (best) {
                   try {
@@ -268,6 +278,10 @@ export async function checkAll(force = false): Promise<void> {
                   } catch (e) {
                     console.warn("[pinned-watcher] Eroare auto-download:", e);
                   }
+                } else if (unconfirmedExists) {
+                  console.log(
+                    `[pinned-watcher] Auto-download sărit pentru "${item.title}": există torrent ${quality}, dar niciunul confirmat prin IMDb ID`,
+                  );
                 } else {
                   console.log(`[pinned-watcher] Auto-download: niciun torrent ${quality} găsit`);
                 }
