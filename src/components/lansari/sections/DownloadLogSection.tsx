@@ -11,11 +11,12 @@ import {
   CheckCircle2,
   Loader2,
   Trash2,
+  Captions,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import { filelistLogQuery } from "@/lib/queries";
-import { deleteFilelistLogEntry } from "@/lib/filelist.functions";
+import { deleteFilelistLogEntry, backfillSubtitles } from "@/lib/filelist.functions";
 import type { FilelistLogEntry } from "@/lib/filelist.functions";
 import { isMovieCategory } from "@/lib/filelist/categories";
 import { formatBytes } from "@/lib/format";
@@ -34,12 +35,38 @@ export function DownloadLogSection() {
   const queryClient = useQueryClient();
   const { data: log, isLoading } = useQuery(filelistLogQuery);
   const deleteFn = useServerFn(deleteFilelistLogEntry);
+  const backfillFn = useServerFn(backfillSubtitles);
   const [visibleCount, setVisibleCount] = useState(3);
+  const [backfilling, setBackfilling] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<{
     id: number;
     name: string;
     hasHash: boolean;
   } | null>(null);
+
+  async function runBackfill() {
+    setBackfilling(true);
+    const toastId = toast.loading("Verific subtitrările pentru descărcările vechi…");
+    try {
+      const res = await backfillFn({});
+      if (res.status === "ok") {
+        toast.success("Subtitrări verificate", {
+          id: toastId,
+          description: `${res.processed} procesate, ${res.skipped} sărite`,
+          duration: 6000,
+        });
+      } else {
+        toast.error("Eroare la verificarea subtitrărilor", { id: toastId, description: res.error });
+      }
+    } catch (e) {
+      toast.error("Eroare neașteptată", {
+        id: toastId,
+        description: e instanceof Error ? e.message : String(e),
+      });
+    } finally {
+      setBackfilling(false);
+    }
+  }
 
   async function confirmDelete() {
     if (!pendingDelete) return;
@@ -58,8 +85,23 @@ export function DownloadLogSection() {
 
   return (
     <div className="mt-3">
-      <h3 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
-        <History className="h-3.5 w-3.5" /> Ultimele torrente descărcate
+      <h3 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center justify-between gap-1">
+        <span className="flex items-center gap-1">
+          <History className="h-3.5 w-3.5" /> Ultimele torrente descărcate
+        </span>
+        <button
+          onClick={runBackfill}
+          disabled={backfilling}
+          className="flex items-center gap-1 rounded-lg px-1.5 py-1 normal-case tracking-normal text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors disabled:opacity-50"
+          title="Verifică/corectează subtitrarea română pentru toate descărcările din jurnal"
+        >
+          {backfilling ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Captions className="h-3.5 w-3.5" />
+          )}
+          Corectează subtitrări
+        </button>
       </h3>
       <div className="rounded-2xl border border-border bg-card p-3">
         <div className="divide-y divide-border/60">

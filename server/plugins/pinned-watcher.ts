@@ -262,6 +262,7 @@ export async function checkAll(force = false): Promise<void> {
                       freeleech: best.freeleech,
                       internal: best.internal,
                       skipLog: true,
+                      imdb: best.imdb ?? imdbId,
                     });
                     if (dlResult.status === "ok") {
                       changes.push(`⬇️ Auto-descărcat (${quality}): ${best.name}`);

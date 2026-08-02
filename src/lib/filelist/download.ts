@@ -21,6 +21,7 @@ import {
 import { qbitLogin, qbitEnsureCookie, resetQbitCookie } from "../qbit-client";
 import { readDownloadLog, appendDownloadLog, markLogEntryComplete } from "./log";
 import { stripDiacritics, torrentMatchesTitle } from "./match";
+import { ensureRomanianSubtitle } from "./subtitles";
 
 // ---------------------------------------------------------------------------
 // Background polling: verifică progresul torrentului și refresh Plex la final
@@ -33,6 +34,9 @@ async function pollUntilComplete(
   plexType: "movie" | "show",
   torrentName: string,
   torrentId: number,
+  qbitUser: string,
+  qbitPass: string,
+  imdbId?: string | null,
 ): Promise<void> {
   const MAX_WAIT_MS = 48 * 60 * 60 * 1000;
   const POLL_INTERVAL_MS = 30_000;
@@ -75,6 +79,15 @@ async function pollUntilComplete(
               }),
             )
             .catch(() => {});
+          await ensureRomanianSubtitle({
+            qbitUrl,
+            cookie,
+            qbitUser,
+            qbitPass,
+            torrentHash,
+            torrentName,
+            imdbId,
+          }).catch((e) => console.warn(`[filelist] Eroare subtitrare pentru "${torrentName}":`, e));
           await refreshPlexLibrary(plexType);
           console.log(`[filelist] Plex refresh trimis pentru "${plexType}"`);
         } else {
@@ -178,9 +191,17 @@ async function resumeOrphanedPolls(): Promise<void> {
     );
     for (const entry of orphaned) {
       const plexType = isMovieCategory(entry.category) ? "movie" : "show";
-      pollUntilComplete(url, cookie, entry.torrentHash!, plexType, entry.name, entry.id).catch(
-        (e) => console.error("[filelist] Eroare resume polling:", e),
-      );
+      pollUntilComplete(
+        url,
+        cookie,
+        entry.torrentHash!,
+        plexType,
+        entry.name,
+        entry.id,
+        qbitUser,
+        qbitPass,
+        entry.imdb,
+      ).catch((e) => console.error("[filelist] Eroare resume polling:", e));
     }
   } catch (e) {
     console.warn("[filelist] resumeOrphanedPolls eșuat:", e);
@@ -463,6 +484,7 @@ interface DownloadFilelistParams {
   freeleech?: boolean;
   internal?: boolean;
   skipLog?: boolean;
+  imdb?: string | null;
 }
 
 // Implementare comună pentru descărcare + upload la qBittorrent, folosită atât
@@ -625,6 +647,7 @@ async function downloadFilelistCore(
       downloadedAt: new Date().toISOString(),
       completedAt: null,
       torrentHash: torrentHash ?? undefined,
+      imdb: params.imdb ?? undefined,
     });
 
     // 7. Pornește polling background — refresh Plex și marchează complet DOAR la final
@@ -637,6 +660,9 @@ async function downloadFilelistCore(
         plexType,
         params.torrentName,
         params.torrentId,
+        qbitUser,
+        qbitPass,
+        params.imdb,
       ).catch((e) => console.error("[filelist] Eroare polling:", e));
     } else {
       console.warn("[filelist] Hash nedisponibil — Plex nu va fi refreshuit automat");
@@ -659,6 +685,7 @@ export const downloadFilelist = createServerFn({ method: "POST" })
       size?: number;
       freeleech?: boolean;
       internal?: boolean;
+      imdb?: string | null;
     }) => ({
       ...data,
       torrentId: Number(data.torrentId),
@@ -678,3 +705,68 @@ export async function downloadFilelistInternal(
 ): Promise<FilelistDownloadResult> {
   return downloadFilelistCore(params);
 }
+
+// ---------------------------------------------------------------------------
+// Backfill: aplică ensureRomanianSubtitle retroactiv pe descărcările deja
+// complete din jurnal — pentru torrentele adăugate înainte ca acest control
+// automat să existe. Rulează secvențial (nu paralel), cu o pauză scurtă între
+// torrente, ca să nu bombardăm OpenSubtitles/qBittorrent.
+// ---------------------------------------------------------------------------
+
+export interface BackfillSubtitlesResult {
+  status: "ok" | "error";
+  error?: string;
+  processed: number;
+  skipped: number;
+}
+
+export const backfillSubtitles = createServerFn({ method: "POST" }).handler(
+  async (): Promise<BackfillSubtitlesResult> => {
+    const { requireAdmin } = await import("../admin.server");
+    await requireAdmin();
+
+    const qbitBase = process.env.QBIT_URL ?? "http://192.168.1.192:25556";
+    const qbitUser = process.env.QBIT_USERNAME;
+    const qbitPass = process.env.QBIT_PASSWORD;
+    if (!qbitUser || !qbitPass) {
+      return { status: "error", error: "QBIT_USERNAME / QBIT_PASSWORD nu sunt configurate", processed: 0, skipped: 0 };
+    }
+
+    const url = qbitBase.replace(/\/$/, "");
+    let cookie: string;
+    try {
+      cookie = await qbitEnsureCookie(url, qbitUser, qbitPass);
+    } catch {
+      resetQbitCookie();
+      cookie = await qbitLogin(url, qbitUser, qbitPass);
+    }
+
+    const log = await readDownloadLog();
+    const entries = log.filter((e) => e.completedAt !== null && e.torrentHash);
+
+    let processed = 0;
+    let skipped = 0;
+
+    for (const entry of entries) {
+      try {
+        await ensureRomanianSubtitle({
+          qbitUrl: url,
+          cookie,
+          qbitUser,
+          qbitPass,
+          torrentHash: entry.torrentHash!,
+          torrentName: entry.name,
+          imdbId: entry.imdb,
+        });
+        processed++;
+      } catch (e) {
+        console.warn(`[filelist] Backfill subtitrare eșuat pentru "${entry.name}":`, e);
+        skipped++;
+      }
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+
+    console.log(`[filelist] Backfill subtitrări: ${processed} procesate, ${skipped} sărite`);
+    return { status: "ok", processed, skipped };
+  },
+);

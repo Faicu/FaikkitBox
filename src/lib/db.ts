@@ -233,6 +233,18 @@ function runCleanups(database: DatabaseSync): void {
       }
       database.exec("PRAGMA user_version = 4");
     }
+
+    if (version < 5) {
+      // v5: downloads capătă coloana imdb — folosită pentru potrivirea
+      // subtitrărilor OpenSubtitles la finalul descărcării
+      try {
+        database.exec("ALTER TABLE downloads ADD COLUMN imdb TEXT");
+        console.log("[db] Migrare v5: adăugat downloads.imdb");
+      } catch {
+        // coloana există deja dintr-o rulare anterioară
+      }
+      database.exec("PRAGMA user_version = 5");
+    }
   } catch (e) {
     console.warn("[db] Curățare eșuată:", e);
   }

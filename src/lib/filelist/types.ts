@@ -55,6 +55,7 @@ export interface FilelistLogEntry {
   downloadedAt: string;
   completedAt: string | null;
   torrentHash?: string; // pentru resume polling după restart server
+  imdb?: string; // pentru potrivirea subtitrărilor OpenSubtitles la completare
 }
 
 export interface FilelistApiTorrent {
@@ -90,4 +91,5 @@ export interface DownloadLogRow {
   downloaded_at: string;
   completed_at: string | null;
   torrent_hash: string | null;
+  imdb: string | null;
 }

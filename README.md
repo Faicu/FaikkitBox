@@ -79,6 +79,16 @@ Fiecare rezultat păstrează `matchedVia` (prin ce criteriu a fost găsit) și `
 
 **Descărcare automată**: pornește doar pentru torrente confirmate prin **IMDB ID** (`matchedByImdb === true`). Un torrent găsit doar prin potrivire de text pe titlu poate fi alt film/serial cu nume asemănător (ex. un documentar „making of" al aceluiași titlu) — prea riscant pentru o acțiune automată, fără confirmare umană.
 
+### Subtitrare română automată (`src/lib/filelist/subtitles.ts`)
+
+La finalul fiecărei descărcări (înainte de refresh-ul Plex), `ensureRomanianSubtitle` verifică automat:
+
+1. **Fișierul media are deja subtitrare română încorporată?** — detectat cu `ffprobe` (dacă e instalat pe server; dacă lipsește, se sare peste acest pas, nu blochează). Dacă da, nu mai face nimic.
+2. **Există un `.srt` în torrent, dar cu denumire greșită pentru Plex?** — Plex identifică limba unei subtitrări externe după numele fișierului (`<nume-media>.ro.srt`), nu după conținut. Dacă torrentul conține exact un `.srt` cu alt nume, e **redenumit prin API-ul qBittorrent** (`torrents/renameFile`) — obligatoriu prin API, nu direct pe disk, altfel qBittorrent pierde evidența fișierului și consideră torrentul incomplet.
+3. **Nicio subtitrare deloc?** — se caută pe **OpenSubtitles** (`OPENSUBTITLES_API_KEY` în `.env`) după IMDb id, limba română. Din rezultate se alege cel al cărui `release` se potrivește cel mai bine cu sursa/rezoluția torrentului (ex. WEB-DL/AMZN 1080p vs BluRay 2160p) — o subtitrare pentru altă sursă desincronizează timpii de afișare. Dacă nu există o potrivire clară, se salvează totuși cel mai apropiat rezultat, dar cu un avertisment în log ("verifică sincronizarea").
+
+**Backfill**: butonul „Corectează subtitrări" din secțiunea Jurnal descărcări (Lansări) rulează aceeași verificare retroactiv pe toate torrentele deja din jurnal (`backfillSubtitles`, `src/lib/filelist/download.ts`).
+
 ### Job de fundal (`server/plugins/pinned-watcher.ts`)
 
 Verifică fiecare item fixat la exact **3 ore**, persistat per item în SQLite (`pinned_watch_state.last_checked_at`) — supraviețuiește restart-urilor serviciului, spre deosebire de un timer în memorie. Bucla de polling rulează la 10 minute, dar sare peste itemele care încă n-au ajuns la 3 ore.
@@ -169,6 +179,8 @@ cp .env.example .env
 | `QBIT_URL` / `QBIT_USERNAME` / `QBIT_PASSWORD` | URL și credențiale WebUI qBittorrent |
 | `FILELIST_USERNAME` / `FILELIST_PASSKEY` | Credențiale API FileList.io |
 | `TMDB_API_KEY` | Token Bearer JWT pentru API TMDB (themoviedb.org) |
+| `OPENSUBTITLES_API_KEY` | Cheie API OpenSubtitles.com, pentru subtitrare română automată când torrentul nu are niciuna (cont gratuit → profil → „API Consumers") |
+| `OPENSUBTITLES_USERNAME` / `OPENSUBTITLES_PASSWORD` | *(opțional)* Login OpenSubtitles, doar dacă limita de download anonimă devine insuficientă |
 | `MEDIA_MOVIES_PATH` / `MEDIA_SERIES_PATH` | Căi locale unde qBittorrent salvează filmele/serialele din Filelist |
 | `GITHUB_REPO` | Repo GitHub (ex: `Faicu/FaikkitBox`) pentru tracking commits |
 | `GITHUB_TOKEN` | *(opțional)* Token GitHub API pentru limită mai mare la request-uri |

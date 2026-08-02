@@ -27,6 +27,7 @@ export function useDownload() {
           size: torrent.size,
           freeleech: torrent.freeleech,
           internal: torrent.internal,
+          imdb: torrent.imdb,
         },
       });
       if (res.status === "ok") {

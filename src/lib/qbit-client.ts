@@ -83,3 +83,40 @@ export function qbitPostForm(
     }),
   );
 }
+
+export interface QbitFileInfo {
+  name: string; // cale relativă în torrent, ex. "Sub/movie.srt"
+  size: number;
+  progress: number;
+}
+
+// Listează fișierele unui torrent (pentru a găsi fișierul media + eventuale .srt).
+export async function qbitListFiles(
+  url: string,
+  hash: string,
+  user: string,
+  pass: string,
+): Promise<QbitFileInfo[]> {
+  const res = await qbitGet(url, `/api/v2/torrents/files?hash=${hash}`, user, pass);
+  if (!res.ok) throw new Error(`qBit torrents/files HTTP ${res.status}`);
+  return (await res.json()) as QbitFileInfo[];
+}
+
+// Redenumește un fișier din interiorul unui torrent — trebuie făcut prin API,
+// nu direct pe disk, altfel qBittorrent pierde evidența fișierului și
+// consideră torrentul incomplet.
+export async function qbitRenameFile(
+  url: string,
+  hash: string,
+  oldPath: string,
+  newPath: string,
+  user: string,
+  pass: string,
+): Promise<void> {
+  const res = await qbitPostForm(url, "/api/v2/torrents/renameFile", user, pass, {
+    hash,
+    oldPath,
+    newPath,
+  });
+  if (!res.ok) throw new Error(`qBit renameFile HTTP ${res.status}`);
+}
