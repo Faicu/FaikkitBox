@@ -22,7 +22,7 @@ import { join, dirname, basename, extname } from "node:path";
 import iconv from "iconv-lite";
 import { qbitGet, qbitListFiles, qbitRenameFile } from "../qbit-client";
 import { searchSubtitles, downloadSubtitle, type OpenSubtitlesResult } from "../opensubtitles-client";
-import { type SubtitleOutcome, CORRECTED_OUTCOMES, OK_OUTCOMES } from "./subtitle-outcomes";
+import { type SubtitleOutcome, CORRECTED_OUTCOMES, OK_OUTCOMES, SHORT_LABELS } from "./subtitle-outcomes";
 
 export type { SubtitleOutcome };
 
@@ -163,7 +163,7 @@ export async function ensureRomanianSubtitle(
         return item(
           torrentName,
           "download_failed",
-          `redenumirea .srt "${current.name}" → "${targetSrtRelPath}" a eșuat: ${e instanceof Error ? e.message : e}`,
+          `redenumirea .srt a eșuat: ${e instanceof Error ? e.message : e}`,
         );
       }
     }
@@ -180,12 +180,10 @@ export async function ensureRomanianSubtitle(
 
     const parts: string[] = [];
     if (needsRename) {
-      parts.push(`.srt redenumit din "${current.name}" în "${targetSrtRelPath}" ca Plex să-l recunoască drept română`);
+      parts.push(`.srt redenumit → "${basename(targetSrtRelPath)}" (Plex îl recunoaște acum ca română)`);
     }
     if (wasReencoded) {
-      parts.push(
-        "conținutul a fost convertit la UTF-8 (era codat altfel — diacriticele ar fi apărut corupte în Plex)",
-      );
+      parts.push("conținut convertit la UTF-8 (era codat altfel — diacriticele ar fi ieșit corupte în Plex)");
     }
     return item(torrentName, needsRename ? "renamed_srt" : "reencoded_srt", parts.join("; "), {
       path: targetSrtRelPath,
@@ -240,15 +238,13 @@ export async function ensureRomanianSubtitle(
   try {
     const { text, wasConverted } = decodeToUtf8Text(content);
     await writeFile(destPath, text, "utf8");
-    const encodingNote = wasConverted
-      ? " (conținutul original nu era UTF-8, a fost convertit — altfel diacriticele apăreau corupte în Plex)"
-      : "";
+    const encodingNote = wasConverted ? " (encoding convertit la UTF-8)" : "";
     if (best.confident) {
       console.log(`[subtitles] "${torrentName}": subtitrare OpenSubtitles salvată → ${destPath}`);
       return item(
         torrentName,
         "downloaded_opensubtitles",
-        `subtitrare descărcată de pe OpenSubtitles (release "${best.result.release}", potrivire sursă+rezoluție confirmată) → ${destPath}${encodingNote}`,
+        `subtitrare descărcată de pe OpenSubtitles, release „${best.result.release}" (potrivire sursă+rezoluție confirmată)${encodingNote}`,
         { release: best.result.release, path: destPath },
       );
     } else {
@@ -258,7 +254,7 @@ export async function ensureRomanianSubtitle(
       return item(
         torrentName,
         "downloaded_opensubtitles_approximate",
-        `subtitrare aproximativă descărcată de pe OpenSubtitles (release "${best.result.release}", fără potrivire clară de sursă/rezoluție) → ${destPath} — verifică sincronizarea${encodingNote}`,
+        `subtitrare aproximativă descărcată de pe OpenSubtitles, release „${best.result.release}" (fără potrivire clară de sursă/rezoluție — verifică sincronizarea)${encodingNote}`,
         { release: best.result.release, path: destPath },
       );
     }
@@ -295,7 +291,7 @@ export async function logSubtitleRun(
 
   const message =
     trigger === "download"
-      ? `${items[0].torrentName}: ${items[0].detail}`
+      ? `${items[0].torrentName}: ${SHORT_LABELS[items[0].outcome]}`
       : `Backfill subtitrări: ${items.length} verificate — ${corrected} corectate, ${ok} deja ok, ${rest} sărite/eșuate`;
 
   // La o descărcare unică, dacă n-a fost nevoie de nicio intervenție

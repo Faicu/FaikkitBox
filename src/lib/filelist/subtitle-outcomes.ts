@@ -37,3 +37,21 @@ export const CORRECTED_OUTCOMES: SubtitleOutcome[] = [
 export const OK_OUTCOMES: SubtitleOutcome[] = ["already_embedded", "srt_already_ok"];
 
 export const APPROXIMATE_OUTCOMES: SubtitleOutcome[] = ["downloaded_opensubtitles_approximate"];
+
+// Etichetă scurtă per outcome — folosită pentru linia din Jurnal Activități
+// și corpul notificării push la o descărcare unică (rezumatul complet, cu
+// nume de fișiere, rămâne doar în drawer-ul de detalii, nu în mesajul scurt).
+export const SHORT_LABELS: Record<SubtitleOutcome, string> = {
+  already_embedded: "are deja subtitrare română încorporată",
+  srt_already_ok: "avea deja .srt corect denumit și codat",
+  renamed_srt: "subtitrare corectată (.srt redenumit pentru Plex)",
+  reencoded_srt: "subtitrare corectată (encoding UTF-8)",
+  downloaded_opensubtitles: "subtitrare descărcată de pe OpenSubtitles",
+  downloaded_opensubtitles_approximate: "subtitrare aproximativă descărcată — verifică sincronizarea",
+  multiple_srt_skipped: "mai multe .srt găsite, am sărit peste",
+  season_pack_skipped: "pachet de episoade, am sărit peste",
+  no_imdb: "fără subtitrare și fără IMDb id pentru căutare",
+  no_subtitle_found: "nicio subtitrare găsită pe OpenSubtitles",
+  download_failed: "eroare la corectarea subtitrării",
+  no_media_file: "niciun fișier media găsit în torrent",
+};
