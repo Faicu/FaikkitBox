@@ -18,14 +18,26 @@ import {
   parseCategoryId,
   isMovieCategory,
 } from "./categories";
-import { qbitLogin, qbitEnsureCookie, resetQbitCookie } from "../qbit-client";
-import { readDownloadLog, appendDownloadLog, markLogEntryComplete } from "./log";
+import { qbitLogin, qbitEnsureCookie, resetQbitCookie, qbitGet } from "../qbit-client";
+import { readDownloadLog, readAllDownloadLogEntries, appendDownloadLog, markLogEntryComplete } from "./log";
 import { stripDiacritics, torrentMatchesTitle } from "./match";
+import { CORRECTED_OUTCOMES } from "./subtitle-outcomes";
 // Import dinamic (nu static) — subtitles.ts foloseşte node:child_process/node:util
 // pentru ffprobe, care nu trebuie să ajungă în bundle-ul de client. download.ts
 // e statically importat de filelist.functions.ts, folosit și din componente
 // client (hooks.ts, DownloadLogSection.tsx), deci orice import static de aici
 // se poate scurge în bundle-ul browserului.
+
+// Un torrent e considerat complet dacă a ajuns la 100% și starea din
+// qBittorrent indică seeding/pauzat-după-seeding — folosit atât de
+// pollUntilComplete (torrent pornit din aplicație) cât și de backfillSubtitles
+// (orice torrent existent în qBittorrent, indiferent de sursă).
+function isTorrentComplete(progress: number, state: string): boolean {
+  return (
+    progress >= 1 &&
+    (state.includes("UP") || state === "uploading" || state === "pausedUP" || state === "stalledUP")
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Background polling: verifică progresul torrentului și refresh Plex la final
@@ -65,12 +77,7 @@ async function pollUntilComplete(
       const progress = Number(torrent.progress ?? 0);
       const state: string = torrent.state ?? "";
 
-      const isDone =
-        progress >= 1 &&
-        (state.includes("UP") ||
-          state === "uploading" ||
-          state === "pausedUP" ||
-          state === "stalledUP");
+      const isDone = isTorrentComplete(progress, state);
 
       if (isDone) {
         const wasFirst = await markLogEntryComplete(torrentId);
@@ -87,7 +94,6 @@ async function pollUntilComplete(
             const { ensureRomanianSubtitle, logSubtitleRun } = await import("./subtitles");
             const subtitleItem = await ensureRomanianSubtitle({
               qbitUrl,
-              cookie,
               qbitUser,
               qbitPass,
               torrentHash,
@@ -717,10 +723,14 @@ export async function downloadFilelistInternal(
 }
 
 // ---------------------------------------------------------------------------
-// Backfill: aplică ensureRomanianSubtitle retroactiv pe descărcările deja
-// complete din jurnal — pentru torrentele adăugate înainte ca acest control
-// automat să existe. Rulează secvențial (nu paralel), cu o pauză scurtă între
-// torrente, ca să nu bombardăm OpenSubtitles/qBittorrent.
+// Backfill: aplică ensureRomanianSubtitle retroactiv pe TOATE torrentele
+// active din qBittorrent — nu doar cele descărcate prin site (jurnalul
+// propriu servește doar ca sursă opțională de IMDb id, când torrentul a
+// fost adăugat prin aplicație; pentru torrente adăugate manual în qBit,
+// IMDb id lipsește, deci doar cazurile 2/3 — .srt existent — pot fi
+// corectate, nu și căutarea pe OpenSubtitles). Rulează secvențial (nu
+// paralel), cu o pauză scurtă între torrente, ca să nu bombardăm
+// OpenSubtitles/qBittorrent.
 // ---------------------------------------------------------------------------
 
 export interface BackfillSubtitlesResult {
@@ -734,6 +744,14 @@ export interface BackfillSubtitlesResult {
 export interface BackfillProgress {
   total: number;
   done: number;
+}
+
+interface QbitTorrentListItem {
+  hash: string;
+  name: string;
+  save_path?: string;
+  progress?: number;
+  state?: string;
 }
 
 // Stare de progres la nivel de modul — un singur backfill rulează odată
@@ -763,42 +781,72 @@ export const backfillSubtitles = createServerFn({ method: "POST" }).handler(
     }
 
     const url = qbitBase.replace(/\/$/, "");
-    let cookie: string;
+
+    // Listă completă a torrentelor din qBittorrent — indiferent dacă au fost
+    // adăugate prin site sau manual din WebUI.
+    let qbitTorrents: QbitTorrentListItem[];
     try {
-      cookie = await qbitEnsureCookie(url, qbitUser, qbitPass);
-    } catch {
-      resetQbitCookie();
-      cookie = await qbitLogin(url, qbitUser, qbitPass);
+      const res = await qbitGet(url, "/api/v2/torrents/info", qbitUser, qbitPass);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      qbitTorrents = (await res.json()) as QbitTorrentListItem[];
+    } catch (e) {
+      return {
+        status: "error",
+        error: `Nu am putut lista torrentele din qBittorrent: ${e instanceof Error ? e.message : e}`,
+        processed: 0,
+        skipped: 0,
+        corrected: 0,
+      };
+    }
+    const completedTorrents = qbitTorrents.filter((t) =>
+      isTorrentComplete(Number(t.progress ?? 0), t.state ?? ""),
+    );
+
+    // Jurnalul propriu — folosit doar ca sursă opțională de IMDb id (pentru
+    // torrentele descărcate prin site) și de categorie (filme/seriale), prin
+    // hash. Pentru restul (adăugate manual), categoria e dedusă din
+    // save_path față de MEDIA_MOVIES_PATH/MEDIA_SERIES_PATH.
+    const ownLog = await readAllDownloadLogEntries();
+    const ownLogByHash = new Map(ownLog.filter((e) => e.torrentHash).map((e) => [e.torrentHash!, e]));
+    const moviesPath = process.env.MEDIA_MOVIES_PATH ?? "/media/ssd2tb/Filme";
+    const seriesPath = process.env.MEDIA_SERIES_PATH ?? "/media/ssd2tb/Seriale";
+
+    function inferPlexType(hash: string, savePath: string | undefined): "movie" | "show" | null {
+      const known = ownLogByHash.get(hash);
+      if (known) return isMovieCategory(known.category) ? "movie" : "show";
+      if (savePath?.startsWith(moviesPath)) return "movie";
+      if (savePath?.startsWith(seriesPath)) return "show";
+      return null;
     }
 
-    const log = await readDownloadLog();
-    const entries = log.filter((e) => e.completedAt !== null && e.torrentHash);
-    const { ensureRomanianSubtitle, logSubtitleRun, CORRECTED_OUTCOMES } = await import("./subtitles");
+    const { ensureRomanianSubtitle, logSubtitleRun } = await import("./subtitles");
 
     let processed = 0;
     let skipped = 0;
-    const items: Array<{ entry: (typeof entries)[number]; result: Awaited<ReturnType<typeof ensureRomanianSubtitle>> }> = [];
+    const items: Array<{
+      plexType: "movie" | "show" | null;
+      result: Awaited<ReturnType<typeof ensureRomanianSubtitle>>;
+    }> = [];
 
-    backfillProgress = { total: entries.length, done: 0 };
+    backfillProgress = { total: completedTorrents.length, done: 0 };
     try {
-      for (const entry of entries) {
+      for (const torrent of completedTorrents) {
         try {
           const result = await ensureRomanianSubtitle({
             qbitUrl: url,
-            cookie,
             qbitUser,
             qbitPass,
-            torrentHash: entry.torrentHash!,
-            torrentName: entry.name,
-            imdbId: entry.imdb,
+            torrentHash: torrent.hash,
+            torrentName: torrent.name,
+            imdbId: ownLogByHash.get(torrent.hash)?.imdb,
           });
-          items.push({ entry, result });
+          items.push({ plexType: inferPlexType(torrent.hash, torrent.save_path), result });
           processed++;
         } catch (e) {
-          console.warn(`[filelist] Backfill subtitrare eșuat pentru "${entry.name}":`, e);
+          console.warn(`[filelist] Backfill subtitrare eșuat pentru "${torrent.name}":`, e);
           skipped++;
         }
-        backfillProgress = { total: entries.length, done: backfillProgress.done + 1 };
+        backfillProgress = { total: completedTorrents.length, done: backfillProgress.done + 1 };
         await new Promise((r) => setTimeout(r, 2000));
       }
     } finally {
@@ -812,11 +860,11 @@ export const backfillSubtitles = createServerFn({ method: "POST" }).handler(
     // backfill mare.
     const touchedCategories = new Set(
       items
-        .filter((it) => CORRECTED_OUTCOMES.includes(it.result.outcome))
-        .map((it) => (isMovieCategory(it.entry.category) ? "movie" : "show")),
+        .filter((it) => CORRECTED_OUTCOMES.includes(it.result.outcome) && it.plexType)
+        .map((it) => it.plexType!),
     );
     for (const plexType of touchedCategories) {
-      await refreshPlexLibrary(plexType as "movie" | "show").catch(() => {});
+      await refreshPlexLibrary(plexType).catch(() => {});
     }
 
     console.log(

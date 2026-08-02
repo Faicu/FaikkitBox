@@ -8,6 +8,11 @@ import {
   DrawerDescription,
 } from "@/components/ui/drawer";
 import type { ActivityEntry } from "@/lib/activity-log";
+import {
+  CORRECTED_OUTCOMES as CORRECTED_OUTCOMES_LIST,
+  OK_OUTCOMES as OK_OUTCOMES_LIST,
+  APPROXIMATE_OUTCOMES as APPROXIMATE_OUTCOMES_LIST,
+} from "@/lib/filelist/subtitle-outcomes";
 
 interface SubtitleRunItemMeta {
   torrentName: string;
@@ -17,14 +22,9 @@ interface SubtitleRunItemMeta {
   path?: string;
 }
 
-const CORRECTED_OUTCOMES = new Set([
-  "renamed_srt",
-  "reencoded_srt",
-  "downloaded_opensubtitles",
-  "downloaded_opensubtitles_approximate",
-]);
-const OK_OUTCOMES = new Set(["already_embedded"]);
-const APPROXIMATE_OUTCOMES = new Set(["downloaded_opensubtitles_approximate"]);
+const CORRECTED_OUTCOMES = new Set<string>(CORRECTED_OUTCOMES_LIST);
+const OK_OUTCOMES = new Set<string>(OK_OUTCOMES_LIST);
+const APPROXIMATE_OUTCOMES = new Set<string>(APPROXIMATE_OUTCOMES_LIST);
 
 function outcomeIcon(outcome: string) {
   if (APPROXIMATE_OUTCOMES.has(outcome)) {

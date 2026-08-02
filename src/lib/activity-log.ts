@@ -69,6 +69,7 @@ export async function logActivity(
   type: ActivityType,
   message: string,
   meta?: Record<string, ActivityMetaValue>,
+  options?: { skipPush?: boolean },
 ): Promise<void> {
   try {
     const { getDb } = await import("./db");
@@ -86,9 +87,11 @@ export async function logActivity(
     console.warn("[activity-log] Eroare la logActivity:", e);
   }
 
-  // Trimite notificare push (fire and forget) — tipurile cu titlu gol nu trimit push
+  // Trimite notificare push (fire and forget) — tipurile cu titlu gol nu
+  // trimit push, la fel ca apelurile care cer explicit skipPush (ex.
+  // subtitle_fix pentru o descărcare unde n-a fost nevoie de nicio corecție)
   const pushTitle = PUSH_TITLES[type];
-  if (pushTitle) {
+  if (pushTitle && !options?.skipPush) {
     import("./push").then(({ sendPushToAll }) => sendPushToAll(pushTitle, message)).catch(() => {});
   }
 }

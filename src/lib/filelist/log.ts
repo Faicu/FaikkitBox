@@ -37,6 +37,21 @@ export async function readDownloadLog(): Promise<FilelistLogEntry[]> {
   }
 }
 
+// Fără LIMIT — folosit de backfillSubtitles (download.ts), care trebuie să
+// proceseze chiar toate intrările din jurnal, nu doar ultimele 100 afișate
+// în UI de readDownloadLog.
+export async function readAllDownloadLogEntries(): Promise<FilelistLogEntry[]> {
+  try {
+    const { getDb } = await import("../db");
+    const rows = getDb()
+      .prepare("SELECT * FROM downloads ORDER BY downloaded_at DESC")
+      .all() as unknown as DownloadLogRow[];
+    return rows.map(rowToEntry);
+  } catch {
+    return [];
+  }
+}
+
 export async function appendDownloadLog(entry: FilelistLogEntry): Promise<void> {
   try {
     const { getDb } = await import("../db");
