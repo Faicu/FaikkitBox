@@ -746,10 +746,11 @@ export const backfillSubtitles = createServerFn({ method: "POST" }).handler(
 
     let processed = 0;
     let skipped = 0;
+    const outcomeCounts: Record<string, number> = {};
 
     for (const entry of entries) {
       try {
-        await ensureRomanianSubtitle({
+        const outcome = await ensureRomanianSubtitle({
           qbitUrl: url,
           cookie,
           qbitUser,
@@ -758,15 +759,26 @@ export const backfillSubtitles = createServerFn({ method: "POST" }).handler(
           torrentName: entry.name,
           imdbId: entry.imdb,
         });
+        outcomeCounts[outcome] = (outcomeCounts[outcome] ?? 0) + 1;
         processed++;
       } catch (e) {
         console.warn(`[filelist] Backfill subtitrare eșuat pentru "${entry.name}":`, e);
+        outcomeCounts.exception = (outcomeCounts.exception ?? 0) + 1;
         skipped++;
       }
       await new Promise((r) => setTimeout(r, 2000));
     }
 
     console.log(`[filelist] Backfill subtitrări: ${processed} procesate, ${skipped} sărite`);
+    const { logActivity } = await import("../activity-log");
+    const summary = Object.entries(outcomeCounts)
+      .map(([k, v]) => `${k}: ${v}`)
+      .join(", ");
+    await logActivity(
+      "subtitle_fix",
+      `Backfill subtitrări finalizat — ${entries.length} torrente verificate (${summary || "niciunul procesat"})`,
+      { processed, skipped, ...outcomeCounts },
+    );
     return { status: "ok", processed, skipped };
   },
 );

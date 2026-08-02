@@ -18,7 +18,8 @@ export type ActivityType =
   | "ubuntu_update"
   | "qbit_action"
   | "pinned_update"
-  | "app_error";
+  | "app_error"
+  | "subtitle_fix";
 
 export type JsonValue = string | number | boolean | null | undefined;
 
@@ -51,6 +52,9 @@ const PUSH_TITLES: Record<ActivityType, string> = {
   // trebuie să mai trimită unul generic pentru acest tip.
   pinned_update: "",
   app_error: "⚠️ Eroare aplicație",
+  // Gol intenționat: rulează des la backfill (o intrare per torrent) — nu
+  // trebuie să bombardeze cu push-uri, dar rămâne vizibil în jurnal.
+  subtitle_fix: "",
 };
 
 export async function logActivity(

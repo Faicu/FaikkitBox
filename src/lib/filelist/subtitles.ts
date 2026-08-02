@@ -37,17 +37,44 @@ interface EnsureRomanianSubtitleParams {
   imdbId?: string | null;
 }
 
-export async function ensureRomanianSubtitle(params: EnsureRomanianSubtitleParams): Promise<void> {
+export type SubtitleOutcome =
+  | "already_embedded"
+  | "renamed_srt"
+  | "downloaded_opensubtitles"
+  | "downloaded_opensubtitles_approximate"
+  | "multiple_srt_skipped"
+  | "no_imdb"
+  | "no_subtitle_found"
+  | "download_failed"
+  | "no_media_file";
+
+async function logSubtitleActivity(
+  torrentName: string,
+  outcome: SubtitleOutcome,
+  message: string,
+  meta?: Record<string, string | number | boolean | null | undefined>,
+): Promise<void> {
+  try {
+    const { logActivity } = await import("../activity-log");
+    await logActivity("subtitle_fix", `${torrentName}: ${message}`, { outcome, ...meta });
+  } catch {
+    // logActivity are propriul fail-soft; nimic de făcut aici
+  }
+}
+
+export async function ensureRomanianSubtitle(
+  params: EnsureRomanianSubtitleParams,
+): Promise<SubtitleOutcome> {
   const { qbitUrl, qbitUser, qbitPass, torrentHash, torrentName } = params;
 
   const [files, savePath] = await Promise.all([
     qbitListFiles(qbitUrl, torrentHash, qbitUser, qbitPass),
     getTorrentSavePath(qbitUrl, torrentHash, qbitUser, qbitPass),
   ]);
-  if (!files.length || !savePath) return;
+  if (!files.length || !savePath) return "no_media_file";
 
   const mediaFile = pickMediaFile(files);
-  if (!mediaFile) return;
+  if (!mediaFile) return "no_media_file";
 
   const mediaAbsPath = join(savePath, mediaFile.name);
   const mediaBaseName = basename(mediaFile.name, extname(mediaFile.name));
@@ -55,7 +82,14 @@ export async function ensureRomanianSubtitle(params: EnsureRomanianSubtitleParam
   const targetSrtRelPath = mediaDir === "." ? `${mediaBaseName}.ro.srt` : `${mediaDir}/${mediaBaseName}.ro.srt`;
 
   const hasEmbeddedRomanian = await hasEmbeddedRomanianSubtitle(mediaAbsPath);
-  if (hasEmbeddedRomanian) return;
+  if (hasEmbeddedRomanian) {
+    await logSubtitleActivity(
+      torrentName,
+      "already_embedded",
+      "are deja subtitrare română încorporată în fișierul media — nimic de făcut",
+    );
+    return "already_embedded";
+  }
 
   const srtFiles = files.filter((f) => f.name.toLowerCase().endsWith(".srt"));
 
@@ -67,33 +101,71 @@ export async function ensureRomanianSubtitle(params: EnsureRomanianSubtitleParam
       try {
         await qbitRenameFile(qbitUrl, torrentHash, current.name, targetSrtRelPath, qbitUser, qbitPass);
         console.log(`[subtitles] "${torrentName}": .srt redenumit → ${targetSrtRelPath}`);
+        await logSubtitleActivity(
+          torrentName,
+          "renamed_srt",
+          `.srt redenumit din "${current.name}" în "${targetSrtRelPath}" ca Plex să-l recunoască drept română`,
+          { from: current.name, to: targetSrtRelPath },
+        );
+        return "renamed_srt";
       } catch (e) {
         console.warn(`[subtitles] "${torrentName}": redenumire .srt eșuată:`, e);
+        await logSubtitleActivity(
+          torrentName,
+          "download_failed",
+          `redenumirea .srt "${current.name}" → "${targetSrtRelPath}" a eșuat: ${e instanceof Error ? e.message : e}`,
+        );
+        return "download_failed";
       }
     }
-    return;
+    return "already_embedded";
   }
 
   // Mai multe .srt-uri — probabil deja există unul cu limba corectă marcată
   // (ex. "movie.ro.srt" alături de "movie.en.srt"); nu ne amestecăm.
-  if (srtFiles.length > 1) return;
+  if (srtFiles.length > 1) {
+    await logSubtitleActivity(
+      torrentName,
+      "multiple_srt_skipped",
+      `conține ${srtFiles.length} fișiere .srt — sar peste, posibil deja etichetate corect pe limbi`,
+    );
+    return "multiple_srt_skipped";
+  }
 
   // Caz 1: nicio subtitrare deloc — încercăm OpenSubtitles.
   if (!params.imdbId) {
     console.warn(`[subtitles] "${torrentName}": fără IMDb id, nu pot căuta pe OpenSubtitles`);
-    return;
+    await logSubtitleActivity(
+      torrentName,
+      "no_imdb",
+      "fără subtitrare și fără IMDb id disponibil — nu pot căuta pe OpenSubtitles",
+    );
+    return "no_imdb";
   }
 
   const results = await searchSubtitles(params.imdbId, "ro");
-  if (!results.length) return;
+  if (!results.length) {
+    await logSubtitleActivity(
+      torrentName,
+      "no_subtitle_found",
+      `niciun rezultat pe OpenSubtitles pentru IMDb ${params.imdbId}`,
+      { imdb: params.imdbId },
+    );
+    return "no_subtitle_found";
+  }
 
   const best = pickBestSubtitle(results, torrentName);
-  if (!best) return;
+  if (!best) return "no_subtitle_found";
 
   const content = await downloadSubtitle(best.result.fileId);
   if (!content) {
     console.warn(`[subtitles] "${torrentName}": descărcare OpenSubtitles eșuată`);
-    return;
+    await logSubtitleActivity(
+      torrentName,
+      "download_failed",
+      `descărcarea subtitrării de pe OpenSubtitles (release "${best.result.release}") a eșuat`,
+    );
+    return "download_failed";
   }
 
   const destPath = join(savePath, mediaDir === "." ? "" : mediaDir, `${mediaBaseName}.ro.srt`);
@@ -101,13 +173,33 @@ export async function ensureRomanianSubtitle(params: EnsureRomanianSubtitleParam
     await writeFile(destPath, content, "utf8");
     if (best.confident) {
       console.log(`[subtitles] "${torrentName}": subtitrare OpenSubtitles salvată → ${destPath}`);
+      await logSubtitleActivity(
+        torrentName,
+        "downloaded_opensubtitles",
+        `subtitrare descărcată de pe OpenSubtitles (release "${best.result.release}", potrivire sursă+rezoluție confirmată) → ${destPath}`,
+        { release: best.result.release, path: destPath },
+      );
+      return "downloaded_opensubtitles";
     } else {
       console.warn(
         `[subtitles] "${torrentName}": subtitrare aproximativă salvată (fără potrivire clară de sursă/rezoluție), verifică sincronizarea → ${destPath}`,
       );
+      await logSubtitleActivity(
+        torrentName,
+        "downloaded_opensubtitles_approximate",
+        `subtitrare aproximativă descărcată de pe OpenSubtitles (release "${best.result.release}", fără potrivire clară de sursă/rezoluție) → ${destPath} — verifică sincronizarea`,
+        { release: best.result.release, path: destPath },
+      );
+      return "downloaded_opensubtitles_approximate";
     }
   } catch (e) {
     console.warn(`[subtitles] "${torrentName}": scriere .srt eșuată:`, e);
+    await logSubtitleActivity(
+      torrentName,
+      "download_failed",
+      `scrierea subtitrării descărcate pe disk a eșuat: ${e instanceof Error ? e.message : e}`,
+    );
+    return "download_failed";
   }
 }
 

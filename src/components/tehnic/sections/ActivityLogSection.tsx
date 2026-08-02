@@ -13,6 +13,7 @@ import {
   Activity,
   GitCommitHorizontal,
   AlertTriangle,
+  Captions,
 } from "lucide-react";
 
 import { activityLogQuery, recentCommitsQuery, commitsFromDbQuery } from "@/lib/queries";
@@ -45,6 +46,7 @@ const TYPE_TO_GROUP: Record<string, string> = {
   torrent_added: "torrente",
   torrent_complete: "torrente",
   qbit_action: "torrente",
+  subtitle_fix: "torrente",
   immich_upload: "immich",
   service_restart: "updates",
   service_update: "updates",
@@ -73,6 +75,7 @@ export function ActivityLogSection() {
     service_update: <Package className="h-3.5 w-3.5 text-amber-400" />,
     ubuntu_update: <Package className="h-3.5 w-3.5 text-orange-400" />,
     qbit_action: <Download className="h-3.5 w-3.5 text-sky-400" />,
+    subtitle_fix: <Captions className="h-3.5 w-3.5 text-teal-400" />,
     pinned_update: <Bell className="h-3.5 w-3.5 text-sky-400" />,
     app_error: <AlertTriangle className="h-3.5 w-3.5 text-red-400" />,
   };
