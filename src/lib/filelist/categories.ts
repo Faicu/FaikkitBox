@@ -2,9 +2,9 @@
 // Categorii Filelist.io
 // ---------------------------------------------------------------------------
 
-// Filme: SD=1, DVD=2, DVD-RO=3, HD=4, HD-RO=19, 4K=6, 4K-RO=26
+// Filme: SD=1, DVD=2, DVD-RO=3, HD=4, HD-RO=19, 4K=6, 4K-RO=26, Blu-Ray=20, 3D=25
 // Seriale: SD=23, HD=21, HD-RO=22, 4K=27
-export const MOVIE_CATEGORIES = [1, 2, 3, 4, 6, 19, 26];
+export const MOVIE_CATEGORIES = [1, 2, 3, 4, 6, 19, 26, 20, 25];
 export const SERIES_CATEGORIES = [21, 22, 23, 27];
 export const ALL_CATEGORIES = [...MOVIE_CATEGORIES, ...SERIES_CATEGORIES];
 
@@ -24,6 +24,10 @@ const CATEGORY_STRING_MAP: Record<string, number> = {
   "Filme HD-RO": 19,
   "Movies 4K-RO": 26,
   "Filme 4K-RO": 26,
+  "Movies Blu-Ray": 20,
+  "Filme Blu-Ray": 20,
+  "Movies 3D": 25,
+  "Filme 3D": 25,
   "TV-Series HD": 21,
   "Seriale HD": 21,
   "TV-Series HD-RO": 22,
@@ -52,9 +56,11 @@ export const CATEGORY_NAMES: Record<number, string> = {
   4: "Filme HD",
   6: "Filme 4K",
   19: "Filme HD-RO",
+  20: "Filme Blu-Ray",
   21: "Seriale HD",
   22: "Seriale HD-RO",
   23: "Seriale SD",
+  25: "Filme 3D",
   26: "Filme 4K-RO",
   27: "Seriale 4K",
 };
