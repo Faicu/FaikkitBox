@@ -48,33 +48,43 @@ export type SubtitleOutcome =
   | "download_failed"
   | "no_media_file";
 
-async function logSubtitleActivity(
+// Rezultatul unei singure verificări/corectări — nu mai loghează nimic
+// direct, doar întoarce ce s-a întâmplat. Logarea (o singură intrare per
+// rulare, fie o descărcare, fie un backfill întreg) se face în logSubtitleRun.
+export interface SubtitleRunItem {
+  torrentName: string;
+  outcome: SubtitleOutcome;
+  detail: string;
+  release?: string;
+  path?: string;
+}
+
+function item(
   torrentName: string,
   outcome: SubtitleOutcome,
-  message: string,
-  meta?: Record<string, string | number | boolean | null | undefined>,
-): Promise<void> {
-  try {
-    const { logActivity } = await import("../activity-log");
-    await logActivity("subtitle_fix", `${torrentName}: ${message}`, { outcome, ...meta });
-  } catch {
-    // logActivity are propriul fail-soft; nimic de făcut aici
-  }
+  detail: string,
+  extra?: { release?: string; path?: string },
+): SubtitleRunItem {
+  return { torrentName, outcome, detail, ...extra };
 }
 
 export async function ensureRomanianSubtitle(
   params: EnsureRomanianSubtitleParams,
-): Promise<SubtitleOutcome> {
+): Promise<SubtitleRunItem> {
   const { qbitUrl, qbitUser, qbitPass, torrentHash, torrentName } = params;
 
   const [files, savePath] = await Promise.all([
     qbitListFiles(qbitUrl, torrentHash, qbitUser, qbitPass),
     getTorrentSavePath(qbitUrl, torrentHash, qbitUser, qbitPass),
   ]);
-  if (!files.length || !savePath) return "no_media_file";
+  if (!files.length || !savePath) {
+    return item(torrentName, "no_media_file", "nu am putut lista fișierele torrentului în qBittorrent");
+  }
 
   const mediaFile = pickMediaFile(files);
-  if (!mediaFile) return "no_media_file";
+  if (!mediaFile) {
+    return item(torrentName, "no_media_file", "niciun fișier media recunoscut în torrent");
+  }
 
   const mediaAbsPath = join(savePath, mediaFile.name);
   const mediaBaseName = basename(mediaFile.name, extname(mediaFile.name));
@@ -83,12 +93,11 @@ export async function ensureRomanianSubtitle(
 
   const hasEmbeddedRomanian = await hasEmbeddedRomanianSubtitle(mediaAbsPath);
   if (hasEmbeddedRomanian) {
-    await logSubtitleActivity(
+    return item(
       torrentName,
       "already_embedded",
       "are deja subtitrare română încorporată în fișierul media — nimic de făcut",
     );
-    return "already_embedded";
   }
 
   const srtFiles = files.filter((f) => f.name.toLowerCase().endsWith(".srt"));
@@ -101,71 +110,66 @@ export async function ensureRomanianSubtitle(
       try {
         await qbitRenameFile(qbitUrl, torrentHash, current.name, targetSrtRelPath, qbitUser, qbitPass);
         console.log(`[subtitles] "${torrentName}": .srt redenumit → ${targetSrtRelPath}`);
-        await logSubtitleActivity(
+        return item(
           torrentName,
           "renamed_srt",
           `.srt redenumit din "${current.name}" în "${targetSrtRelPath}" ca Plex să-l recunoască drept română`,
-          { from: current.name, to: targetSrtRelPath },
+          { path: targetSrtRelPath },
         );
-        return "renamed_srt";
       } catch (e) {
         console.warn(`[subtitles] "${torrentName}": redenumire .srt eșuată:`, e);
-        await logSubtitleActivity(
+        return item(
           torrentName,
           "download_failed",
           `redenumirea .srt "${current.name}" → "${targetSrtRelPath}" a eșuat: ${e instanceof Error ? e.message : e}`,
         );
-        return "download_failed";
       }
     }
-    return "already_embedded";
+    return item(torrentName, "already_embedded", "are deja un .srt denumit corect pentru Plex");
   }
 
   // Mai multe .srt-uri — probabil deja există unul cu limba corectă marcată
   // (ex. "movie.ro.srt" alături de "movie.en.srt"); nu ne amestecăm.
   if (srtFiles.length > 1) {
-    await logSubtitleActivity(
+    return item(
       torrentName,
       "multiple_srt_skipped",
       `conține ${srtFiles.length} fișiere .srt — sar peste, posibil deja etichetate corect pe limbi`,
     );
-    return "multiple_srt_skipped";
   }
 
   // Caz 1: nicio subtitrare deloc — încercăm OpenSubtitles.
   if (!params.imdbId) {
     console.warn(`[subtitles] "${torrentName}": fără IMDb id, nu pot căuta pe OpenSubtitles`);
-    await logSubtitleActivity(
+    return item(
       torrentName,
       "no_imdb",
       "fără subtitrare și fără IMDb id disponibil — nu pot căuta pe OpenSubtitles",
     );
-    return "no_imdb";
   }
 
   const results = await searchSubtitles(params.imdbId, "ro");
   if (!results.length) {
-    await logSubtitleActivity(
+    return item(
       torrentName,
       "no_subtitle_found",
       `niciun rezultat pe OpenSubtitles pentru IMDb ${params.imdbId}`,
-      { imdb: params.imdbId },
     );
-    return "no_subtitle_found";
   }
 
   const best = pickBestSubtitle(results, torrentName);
-  if (!best) return "no_subtitle_found";
+  if (!best) {
+    return item(torrentName, "no_subtitle_found", "niciun rezultat OpenSubtitles utilizabil");
+  }
 
   const content = await downloadSubtitle(best.result.fileId);
   if (!content) {
     console.warn(`[subtitles] "${torrentName}": descărcare OpenSubtitles eșuată`);
-    await logSubtitleActivity(
+    return item(
       torrentName,
       "download_failed",
       `descărcarea subtitrării de pe OpenSubtitles (release "${best.result.release}") a eșuat`,
     );
-    return "download_failed";
   }
 
   const destPath = join(savePath, mediaDir === "." ? "" : mediaDir, `${mediaBaseName}.ro.srt`);
@@ -173,33 +177,88 @@ export async function ensureRomanianSubtitle(
     await writeFile(destPath, content, "utf8");
     if (best.confident) {
       console.log(`[subtitles] "${torrentName}": subtitrare OpenSubtitles salvată → ${destPath}`);
-      await logSubtitleActivity(
+      return item(
         torrentName,
         "downloaded_opensubtitles",
         `subtitrare descărcată de pe OpenSubtitles (release "${best.result.release}", potrivire sursă+rezoluție confirmată) → ${destPath}`,
         { release: best.result.release, path: destPath },
       );
-      return "downloaded_opensubtitles";
     } else {
       console.warn(
         `[subtitles] "${torrentName}": subtitrare aproximativă salvată (fără potrivire clară de sursă/rezoluție), verifică sincronizarea → ${destPath}`,
       );
-      await logSubtitleActivity(
+      return item(
         torrentName,
         "downloaded_opensubtitles_approximate",
         `subtitrare aproximativă descărcată de pe OpenSubtitles (release "${best.result.release}", fără potrivire clară de sursă/rezoluție) → ${destPath} — verifică sincronizarea`,
         { release: best.result.release, path: destPath },
       );
-      return "downloaded_opensubtitles_approximate";
     }
   } catch (e) {
     console.warn(`[subtitles] "${torrentName}": scriere .srt eșuată:`, e);
-    await logSubtitleActivity(
+    return item(
       torrentName,
       "download_failed",
       `scrierea subtitrării descărcate pe disk a eșuat: ${e instanceof Error ? e.message : e}`,
     );
-    return "download_failed";
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Logging: o singură intrare de activitate per rulare (o descărcare sau un
+// backfill întreg), cu lista per-torrent atașată în meta.items pentru
+// afișarea de detalii la click în UI.
+// ---------------------------------------------------------------------------
+
+export type SubtitleRunTrigger = "download" | "backfill";
+
+// Outcome-uri care au schimbat efectiv ceva pe disk — folosit și de
+// backfillSubtitles (download.ts) ca să știe pentru ce categorii (filme/
+// seriale) trebuie declanșat refresh Plex.
+export const CORRECTED_OUTCOMES: SubtitleOutcome[] = [
+  "renamed_srt",
+  "downloaded_opensubtitles",
+  "downloaded_opensubtitles_approximate",
+];
+const OK_OUTCOMES: SubtitleOutcome[] = ["already_embedded"];
+
+export async function logSubtitleRun(
+  items: SubtitleRunItem[],
+  trigger: SubtitleRunTrigger,
+): Promise<void> {
+  if (!items.length) return;
+
+  const byOutcome: Record<string, number> = {};
+  for (const it of items) byOutcome[it.outcome] = (byOutcome[it.outcome] ?? 0) + 1;
+
+  const corrected = items.filter((it) => CORRECTED_OUTCOMES.includes(it.outcome)).length;
+  const ok = items.filter((it) => OK_OUTCOMES.includes(it.outcome)).length;
+  const rest = items.length - corrected - ok;
+
+  const message =
+    trigger === "download"
+      ? `${items[0].torrentName}: ${items[0].detail}`
+      : `Backfill subtitrări: ${items.length} verificate — ${corrected} corectate, ${ok} deja ok, ${rest} sărite/eșuate`;
+
+  try {
+    const { logActivity } = await import("../activity-log");
+    await logActivity("subtitle_fix", message, {
+      trigger,
+      total: items.length,
+      corrected,
+      ok,
+      rest,
+      byOutcome: Object.entries(byOutcome).map(([outcome, count]) => ({ outcome, count })),
+      items: items.map((it) => ({
+        torrentName: it.torrentName,
+        outcome: it.outcome,
+        detail: it.detail,
+        release: it.release,
+        path: it.path,
+      })),
+    });
+  } catch (e) {
+    console.warn("[subtitles] Nu am putut loga rezumatul rulării:", e);
   }
 }
 

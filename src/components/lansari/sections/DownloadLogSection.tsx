@@ -16,10 +16,15 @@ import {
 import { toast } from "sonner";
 
 import { filelistLogQuery } from "@/lib/queries";
-import { deleteFilelistLogEntry, backfillSubtitles } from "@/lib/filelist.functions";
+import {
+  deleteFilelistLogEntry,
+  backfillSubtitles,
+  getBackfillProgress,
+} from "@/lib/filelist.functions";
 import type { FilelistLogEntry } from "@/lib/filelist.functions";
 import { isMovieCategory } from "@/lib/filelist/categories";
 import { formatBytes } from "@/lib/format";
+import { Progress } from "@/components/ui/progress";
 import {
   AlertDialog,
   AlertDialogContent,
@@ -36,8 +41,10 @@ export function DownloadLogSection() {
   const { data: log, isLoading } = useQuery(filelistLogQuery);
   const deleteFn = useServerFn(deleteFilelistLogEntry);
   const backfillFn = useServerFn(backfillSubtitles);
+  const progressFn = useServerFn(getBackfillProgress);
   const [visibleCount, setVisibleCount] = useState(3);
   const [backfilling, setBackfilling] = useState(false);
+  const [progress, setProgress] = useState<{ total: number; done: number } | null>(null);
   const [pendingDelete, setPendingDelete] = useState<{
     id: number;
     name: string;
@@ -46,13 +53,18 @@ export function DownloadLogSection() {
 
   async function runBackfill() {
     setBackfilling(true);
+    setProgress(null);
     const toastId = toast.loading("Verific subtitrările pentru descărcările vechi…");
+    const pollInterval = setInterval(async () => {
+      const p = await progressFn().catch(() => null);
+      setProgress(p);
+    }, 1000);
     try {
       const res = await backfillFn({});
       if (res.status === "ok") {
         toast.success("Subtitrări verificate", {
           id: toastId,
-          description: `${res.processed} procesate, ${res.skipped} sărite`,
+          description: `${res.processed} verificate, ${res.corrected} corectate, ${res.skipped} sărite`,
           duration: 6000,
         });
       } else {
@@ -64,6 +76,8 @@ export function DownloadLogSection() {
         description: e instanceof Error ? e.message : String(e),
       });
     } finally {
+      clearInterval(pollInterval);
+      setProgress(null);
       setBackfilling(false);
     }
   }
@@ -103,6 +117,16 @@ export function DownloadLogSection() {
           Corectează subtitrări
         </button>
       </h3>
+      {backfilling && (
+        <div className="mb-2 px-1">
+          <Progress
+            value={progress ? (progress.done / Math.max(progress.total, 1)) * 100 : 0}
+          />
+          <div className="mt-1 text-[11px] text-muted-foreground">
+            {progress ? `${progress.done}/${progress.total} verificate` : "Pornesc verificarea…"}
+          </div>
+        </div>
+      )}
       <div className="rounded-2xl border border-border bg-card p-3">
         <div className="divide-y divide-border/60">
           {log.slice(0, visibleCount).map((e: FilelistLogEntry) => (

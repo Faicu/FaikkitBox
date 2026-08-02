@@ -23,12 +23,19 @@ export type ActivityType =
 
 export type JsonValue = string | number | boolean | null | undefined;
 
+// Valorile din meta acceptă și array de obiecte plate (ex. subtitle_fix
+// atașează lista per-torrent ca meta.items) — logActivity/getActivityLog
+// serializează/deserializează tot blob-ul cu JSON.stringify/parse dintr-o
+// dată, deci runtime-ul suportă deja structuri nested; doar tipul era
+// restricționat la primitive.
+export type ActivityMetaValue = JsonValue | Record<string, JsonValue>[];
+
 export interface ActivityEntry {
   id: string;
   timestamp: string; // ISO
   type: ActivityType;
   message: string;
-  meta?: Record<string, JsonValue>;
+  meta?: Record<string, ActivityMetaValue>;
 }
 
 // ---------------------------------------------------------------------------
@@ -52,15 +59,16 @@ const PUSH_TITLES: Record<ActivityType, string> = {
   // trebuie să mai trimită unul generic pentru acest tip.
   pinned_update: "",
   app_error: "⚠️ Eroare aplicație",
-  // Gol intenționat: rulează des la backfill (o intrare per torrent) — nu
-  // trebuie să bombardeze cu push-uri, dar rămâne vizibil în jurnal.
-  subtitle_fix: "",
+  // O singură intrare de log per rulare (descărcare unică sau backfill întreg
+  // — vezi logSubtitleRun în src/lib/filelist/subtitles.ts), deci un singur
+  // push per rulare, nu per torrent.
+  subtitle_fix: "💬 Subtitrare",
 };
 
 export async function logActivity(
   type: ActivityType,
   message: string,
-  meta?: Record<string, JsonValue>,
+  meta?: Record<string, ActivityMetaValue>,
 ): Promise<void> {
   try {
     const { getDb } = await import("./db");

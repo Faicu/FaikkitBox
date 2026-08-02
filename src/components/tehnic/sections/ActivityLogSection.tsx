@@ -20,6 +20,7 @@ import { activityLogQuery, recentCommitsQuery, commitsFromDbQuery } from "@/lib/
 import type { ActivityEntry } from "@/lib/activity-log";
 import type { GitHubCommit } from "@/lib/github.functions";
 import { CommitDrawer } from "../CommitDrawer";
+import { SubtitleFixDrawer } from "../SubtitleFixDrawer";
 import { relativeTime } from "../utils";
 
 type TimelineItem =
@@ -62,6 +63,7 @@ export function ActivityLogSection() {
   const [visible, setVisible] = useState(10);
   const [filter, setFilter] = useState("all");
   const [selectedCommit, setSelectedCommit] = useState<GitHubCommit | null>(null);
+  const [selectedSubtitleEntry, setSelectedSubtitleEntry] = useState<ActivityEntry | null>(null);
 
   const iconMap: Record<string, React.ReactNode> = {
     server_start: <Server className="h-3.5 w-3.5 text-emerald-400" />,
@@ -145,8 +147,21 @@ export function ActivityLogSection() {
           {shown.map((item) => {
             if (item.kind === "activity") {
               const entry = item.entry;
+              const hasSubtitleDetails =
+                entry.type === "subtitle_fix" &&
+                Array.isArray(entry.meta?.items) &&
+                (entry.meta.items as unknown[]).length > 0;
+              const Row = hasSubtitleDetails ? "button" : "div";
               return (
-                <div key={entry.id} className="flex items-start gap-2.5 px-3 py-2.5">
+                <Row
+                  key={entry.id}
+                  onClick={hasSubtitleDetails ? () => setSelectedSubtitleEntry(entry) : undefined}
+                  className={`w-full flex items-start gap-2.5 px-3 py-2.5 text-left ${
+                    hasSubtitleDetails
+                      ? "hover:bg-muted/40 transition-colors cursor-pointer"
+                      : ""
+                  }`}
+                >
                   <div className="mt-0.5 shrink-0">
                     {iconMap[entry.type] ?? (
                       <Activity className="h-3.5 w-3.5 text-muted-foreground" />
@@ -158,7 +173,7 @@ export function ActivityLogSection() {
                   <div className="shrink-0 text-[11px] text-muted-foreground whitespace-nowrap">
                     {relativeTime(entry.timestamp)}
                   </div>
-                </div>
+                </Row>
               );
             }
             const c = item.commit;
@@ -198,6 +213,12 @@ export function ActivityLogSection() {
 
       {selectedCommit && (
         <CommitDrawer commit={selectedCommit} onClose={() => setSelectedCommit(null)} />
+      )}
+      {selectedSubtitleEntry && (
+        <SubtitleFixDrawer
+          entry={selectedSubtitleEntry}
+          onClose={() => setSelectedSubtitleEntry(null)}
+        />
       )}
     </>
   );
