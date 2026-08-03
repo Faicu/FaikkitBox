@@ -804,28 +804,62 @@ async function hasEmbeddedRomanianSubtitle(mediaAbsPath: string): Promise<boolea
   }
 }
 
-const SOURCE_TAGS = [
-  "WEB-DL",
-  "WEBDL",
-  "WEBRip",
-  "BluRay",
-  "BDRip",
-  "BRRip",
-  "HDTV",
+const RESOLUTION_TAGS = ["2160p", "1080p", "720p", "480p"];
+// Modul de obținere a materialului (rip/encode), distinct de platforma de
+// streaming — un torrent "HULU.WEB-DL" și unul "AMZN.WEB-DL" au același mod
+// de obținere, dar sunt surse diferite; înainte erau amestecate într-o
+// singură listă, ceea ce făcea ca platforma să fie complet ignorată.
+const ACQUISITION_TAGS = ["WEB-DL", "WEBDL", "WEBRip", "BluRay", "BDRip", "BRRip", "HDTV", "DVDRip", "REMUX"];
+// Platforma/serviciul de streaming de unde provine fișierul — la fel de
+// importantă ca modul de obținere pentru sincronizare (rip-uri diferite de
+// pe platforme diferite au adesea tăieturi/intro diferite).
+const PLATFORM_TAGS = [
   "AMZN",
   "NF",
   "DSNP",
   "HMAX",
+  "MAX",
   "ATVP",
+  "HULU",
+  "PCOK",
+  "STAN",
+  "iT",
+  "MA",
+  "SHO",
+  "CRAV",
 ];
-const RESOLUTION_TAGS = ["2160p", "1080p", "720p", "480p"];
+const CODEC_TAGS = ["H264", "x264", "H265", "x265", "HEVC", "AV1", "XviD", "DivX"];
 
-function extractTags(name: string): { resolution: string | null; source: string | null; group: string | null } {
-  const resolution = RESOLUTION_TAGS.find((r) => new RegExp(r, "i").test(name)) ?? null;
-  const source = SOURCE_TAGS.find((s) => new RegExp(s.replace("-", "-?"), "i").test(name)) ?? null;
+// Caută un tag dintr-o listă ca token delimitat (punct/underscore/cratimă/
+// spațiu la ambele capete, sau începutul/sfârșitul numelui) — evită
+// potriviri false pe substring (ex. "MA" în interiorul altui cuvânt).
+// Cratima internă a unor tag-uri (ex. "WEB-DL") e opțională, ca să prindă și
+// varianta fără cratimă ("WEBDL"), deja listată separat oricum.
+function findTag(name: string, tags: string[]): string | null {
+  for (const tag of tags) {
+    const escaped = tag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/-/g, "-?");
+    const re = new RegExp(`(?:^|[.\\s_-])${escaped}(?:[.\\s_-]|$)`, "i");
+    if (re.test(name)) return tag;
+  }
+  return null;
+}
+
+interface ReleaseTags {
+  resolution: string | null;
+  acquisition: string | null;
+  platform: string | null;
+  codec: string | null;
+  group: string | null;
+}
+
+function extractTags(name: string): ReleaseTags {
+  const resolution = findTag(name, RESOLUTION_TAGS);
+  const acquisition = findTag(name, ACQUISITION_TAGS);
+  const platform = findTag(name, PLATFORM_TAGS);
+  const codec = findTag(name, CODEC_TAGS);
   const groupMatch = name.match(/-([A-Za-z0-9]+)$/);
   const group = groupMatch ? groupMatch[1].toLowerCase() : null;
-  return { resolution, source, group };
+  return { resolution, acquisition, platform, codec, group };
 }
 
 export interface ScoredRelease<T> {
@@ -836,20 +870,27 @@ export interface ScoredRelease<T> {
 
 // Alege, dintr-o listă de candidați (rezultate OpenSubtitles, variante dintr-o
 // arhivă subs.ro etc.), pe cel al cărui nume de release se potrivește cel mai
-// bine cu numele torrentului (sursă + rezoluție + grup de release) — o
-// subtitrare pentru altă sursă/calitate desincronizează timpii de afișare.
-// Generic — folosit atât pentru OpenSubtitles cât și pentru subs.ro, ca
-// scorul unui candidat de la o sursă să poată fi comparat direct cu scorul
-// unui candidat de la cealaltă sursă.
+// bine cu numele fișierului media — rezoluție, mod de obținere (WEB-DL/
+// BluRay/...), platformă (HULU/AMZN/...), codec și grup de release — ca
+// subtitrarea aleasă să fie identică sau cât mai apropiată de fișier, nu doar
+// "compatibilă" (o subtitrare pentru altă sursă/calitate desincronizează
+// timpii de afișare). Generic — folosit atât pentru OpenSubtitles cât și
+// pentru subs.ro, ca scorul unui candidat de la o sursă să poată fi comparat
+// direct cu scorul unui candidat de la cealaltă sursă.
+//
+// "confident" rămâne definit strict pe rezoluție+mod de obținere (cele mai
+// relevante pentru sincronizare); platformă/codec/grup contează doar pentru
+// alegerea între mai mulți candidați deja compatibili, ca să câștige cel mai
+// apropiat de numele exact al fișierului.
 function pickBestByRelease<T>(
   candidates: T[],
   releaseOf: (c: T) => string,
   popularityOf: (c: T) => number,
-  torrentName: string,
+  targetName: string,
 ): ScoredRelease<T> | null {
   if (!candidates.length) return null;
 
-  const target = extractTags(torrentName);
+  const target = extractTags(targetName);
 
   let best: T | null = null;
   let bestScore = -1;
@@ -860,16 +901,21 @@ function pickBestByRelease<T>(
     const tags = extractTags(releaseOf(c) || "");
     let score = 0;
     const resMatch = !!target.resolution && tags.resolution === target.resolution;
-    const srcMatch = !!target.source && tags.source === target.source;
-    if (resMatch) score += 2;
-    if (srcMatch) score += 2;
-    if (target.group && tags.group === target.group) score += 1;
+    const acqMatch = !!target.acquisition && tags.acquisition === target.acquisition;
+    const platformMatch = !!target.platform && tags.platform === target.platform;
+    const codecMatch = !!target.codec && tags.codec === target.codec;
+    const groupMatch = !!target.group && tags.group === target.group;
+    if (resMatch) score += 3;
+    if (acqMatch) score += 2;
+    if (platformMatch) score += 2;
+    if (codecMatch) score += 1;
+    if (groupMatch) score += 2;
 
     const popularity = popularityOf(c);
     if (score > bestScore || (score === bestScore && popularity > bestPopularity)) {
       best = c;
       bestScore = score;
-      bestConfident = resMatch && srcMatch;
+      bestConfident = resMatch && acqMatch;
       bestPopularity = popularity;
     }
   }
