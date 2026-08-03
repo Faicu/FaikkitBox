@@ -85,9 +85,11 @@ export function qbitPostForm(
 }
 
 export interface QbitFileInfo {
+  index: number; // poziția fișierului în torrent — necesar pentru filePrio
   name: string; // cale relativă în torrent, ex. "Sub/movie.srt"
   size: number;
   progress: number;
+  piece_range?: [number, number]; // pentru detectarea suprapunerii de piesă cu alte fișiere
 }
 
 // Listează fișierele unui torrent (pentru a găsi fișierul media + eventuale .srt).
@@ -119,4 +121,26 @@ export async function qbitRenameFile(
     newPath,
   });
   if (!res.ok) throw new Error(`qBit renameFile HTTP ${res.status}`);
+}
+
+// Exclude (prioritate 0) sau reinclude un fișier din setul "wanted" al unui
+// torrent. Folosit înainte de a modifica direct pe disc conținutul unui .srt
+// existent (conversie encoding) — bytes-ii nu mai corespund hash-ului piesei
+// din .torrent, iar excluderea fișierului face ca un eventual "Force Recheck"
+// să nu-l mai re-verifice/redescarce (revenind la varianta greșit codată) și
+// să nu-l mai ofere la seed altor peers (ar ieși ca hash mismatch pentru ei).
+export async function qbitSetFilePriority(
+  url: string,
+  hash: string,
+  fileIndex: number,
+  priority: 0 | 1 | 6 | 7,
+  user: string,
+  pass: string,
+): Promise<void> {
+  const res = await qbitPostForm(url, "/api/v2/torrents/filePrio", user, pass, {
+    hash,
+    id: String(fileIndex),
+    priority: String(priority),
+  });
+  if (!res.ok) throw new Error(`qBit filePrio HTTP ${res.status}`);
 }

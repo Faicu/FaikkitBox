@@ -20,7 +20,7 @@ import { promisify } from "node:util";
 import { readFile, writeFile } from "node:fs/promises";
 import { join, dirname, basename, extname } from "node:path";
 import iconv from "iconv-lite";
-import { qbitGet, qbitListFiles, qbitRenameFile } from "../qbit-client";
+import { qbitGet, qbitListFiles, qbitRenameFile, qbitSetFilePriority } from "../qbit-client";
 import { searchSubtitles, downloadSubtitle, type OpenSubtitlesResult } from "../opensubtitles-client";
 import { type SubtitleOutcome, CORRECTED_OUTCOMES, OK_OUTCOMES, SHORT_LABELS } from "./subtitle-outcomes";
 import { lookupTitleByImdbId, searchImdbIdByReleaseName } from "../tmdb-title-lookup";
@@ -75,18 +75,36 @@ async function readFileWithRetry(absPath: string, attempts = 4, delayMs = 500): 
 // noi, deci nu le controlăm bytes-ii din start). Scrierea se face direct pe
 // disc, în afara API-ului qBittorrent: schimbă doar conținutul, nu calea,
 // deci nu afectează evidența fișierelor din qBittorrent (spre deosebire de
-// redenumire, care trebuie mereu prin API).
-async function ensureUtf8SrtOnDisk(absPath: string): Promise<boolean> {
+// redenumire, care trebuie mereu prin API) — DAR modifică bytes-ii fișierului,
+// deci nu mai corespund hash-ului piesei din .torrent. Chiar înainte de
+// scriere, excludem fișierul de la download/seed în qBittorrent (`exclude`),
+// ca un eventual "Force Recheck" viitor să nu-l mai re-verifice/redescarce
+// (anulând conversia) și să nu-l mai oferim la seed altor peers cu bytes
+// modificați (hash mismatch pentru ei). Excluderea e permanentă și
+// intenționată — un .srt are dimensiune neglijabilă, nu afectează ratio-ul.
+async function ensureUtf8SrtOnDisk(absPath: string, exclude: () => Promise<void>): Promise<boolean> {
   try {
     const buf = await readFileWithRetry(absPath);
     const { text, wasConverted } = decodeToUtf8Text(buf);
     if (!wasConverted) return false;
+    await exclude().catch((e) =>
+      console.warn(`[subtitles] Nu am putut exclude .srt de la seed în qBittorrent (${absPath}):`, e),
+    );
     await writeFile(absPath, text, "utf8");
     return true;
   } catch (e) {
     console.warn(`[subtitles] Verificare/conversie UTF-8 eșuată pentru ${absPath}:`, e);
     return false;
   }
+}
+
+// Verifică dacă două fișiere din același torrent partajează cel puțin o
+// piesă — dacă da, excluderea unuia singur de la seed (qbitSetFilePriority)
+// nu protejează complet la un recheck, pentru că piesa comună tot e "wanted"
+// prin celălalt fișier. Doar avertisment, nu blochează conversia.
+function piecesOverlap(a?: [number, number], b?: [number, number]): boolean {
+  if (!a || !b) return false;
+  return a[0] <= b[1] && b[0] <= a[1];
 }
 
 const MEDIA_EXTENSIONS = [".mkv", ".mp4", ".avi", ".m2ts", ".ts", ".wmv", ".mov"];
@@ -218,7 +236,9 @@ export async function ensureRomanianSubtitle(
     }
 
     const finalAbsPath = join(savePath, targetSrtRelPath);
-    const wasReencoded = await ensureUtf8SrtOnDisk(finalAbsPath);
+    const wasReencoded = await ensureUtf8SrtOnDisk(finalAbsPath, () =>
+      qbitSetFilePriority(qbitUrl, torrentHash, current.index, 0, qbitUser, qbitPass),
+    );
     if (wasReencoded) {
       console.log(`[subtitles] "${torrentName}": .srt convertit la UTF-8 → ${targetSrtRelPath}`);
     }
@@ -232,7 +252,14 @@ export async function ensureRomanianSubtitle(
       parts.push(`.srt redenumit → "${basename(targetSrtRelPath)}" (Plex îl recunoaște acum ca română)`);
     }
     if (wasReencoded) {
-      parts.push("conținut convertit la UTF-8 (era codat altfel — diacriticele ar fi ieșit corupte în Plex)");
+      parts.push(
+        "conținut convertit la UTF-8 (era codat altfel — diacriticele ar fi ieșit corupte în Plex); exclus de la seed în qBittorrent (dimensiune neglijabilă, evită conflicte de hash la un eventual recheck)",
+      );
+      if (piecesOverlap(current.piece_range, mediaFile.piece_range)) {
+        parts.push(
+          "risc rezidual: piesa .srt-ului e comună cu piesa fișierului video (încă seed-uit) — un recheck viitor tot ar putea re-descărca acea piesă și anula conversia",
+        );
+      }
     }
     return item(torrentName, displayTitle, needsRename ? "renamed_srt" : "reencoded_srt", parts.join("; "), {
       path: targetSrtRelPath,
