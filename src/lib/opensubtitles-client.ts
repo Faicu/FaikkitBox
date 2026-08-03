@@ -13,11 +13,20 @@ export interface OpenSubtitlesResult {
   downloadCount: number;
   rating: number;
   fps?: number;
+  // Prezente doar la căutarea per sezon (searchSeasonSubtitles) — folosite
+  // pentru a asocia fiecare rezultat cu episodul corect.
+  seasonNumber?: number;
+  episodeNumber?: number;
 }
 
 interface OsSubtitleFile {
   file_id: number;
   file_name?: string;
+}
+
+interface OsFeatureDetails {
+  season_number?: number;
+  episode_number?: number;
 }
 
 interface OsSubtitleAttributes {
@@ -26,10 +35,31 @@ interface OsSubtitleAttributes {
   ratings?: number;
   fps?: number;
   files?: OsSubtitleFile[];
+  feature_details?: OsFeatureDetails;
 }
 
 interface OsSearchResponse {
   data?: Array<{ attributes?: OsSubtitleAttributes }>;
+}
+
+function parseSearchResponse(data: OsSearchResponse): OpenSubtitlesResult[] {
+  if (!Array.isArray(data.data)) return [];
+  const results: OpenSubtitlesResult[] = [];
+  for (const item of data.data) {
+    const attrs = item.attributes;
+    const fileId = attrs?.files?.[0]?.file_id;
+    if (!fileId) continue;
+    results.push({
+      fileId,
+      release: attrs?.release ?? "",
+      downloadCount: attrs?.download_count ?? 0,
+      rating: attrs?.ratings ?? 0,
+      fps: attrs?.fps,
+      seasonNumber: attrs?.feature_details?.season_number,
+      episodeNumber: attrs?.feature_details?.episode_number,
+    });
+  }
+  return results;
 }
 
 function apiKey(): string | null {
@@ -86,23 +116,39 @@ export async function searchSubtitles(
       signal: AbortSignal.timeout(15_000),
     });
     if (!res.ok) return [];
-    const data = (await res.json()) as OsSearchResponse;
-    if (!Array.isArray(data.data)) return [];
+    return parseSearchResponse((await res.json()) as OsSearchResponse);
+  } catch {
+    return [];
+  }
+}
 
-    const results: OpenSubtitlesResult[] = [];
-    for (const item of data.data) {
-      const attrs = item.attributes;
-      const fileId = attrs?.files?.[0]?.file_id;
-      if (!fileId) continue;
-      results.push({
-        fileId,
-        release: attrs?.release ?? "",
-        downloadCount: attrs?.download_count ?? 0,
-        rating: attrs?.ratings ?? 0,
-        fps: attrs?.fps,
-      });
-    }
-    return results;
+// Caută subtitrări pentru TOT un sezon al unui serial, într-un singur apel —
+// mult mai eficient decât un request per episod. `showImdbId` e IMDb id-ul
+// serialului (nu al unui episod individual). Fiecare rezultat vine cu
+// seasonNumber/episodeNumber populate, pentru asociere ulterioară cu
+// episodul corect (vezi src/lib/filelist/subtitles.ts, processSeasonPack).
+export async function searchSeasonSubtitles(
+  showImdbId: string,
+  seasonNumber: number,
+  language = "ro",
+): Promise<OpenSubtitlesResult[]> {
+  const key = apiKey();
+  if (!key) return [];
+
+  const cleanImdb = showImdbId.replace(/^tt/i, "");
+  const params = new URLSearchParams({
+    parent_imdb_id: cleanImdb,
+    season_number: String(seasonNumber),
+    languages: language,
+  });
+
+  try {
+    const res = await fetch(`${API_BASE}/subtitles?${params.toString()}`, {
+      headers: { "Api-Key": key, Accept: "application/json" },
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!res.ok) return [];
+    return parseSearchResponse((await res.json()) as OsSearchResponse);
   } catch {
     return [];
   }

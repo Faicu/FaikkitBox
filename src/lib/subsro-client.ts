@@ -12,6 +12,7 @@ const API_BASE = "https://api.subs.ro/v1.0";
 
 export interface SubsRoItem {
   id: number;
+  title: string;
   description: string;
   translator: string;
   language: string;
@@ -39,10 +40,11 @@ export async function searchSubsRo(imdbId: string, language = "ro"): Promise<Sub
     );
     if (!res.ok) return [];
     const data = (await res.json()) as {
-      items?: Array<{ id: number; description?: string; translator?: string; language?: string }>;
+      items?: Array<{ id: number; title?: string; description?: string; translator?: string; language?: string }>;
     };
     return (data.items ?? []).map((it) => ({
       id: it.id,
+      title: it.title ?? "",
       description: it.description ?? "",
       translator: it.translator ?? "",
       language: it.language ?? language,
@@ -50,6 +52,16 @@ export async function searchSubsRo(imdbId: string, language = "ro"): Promise<Sub
   } catch {
     return [];
   }
+}
+
+// Pentru seriale, o căutare după IMDb id-ul serialului întoarce rezultate
+// pentru toate sezoanele — filtrăm după numărul sezonului căutat, extras din
+// title/description (ex. "The Rookie - Sezonul 8", "Sezonul 8 complet, 18
+// episoade..."). Case insensitive, acceptă și "sezon" fără "ul".
+export function subsRoItemMatchesSeason(item: SubsRoItem, seasonNumber: number): boolean {
+  const text = `${item.title} ${item.description}`;
+  const m = text.match(/sezon(?:ul)?\s+0*(\d{1,3})\b/i);
+  return m ? Number(m[1]) === seasonNumber : false;
 }
 
 // Descarcă arhiva .zip a unei subtitrări (bytes bruți). null la orice eroare.

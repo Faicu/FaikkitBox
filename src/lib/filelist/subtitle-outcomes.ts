@@ -17,7 +17,12 @@ export type SubtitleOutcome =
   | "no_imdb"
   | "no_subtitle_found"
   | "download_failed"
-  | "no_media_file";
+  | "no_media_file"
+  // Rezultate agregate pentru un pachet de episoade (season pack) — un
+  // singur SubtitleRunItem per torrent, cu detaliu per episod în `detail`.
+  | "season_corrected"
+  | "season_already_ok"
+  | "season_no_subtitle_found";
 
 // Outcome-uri care au schimbat efectiv ceva pe disk — folosite de
 // backfillSubtitles ca să știe pentru ce categorii (filme/seriale) trebuie
@@ -28,13 +33,14 @@ export const CORRECTED_OUTCOMES: SubtitleOutcome[] = [
   "reencoded_srt",
   "downloaded_opensubtitles",
   "downloaded_opensubtitles_approximate",
+  "season_corrected",
 ];
 
 // Outcome-uri "nimic de făcut" — subtitrarea era deja corectă. Folosite și
 // pentru a decide când NU trimitem notificare push la o descărcare unică
 // (logSubtitleRun) — utilizatorul nu vrea push când n-a fost nevoie de nicio
 // intervenție.
-export const OK_OUTCOMES: SubtitleOutcome[] = ["already_embedded", "srt_already_ok"];
+export const OK_OUTCOMES: SubtitleOutcome[] = ["already_embedded", "srt_already_ok", "season_already_ok"];
 
 export const APPROXIMATE_OUTCOMES: SubtitleOutcome[] = ["downloaded_opensubtitles_approximate"];
 
@@ -54,4 +60,7 @@ export const SHORT_LABELS: Record<SubtitleOutcome, string> = {
   no_subtitle_found: "nicio subtitrare găsită pe OpenSubtitles",
   download_failed: "eroare la corectarea subtitrării",
   no_media_file: "niciun fișier media găsit în torrent",
+  season_corrected: "subtitrări corectate pentru sezon (vezi detalii per episod)",
+  season_already_ok: "toate episoadele au deja subtitrare corectă",
+  season_no_subtitle_found: "unele episoade fără subtitrare găsită (vezi detalii)",
 };

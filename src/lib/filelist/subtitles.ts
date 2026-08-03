@@ -20,9 +20,14 @@ import { promisify } from "node:util";
 import { access, readFile, writeFile } from "node:fs/promises";
 import { join, dirname, basename, extname } from "node:path";
 import iconv from "iconv-lite";
-import { qbitGet, qbitListFiles, qbitRenameFile, qbitSetFilePriority } from "../qbit-client";
-import { searchSubtitles, downloadSubtitle } from "../opensubtitles-client";
-import { searchSubsRo, downloadSubsRoZip, extractSrtEntriesFromZip } from "../subsro-client";
+import { qbitGet, qbitListFiles, qbitRenameFile, qbitSetFilePriority, type QbitFileInfo } from "../qbit-client";
+import { searchSubtitles, searchSeasonSubtitles, downloadSubtitle } from "../opensubtitles-client";
+import {
+  searchSubsRo,
+  downloadSubsRoZip,
+  extractSrtEntriesFromZip,
+  subsRoItemMatchesSeason,
+} from "../subsro-client";
 import { type SubtitleOutcome, CORRECTED_OUTCOMES, OK_OUTCOMES, SHORT_LABELS } from "./subtitle-outcomes";
 import { lookupTitleByImdbId, searchImdbIdByReleaseName } from "../tmdb-title-lookup";
 
@@ -120,6 +125,24 @@ function piecesOverlap(a?: [number, number], b?: [number, number]): boolean {
 const MEDIA_EXTENSIONS = [".mkv", ".mp4", ".avi", ".m2ts", ".ts", ".wmv", ".mov"];
 const ROMANIAN_LANG_CODES = ["ro", "rum", "ron"];
 
+// Extrage sezon+episod dintr-un nume de fișier (ex. "...S08E01..." → {8, 1}).
+// Folosit atât pentru a asocia fiecare fișier media cu subtitrarea lui
+// corectă într-un pachet de episoade, cât și pentru a determina sezonul
+// pachetului (din primul fișier media care se potrivește).
+function parseSeasonEpisode(name: string): { season: number; episode: number } | null {
+  const m = name.match(/S(\d{1,3})E(\d{1,3})/i);
+  if (!m) return null;
+  return { season: Number(m[1]), episode: Number(m[2]) };
+}
+
+// Cheie normalizată (ex. "S08E01") pentru potrivire exactă între un fișier
+// media și subtitrarea/candidatul lui, indiferent de padding-ul original.
+function extractEpisodeKey(name: string): string | null {
+  const se = parseSeasonEpisode(name);
+  if (!se) return null;
+  return `S${String(se.season).padStart(2, "0")}E${String(se.episode).padStart(2, "0")}`;
+}
+
 interface EnsureRomanianSubtitleParams {
   qbitUrl: string;
   qbitUser: string;
@@ -192,17 +215,21 @@ export async function ensureRomanianSubtitle(
   if (!mediaFiles.length) {
     return item(torrentName, displayTitle, "no_media_file", "niciun fișier media recunoscut în torrent");
   }
-  // Torrent cu mai multe episoade ("season pack") — nu avem cum să știm
-  // sigur cărui episod îi aparține un .srt găsit, iar asocierea greșită
-  // (subtitrare pe alt episod) e mai rea decât să nu facem nimic. Sărim
-  // peste complet, fără nicio verificare/modificare.
+  // Torrent cu mai multe episoade ("season pack") — procesat separat, per
+  // episod (fiecare fișier media asociat cu subtitrarea lui după SxxExx).
   if (mediaFiles.length > 1) {
-    return item(
+    return processSeasonPack({
+      mediaFiles,
+      downloadedFiles,
+      savePath,
+      qbitUrl,
+      torrentHash,
+      qbitUser,
+      qbitPass,
       torrentName,
       displayTitle,
-      "season_pack_skipped",
-      `torrent cu ${mediaFiles.length} fișiere media (probabil pachet de episoade) — sar peste, nu pot asocia sigur subtitrarea cu episodul corect`,
-    );
+      imdbId,
+    });
   }
   const mediaFile = mediaFiles[0];
 
@@ -419,6 +446,255 @@ export async function ensureRomanianSubtitle(
       `scrierea subtitrării descărcate pe disk a eșuat: ${e instanceof Error ? e.message : e}`,
     );
   }
+}
+
+// ---------------------------------------------------------------------------
+// Pachet de episoade (season pack) — fiecare fișier media procesat separat,
+// asociat cu subtitrarea lui după cheia SxxExx. Rezultatele OpenSubtitles
+// (căutare pe tot sezonul, un singur apel) și subs.ro (căutare + arhive,
+// preluate lazy — doar dacă chiar e nevoie) sunt partajate între toate
+// episoadele din același torrent, nu re-cerute per episod. Agregă totul
+// într-un singur SubtitleRunItem, cu detaliu per episod în `detail`.
+// ---------------------------------------------------------------------------
+
+interface ProcessSeasonPackParams {
+  mediaFiles: QbitFileInfo[];
+  downloadedFiles: QbitFileInfo[];
+  savePath: string;
+  qbitUrl: string;
+  torrentHash: string;
+  qbitUser: string;
+  qbitPass: string;
+  torrentName: string;
+  displayTitle: string;
+  imdbId: string | null;
+}
+
+async function processSeasonPack(params: ProcessSeasonPackParams): Promise<SubtitleRunItem> {
+  const {
+    mediaFiles,
+    downloadedFiles,
+    savePath,
+    qbitUrl,
+    torrentHash,
+    qbitUser,
+    qbitPass,
+    torrentName,
+    displayTitle,
+    imdbId,
+  } = params;
+
+  const seasonNumber = mediaFiles.map((f) => parseSeasonEpisode(f.name)?.season).find((s) => s != null) ?? null;
+
+  if (!imdbId || seasonNumber == null) {
+    return item(
+      torrentName,
+      displayTitle,
+      "season_pack_skipped",
+      `pachet cu ${mediaFiles.length} fișiere media — ${
+        !imdbId ? "fără IMDb id" : "nu am putut determina sezonul din numele fișierelor"
+      }, nu pot căuta subtitrări per episod`,
+    );
+  }
+
+  // Rezultate OpenSubtitles pentru tot sezonul, într-un singur apel.
+  const osSeasonResults = await searchSeasonSubtitles(imdbId, seasonNumber, "ro");
+
+  // subs.ro — preluat lazy, doar dacă vreun episod chiar are nevoie (nicio
+  // potrivire "confident" în OpenSubtitles pentru el). O singură căutare +
+  // cel mult 2 arhive descărcate, refolosite pentru toate episoadele.
+  let subsRoEntries: Array<{ release: string; content: Buffer }> | null = null;
+  async function getSubsRoEntries(): Promise<Array<{ release: string; content: Buffer }>> {
+    if (subsRoEntries) return subsRoEntries;
+    subsRoEntries = [];
+    const items = await searchSubsRo(imdbId!, "ro");
+    const seasonItems = items.filter((it) => subsRoItemMatchesSeason(it, seasonNumber!));
+    for (const it of seasonItems.slice(0, 2)) {
+      const zipBuf = await downloadSubsRoZip(it.id);
+      if (zipBuf) subsRoEntries.push(...extractSrtEntriesFromZip(zipBuf));
+    }
+    return subsRoEntries;
+  }
+
+  interface EpisodeResult {
+    episodeKey: string;
+    outcome: SubtitleOutcome;
+    detail: string;
+  }
+  const episodeResults: EpisodeResult[] = [];
+
+  for (const mediaFile of mediaFiles) {
+    const episodeKey = extractEpisodeKey(mediaFile.name);
+    if (!episodeKey) {
+      episodeResults.push({
+        episodeKey: basename(mediaFile.name, extname(mediaFile.name)),
+        outcome: "no_subtitle_found",
+        detail: "nu am putut determina numărul episodului din numele fișierului",
+      });
+      continue;
+    }
+
+    const mediaAbsPath = join(savePath, mediaFile.name);
+    const mediaBaseName = basename(mediaFile.name, extname(mediaFile.name));
+    const mediaDir = dirname(mediaFile.name);
+    const targetSrtRelPath = mediaDir === "." ? `${mediaBaseName}.ro.srt` : `${mediaDir}/${mediaBaseName}.ro.srt`;
+
+    if (await hasEmbeddedRomanianSubtitle(mediaAbsPath)) {
+      episodeResults.push({
+        episodeKey,
+        outcome: "already_embedded",
+        detail: "are deja subtitrare română încorporată",
+      });
+      continue;
+    }
+
+    const episodeSrtFiles = downloadedFiles.filter(
+      (f) => f.name.toLowerCase().endsWith(".srt") && extractEpisodeKey(f.name) === episodeKey,
+    );
+
+    if (episodeSrtFiles.length === 1) {
+      const current = episodeSrtFiles[0];
+      const needsRename = current.name !== targetSrtRelPath;
+      if (needsRename) {
+        try {
+          await qbitRenameFile(qbitUrl, torrentHash, current.name, targetSrtRelPath, qbitUser, qbitPass);
+        } catch (e) {
+          episodeResults.push({
+            episodeKey,
+            outcome: "download_failed",
+            detail: `redenumire .srt eșuată: ${e instanceof Error ? e.message : e}`,
+          });
+          continue;
+        }
+      }
+
+      const finalAbsPath = join(savePath, targetSrtRelPath);
+      const wasReencoded = await ensureUtf8SrtOnDisk(finalAbsPath, () =>
+        qbitSetFilePriority(qbitUrl, torrentHash, current.index, 0, qbitUser, qbitPass),
+      );
+
+      if (!needsRename && !wasReencoded) {
+        episodeResults.push({ episodeKey, outcome: "srt_already_ok", detail: "are deja .srt corect" });
+      } else {
+        const parts = [
+          needsRename && `.srt redenumit → "${basename(targetSrtRelPath)}"`,
+          wasReencoded && "convertit la UTF-8, exclus de la seed",
+        ].filter(Boolean);
+        episodeResults.push({
+          episodeKey,
+          outcome: needsRename ? "renamed_srt" : "reencoded_srt",
+          detail: parts.join("; "),
+        });
+      }
+      continue;
+    }
+
+    if (episodeSrtFiles.length > 1) {
+      episodeResults.push({
+        episodeKey,
+        outcome: "multiple_srt_skipped",
+        detail: `${episodeSrtFiles.length} fișiere .srt găsite pentru acest episod — sar peste`,
+      });
+      continue;
+    }
+
+    // .srt extern descărcat anterior (nu urmărit de qBittorrent) — la fel ca
+    // la filme, verificăm direct pe disc înainte să căutăm din nou.
+    const sidecarAbsPath = join(savePath, targetSrtRelPath);
+    if (await fileExists(sidecarAbsPath)) {
+      const wasReencoded = await ensureUtf8SrtOnDisk(sidecarAbsPath, async () => {});
+      episodeResults.push({
+        episodeKey,
+        outcome: "srt_already_ok",
+        detail: wasReencoded ? "are deja .srt extern, convertit la UTF-8" : "are deja .srt extern corect",
+      });
+      continue;
+    }
+
+    // Căutare externă — OpenSubtitles (deja preluat pentru tot sezonul), apoi
+    // subs.ro (lazy) dacă nu avem o potrivire clară de sursă+rezoluție.
+    interface Winner {
+      source: "opensubtitles" | "subsro";
+      release: string;
+      getContent: () => Promise<Buffer | null>;
+    }
+    let winner: Winner | null = null;
+    let winnerScore = -1;
+    let winnerConfident = false;
+
+    const osForEpisode = osSeasonResults.filter((r) => {
+      if (r.seasonNumber == null || r.episodeNumber == null) return extractEpisodeKey(r.release) === episodeKey;
+      return `S${String(r.seasonNumber).padStart(2, "0")}E${String(r.episodeNumber).padStart(2, "0")}` === episodeKey;
+    });
+    const osBest = pickBestByRelease(osForEpisode, (r) => r.release, (r) => r.downloadCount, mediaFile.name);
+    if (osBest) {
+      winner = {
+        source: "opensubtitles",
+        release: osBest.candidate.release,
+        getContent: () => downloadSubtitle(osBest.candidate.fileId),
+      };
+      winnerScore = osBest.score;
+      winnerConfident = osBest.confident;
+    }
+
+    if (!winnerConfident) {
+      const allSubsRo = await getSubsRoEntries();
+      const subsRoForEpisode = allSubsRo.filter((e) => extractEpisodeKey(e.release) === episodeKey);
+      const subsRoBest = pickBestByRelease(subsRoForEpisode, (e) => e.release, () => 0, mediaFile.name);
+      if (subsRoBest && subsRoBest.score > winnerScore) {
+        const chosenContent = subsRoBest.candidate.content;
+        winner = { source: "subsro", release: subsRoBest.candidate.release, getContent: async () => chosenContent };
+        winnerConfident = subsRoBest.confident;
+      }
+    }
+
+    if (!winner) {
+      episodeResults.push({ episodeKey, outcome: "no_subtitle_found", detail: "nicio subtitrare găsită" });
+      continue;
+    }
+
+    const sourceLabel = winner.source === "opensubtitles" ? "OpenSubtitles" : "subs.ro";
+    const content = await winner.getContent();
+    if (!content) {
+      episodeResults.push({
+        episodeKey,
+        outcome: "download_failed",
+        detail: `descărcare eșuată de pe ${sourceLabel} (release „${winner.release}")`,
+      });
+      continue;
+    }
+
+    try {
+      const { text, wasConverted } = decodeToUtf8Text(content);
+      await writeFile(join(savePath, mediaDir === "." ? "" : mediaDir, `${mediaBaseName}.ro.srt`), text, "utf8");
+      episodeResults.push({
+        episodeKey,
+        outcome: winnerConfident ? "downloaded_opensubtitles" : "downloaded_opensubtitles_approximate",
+        detail: `descărcat de pe ${sourceLabel}, release „${winner.release}"${
+          winnerConfident ? "" : " (aproximativ — verifică sincronizarea)"
+        }${wasConverted ? ", UTF-8" : ""}`,
+      });
+    } catch (e) {
+      episodeResults.push({
+        episodeKey,
+        outcome: "download_failed",
+        detail: `scriere eșuată: ${e instanceof Error ? e.message : e}`,
+      });
+    }
+  }
+
+  const corrected = episodeResults.filter((r) => CORRECTED_OUTCOMES.includes(r.outcome)).length;
+  const ok = episodeResults.filter((r) => OK_OUTCOMES.includes(r.outcome)).length;
+  const failed = episodeResults.length - corrected - ok;
+
+  const summary = `${episodeResults.length} episoade — ${corrected} corectate, ${ok} deja ok, ${failed} fără subtitrare`;
+  const perEpisode = episodeResults
+    .sort((a, b) => a.episodeKey.localeCompare(b.episodeKey))
+    .map((r) => `${r.episodeKey}: ${r.detail}`)
+    .join("; ");
+
+  const outcome: SubtitleOutcome = corrected > 0 ? "season_corrected" : failed > 0 ? "season_no_subtitle_found" : "season_already_ok";
+  return item(torrentName, displayTitle, outcome, `${summary} — ${perEpisode}`);
 }
 
 // ---------------------------------------------------------------------------
