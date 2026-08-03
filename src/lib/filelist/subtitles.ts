@@ -501,15 +501,22 @@ async function processSeasonPack(params: ProcessSeasonPackParams): Promise<Subti
   const osSeasonResults = await searchSeasonSubtitles(imdbId, seasonNumber, "ro");
 
   // subs.ro — preluat lazy, doar dacă vreun episod chiar are nevoie (nicio
-  // potrivire "confident" în OpenSubtitles pentru el). O singură căutare +
-  // cel mult 2 arhive descărcate, refolosite pentru toate episoadele.
+  // potrivire "confident" în OpenSubtitles pentru el). Un sezon în
+  // desfășurare apare adesea ca mai multe pachete PARȚIALE, publicate pe
+  // măsură ce ies episoadele (ex. "Episoadele 1-4", apoi separat "Episoadele
+  // 5-8"), toate potrivind același "Sezonul N" din descriere — de asta
+  // descărcăm TOATE pachetele sezonului găsite (până la un plafon generos),
+  // nu doar primele 1-2, altfel am rata episoadele dintr-un pachet mai vechi.
+  // Rezultatele din toate pachetele sunt puse laolaltă și filtrate per
+  // episod mai jos — un episod care nu apare în niciunul rămâne fără
+  // subtitrare de pe subs.ro (raportat explicit, nu blochează restul).
   let subsRoEntries: Array<{ release: string; content: Buffer }> | null = null;
   async function getSubsRoEntries(): Promise<Array<{ release: string; content: Buffer }>> {
     if (subsRoEntries) return subsRoEntries;
     subsRoEntries = [];
     const items = await searchSubsRo(imdbId!, "ro");
     const seasonItems = items.filter((it) => subsRoItemMatchesSeason(it, seasonNumber!));
-    for (const it of seasonItems.slice(0, 2)) {
+    for (const it of seasonItems.slice(0, 6)) {
       const zipBuf = await downloadSubsRoZip(it.id);
       if (zipBuf) subsRoEntries.push(...extractSrtEntriesFromZip(zipBuf));
     }
