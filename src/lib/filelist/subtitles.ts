@@ -21,7 +21,8 @@ import { readFile, writeFile } from "node:fs/promises";
 import { join, dirname, basename, extname } from "node:path";
 import iconv from "iconv-lite";
 import { qbitGet, qbitListFiles, qbitRenameFile, qbitSetFilePriority } from "../qbit-client";
-import { searchSubtitles, downloadSubtitle, type OpenSubtitlesResult } from "../opensubtitles-client";
+import { searchSubtitles, downloadSubtitle } from "../opensubtitles-client";
+import { searchSubsRo, downloadSubsRoZip, extractSrtEntriesFromZip } from "../subsro-client";
 import { type SubtitleOutcome, CORRECTED_OUTCOMES, OK_OUTCOMES, SHORT_LABELS } from "./subtitle-outcomes";
 import { lookupTitleByImdbId, searchImdbIdByReleaseName } from "../tmdb-title-lookup";
 
@@ -277,40 +278,80 @@ export async function ensureRomanianSubtitle(
     );
   }
 
-  // Caz 1: nicio subtitrare deloc — încercăm OpenSubtitles.
+  // Caz 1: nicio subtitrare deloc — încercăm OpenSubtitles, apoi (dacă
+  // rezultatul nu e o potrivire "confident" de sursă+rezoluție) și subs.ro,
+  // care are des exact release-ul căutat pentru lansări românești recente.
   if (!imdbId) {
-    console.warn(`[subtitles] "${torrentName}": fără IMDb id, nu pot căuta pe OpenSubtitles`);
+    console.warn(`[subtitles] "${torrentName}": fără IMDb id, nu pot căuta subtitrare`);
     return item(
       torrentName,
       displayTitle,
       "no_imdb",
-      "fără subtitrare și fără IMDb id disponibil — nu pot căuta pe OpenSubtitles",
+      "fără subtitrare și fără IMDb id disponibil — nu pot căuta pe OpenSubtitles/subs.ro",
     );
   }
 
-  const results = await searchSubtitles(imdbId, "ro");
-  if (!results.length) {
+  interface Winner {
+    source: "opensubtitles" | "subsro";
+    release: string;
+    getContent: () => Promise<Buffer | null>;
+  }
+
+  let winner: Winner | null = null;
+  let winnerScore = -1;
+  let winnerConfident = false;
+
+  const osResults = await searchSubtitles(imdbId, "ro");
+  const osBest = pickBestByRelease(osResults, (r) => r.release, (r) => r.downloadCount, torrentName);
+  if (osBest) {
+    winner = {
+      source: "opensubtitles",
+      release: osBest.candidate.release,
+      getContent: () => downloadSubtitle(osBest.candidate.fileId),
+    };
+    winnerScore = osBest.score;
+    winnerConfident = osBest.confident;
+  }
+
+  // OpenSubtitles n-a dat o potrivire clară de sursă+rezoluție — verificăm și
+  // subs.ro. O arhivă subs.ro poate conține mai multe variante (una per
+  // sursă/rezoluție), fiecare tratată ca un candidat separat, scorat la fel.
+  if (!winnerConfident) {
+    const subsRoItems = await searchSubsRo(imdbId, "ro");
+    if (subsRoItems.length) {
+      const zipEntries: Array<{ release: string; content: Buffer }> = [];
+      for (const it of subsRoItems.slice(0, 3)) {
+        const zipBuf = await downloadSubsRoZip(it.id);
+        if (zipBuf) zipEntries.push(...extractSrtEntriesFromZip(zipBuf));
+      }
+      const subsRoBest = pickBestByRelease(zipEntries, (e) => e.release, () => 0, torrentName);
+      if (subsRoBest && subsRoBest.score > winnerScore) {
+        const chosenContent = subsRoBest.candidate.content;
+        winner = { source: "subsro", release: subsRoBest.candidate.release, getContent: async () => chosenContent };
+        winnerScore = subsRoBest.score;
+        winnerConfident = subsRoBest.confident;
+      }
+    }
+  }
+
+  if (!winner) {
     return item(
       torrentName,
       displayTitle,
       "no_subtitle_found",
-      `niciun rezultat pe OpenSubtitles pentru IMDb ${imdbId}`,
+      `niciun rezultat pe OpenSubtitles sau subs.ro pentru IMDb ${imdbId}`,
     );
   }
 
-  const best = pickBestSubtitle(results, torrentName);
-  if (!best) {
-    return item(torrentName, displayTitle, "no_subtitle_found", "niciun rezultat OpenSubtitles utilizabil");
-  }
-
-  const content = await downloadSubtitle(best.result.fileId);
+  const sourceLabel = winner.source === "opensubtitles" ? "OpenSubtitles" : "subs.ro";
+  const content = await winner.getContent();
   if (!content) {
-    console.warn(`[subtitles] "${torrentName}": descărcare OpenSubtitles eșuată`);
+    console.warn(`[subtitles] "${torrentName}": descărcare ${sourceLabel} eșuată`);
     return item(
       torrentName,
       displayTitle,
       "download_failed",
-      `descărcarea subtitrării de pe OpenSubtitles (release "${best.result.release}") a eșuat`,
+      `descărcarea subtitrării de pe ${sourceLabel} (release "${winner.release}") a eșuat`,
     );
   }
 
@@ -319,14 +360,14 @@ export async function ensureRomanianSubtitle(
     const { text, wasConverted } = decodeToUtf8Text(content);
     await writeFile(destPath, text, "utf8");
     const encodingNote = wasConverted ? " (encoding convertit la UTF-8)" : "";
-    if (best.confident) {
-      console.log(`[subtitles] "${torrentName}": subtitrare OpenSubtitles salvată → ${destPath}`);
+    if (winnerConfident) {
+      console.log(`[subtitles] "${torrentName}": subtitrare ${sourceLabel} salvată → ${destPath}`);
       return item(
         torrentName,
         displayTitle,
         "downloaded_opensubtitles",
-        `subtitrare descărcată de pe OpenSubtitles, release „${best.result.release}" (potrivire sursă+rezoluție confirmată)${encodingNote}`,
-        { release: best.result.release, path: destPath },
+        `subtitrare descărcată de pe ${sourceLabel}, release „${winner.release}" (potrivire sursă+rezoluție confirmată)${encodingNote}`,
+        { release: winner.release, path: destPath },
       );
     } else {
       console.warn(
@@ -336,8 +377,8 @@ export async function ensureRomanianSubtitle(
         torrentName,
         displayTitle,
         "downloaded_opensubtitles_approximate",
-        `subtitrare aproximativă descărcată de pe OpenSubtitles, release „${best.result.release}" (fără potrivire clară de sursă/rezoluție — verifică sincronizarea)${encodingNote}`,
-        { release: best.result.release, path: destPath },
+        `subtitrare aproximativă descărcată de pe ${sourceLabel}, release „${winner.release}" (fără potrivire clară de sursă/rezoluție — verifică sincronizarea)${encodingNote}`,
+        { release: winner.release, path: destPath },
       );
     }
   } catch (e) {
@@ -482,23 +523,36 @@ function extractTags(name: string): { resolution: string | null; source: string 
   return { resolution, source, group };
 }
 
-// Alege subtitrarea OpenSubtitles al cărei "release" se potrivește cel mai
+export interface ScoredRelease<T> {
+  candidate: T;
+  score: number;
+  confident: boolean;
+}
+
+// Alege, dintr-o listă de candidați (rezultate OpenSubtitles, variante dintr-o
+// arhivă subs.ro etc.), pe cel al cărui nume de release se potrivește cel mai
 // bine cu numele torrentului (sursă + rezoluție + grup de release) — o
 // subtitrare pentru altă sursă/calitate desincronizează timpii de afișare.
-function pickBestSubtitle(
-  results: OpenSubtitlesResult[],
+// Generic — folosit atât pentru OpenSubtitles cât și pentru subs.ro, ca
+// scorul unui candidat de la o sursă să poată fi comparat direct cu scorul
+// unui candidat de la cealaltă sursă.
+function pickBestByRelease<T>(
+  candidates: T[],
+  releaseOf: (c: T) => string,
+  popularityOf: (c: T) => number,
   torrentName: string,
-): { result: OpenSubtitlesResult; confident: boolean } | null {
-  if (!results.length) return null;
+): ScoredRelease<T> | null {
+  if (!candidates.length) return null;
 
   const target = extractTags(torrentName);
 
-  let best: OpenSubtitlesResult | null = null;
+  let best: T | null = null;
   let bestScore = -1;
   let bestConfident = false;
+  let bestPopularity = -Infinity;
 
-  for (const r of results) {
-    const tags = extractTags(r.release || "");
+  for (const c of candidates) {
+    const tags = extractTags(releaseOf(c) || "");
     let score = 0;
     const resMatch = !!target.resolution && tags.resolution === target.resolution;
     const srcMatch = !!target.source && tags.source === target.source;
@@ -506,16 +560,15 @@ function pickBestSubtitle(
     if (srcMatch) score += 2;
     if (target.group && tags.group === target.group) score += 1;
 
-    if (
-      score > bestScore ||
-      (score === bestScore && best && r.downloadCount > best.downloadCount)
-    ) {
-      best = r;
+    const popularity = popularityOf(c);
+    if (score > bestScore || (score === bestScore && popularity > bestPopularity)) {
+      best = c;
       bestScore = score;
       bestConfident = resMatch && srcMatch;
+      bestPopularity = popularity;
     }
   }
 
   if (!best) return null;
-  return { result: best, confident: bestConfident };
+  return { candidate: best, score: bestScore, confident: bestConfident };
 }

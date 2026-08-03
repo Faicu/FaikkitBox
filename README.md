@@ -85,7 +85,7 @@ La finalul fiecărei descărcări (înainte de refresh-ul Plex), `ensureRomanian
 
 1. **Fișierul media are deja subtitrare română încorporată?** — detectat cu `ffprobe` (dacă e instalat pe server; dacă lipsește, se sare peste acest pas, nu blochează). Dacă da, nu mai face nimic.
 2. **Există un `.srt` în torrent, dar cu denumire greșită pentru Plex?** — Plex identifică limba unei subtitrări externe după numele fișierului (`<nume-media>.ro.srt`), nu după conținut. Dacă torrentul conține exact un `.srt` cu alt nume, e **redenumit prin API-ul qBittorrent** (`torrents/renameFile`) — obligatoriu prin API, nu direct pe disk, altfel qBittorrent pierde evidența fișierului și consideră torrentul incomplet.
-3. **Nicio subtitrare deloc?** — se caută pe **OpenSubtitles** (`OPENSUBTITLES_API_KEY` în `.env`) după IMDb id, limba română. Din rezultate se alege cel al cărui `release` se potrivește cel mai bine cu sursa/rezoluția torrentului (ex. WEB-DL/AMZN 1080p vs BluRay 2160p) — o subtitrare pentru altă sursă desincronizează timpii de afișare. Dacă nu există o potrivire clară, se salvează totuși cel mai apropiat rezultat, dar cu un avertisment în log ("verifică sincronizarea").
+3. **Nicio subtitrare deloc?** — se caută pe **OpenSubtitles** (`OPENSUBTITLES_API_KEY` în `.env`) după IMDb id, limba română. Din rezultate se alege cel al cărui `release` se potrivește cel mai bine cu sursa/rezoluția torrentului (ex. WEB-DL/AMZN 1080p vs BluRay 2160p) — o subtitrare pentru altă sursă desincronizează timpii de afișare. Dacă OpenSubtitles nu are o potrivire clară (sursă+rezoluție), se caută și pe **subs.ro** (`SUBSRO_API_KEY` în `.env`) — arhivele de acolo conțin adesea mai multe variante (una per sursă/rezoluție), extrase și scorate la fel; câștigă oricare din cele două surse cu potrivirea mai bună. Dacă nici așa nu există o potrivire clară, se salvează totuși cel mai apropiat rezultat, dar cu un avertisment în log ("verifică sincronizarea").
 
 **Backfill**: butonul „Corectează subtitrări" din secțiunea Jurnal descărcări (Lansări) rulează aceeași verificare retroactiv pe toate torrentele deja din jurnal (`backfillSubtitles`, `src/lib/filelist/download.ts`).
 
@@ -181,6 +181,7 @@ cp .env.example .env
 | `TMDB_API_KEY` | Token Bearer JWT pentru API TMDB (themoviedb.org) |
 | `OPENSUBTITLES_API_KEY` | Cheie API OpenSubtitles.com, pentru subtitrare română automată când torrentul nu are niciuna (cont gratuit → profil → „API Consumers") |
 | `OPENSUBTITLES_USERNAME` / `OPENSUBTITLES_PASSWORD` | *(opțional)* Login OpenSubtitles, doar dacă limita de download anonimă devine insuficientă |
+| `SUBSRO_API_KEY` | Cheie API subs.ro, sursă de rezervă pentru subtitrări când OpenSubtitles nu are o potrivire exactă de sursă/rezoluție |
 | `MEDIA_MOVIES_PATH` / `MEDIA_SERIES_PATH` | Căi locale unde qBittorrent salvează filmele/serialele din Filelist |
 | `GITHUB_REPO` | Repo GitHub (ex: `Faicu/FaikkitBox`) pentru tracking commits |
 | `GITHUB_TOKEN` | *(opțional)* Token GitHub API pentru limită mai mare la request-uri |
