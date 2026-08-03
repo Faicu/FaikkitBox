@@ -1,15 +1,26 @@
 // ---------------------------------------------------------------------------
-// Asigură subtitrare română corectă la finalul unei descărcări Filelist.
-// Apelat din pollUntilComplete (download.ts) înainte de refreshPlexLibrary.
+// Asigură subtitrare română corectă la finalul unei descărcări Filelist (film
+// sau, pentru pachete de episoade, fiecare episod din torrent — vezi
+// processSeasonPack). Apelat din pollUntilComplete (download.ts) și din
+// backfillSubtitles, înainte de refreshPlexLibrary.
 //
-// Două cazuri tratate:
-//  1. Torrentul are deja un .srt, dar cu denumire greșită pentru Plex —
-//     redenumit prin API-ul qBittorrent (torrents/renameFile), altfel
-//     qBittorrent pierde evidența fișierului și consideră torrentul incomplet.
-//  2. Torrentul nu are nicio subtitrare (nici încorporată, nici .srt) —
-//     căutăm pe OpenSubtitles după IMDb id și alegem rezultatul al cărui
-//     "release" se potrivește cel mai bine cu sursa/rezoluția torrentului
-//     (o subtitrare pentru altă sursă/calitate desincronizează timpii).
+// Pentru fiecare fișier media (filmul însuși, sau un episod dintr-un pachet),
+// verificările rulează în ordine, oprindu-se la prima care se potrivește:
+//  1. Are deja subtitrare română încorporată în fișier? (ffprobe) — nimic de
+//     făcut.
+//  2. Are deja audio nativ în română? (ffprobe pe track-ul audio, sau o
+//     platformă cunoscută doar cu conținut românesc, ex. ANTP) — nu are
+//     nevoie de subtitrare.
+//  3. Are deja un .srt urmărit de qBittorrent? — redenumit (prin API, nu
+//     direct pe disc, altfel qBittorrent pierde evidența fișierului) și/sau
+//     convertit la UTF-8 dacă e cazul.
+//  4. Are deja un .srt extern, descărcat de sistem într-o rulare anterioară
+//     (nu urmărit de qBittorrent, deci invizibil la pasul 3)? — nu mai caută
+//     din nou.
+//  5. Nimic din toate astea — caută pe OpenSubtitles, apoi (dacă rezultatul
+//     nu e o potrivire clară de sursă+rezoluție) și pe subs.ro, alege
+//     candidatul cel mai apropiat de numele fișierului (vezi
+//     pickBestByRelease) și îl descarcă.
 //
 // Orice eroare aici e prinsă și logată — nu trebuie să blocheze niciodată
 // refresh-ul Plex care urmează.
@@ -21,7 +32,7 @@ import { access, readFile, writeFile } from "node:fs/promises";
 import { join, dirname, basename, extname } from "node:path";
 import iconv from "iconv-lite";
 import { qbitGet, qbitListFiles, qbitRenameFile, qbitSetFilePriority, type QbitFileInfo } from "../qbit-client";
-import { searchSubtitles, searchSeasonSubtitles, downloadSubtitle } from "../opensubtitles-client";
+import { searchSubtitles, searchSeasonSubtitles, downloadSubtitle, type OpenSubtitlesResult } from "../opensubtitles-client";
 import {
   searchSubsRo,
   downloadSubsRoZip,
@@ -135,12 +146,183 @@ function parseSeasonEpisode(name: string): { season: number; episode: number } |
   return { season: Number(m[1]), episode: Number(m[2]) };
 }
 
-// Cheie normalizată (ex. "S08E01") pentru potrivire exactă între un fișier
-// media și subtitrarea/candidatul lui, indiferent de padding-ul original.
+// Cheie normalizată (ex. "S08E01"), indiferent de padding-ul original.
+function episodeKeyFrom(season: number, episode: number): string {
+  return `S${String(season).padStart(2, "0")}E${String(episode).padStart(2, "0")}`;
+}
+
+// Cheie normalizată pentru potrivire exactă între un fișier media și
+// subtitrarea/candidatul lui.
 function extractEpisodeKey(name: string): string | null {
   const se = parseSeasonEpisode(name);
-  if (!se) return null;
-  return `S${String(se.season).padStart(2, "0")}E${String(se.episode).padStart(2, "0")}`;
+  return se ? episodeKeyFrom(se.season, se.episode) : null;
+}
+
+// ---------------------------------------------------------------------------
+// Helper-e comune, folosite atât pentru fluxul de film (un singur fișier
+// media per torrent) cât și pentru fiecare episod dintr-un pachet de sezon
+// (processSeasonPack) — evită duplicarea acelorași verificări/decizii.
+// ---------------------------------------------------------------------------
+
+interface SubtitleWinner {
+  source: "opensubtitles" | "subsro";
+  release: string;
+  getContent: () => Promise<Buffer | null>;
+}
+
+// Alege cea mai bună subtitrare disponibilă pentru un fișier țintă: întâi
+// OpenSubtitles, apoi (doar dacă OpenSubtitles n-a dat o potrivire
+// "confident" de sursă+rezoluție) subs.ro. `getSubsRoCandidates` e lazy —
+// apelat doar dacă chiar e nevoie, ca să nu facem căutări/descărcări subs.ro
+// inutile când OpenSubtitles are deja o potrivire bună.
+async function resolveBestSubtitle(
+  targetName: string,
+  osCandidates: OpenSubtitlesResult[],
+  getSubsRoCandidates: () => Promise<Array<{ release: string; content: Buffer }>>,
+): Promise<{ winner: SubtitleWinner; confident: boolean } | null> {
+  let winner: SubtitleWinner | null = null;
+  let winnerScore = -1;
+  let winnerConfident = false;
+
+  const osBest = pickBestByRelease(osCandidates, (r) => r.release, (r) => r.downloadCount, targetName);
+  if (osBest) {
+    winner = {
+      source: "opensubtitles",
+      release: osBest.candidate.release,
+      getContent: () => downloadSubtitle(osBest.candidate.fileId),
+    };
+    winnerScore = osBest.score;
+    winnerConfident = osBest.confident;
+  }
+
+  if (!winnerConfident) {
+    const subsRoCandidates = await getSubsRoCandidates();
+    const subsRoBest = pickBestByRelease(subsRoCandidates, (e) => e.release, () => 0, targetName);
+    if (subsRoBest && subsRoBest.score > winnerScore) {
+      const chosenContent = subsRoBest.candidate.content;
+      winner = { source: "subsro", release: subsRoBest.candidate.release, getContent: async () => chosenContent };
+      winnerConfident = subsRoBest.confident;
+    }
+  }
+
+  if (!winner) return null;
+  return { winner, confident: winnerConfident };
+}
+
+// Descarcă și scrie pe disc subtitrarea aleasă de resolveBestSubtitle,
+// convertind la UTF-8 dacă e cazul.
+async function downloadAndWriteSubtitle(
+  winner: SubtitleWinner,
+  confident: boolean,
+  destPath: string,
+): Promise<{ outcome: SubtitleOutcome; detail: string }> {
+  const sourceLabel = winner.source === "opensubtitles" ? "OpenSubtitles" : "subs.ro";
+  const content = await winner.getContent();
+  if (!content) {
+    console.warn(`[subtitles] descărcare ${sourceLabel} eșuată pentru release „${winner.release}"`);
+    return {
+      outcome: "download_failed",
+      detail: `descărcarea subtitrării de pe ${sourceLabel} (release „${winner.release}") a eșuat`,
+    };
+  }
+
+  try {
+    const { text, wasConverted } = decodeToUtf8Text(content);
+    await writeFile(destPath, text, "utf8");
+    const encodingNote = wasConverted ? " (encoding convertit la UTF-8)" : "";
+    if (confident) {
+      console.log(`[subtitles] subtitrare ${sourceLabel} salvată → ${destPath}`);
+      return {
+        outcome: "downloaded_opensubtitles",
+        detail: `subtitrare descărcată de pe ${sourceLabel}, release „${winner.release}" (potrivire sursă+rezoluție confirmată)${encodingNote}`,
+      };
+    }
+    console.warn(`[subtitles] subtitrare aproximativă salvată (verifică sincronizarea) → ${destPath}`);
+    return {
+      outcome: "downloaded_opensubtitles_approximate",
+      detail: `subtitrare aproximativă descărcată de pe ${sourceLabel}, release „${winner.release}" (fără potrivire clară de sursă/rezoluție — verifică sincronizarea)${encodingNote}`,
+    };
+  } catch (e) {
+    console.warn(`[subtitles] scriere .srt eșuată (${destPath}):`, e);
+    return {
+      outcome: "download_failed",
+      detail: `scrierea subtitrării descărcate pe disk a eșuat: ${e instanceof Error ? e.message : e}`,
+    };
+  }
+}
+
+interface TrackedSrtContext {
+  qbitUrl: string;
+  torrentHash: string;
+  qbitUser: string;
+  qbitPass: string;
+  savePath: string;
+}
+
+// Redenumește (dacă e cazul, prin API-ul qBittorrent) și verifică/convertește
+// la UTF-8 (dacă e cazul, excluzând fișierul de la seed) un .srt deja
+// urmărit de qBittorrent, asociat cu un anume fișier media.
+async function handleTrackedSrt(
+  current: QbitFileInfo,
+  targetSrtRelPath: string,
+  mediaFilePieceRange: [number, number] | undefined,
+  ctx: TrackedSrtContext,
+): Promise<{ outcome: SubtitleOutcome; detail: string }> {
+  const { qbitUrl, torrentHash, qbitUser, qbitPass, savePath } = ctx;
+  const needsRename = current.name !== targetSrtRelPath;
+  if (needsRename) {
+    try {
+      await qbitRenameFile(qbitUrl, torrentHash, current.name, targetSrtRelPath, qbitUser, qbitPass);
+      console.log(`[subtitles] .srt redenumit → ${targetSrtRelPath}`);
+    } catch (e) {
+      console.warn(`[subtitles] redenumire .srt eșuată:`, e);
+      return {
+        outcome: "download_failed",
+        detail: `redenumirea .srt a eșuat: ${e instanceof Error ? e.message : e}`,
+      };
+    }
+  }
+
+  const finalAbsPath = join(savePath, targetSrtRelPath);
+  const wasReencoded = await ensureUtf8SrtOnDisk(finalAbsPath, () =>
+    qbitSetFilePriority(qbitUrl, torrentHash, current.index, 0, qbitUser, qbitPass),
+  );
+  if (wasReencoded) {
+    console.log(`[subtitles] .srt convertit la UTF-8 → ${targetSrtRelPath}`);
+  }
+
+  if (!needsRename && !wasReencoded) {
+    return { outcome: "srt_already_ok", detail: "are deja un .srt denumit corect și codat UTF-8" };
+  }
+
+  const parts: string[] = [];
+  if (needsRename) {
+    parts.push(`.srt redenumit → "${basename(targetSrtRelPath)}" (Plex îl recunoaște acum ca română)`);
+  }
+  if (wasReencoded) {
+    parts.push(
+      "conținut convertit la UTF-8 (era codat altfel — diacriticele ar fi ieșit corupte în Plex); exclus de la seed în qBittorrent (dimensiune neglijabilă, evită conflicte de hash la un eventual recheck)",
+    );
+    if (piecesOverlap(current.piece_range, mediaFilePieceRange)) {
+      parts.push(
+        "risc rezidual: piesa .srt-ului e comună cu piesa fișierului video (încă seed-uit) — un recheck viitor tot ar putea re-descărca acea piesă și anula conversia",
+      );
+    }
+  }
+  return { outcome: needsRename ? "renamed_srt" : "reencoded_srt", detail: parts.join("; ") };
+}
+
+// Verifică/convertește la UTF-8 un .srt extern deja descărcat de sistem
+// (nu urmărit de qBittorrent, deci invizibil pentru handleTrackedSrt) — nu
+// mai caută din nou o subtitrare pentru acest fișier.
+async function handleSidecarSrt(sidecarAbsPath: string): Promise<{ outcome: SubtitleOutcome; detail: string }> {
+  const wasReencoded = await ensureUtf8SrtOnDisk(sidecarAbsPath, async () => {});
+  return {
+    outcome: "srt_already_ok",
+    detail: wasReencoded
+      ? "are deja un .srt extern (descărcat anterior), acum convertit la UTF-8 — netrackuit de qBittorrent, nu mai caut din nou"
+      : "are deja un .srt extern (descărcat anterior sau plasat manual), denumit și codat corect — netrackuit de qBittorrent, nu mai caut din nou",
+  };
 }
 
 interface EnsureRomanianSubtitleParams {
@@ -238,8 +420,7 @@ export async function ensureRomanianSubtitle(
   const mediaDir = dirname(mediaFile.name);
   const targetSrtRelPath = mediaDir === "." ? `${mediaBaseName}.ro.srt` : `${mediaDir}/${mediaBaseName}.ro.srt`;
 
-  const hasEmbeddedRomanian = await hasEmbeddedRomanianSubtitle(mediaAbsPath);
-  if (hasEmbeddedRomanian) {
+  if (await hasEmbeddedRomanianSubtitle(mediaAbsPath)) {
     return item(
       torrentName,
       displayTitle,
@@ -256,56 +437,16 @@ export async function ensureRomanianSubtitle(
   const srtFiles = downloadedFiles.filter((f) => f.name.toLowerCase().endsWith(".srt"));
 
   // Caz 2: exact un .srt în torrent, deja identificabil ca subtitrarea
-  // filmului/episodului — trebuie redenumit după convenția Plex (dacă e
-  // cazul) și verificat/convertit la UTF-8 (dacă e cazul) — altfel Plex
-  // afișează diacriticele corupte, indiferent dacă numele e corect.
+  // filmului — redenumit/convertit dacă e cazul.
   if (srtFiles.length === 1) {
-    const current = srtFiles[0];
-    const needsRename = current.name !== targetSrtRelPath;
-    if (needsRename) {
-      try {
-        await qbitRenameFile(qbitUrl, torrentHash, current.name, targetSrtRelPath, qbitUser, qbitPass);
-        console.log(`[subtitles] "${torrentName}": .srt redenumit → ${targetSrtRelPath}`);
-      } catch (e) {
-        console.warn(`[subtitles] "${torrentName}": redenumire .srt eșuată:`, e);
-        return item(
-          torrentName,
-          displayTitle,
-          "download_failed",
-          `redenumirea .srt a eșuat: ${e instanceof Error ? e.message : e}`,
-        );
-      }
-    }
-
-    const finalAbsPath = join(savePath, targetSrtRelPath);
-    const wasReencoded = await ensureUtf8SrtOnDisk(finalAbsPath, () =>
-      qbitSetFilePriority(qbitUrl, torrentHash, current.index, 0, qbitUser, qbitPass),
-    );
-    if (wasReencoded) {
-      console.log(`[subtitles] "${torrentName}": .srt convertit la UTF-8 → ${targetSrtRelPath}`);
-    }
-
-    if (!needsRename && !wasReencoded) {
-      return item(torrentName, displayTitle, "srt_already_ok", "are deja un .srt denumit corect și codat UTF-8");
-    }
-
-    const parts: string[] = [];
-    if (needsRename) {
-      parts.push(`.srt redenumit → "${basename(targetSrtRelPath)}" (Plex îl recunoaște acum ca română)`);
-    }
-    if (wasReencoded) {
-      parts.push(
-        "conținut convertit la UTF-8 (era codat altfel — diacriticele ar fi ieșit corupte în Plex); exclus de la seed în qBittorrent (dimensiune neglijabilă, evită conflicte de hash la un eventual recheck)",
-      );
-      if (piecesOverlap(current.piece_range, mediaFile.piece_range)) {
-        parts.push(
-          "risc rezidual: piesa .srt-ului e comună cu piesa fișierului video (încă seed-uit) — un recheck viitor tot ar putea re-descărca acea piesă și anula conversia",
-        );
-      }
-    }
-    return item(torrentName, displayTitle, needsRename ? "renamed_srt" : "reencoded_srt", parts.join("; "), {
-      path: targetSrtRelPath,
+    const { outcome, detail } = await handleTrackedSrt(srtFiles[0], targetSrtRelPath, mediaFile.piece_range, {
+      qbitUrl,
+      torrentHash,
+      qbitUser,
+      qbitPass,
+      savePath,
     });
+    return item(torrentName, displayTitle, outcome, detail, { path: targetSrtRelPath });
   }
 
   // Mai multe .srt-uri — probabil deja există unul cu limba corectă marcată
@@ -328,15 +469,8 @@ export async function ensureRomanianSubtitle(
   // unde am scrie noi unul nou, înainte să căutăm extern din nou.
   const sidecarAbsPath = join(savePath, targetSrtRelPath);
   if (await fileExists(sidecarAbsPath)) {
-    const wasReencoded = await ensureUtf8SrtOnDisk(sidecarAbsPath, async () => {});
-    return item(
-      torrentName,
-      displayTitle,
-      "srt_already_ok",
-      wasReencoded
-        ? "are deja un .srt extern (descărcat anterior), acum convertit la UTF-8 — netrackuit de qBittorrent, nu mai caut din nou"
-        : "are deja un .srt extern (descărcat anterior sau plasat manual), denumit și codat corect — netrackuit de qBittorrent, nu mai caut din nou",
-    );
+    const { outcome, detail } = await handleSidecarSrt(sidecarAbsPath);
+    return item(torrentName, displayTitle, outcome, detail);
   }
 
   // Caz 1: nicio subtitrare deloc — încercăm OpenSubtitles, apoi (dacă
@@ -352,50 +486,20 @@ export async function ensureRomanianSubtitle(
     );
   }
 
-  interface Winner {
-    source: "opensubtitles" | "subsro";
-    release: string;
-    getContent: () => Promise<Buffer | null>;
-  }
-
-  let winner: Winner | null = null;
-  let winnerScore = -1;
-  let winnerConfident = false;
-
   const osResults = await searchSubtitles(imdbId, "ro");
-  const osBest = pickBestByRelease(osResults, (r) => r.release, (r) => r.downloadCount, torrentName);
-  if (osBest) {
-    winner = {
-      source: "opensubtitles",
-      release: osBest.candidate.release,
-      getContent: () => downloadSubtitle(osBest.candidate.fileId),
-    };
-    winnerScore = osBest.score;
-    winnerConfident = osBest.confident;
-  }
-
-  // OpenSubtitles n-a dat o potrivire clară de sursă+rezoluție — verificăm și
-  // subs.ro. O arhivă subs.ro poate conține mai multe variante (una per
-  // sursă/rezoluție), fiecare tratată ca un candidat separat, scorat la fel.
-  if (!winnerConfident) {
+  const resolved = await resolveBestSubtitle(torrentName, osResults, async () => {
+    // O arhivă subs.ro poate conține mai multe variante (una per
+    // sursă/rezoluție), fiecare tratată ca un candidat separat, scorat la fel.
     const subsRoItems = await searchSubsRo(imdbId, "ro");
-    if (subsRoItems.length) {
-      const zipEntries: Array<{ release: string; content: Buffer }> = [];
-      for (const it of subsRoItems.slice(0, 3)) {
-        const zipBuf = await downloadSubsRoZip(it.id);
-        if (zipBuf) zipEntries.push(...extractSrtEntriesFromZip(zipBuf));
-      }
-      const subsRoBest = pickBestByRelease(zipEntries, (e) => e.release, () => 0, torrentName);
-      if (subsRoBest && subsRoBest.score > winnerScore) {
-        const chosenContent = subsRoBest.candidate.content;
-        winner = { source: "subsro", release: subsRoBest.candidate.release, getContent: async () => chosenContent };
-        winnerScore = subsRoBest.score;
-        winnerConfident = subsRoBest.confident;
-      }
+    const zipEntries: Array<{ release: string; content: Buffer }> = [];
+    for (const it of subsRoItems.slice(0, 3)) {
+      const zipBuf = await downloadSubsRoZip(it.id);
+      if (zipBuf) zipEntries.push(...extractSrtEntriesFromZip(zipBuf));
     }
-  }
+    return zipEntries;
+  });
 
-  if (!winner) {
+  if (!resolved) {
     return item(
       torrentName,
       displayTitle,
@@ -404,53 +508,9 @@ export async function ensureRomanianSubtitle(
     );
   }
 
-  const sourceLabel = winner.source === "opensubtitles" ? "OpenSubtitles" : "subs.ro";
-  const content = await winner.getContent();
-  if (!content) {
-    console.warn(`[subtitles] "${torrentName}": descărcare ${sourceLabel} eșuată`);
-    return item(
-      torrentName,
-      displayTitle,
-      "download_failed",
-      `descărcarea subtitrării de pe ${sourceLabel} (release "${winner.release}") a eșuat`,
-    );
-  }
-
   const destPath = join(savePath, mediaDir === "." ? "" : mediaDir, `${mediaBaseName}.ro.srt`);
-  try {
-    const { text, wasConverted } = decodeToUtf8Text(content);
-    await writeFile(destPath, text, "utf8");
-    const encodingNote = wasConverted ? " (encoding convertit la UTF-8)" : "";
-    if (winnerConfident) {
-      console.log(`[subtitles] "${torrentName}": subtitrare ${sourceLabel} salvată → ${destPath}`);
-      return item(
-        torrentName,
-        displayTitle,
-        "downloaded_opensubtitles",
-        `subtitrare descărcată de pe ${sourceLabel}, release „${winner.release}" (potrivire sursă+rezoluție confirmată)${encodingNote}`,
-        { release: winner.release, path: destPath },
-      );
-    } else {
-      console.warn(
-        `[subtitles] "${torrentName}": subtitrare aproximativă salvată (fără potrivire clară de sursă/rezoluție), verifică sincronizarea → ${destPath}`,
-      );
-      return item(
-        torrentName,
-        displayTitle,
-        "downloaded_opensubtitles_approximate",
-        `subtitrare aproximativă descărcată de pe ${sourceLabel}, release „${winner.release}" (fără potrivire clară de sursă/rezoluție — verifică sincronizarea)${encodingNote}`,
-        { release: winner.release, path: destPath },
-      );
-    }
-  } catch (e) {
-    console.warn(`[subtitles] "${torrentName}": scriere .srt eșuată:`, e);
-    return item(
-      torrentName,
-      displayTitle,
-      "download_failed",
-      `scrierea subtitrării descărcate pe disk a eșuat: ${e instanceof Error ? e.message : e}`,
-    );
-  }
+  const { outcome, detail } = await downloadAndWriteSubtitle(resolved.winner, resolved.confident, destPath);
+  return item(torrentName, displayTitle, outcome, detail, { release: resolved.winner.release, path: destPath });
 }
 
 // ---------------------------------------------------------------------------
@@ -502,10 +562,16 @@ async function processSeasonPack(params: ProcessSeasonPackParams): Promise<Subti
     );
   }
 
-  // Rezultate OpenSubtitles pentru tot sezonul, într-un singur apel.
-  const osSeasonResults = await searchSeasonSubtitles(imdbId, seasonNumber, "ro");
+  // OpenSubtitles pentru tot sezonul — un singur apel, dar lazy: doar dacă
+  // vreun episod chiar ajunge la pasul de căutare externă (nu are rost dacă
+  // toate episoadele au deja embedded/tracked/sidecar rezolvate).
+  let osSeasonResults: OpenSubtitlesResult[] | null = null;
+  async function getOsSeasonResults(): Promise<OpenSubtitlesResult[]> {
+    if (!osSeasonResults) osSeasonResults = await searchSeasonSubtitles(imdbId!, seasonNumber!, "ro");
+    return osSeasonResults;
+  }
 
-  // subs.ro — preluat lazy, doar dacă vreun episod chiar are nevoie (nicio
+  // subs.ro — la fel, lazy, doar dacă vreun episod chiar are nevoie (nicio
   // potrivire "confident" în OpenSubtitles pentru el). Un sezon în
   // desfășurare apare adesea ca mai multe pachete PARȚIALE, publicate pe
   // măsură ce ies episoadele (ex. "Episoadele 1-4", apoi separat "Episoadele
@@ -571,39 +637,14 @@ async function processSeasonPack(params: ProcessSeasonPackParams): Promise<Subti
     );
 
     if (episodeSrtFiles.length === 1) {
-      const current = episodeSrtFiles[0];
-      const needsRename = current.name !== targetSrtRelPath;
-      if (needsRename) {
-        try {
-          await qbitRenameFile(qbitUrl, torrentHash, current.name, targetSrtRelPath, qbitUser, qbitPass);
-        } catch (e) {
-          episodeResults.push({
-            episodeKey,
-            outcome: "download_failed",
-            detail: `redenumire .srt eșuată: ${e instanceof Error ? e.message : e}`,
-          });
-          continue;
-        }
-      }
-
-      const finalAbsPath = join(savePath, targetSrtRelPath);
-      const wasReencoded = await ensureUtf8SrtOnDisk(finalAbsPath, () =>
-        qbitSetFilePriority(qbitUrl, torrentHash, current.index, 0, qbitUser, qbitPass),
-      );
-
-      if (!needsRename && !wasReencoded) {
-        episodeResults.push({ episodeKey, outcome: "srt_already_ok", detail: "are deja .srt corect" });
-      } else {
-        const parts = [
-          needsRename && `.srt redenumit → "${basename(targetSrtRelPath)}"`,
-          wasReencoded && "convertit la UTF-8, exclus de la seed",
-        ].filter(Boolean);
-        episodeResults.push({
-          episodeKey,
-          outcome: needsRename ? "renamed_srt" : "reencoded_srt",
-          detail: parts.join("; "),
-        });
-      }
+      const { outcome, detail } = await handleTrackedSrt(episodeSrtFiles[0], targetSrtRelPath, mediaFile.piece_range, {
+        qbitUrl,
+        torrentHash,
+        qbitUser,
+        qbitPass,
+        savePath,
+      });
+      episodeResults.push({ episodeKey, outcome, detail });
       continue;
     }
 
@@ -620,85 +661,31 @@ async function processSeasonPack(params: ProcessSeasonPackParams): Promise<Subti
     // la filme, verificăm direct pe disc înainte să căutăm din nou.
     const sidecarAbsPath = join(savePath, targetSrtRelPath);
     if (await fileExists(sidecarAbsPath)) {
-      const wasReencoded = await ensureUtf8SrtOnDisk(sidecarAbsPath, async () => {});
-      episodeResults.push({
-        episodeKey,
-        outcome: "srt_already_ok",
-        detail: wasReencoded ? "are deja .srt extern, convertit la UTF-8" : "are deja .srt extern corect",
-      });
+      const { outcome, detail } = await handleSidecarSrt(sidecarAbsPath);
+      episodeResults.push({ episodeKey, outcome, detail });
       continue;
     }
 
-    // Căutare externă — OpenSubtitles (deja preluat pentru tot sezonul), apoi
-    // subs.ro (lazy) dacă nu avem o potrivire clară de sursă+rezoluție.
-    interface Winner {
-      source: "opensubtitles" | "subsro";
-      release: string;
-      getContent: () => Promise<Buffer | null>;
-    }
-    let winner: Winner | null = null;
-    let winnerScore = -1;
-    let winnerConfident = false;
-
-    const osForEpisode = osSeasonResults.filter((r) => {
+    // Căutare externă — OpenSubtitles (tot sezonul, preluat lazy) filtrat la
+    // acest episod, apoi subs.ro (lazy) dacă nu avem o potrivire clară.
+    const osSeasonForEpisode = (await getOsSeasonResults()).filter((r) => {
       if (r.seasonNumber == null || r.episodeNumber == null) return extractEpisodeKey(r.release) === episodeKey;
-      return `S${String(r.seasonNumber).padStart(2, "0")}E${String(r.episodeNumber).padStart(2, "0")}` === episodeKey;
+      return episodeKeyFrom(r.seasonNumber, r.episodeNumber) === episodeKey;
     });
-    const osBest = pickBestByRelease(osForEpisode, (r) => r.release, (r) => r.downloadCount, mediaFile.name);
-    if (osBest) {
-      winner = {
-        source: "opensubtitles",
-        release: osBest.candidate.release,
-        getContent: () => downloadSubtitle(osBest.candidate.fileId),
-      };
-      winnerScore = osBest.score;
-      winnerConfident = osBest.confident;
-    }
 
-    if (!winnerConfident) {
+    const resolved = await resolveBestSubtitle(mediaFile.name, osSeasonForEpisode, async () => {
       const allSubsRo = await getSubsRoEntries();
-      const subsRoForEpisode = allSubsRo.filter((e) => extractEpisodeKey(e.release) === episodeKey);
-      const subsRoBest = pickBestByRelease(subsRoForEpisode, (e) => e.release, () => 0, mediaFile.name);
-      if (subsRoBest && subsRoBest.score > winnerScore) {
-        const chosenContent = subsRoBest.candidate.content;
-        winner = { source: "subsro", release: subsRoBest.candidate.release, getContent: async () => chosenContent };
-        winnerConfident = subsRoBest.confident;
-      }
-    }
+      return allSubsRo.filter((e) => extractEpisodeKey(e.release) === episodeKey);
+    });
 
-    if (!winner) {
+    if (!resolved) {
       episodeResults.push({ episodeKey, outcome: "no_subtitle_found", detail: "nicio subtitrare găsită" });
       continue;
     }
 
-    const sourceLabel = winner.source === "opensubtitles" ? "OpenSubtitles" : "subs.ro";
-    const content = await winner.getContent();
-    if (!content) {
-      episodeResults.push({
-        episodeKey,
-        outcome: "download_failed",
-        detail: `descărcare eșuată de pe ${sourceLabel} (release „${winner.release}")`,
-      });
-      continue;
-    }
-
-    try {
-      const { text, wasConverted } = decodeToUtf8Text(content);
-      await writeFile(join(savePath, mediaDir === "." ? "" : mediaDir, `${mediaBaseName}.ro.srt`), text, "utf8");
-      episodeResults.push({
-        episodeKey,
-        outcome: winnerConfident ? "downloaded_opensubtitles" : "downloaded_opensubtitles_approximate",
-        detail: `descărcat de pe ${sourceLabel}, release „${winner.release}"${
-          winnerConfident ? "" : " (aproximativ — verifică sincronizarea)"
-        }${wasConverted ? ", UTF-8" : ""}`,
-      });
-    } catch (e) {
-      episodeResults.push({
-        episodeKey,
-        outcome: "download_failed",
-        detail: `scriere eșuată: ${e instanceof Error ? e.message : e}`,
-      });
-    }
+    const destPath = join(savePath, mediaDir === "." ? "" : mediaDir, `${mediaBaseName}.ro.srt`);
+    const { outcome, detail } = await downloadAndWriteSubtitle(resolved.winner, resolved.confident, destPath);
+    episodeResults.push({ episodeKey, outcome, detail });
   }
 
   const corrected = episodeResults.filter((r) => CORRECTED_OUTCOMES.includes(r.outcome)).length;
@@ -827,7 +814,7 @@ async function hasEmbeddedRomanianSubtitle(mediaAbsPath: string): Promise<boolea
 // nicio subtitrare. Aceeași limitare ca la subtitrare: dacă ffprobe lipsește
 // sau fișierul n-are deloc tag de limbă pe track-ul audio, tratăm ca
 // "necunoscut" (returnăm false) — apelantul mai are șansa heuristicii de
-// platformă (isKnownRomanianOnlySource) înainte să caute extern.
+// platformă (knownRomanianOnlySourceTag) înainte să caute extern.
 async function hasRomanianAudio(mediaAbsPath: string): Promise<boolean> {
   try {
     const { stdout } = await execFileAsync(
