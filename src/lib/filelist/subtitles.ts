@@ -17,7 +17,7 @@
 
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { readFile, writeFile } from "node:fs/promises";
+import { access, readFile, writeFile } from "node:fs/promises";
 import { join, dirname, basename, extname } from "node:path";
 import iconv from "iconv-lite";
 import { qbitGet, qbitListFiles, qbitRenameFile, qbitSetFilePriority } from "../qbit-client";
@@ -50,6 +50,15 @@ function isValidUtf8(buf: Buffer): boolean {
 function decodeToUtf8Text(buf: Buffer): { text: string; wasConverted: boolean } {
   if (isValidUtf8(buf)) return { text: buf.toString("utf8"), wasConverted: false };
   return { text: iconv.decode(buf, FALLBACK_ENCODING), wasConverted: true };
+}
+
+async function fileExists(absPath: string): Promise<boolean> {
+  try {
+    await access(absPath);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // Citește un fișier cu reîncercări scurte — imediat după un rename prin API-ul
@@ -275,6 +284,26 @@ export async function ensureRomanianSubtitle(
       displayTitle,
       "multiple_srt_skipped",
       `conține ${srtFiles.length} fișiere .srt — sar peste, posibil deja etichetate corect pe limbi`,
+    );
+  }
+
+  // Un .srt descărcat de noi (OpenSubtitles/subs.ro) e scris direct pe disc,
+  // în afara torrentului — qBittorrent nu-l "vede" niciodată ca aparținând
+  // torrentului (nu era în .torrent-ul original), deci `srtFiles` de mai sus
+  // (bazat strict pe evidența qBittorrent) rămâne mereu gol pentru el, chiar
+  // și la rulări ulterioare. Fără verificarea asta, am redescărca aceeași
+  // subtitrare la fiecare backfill. Verificăm direct pe disc, la calea exactă
+  // unde am scrie noi unul nou, înainte să căutăm extern din nou.
+  const sidecarAbsPath = join(savePath, targetSrtRelPath);
+  if (await fileExists(sidecarAbsPath)) {
+    const wasReencoded = await ensureUtf8SrtOnDisk(sidecarAbsPath, async () => {});
+    return item(
+      torrentName,
+      displayTitle,
+      "srt_already_ok",
+      wasReencoded
+        ? "are deja un .srt extern (descărcat anterior), acum convertit la UTF-8 — netrackuit de qBittorrent, nu mai caut din nou"
+        : "are deja un .srt extern (descărcat anterior sau plasat manual), denumit și codat corect — netrackuit de qBittorrent, nu mai caut din nou",
     );
   }
 
