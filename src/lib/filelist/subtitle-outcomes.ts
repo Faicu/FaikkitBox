@@ -7,6 +7,7 @@
 
 export type SubtitleOutcome =
   | "already_embedded"
+  | "audio_already_romanian"
   | "srt_already_ok"
   | "renamed_srt"
   | "reencoded_srt"
@@ -40,7 +41,12 @@ export const CORRECTED_OUTCOMES: SubtitleOutcome[] = [
 // pentru a decide când NU trimitem notificare push la o descărcare unică
 // (logSubtitleRun) — utilizatorul nu vrea push când n-a fost nevoie de nicio
 // intervenție.
-export const OK_OUTCOMES: SubtitleOutcome[] = ["already_embedded", "srt_already_ok", "season_already_ok"];
+export const OK_OUTCOMES: SubtitleOutcome[] = [
+  "already_embedded",
+  "audio_already_romanian",
+  "srt_already_ok",
+  "season_already_ok",
+];
 
 export const APPROXIMATE_OUTCOMES: SubtitleOutcome[] = ["downloaded_opensubtitles_approximate"];
 
@@ -49,6 +55,7 @@ export const APPROXIMATE_OUTCOMES: SubtitleOutcome[] = ["downloaded_opensubtitle
 // nume de fișiere, rămâne doar în drawer-ul de detalii, nu în mesajul scurt).
 export const SHORT_LABELS: Record<SubtitleOutcome, string> = {
   already_embedded: "are deja subtitrare română încorporată",
+  audio_already_romanian: "conținut audio deja în română — nu necesită subtitrare",
   srt_already_ok: "avea deja .srt corect denumit și codat",
   renamed_srt: "subtitrare corectată (.srt redenumit pentru Plex)",
   reencoded_srt: "subtitrare corectată (encoding UTF-8)",

@@ -248,6 +248,11 @@ export async function ensureRomanianSubtitle(
     );
   }
 
+  const alreadyRomanianDetail = await detectAlreadyRomanianContent(mediaAbsPath, mediaFile.name);
+  if (alreadyRomanianDetail) {
+    return item(torrentName, displayTitle, "audio_already_romanian", alreadyRomanianDetail);
+  }
+
   const srtFiles = downloadedFiles.filter((f) => f.name.toLowerCase().endsWith(".srt"));
 
   // Caz 2: exact un .srt în torrent, deja identificabil ca subtitrarea
@@ -555,6 +560,12 @@ async function processSeasonPack(params: ProcessSeasonPackParams): Promise<Subti
       continue;
     }
 
+    const alreadyRomanianDetail = await detectAlreadyRomanianContent(mediaAbsPath, mediaFile.name);
+    if (alreadyRomanianDetail) {
+      episodeResults.push({ episodeKey, outcome: "audio_already_romanian", detail: alreadyRomanianDetail });
+      continue;
+    }
+
     const episodeSrtFiles = downloadedFiles.filter(
       (f) => f.name.toLowerCase().endsWith(".srt") && extractEpisodeKey(f.name) === episodeKey,
     );
@@ -809,6 +820,68 @@ async function hasEmbeddedRomanianSubtitle(mediaAbsPath: string): Promise<boolea
   } catch {
     return false;
   }
+}
+
+// Verifică prin ffprobe dacă track-ul audio principal e deja în română —
+// conținut nativ românesc (emisiuni TV, producții locale) n-are nevoie de
+// nicio subtitrare. Aceeași limitare ca la subtitrare: dacă ffprobe lipsește
+// sau fișierul n-are deloc tag de limbă pe track-ul audio, tratăm ca
+// "necunoscut" (returnăm false) — apelantul mai are șansa heuristicii de
+// platformă (isKnownRomanianOnlySource) înainte să caute extern.
+async function hasRomanianAudio(mediaAbsPath: string): Promise<boolean> {
+  try {
+    const { stdout } = await execFileAsync(
+      "ffprobe",
+      [
+        "-v",
+        "error",
+        "-select_streams",
+        "a",
+        "-show_entries",
+        "stream_tags=language",
+        "-of",
+        "csv=p=0",
+        mediaAbsPath,
+      ],
+      { timeout: 20_000 },
+    );
+    const langs = stdout
+      .split(/\r?\n/)
+      .map((l) => l.trim().toLowerCase())
+      .filter(Boolean);
+    return langs.some((l) => ROMANIAN_LANG_CODES.includes(l));
+  } catch {
+    return false;
+  }
+}
+
+// Platforme/surse cunoscute care oferă exclusiv conținut audio nativ în
+// română (emisiuni TV românești) — indiciu de rezervă când ffprobe nu poate
+// confirma limba audio (fișier fără tag de limbă setat pe track, frecvent la
+// rip-uri TV). Listă mică, extensibilă — adaugă alte platforme aici dacă
+// apar cazuri similare.
+const ROMANIAN_ONLY_PLATFORM_TAGS = ["ANTP"]; // Antena Play
+
+function knownRomanianOnlySourceTag(mediaFileName: string): string | null {
+  return ROMANIAN_ONLY_PLATFORM_TAGS.find((tag) => findTag(mediaFileName, [tag]) === tag) ?? null;
+}
+
+// Verifică (audio ffprobe, apoi heuristica de platformă) dacă fișierul e deja
+// conținut românesc, care nu are nevoie de nicio subtitrare — evită erori
+// "fără IMDb id" pentru emisiuni TV locale (fără prezență pe IMDb) și evită
+// să căutăm inutil o subtitrare pentru ceva deja în română.
+async function detectAlreadyRomanianContent(
+  mediaAbsPath: string,
+  mediaFileName: string,
+): Promise<string | null> {
+  if (await hasRomanianAudio(mediaAbsPath)) {
+    return "conținutul audio e deja în română (detectat prin ffprobe) — nu necesită subtitrare";
+  }
+  const platformTag = knownRomanianOnlySourceTag(mediaFileName);
+  if (platformTag) {
+    return `sursă cunoscută cu conținut exclusiv românesc (${platformTag}) — presupun audio deja în română, nu caut subtitrare`;
+  }
+  return null;
 }
 
 const RESOLUTION_TAGS = ["2160p", "1080p", "720p", "480p"];
