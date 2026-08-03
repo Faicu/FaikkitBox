@@ -19,7 +19,7 @@ import { filelistLogQuery } from "@/lib/queries";
 import {
   deleteFilelistLogEntry,
   backfillSubtitles,
-  getBackfillProgress,
+  getBackfillState,
 } from "@/lib/filelist.functions";
 import type { FilelistLogEntry } from "@/lib/filelist.functions";
 import { isMovieCategory } from "@/lib/filelist/categories";
@@ -41,7 +41,7 @@ export function DownloadLogSection() {
   const { data: log, isLoading } = useQuery(filelistLogQuery);
   const deleteFn = useServerFn(deleteFilelistLogEntry);
   const backfillFn = useServerFn(backfillSubtitles);
-  const progressFn = useServerFn(getBackfillProgress);
+  const stateFn = useServerFn(getBackfillState);
   const [visibleCount, setVisibleCount] = useState(3);
   const [backfilling, setBackfilling] = useState(false);
   const [progress, setProgress] = useState<{ total: number; done: number } | null>(null);
@@ -51,35 +51,48 @@ export function DownloadLogSection() {
     hasHash: boolean;
   } | null>(null);
 
+  // Backfill-ul poate dura multe minute (zeci/sute de torrente) — pornim
+  // rularea în fundal (răspuns rapid la backfillFn) și urmărim progresul +
+  // rezultatul final exclusiv prin polling, ca un singur request HTTP lung
+  // să nu fie tăiat de vreun timeout de proxy/browser aproape de final.
   async function runBackfill() {
     setBackfilling(true);
     setProgress(null);
     const toastId = toast.loading("Verific subtitrările pentru descărcările vechi…");
-    const pollInterval = setInterval(async () => {
-      const p = await progressFn().catch(() => null);
-      setProgress(p);
-    }, 1000);
-    try {
-      const res = await backfillFn({});
-      if (res.status === "ok") {
-        toast.success("Subtitrări verificate", {
-          id: toastId,
-          description: `${res.processed} verificate, ${res.corrected} corectate, ${res.skipped} sărite`,
-          duration: 6000,
-        });
-      } else {
-        toast.error("Eroare la verificarea subtitrărilor", { id: toastId, description: res.error });
-      }
-    } catch (e) {
-      toast.error("Eroare neașteptată", {
-        id: toastId,
-        description: e instanceof Error ? e.message : String(e),
-      });
-    } finally {
-      clearInterval(pollInterval);
-      setProgress(null);
+
+    const startRes = await backfillFn({}).catch((e) => ({
+      status: "error" as const,
+      error: e instanceof Error ? e.message : String(e),
+    }));
+    if (startRes.status !== "ok") {
+      toast.error("Eroare la pornirea verificării", { id: toastId, description: startRes.error });
       setBackfilling(false);
+      return;
     }
+
+    const pollInterval = setInterval(async () => {
+      const state = await stateFn().catch(() => null);
+      if (!state) return;
+      setProgress(state.progress);
+      if (!state.running) {
+        clearInterval(pollInterval);
+        setBackfilling(false);
+        setProgress(null);
+        if (state.lastResult?.status === "ok") {
+          const r = state.lastResult;
+          toast.success("Subtitrări verificate", {
+            id: toastId,
+            description: `${r.processed} verificate, ${r.corrected} corectate, ${r.skipped} sărite`,
+            duration: 6000,
+          });
+        } else {
+          toast.error("Eroare la verificarea subtitrărilor", {
+            id: toastId,
+            description: state.lastResult?.error,
+          });
+        }
+      }
+    }, 1500);
   }
 
   async function confirmDelete() {

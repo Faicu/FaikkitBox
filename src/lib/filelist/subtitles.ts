@@ -23,7 +23,7 @@ import iconv from "iconv-lite";
 import { qbitGet, qbitListFiles, qbitRenameFile } from "../qbit-client";
 import { searchSubtitles, downloadSubtitle, type OpenSubtitlesResult } from "../opensubtitles-client";
 import { type SubtitleOutcome, CORRECTED_OUTCOMES, OK_OUTCOMES, SHORT_LABELS } from "./subtitle-outcomes";
-import { lookupTitleByImdbId } from "../tmdb-title-lookup";
+import { lookupTitleByImdbId, searchImdbIdByReleaseName } from "../tmdb-title-lookup";
 
 export type { SubtitleOutcome };
 
@@ -51,6 +51,25 @@ function decodeToUtf8Text(buf: Buffer): { text: string; wasConverted: boolean } 
   return { text: iconv.decode(buf, FALLBACK_ENCODING), wasConverted: true };
 }
 
+// Citește un fișier cu reîncercări scurte — imediat după un rename prin API-ul
+// qBittorrent, fișierul poate să nu fie încă vizibil instant la o citire
+// directă (mai ales pe montări de rețea), deși API-ul a răspuns deja cu
+// succes. Fără retry, prima citire poate da ENOENT chiar dacă fișierul chiar
+// există (confirmat: apare pe disc la o verificare manuală câteva secunde mai
+// târziu).
+async function readFileWithRetry(absPath: string, attempts = 4, delayMs = 500): Promise<Buffer> {
+  let lastError: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await readFile(absPath);
+    } catch (e) {
+      lastError = e;
+      if (i < attempts - 1) await new Promise((r) => setTimeout(r, delayMs));
+    }
+  }
+  throw lastError;
+}
+
 // Verifică (și corectează, dacă e cazul) encoding-ul unui .srt deja scris pe
 // disc — folosit pentru fișierele care vin cu torrentul (nu descărcate de
 // noi, deci nu le controlăm bytes-ii din start). Scrierea se face direct pe
@@ -59,7 +78,7 @@ function decodeToUtf8Text(buf: Buffer): { text: string; wasConverted: boolean } 
 // redenumire, care trebuie mereu prin API).
 async function ensureUtf8SrtOnDisk(absPath: string): Promise<boolean> {
   try {
-    const buf = await readFile(absPath);
+    const buf = await readFileWithRetry(absPath);
     const { text, wasConverted } = decodeToUtf8Text(buf);
     if (!wasConverted) return false;
     await writeFile(absPath, text, "utf8");
@@ -80,6 +99,9 @@ interface EnsureRomanianSubtitleParams {
   torrentHash: string;
   torrentName: string;
   imdbId?: string | null;
+  // Ajută căutarea TMDB de rezervă (când imdbId lipsește) să aleagă corect
+  // între /search/movie și /search/tv. Fără el, se încearcă ambele.
+  mediaType?: "movie" | "tv";
 }
 
 // Rezultatul unei singure verificări/corectări — nu mai loghează nimic
@@ -113,17 +135,32 @@ export async function ensureRomanianSubtitle(
 ): Promise<SubtitleRunItem> {
   const { qbitUrl, qbitUser, qbitPass, torrentHash, torrentName } = params;
 
-  const [files, savePath, tmdbTitle] = await Promise.all([
+  const [files, savePath, imdbLookup] = await Promise.all([
     qbitListFiles(qbitUrl, torrentHash, qbitUser, qbitPass),
     getTorrentSavePath(qbitUrl, torrentHash, qbitUser, qbitPass),
-    params.imdbId ? lookupTitleByImdbId(params.imdbId) : Promise.resolve(null),
+    // Dacă avem deja IMDb id (torrent descărcat prin site), luăm doar
+    // titlul. Dacă nu (torrent adăugat manual în qBittorrent), încercăm să
+    // găsim IMDb id-ul căutând titlul extras din numele lansării pe TMDB —
+    // altfel n-am avea cum să căutăm subtitrarea pe OpenSubtitles.
+    params.imdbId
+      ? lookupTitleByImdbId(params.imdbId).then((title) => ({ imdbId: params.imdbId!, title }))
+      : searchImdbIdByReleaseName(torrentName, params.mediaType),
   ]);
-  const displayTitle = tmdbTitle ?? torrentName;
+  const imdbId: string | null = params.imdbId ?? imdbLookup?.imdbId ?? null;
+  const displayTitle = imdbLookup?.title ?? torrentName;
   if (!files.length || !savePath) {
     return item(torrentName, displayTitle, "no_media_file", "nu am putut lista fișierele torrentului în qBittorrent");
   }
 
-  const mediaFiles = files.filter((f) => MEDIA_EXTENSIONS.includes(extname(f.name).toLowerCase()));
+  // Un fișier din torrent poate avea prioritate 0 ("nu descărca") — apare în
+  // listă, dar nu există fizic pe disc, deși torrentul e altfel complet.
+  // Ignorăm complet astfel de fișiere, altfel un .srt "fantomă" ar da eroare
+  // la citire (ENOENT) sau ar fi asociat greșit cu media descărcată.
+  const downloadedFiles = files.filter((f) => Number(f.progress ?? 0) >= 1);
+
+  const mediaFiles = downloadedFiles.filter((f) =>
+    MEDIA_EXTENSIONS.includes(extname(f.name).toLowerCase()),
+  );
   if (!mediaFiles.length) {
     return item(torrentName, displayTitle, "no_media_file", "niciun fișier media recunoscut în torrent");
   }
@@ -156,7 +193,7 @@ export async function ensureRomanianSubtitle(
     );
   }
 
-  const srtFiles = files.filter((f) => f.name.toLowerCase().endsWith(".srt"));
+  const srtFiles = downloadedFiles.filter((f) => f.name.toLowerCase().endsWith(".srt"));
 
   // Caz 2: exact un .srt în torrent, deja identificabil ca subtitrarea
   // filmului/episodului — trebuie redenumit după convenția Plex (dacă e
@@ -214,7 +251,7 @@ export async function ensureRomanianSubtitle(
   }
 
   // Caz 1: nicio subtitrare deloc — încercăm OpenSubtitles.
-  if (!params.imdbId) {
+  if (!imdbId) {
     console.warn(`[subtitles] "${torrentName}": fără IMDb id, nu pot căuta pe OpenSubtitles`);
     return item(
       torrentName,
@@ -224,13 +261,13 @@ export async function ensureRomanianSubtitle(
     );
   }
 
-  const results = await searchSubtitles(params.imdbId, "ro");
+  const results = await searchSubtitles(imdbId, "ro");
   if (!results.length) {
     return item(
       torrentName,
       displayTitle,
       "no_subtitle_found",
-      `niciun rezultat pe OpenSubtitles pentru IMDb ${params.imdbId}`,
+      `niciun rezultat pe OpenSubtitles pentru IMDb ${imdbId}`,
     );
   }
 
