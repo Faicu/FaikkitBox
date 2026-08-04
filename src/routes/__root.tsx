@@ -173,7 +173,15 @@ function AutoReloadWatcher() {
       const stack = error instanceof Error ? error.stack : undefined;
       logClientError({ data: { message, stack } }).catch(() => {});
     };
-    const onError = (event: ErrorEvent) => reportError(event.error ?? event.message);
+    const onError = (event: ErrorEvent) => {
+      // Scripturi de pe alte origini (ex. beacon-ul de analytics injectat de
+      // Cloudflare la nivel de proxy, static.cloudflareinsights.com) produc
+      // erori complet în afara controlului nostru — logarea lor umple
+      // "Erori aplicație" cu zgomot nefolositor, fără nicio linie de cod
+      // proprie de reparat.
+      if (event.filename && new URL(event.filename, location.href).origin !== location.origin) return;
+      reportError(event.error ?? event.message);
+    };
     const onRejection = (event: PromiseRejectionEvent) => reportError(event.reason);
     window.addEventListener("error", onError);
     window.addEventListener("unhandledrejection", onRejection);
