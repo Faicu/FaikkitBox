@@ -83,11 +83,35 @@ async function fileExists(absPath: string): Promise<boolean> {
 // succes. Fără retry, prima citire poate da ENOENT chiar dacă fișierul chiar
 // există (confirmat: apare pe disc la o verificare manuală câteva secunde mai
 // târziu).
-async function readFileWithRetry(absPath: string, attempts = 4, delayMs = 500): Promise<Buffer> {
+async function readFileWithRetry(absPath: string, attempts = 6, delayMs = 750): Promise<Buffer> {
   let lastError: unknown;
   for (let i = 0; i < attempts; i++) {
     try {
       return await readFile(absPath);
+    } catch (e) {
+      lastError = e;
+      if (i < attempts - 1) await new Promise((r) => setTimeout(r, delayMs));
+    }
+  }
+  throw lastError;
+}
+
+// EACCES/EBUSY la scriere apar tranzitoriu când alt proces (torrent client,
+// verificare antivirus, montare de rețea) ține fișierul .srt deschis chiar
+// în fereastra în care încercăm conversia — a apărut recurent în producție
+// (vezi Erori Aplicație), și reușea la o rulare ulterioară fără nicio
+// intervenție. Retry cu backoff, ca la citire.
+async function writeFileWithRetry(
+  absPath: string,
+  data: string,
+  attempts = 6,
+  delayMs = 750,
+): Promise<void> {
+  let lastError: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      await writeFile(absPath, data, "utf8");
+      return;
     } catch (e) {
       lastError = e;
       if (i < attempts - 1) await new Promise((r) => setTimeout(r, delayMs));
@@ -116,7 +140,7 @@ async function ensureUtf8SrtOnDisk(absPath: string, exclude: () => Promise<void>
     await exclude().catch((e) =>
       console.warn(`[subtitles] Nu am putut exclude .srt de la seed în qBittorrent (${absPath}):`, e),
     );
-    await writeFile(absPath, text, "utf8");
+    await writeFileWithRetry(absPath, text);
     return true;
   } catch (e) {
     console.warn(`[subtitles] Verificare/conversie UTF-8 eșuată pentru ${absPath}:`, e);
