@@ -236,6 +236,37 @@ if (typeof process !== "undefined" && process.env) {
 // Căutare Filelist internă (fără requireAdmin — pentru plugin-uri background)
 // ---------------------------------------------------------------------------
 
+// Categoriile Filelist.io pentru fiecare filtru expus în UI — folosit atât de
+// căutarea internă (searchFilelistRaw) cât și de server function-ul public
+// (searchFilelist).
+function resolveCategoryIds(category: FilelistCategory): readonly number[] {
+  return category === "movies"
+    ? MOVIE_CATEGORIES
+    : category === "series"
+      ? SERIES_CATEGORIES
+      : ALL_CATEGORIES;
+}
+
+// Mapează răspunsul brut al API-ului Filelist.io la forma internă
+// FilelistTorrent — folosit atât de căutarea internă cât și de server
+// function-ul public, ca să nu diverge maparea între ele.
+function mapApiTorrents(raw: FilelistApiTorrent[]): FilelistTorrent[] {
+  return raw.map((t) => ({
+    id: Number(t.id),
+    name: String(t.name ?? ""),
+    size: Number(t.size ?? 0),
+    seeders: Number(t.seeders ?? 0),
+    leechers: Number(t.leechers ?? 0),
+    times_completed: Number(t.times_completed ?? 0),
+    category: parseCategoryId(t.category),
+    categoryName: CATEGORY_NAMES[parseCategoryId(t.category)] ?? `Cat ${t.category}`,
+    freeleech: !!Number(t.freeleech),
+    internal: !!Number(t.internal),
+    upload_date: String(t.upload_date ?? ""),
+    imdb: t.imdb || undefined,
+  }));
+}
+
 export async function searchFilelistRaw(
   query: string,
   category: FilelistCategory,
@@ -244,19 +275,13 @@ export async function searchFilelistRaw(
   const username = process.env.FILELIST_USERNAME;
   const passkey = process.env.FILELIST_PASSKEY;
   if (!username || !passkey) return [];
-  const catIds =
-    category === "movies"
-      ? MOVIE_CATEGORIES
-      : category === "series"
-        ? SERIES_CATEGORIES
-        : ALL_CATEGORIES;
   const params = new URLSearchParams({
     username,
     passkey,
     action: "search-torrents",
     type,
     query: query.trim(),
-    category: catIds.join(","),
+    category: resolveCategoryIds(category).join(","),
     output: "json",
   });
   try {
@@ -266,20 +291,7 @@ export async function searchFilelistRaw(
     if (!res.ok) return [];
     const raw: FilelistApiTorrent[] = await res.json();
     if (!Array.isArray(raw)) return [];
-    return raw.map((t) => ({
-      id: Number(t.id),
-      name: String(t.name ?? ""),
-      size: Number(t.size ?? 0),
-      seeders: Number(t.seeders ?? 0),
-      leechers: Number(t.leechers ?? 0),
-      times_completed: Number(t.times_completed ?? 0),
-      category: parseCategoryId(t.category),
-      categoryName: CATEGORY_NAMES[parseCategoryId(t.category)] ?? `Cat ${t.category}`,
-      freeleech: !!Number(t.freeleech),
-      internal: !!Number(t.internal),
-      upload_date: String(t.upload_date ?? ""),
-      imdb: t.imdb || undefined,
-    }));
+    return mapApiTorrents(raw);
   } catch {
     return [];
   }
@@ -305,12 +317,6 @@ export const searchFilelist = createServerFn({ method: "GET" })
     }
 
     const category = data.category ?? "all";
-    const catIds =
-      category === "movies"
-        ? MOVIE_CATEGORIES
-        : category === "series"
-          ? SERIES_CATEGORIES
-          : ALL_CATEGORIES;
 
     const params = new URLSearchParams({
       username,
@@ -318,7 +324,7 @@ export const searchFilelist = createServerFn({ method: "GET" })
       action: "search-torrents",
       type: "name",
       query: data.query.trim(),
-      category: catIds.join(","),
+      category: resolveCategoryIds(category).join(","),
       output: "json",
     });
 
@@ -337,20 +343,7 @@ export const searchFilelist = createServerFn({ method: "GET" })
         return { status: "error", error: "Răspuns neașteptat de la Filelist API", torrents: [] };
       }
 
-      const torrents: FilelistTorrent[] = raw.map((t) => ({
-        id: Number(t.id),
-        name: String(t.name ?? ""),
-        size: Number(t.size ?? 0),
-        seeders: Number(t.seeders ?? 0),
-        leechers: Number(t.leechers ?? 0),
-        times_completed: Number(t.times_completed ?? 0),
-        category: parseCategoryId(t.category),
-        categoryName: CATEGORY_NAMES[parseCategoryId(t.category)] ?? `Cat ${t.category}`,
-        freeleech: !!Number(t.freeleech),
-        internal: !!Number(t.internal),
-        upload_date: String(t.upload_date ?? ""),
-        imdb: t.imdb || undefined,
-      }));
+      const torrents: FilelistTorrent[] = mapApiTorrents(raw);
 
       // Sortează după data postării, cel mai recent primul
       torrents.sort((a, b) => {
@@ -587,7 +580,9 @@ async function downloadFilelistCore(
 
     // Sesiunea SID poate expira în qBittorrent între timp; un SID expirat
     // primește tot 403 (nu 401), deci reîncercăm o dată cu login proaspăt.
-    if (!uploadRes.ok) {
+    // Alte coduri de eroare (400 body invalid, 500 server) nu se rezolvă
+    // printr-un relogin — le lăsăm să treacă direct la eroarea de mai jos.
+    if (uploadRes.status === 401 || uploadRes.status === 403) {
       resetQbitCookie();
       cookie = await qbitLogin(url, qbitUser, qbitPass);
       uploadRes = await fetch(`${url}/api/v2/torrents/add`, {
@@ -624,12 +619,11 @@ async function downloadFilelistCore(
       );
       if (listRes.ok) {
         const list: QbitTorrentInfo[] = await listRes.json();
-        const match =
-          list.find((t) =>
-            String(t.name ?? "")
-              .toLowerCase()
-              .includes(params.torrentName.slice(0, 20).toLowerCase()),
-          ) ?? list[0];
+        const match = list.find((t) =>
+          String(t.name ?? "")
+            .toLowerCase()
+            .includes(params.torrentName.slice(0, 20).toLowerCase()),
+        );
         torrentHash = match?.hash ?? null;
       }
     } catch (e) {

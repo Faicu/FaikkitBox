@@ -252,7 +252,7 @@ async function downloadAndWriteSubtitle(
 
   try {
     const { text, wasConverted } = decodeToUtf8Text(content);
-    await writeFile(destPath, text, "utf8");
+    await writeFileWithRetry(destPath, text);
     const encodingNote = wasConverted ? " (encoding convertit la UTF-8)" : "";
     if (confident) {
       console.log(`[subtitles] subtitrare ${sourceLabel} salvată → ${destPath}`);
@@ -802,11 +802,15 @@ async function getTorrentSavePath(
   }
 }
 
-// Verifică prin ffprobe dacă fișierul media are deja un stream de subtitrare
-// în română încorporat. Dacă ffprobe nu e disponibil pe server, tratăm ca
-// "necunoscut" (returnăm false) — mai bine încercăm să adăugăm un .srt în
-// plus decât să lăsăm filmul fără subtitrare deloc.
-async function hasEmbeddedRomanianSubtitle(mediaAbsPath: string): Promise<boolean> {
+// Verifică prin ffprobe dacă fișierul media are deja un stream (subtitrare
+// sau audio) cu tag de limbă română. Dacă ffprobe nu e disponibil pe server
+// sau fișierul n-are deloc tag de limbă pe stream-ul respectiv, tratăm ca
+// "necunoscut" (returnăm false) — apelanții preferă să încerce în plus decât
+// să presupună greșit că nu e nevoie.
+async function hasRomanianLanguageStream(
+  mediaAbsPath: string,
+  streamSelector: "s" | "a",
+): Promise<boolean> {
   try {
     const { stdout } = await execFileAsync(
       "ffprobe",
@@ -814,7 +818,7 @@ async function hasEmbeddedRomanianSubtitle(mediaAbsPath: string): Promise<boolea
         "-v",
         "error",
         "-select_streams",
-        "s",
+        streamSelector,
         "-show_entries",
         "stream_tags=language",
         "-of",
@@ -833,37 +837,19 @@ async function hasEmbeddedRomanianSubtitle(mediaAbsPath: string): Promise<boolea
   }
 }
 
-// Verifică prin ffprobe dacă track-ul audio principal e deja în română —
-// conținut nativ românesc (emisiuni TV, producții locale) n-are nevoie de
-// nicio subtitrare. Aceeași limitare ca la subtitrare: dacă ffprobe lipsește
-// sau fișierul n-are deloc tag de limbă pe track-ul audio, tratăm ca
-// "necunoscut" (returnăm false) — apelantul mai are șansa heuristicii de
-// platformă (knownRomanianOnlySourceTag) înainte să caute extern.
+// Verifică dacă fișierul media are deja un stream de subtitrare în română
+// încorporat — mai bine încercăm să adăugăm un .srt în plus decât să lăsăm
+// filmul fără subtitrare deloc.
+async function hasEmbeddedRomanianSubtitle(mediaAbsPath: string): Promise<boolean> {
+  return hasRomanianLanguageStream(mediaAbsPath, "s");
+}
+
+// Verifică dacă track-ul audio principal e deja în română — conținut nativ
+// românesc (emisiuni TV, producții locale) n-are nevoie de nicio subtitrare.
+// Apelantul mai are șansa heuristicii de platformă (knownRomanianOnlySourceTag)
+// înainte să caute extern.
 async function hasRomanianAudio(mediaAbsPath: string): Promise<boolean> {
-  try {
-    const { stdout } = await execFileAsync(
-      "ffprobe",
-      [
-        "-v",
-        "error",
-        "-select_streams",
-        "a",
-        "-show_entries",
-        "stream_tags=language",
-        "-of",
-        "csv=p=0",
-        mediaAbsPath,
-      ],
-      { timeout: 20_000 },
-    );
-    const langs = stdout
-      .split(/\r?\n/)
-      .map((l) => l.trim().toLowerCase())
-      .filter(Boolean);
-    return langs.some((l) => ROMANIAN_LANG_CODES.includes(l));
-  } catch {
-    return false;
-  }
+  return hasRomanianLanguageStream(mediaAbsPath, "a");
 }
 
 // Platforme/surse cunoscute care oferă exclusiv conținut audio nativ în
