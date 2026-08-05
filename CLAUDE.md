@@ -15,7 +15,11 @@ La finalul fiecărei sarcini care implică modificări de fișiere, execută în
    - Dacă build-ul eșuează: repară și repetă până trece — serviciul rămâne
      oprit între timp, nu-l lăsa așa la finalul sesiunii.
 3. `git add <fișierele modificate>` + `git commit` cu un mesaj descriptiv
-4. `git push origin main` — sincronizează cu github.com/Faicu/FaikkitBox
-5. `sudo systemctl start faikkitbox` — repornește serviciul cu build-ul nou
+4. `sudo systemctl start faikkitbox` — repornește serviciul cu build-ul nou
 
-Nu raporta sarcina ca finalizată până când toți cei 5 pași nu au fost executați cu succes (serviciul activ, la final).
+Nu raporta sarcina ca finalizată până când toți cei 4 pași nu au fost executați cu succes (serviciul activ, la final).
+
+**Nu face `git push` singur.** Push-ul către GitHub se face manual, de utilizator,
+din pagina Tehnic (buton dedicat) — vezi `pushToGitHub` în
+`src/lib/github.functions.ts`. Commit-urile locale rămân nepublicate până când
+utilizatorul apasă butonul; asta e intenționat, nu o eroare de urmărit sau reparat.

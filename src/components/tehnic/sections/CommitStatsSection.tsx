@@ -1,12 +1,37 @@
-import { useQuery } from "@tanstack/react-query";
-import { GitCommitHorizontal, Clock, Activity } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { GitCommitHorizontal, Clock, Activity, UploadCloud } from "lucide-react";
+import { toast } from "sonner";
 
-import { recentCommitsQuery, commitsFromDbQuery } from "@/lib/queries";
+import { recentCommitsQuery, commitsFromDbQuery, githubPushStatusQuery, adminStatusQuery } from "@/lib/queries";
+import { pushToGitHub } from "@/lib/github.functions";
 import { StatCell } from "../StatCell";
 
 export function CommitStatsSection() {
   useQuery(recentCommitsQuery);
   const { data: commitsData, isLoading } = useQuery(commitsFromDbQuery);
+  const admin = useQuery(adminStatusQuery);
+  const pushStatus = useQuery(githubPushStatusQuery);
+
+  const qc = useQueryClient();
+  const pushFn = useServerFn(pushToGitHub);
+  const pushMutation = useMutation({
+    mutationFn: () => pushFn(),
+    onSuccess: (res) => {
+      if (res.status === "ok") {
+        toast.success(
+          res.pushedCommits > 0
+            ? `Trimis pe GitHub: ${res.pushedCommits} commit${res.pushedCommits !== 1 ? "-uri" : ""}`
+            : "Nimic de trimis — deja sincronizat",
+        );
+        qc.invalidateQueries({ queryKey: ["githubPushStatus"] });
+        qc.invalidateQueries({ queryKey: ["githubSync"] });
+      } else {
+        toast.error(`Push eșuat: ${res.error}`);
+      }
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
 
   const commits = commitsData?.status === "ok" ? commitsData.commits : [];
   const total = commits.length;
@@ -17,6 +42,8 @@ export function CommitStatsSection() {
   const thisWeekStart = new Date();
   thisWeekStart.setDate(thisWeekStart.getDate() - thisWeekStart.getDay());
   const thisWeek = commits.filter((c) => new Date(c.date) >= thisWeekStart).length;
+
+  const ahead = pushStatus.data?.status === "ok" ? pushStatus.data.data.ahead : 0;
 
   return (
     <section className="space-y-2">
@@ -46,6 +73,22 @@ export function CommitStatsSection() {
           </div>
         )}
       </div>
+
+      {admin.data?.isAdmin && (
+        <button
+          type="button"
+          onClick={() => pushMutation.mutate()}
+          disabled={pushMutation.isPending || ahead === 0}
+          className="flex w-full items-center justify-center gap-2 rounded-xl border border-sky-500/30 bg-sky-500/15 px-3 py-2.5 text-sm font-medium text-sky-400 hover:bg-sky-500/25 disabled:opacity-50"
+        >
+          <UploadCloud className="h-4 w-4" />
+          {pushMutation.isPending
+            ? "Se trimite pe GitHub..."
+            : ahead > 0
+              ? `Trimite pe GitHub (${ahead} commit${ahead !== 1 ? "-uri" : ""})`
+              : "Sincronizat cu GitHub"}
+        </button>
+      )}
     </section>
   );
 }

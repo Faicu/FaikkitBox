@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { execSync } from "child_process";
+import { execSync, execFileSync } from "child_process";
 
 export interface GitHubCommit {
   sha: string;
@@ -244,6 +244,71 @@ export const getGitHubSyncStatus = createServerFn({ method: "GET" }).handler(
       };
     } catch (e) {
       return { status: "error", error: e instanceof Error ? e.message : String(e) };
+    }
+  },
+);
+
+export interface GitPushStatus {
+  ahead: number;
+  behind: number;
+  branch: string;
+}
+
+// Numărul de commit-uri locale nepublicate — sursa pentru butonul de push din
+// pagina Tehnic. `git fetch` e best-effort (doar actualizează referința locală
+// origin/main, nu schimbă nimic din working tree); dacă eșuează (fără rețea),
+// raportăm ahead/behind față de ultima referință cunoscută.
+export const getGitPushStatus = createServerFn({ method: "GET" }).handler(
+  async (): Promise<{ status: "ok"; data: GitPushStatus } | { status: "error"; error: string }> => {
+    try {
+      const branch = execSync("git rev-parse --abbrev-ref HEAD", { encoding: "utf8" }).trim();
+      try {
+        execFileSync("git", ["fetch", "--quiet", "origin", branch], { timeout: 8000 });
+      } catch {
+        // fără rețea sau fără acces — continuăm cu ce știm local
+      }
+      const ahead = Number(
+        execSync(`git rev-list origin/${branch}..HEAD --count`, { encoding: "utf8" }).trim(),
+      );
+      const behind = Number(
+        execSync(`git rev-list HEAD..origin/${branch} --count`, { encoding: "utf8" }).trim(),
+      );
+      return { status: "ok", data: { ahead, behind, branch } };
+    } catch (e) {
+      return { status: "error", error: e instanceof Error ? e.message : String(e) };
+    }
+  },
+);
+
+export interface GitPushResult {
+  status: "ok" | "error";
+  error?: string;
+  pushedCommits: number;
+}
+
+// Trimite commit-urile locale pe GitHub — apăsat manual din pagina Tehnic.
+// Nu rulează build/restart: acelea s-au întâmplat deja când commit-urile au
+// fost create local, push-ul doar le publică.
+export const pushToGitHub = createServerFn({ method: "POST" }).handler(
+  async (): Promise<GitPushResult> => {
+    const { requireAdmin } = await import("./admin.server");
+    await requireAdmin();
+    try {
+      const branch = execSync("git rev-parse --abbrev-ref HEAD", { encoding: "utf8" }).trim();
+      const ahead = Number(
+        execSync(`git rev-list origin/${branch}..HEAD --count`, { encoding: "utf8" }).trim(),
+      );
+      if (ahead === 0) {
+        return { status: "ok", pushedCommits: 0 };
+      }
+      execFileSync("git", ["push", "origin", branch], { timeout: 30_000 });
+      return { status: "ok", pushedCommits: ahead };
+    } catch (e) {
+      return {
+        status: "error",
+        error: e instanceof Error ? e.message : String(e),
+        pushedCommits: 0,
+      };
     }
   },
 );
