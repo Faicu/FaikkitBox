@@ -280,6 +280,37 @@ export const getGitPushStatus = createServerFn({ method: "GET" }).handler(
   },
 );
 
+export interface UnpushedCommit {
+  shortSha: string;
+  message: string;
+  author: string;
+  date: string;
+}
+
+// Detalii despre commit-urile locale nepublicate — afișate deasupra butonului
+// de push din pagina Tehnic, ca userul să vadă ce urmează să trimită.
+export const getUnpushedCommits = createServerFn({ method: "GET" }).handler(
+  async (): Promise<{ status: "ok"; commits: UnpushedCommit[] } | { status: "error"; error: string }> => {
+    try {
+      const branch = execSync("git rev-parse --abbrev-ref HEAD", { encoding: "utf8" }).trim();
+      const sep = "\x1f";
+      const log = execSync(
+        `git log origin/${branch}..HEAD --pretty=format:%h${sep}%s${sep}%an${sep}%aI`,
+        { encoding: "utf8" },
+      ).trim();
+      const commits: UnpushedCommit[] = log
+        ? log.split("\n").map((line) => {
+            const [shortSha, message, author, date] = line.split(sep);
+            return { shortSha, message, author, date };
+          })
+        : [];
+      return { status: "ok", commits };
+    } catch (e) {
+      return { status: "error", error: e instanceof Error ? e.message : String(e) };
+    }
+  },
+);
+
 export interface GitPushResult {
   status: "ok" | "error";
   error?: string;

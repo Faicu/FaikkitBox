@@ -3,7 +3,13 @@ import { useServerFn } from "@tanstack/react-start";
 import { GitCommitHorizontal, Clock, Activity, UploadCloud } from "lucide-react";
 import { toast } from "sonner";
 
-import { recentCommitsQuery, commitsFromDbQuery, githubPushStatusQuery, adminStatusQuery } from "@/lib/queries";
+import {
+  recentCommitsQuery,
+  commitsFromDbQuery,
+  githubPushStatusQuery,
+  adminStatusQuery,
+  unpushedCommitsQuery,
+} from "@/lib/queries";
 import { pushToGitHub } from "@/lib/github.functions";
 import { StatCell } from "../StatCell";
 
@@ -12,6 +18,7 @@ export function CommitStatsSection() {
   const { data: commitsData, isLoading } = useQuery(commitsFromDbQuery);
   const admin = useQuery(adminStatusQuery);
   const pushStatus = useQuery(githubPushStatusQuery);
+  const unpushed = useQuery({ ...unpushedCommitsQuery, enabled: !!admin.data?.isAdmin });
 
   const qc = useQueryClient();
   const pushFn = useServerFn(pushToGitHub);
@@ -26,6 +33,7 @@ export function CommitStatsSection() {
         );
         qc.invalidateQueries({ queryKey: ["githubPushStatus"] });
         qc.invalidateQueries({ queryKey: ["githubSync"] });
+        qc.invalidateQueries({ queryKey: ["unpushedCommits"] });
       } else {
         toast.error(`Push eșuat: ${res.error}`);
       }
@@ -73,6 +81,22 @@ export function CommitStatsSection() {
           </div>
         )}
       </div>
+
+      {admin.data?.isAdmin && ahead > 0 && unpushed.data?.status === "ok" && unpushed.data.commits.length > 0 && (
+        <div className="rounded-2xl border border-border bg-card divide-y divide-border/50">
+          {unpushed.data.commits.map((c) => (
+            <div key={c.shortSha} className="px-3 py-2 text-xs">
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-muted-foreground">{c.shortSha}</span>
+                <span className="truncate text-foreground">{c.message}</span>
+              </div>
+              <div className="text-[11px] text-muted-foreground">
+                {c.author} · {new Date(c.date).toLocaleString("ro-RO")}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {admin.data?.isAdmin && (
         <button

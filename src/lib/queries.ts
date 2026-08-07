@@ -6,7 +6,7 @@ import { getLastSpeedtest, getSpeedtestHistory } from "./speedtest.functions";
 import { getActivityLog } from "./activity-log";
 import { getErrorLogs } from "./error-log";
 import { getFilelistDownloadLog } from "./filelist.functions";
-import { getRecentCommits, getCommitsFromDb, getGitHubSyncStatus, getGitPushStatus } from "./github.functions";
+import { getRecentCommits, getCommitsFromDb, getGitHubSyncStatus, getGitPushStatus, getUnpushedCommits } from "./github.functions";
 import { getPinnedItems } from "./pinned.functions";
 
 // Interval de bază pentru statistici live (Plex/Immich/qBit/Host)
@@ -138,6 +138,14 @@ export const githubPushStatusQuery = queryOptions({
   staleTime: 30_000,
   refetchOnWindowFocus: true,
 });
+export const unpushedCommitsQuery = queryOptions({
+  queryKey: ["unpushedCommits"],
+  queryFn: () => getUnpushedCommits(),
+  refetchInterval: 60_000,
+  staleTime: 30_000,
+  refetchOnWindowFocus: true,
+});
+
 export const speedtestHistoryQuery = queryOptions({
   queryKey: ["speedtestHistory"],
   queryFn: () => getSpeedtestHistory(),
