@@ -1,25 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import {
-  PlayCircle,
-  Images,
-  Download,
-  Cpu,
-  ChevronRight,
-  Users,
-  HardDrive,
-  ListChecks,
-  Tv,
-  Film,
-  CheckCircle2,
-  Upload,
-  RefreshCw,
-} from "lucide-react";
+import { PlayCircle, ChevronRight, Users, Tv, Film, RefreshCw } from "lucide-react";
 import { useState } from "react";
 
 import { PageShell } from "@/components/PageShell";
 import { ServicePill } from "@/components/ServicePill";
-import { RadialGauge } from "@/components/RadialGauge";
 import {
   Drawer,
   DrawerContent,
@@ -27,9 +12,8 @@ import {
   DrawerTitle,
   DrawerDescription,
 } from "@/components/ui/drawer";
-import { plexQuery, plexSessionsQuery, immichQuery, qbitQuery, hostQuery } from "@/lib/queries";
-import type { HostData } from "@/lib/services.functions";
-import { formatBytes, formatSpeed } from "@/lib/format";
+import { plexQuery, plexSessionsQuery } from "@/lib/queries";
+import { formatSpeed } from "@/lib/format";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -37,7 +21,7 @@ export const Route = createFileRoute("/")({
       { title: "Prezentare generală — Monitor Server" },
       {
         name: "description",
-        content: "Stare în timp real pentru Plex, Immich, qBittorrent și gazdă.",
+        content: "Stare în timp real pentru Plex.",
       },
     ],
   }),
@@ -49,9 +33,6 @@ function Overview() {
   const plexSessions = useQuery(plexSessionsQuery);
   const sessions =
     plexSessions.data?.status === "ok" ? plexSessions.data.sessions : plex.data?.sessions;
-  const immich = useQuery(immichQuery);
-  const qbit = useQuery(qbitQuery);
-  const host = useQuery(hostQuery);
   const [plexDrawer, setPlexDrawer] = useState<"views" | "users" | null>(null);
   const [plexAddedMode, setPlexAddedMode] = useState<"movies" | "episodes">("movies");
 
@@ -196,77 +177,6 @@ function Overview() {
             </div>
           )}
         </ServiceRow>
-
-        <ServiceRow
-          to="/immich"
-          title="Immich"
-          icon={<Images className="h-5 w-5" />}
-          accent="text-purple-400"
-          status={immich.isLoading ? "loading" : (immich.data?.status ?? "error")}
-          error={immich.data?.error}
-        >
-          {immich.data?.status === "ok" && (
-            <div className="grid grid-cols-4 gap-1.5 text-sm">
-              <Metric
-                label="Fișiere"
-                value={(immich.data.totalAssets ?? 0).toLocaleString()}
-                compact
-              />
-              <Metric
-                icon={<HardDrive className="h-3 w-3" />}
-                label="Spațiu"
-                value={formatBytes(immich.data.usageBytes ?? 0)}
-                compact
-              />
-              <Metric
-                icon={<ListChecks className="h-3 w-3" />}
-                label="Sarcini"
-                value={(immich.data.jobQueueDepth ?? 0).toLocaleString()}
-                compact
-              />
-              <Metric
-                icon={<Upload className="h-3 w-3" />}
-                label="Azi"
-                value={
-                  immich.data.uploadsToday != null ? immich.data.uploadsToday.toLocaleString() : "—"
-                }
-                compact
-              />
-            </div>
-          )}
-        </ServiceRow>
-
-        <ServiceRow
-          to="/qbit"
-          title="qBittorrent"
-          icon={<Download className="h-5 w-5" />}
-          accent="text-sky-400"
-          status={qbit.isLoading ? "loading" : (qbit.data?.status ?? "error")}
-          error={qbit.data?.error}
-        >
-          {qbit.data?.status === "ok" && (
-            <div className="grid grid-cols-3 gap-2 text-sm">
-              <Metric label="↓" value={formatSpeed(qbit.data.dlSpeed)} />
-              <Metric label="↑" value={formatSpeed(qbit.data.upSpeed)} />
-              <Metric
-                label="Active"
-                value={`${qbit.data.counts.downloading + qbit.data.counts.seeding} / ${qbit.data.counts.total}`}
-              />
-            </div>
-          )}
-        </ServiceRow>
-
-        <ServiceRow
-          className="sm:col-span-2"
-          to="/sistem"
-          title="Sistem"
-          icon={<Cpu className="h-5 w-5" />}
-          accent="text-emerald-400"
-          status={host.isLoading ? "loading" : (host.data?.status ?? "error")}
-          error={host.data?.error}
-        >
-          {host.data?.status === "ok" && <HostGauges data={host.data} />}
-        </ServiceRow>
       </div>
 
       <Drawer open={plexDrawer === "views"} onOpenChange={(o) => !o && setPlexDrawer(null)}>
@@ -344,42 +254,6 @@ function Overview() {
   );
 }
 
-function HostGauges({ data }: { data: HostData }) {
-  const cpu = data.cpuPercent ?? 0;
-  const mem = data.memPercent ?? 0;
-  const netTotal = (data.net ?? []).reduce((sum, n) => sum + (n.rxSec ?? 0) + (n.txSec ?? 0), 0);
-  // Scale network to a rough 100 Mbit/s = 100% reference
-  const netRef = (100 * 1024 * 1024) / 8; // bytes/s
-  const netPct = Math.min(100, (netTotal / netRef) * 100);
-  return (
-    <div className="grid grid-cols-3 gap-2">
-      <RadialGauge
-        label="Procesor"
-        value={cpu}
-        centerText={`${cpu.toFixed(0)}%`}
-        colorClass="text-emerald-400"
-      />
-      <RadialGauge
-        label="Memorie"
-        value={mem}
-        centerText={`${mem.toFixed(0)}%`}
-        sub={
-          data.memUsedBytes != null && data.memTotalBytes != null
-            ? `${formatBytes(data.memUsedBytes)}`
-            : undefined
-        }
-        colorClass="text-primary"
-      />
-      <RadialGauge
-        label="Rețea"
-        value={netPct}
-        centerText={formatSpeed(netTotal)}
-        colorClass="text-sky-400"
-      />
-    </div>
-  );
-}
-
 function ServiceRow({
   to,
   title,
@@ -390,7 +264,7 @@ function ServiceRow({
   children,
   className,
 }: {
-  to: "/plex" | "/immich" | "/qbit" | "/sistem";
+  to: "/plex";
   title: string;
   icon: React.ReactNode;
   accent: string;
@@ -417,30 +291,6 @@ function ServiceRow({
       )}
       {children && <div className="mt-3">{children}</div>}
     </Link>
-  );
-}
-
-function Metric({
-  label,
-  value,
-  icon,
-  compact,
-}: {
-  label: string;
-  value: string;
-  icon?: React.ReactNode;
-  compact?: boolean;
-}) {
-  return (
-    <div className={`rounded-lg bg-muted/40 ${compact ? "px-2 py-1" : "px-2.5 py-1.5"}`}>
-      <div
-        className={`flex items-center gap-1 uppercase tracking-wide text-muted-foreground ${compact ? "text-[9px]" : "text-[10px]"}`}
-      >
-        {icon}
-        {label}
-      </div>
-      <div className="text-sm font-semibold tabular-nums">{value}</div>
-    </div>
   );
 }
 

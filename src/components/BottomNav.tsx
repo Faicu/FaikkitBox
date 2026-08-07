@@ -1,22 +1,27 @@
 import { Link, useRouterState } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import { LayoutDashboard, Flame, Wrench, Compass } from "lucide-react";
+import { adminStatusQuery } from "@/lib/queries";
 
 const baseItems = [
   { to: "/", label: "Acasă", icon: LayoutDashboard },
   { to: "/descopera", label: "Descoperă", icon: Compass },
   { to: "/lansari", label: "Lansări", icon: Flame },
-  { to: "/tehnic", label: "Tehnic", icon: Wrench },
 ] as const;
+
+const tehnicItem = { to: "/tehnic", label: "Tehnic", icon: Wrench } as const;
 
 export function BottomNav() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const admin = useQuery(adminStatusQuery);
+  const items = admin.data?.isAdmin ? [...baseItems, tehnicItem] : baseItems;
   return (
     <nav
       className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/60 bg-card/70 backdrop-blur-xl"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
       <ul className="mx-auto flex max-w-2xl items-stretch justify-around">
-        {baseItems.map((item) => {
+        {items.map((item) => {
           const active = pathname === item.to;
           const Icon = item.icon;
           return (
