@@ -281,6 +281,7 @@ export const getGitPushStatus = createServerFn({ method: "GET" }).handler(
 );
 
 export interface UnpushedCommit {
+  sha: string;
   shortSha: string;
   message: string;
   author: string;
@@ -295,13 +296,13 @@ export const getUnpushedCommits = createServerFn({ method: "GET" }).handler(
       const branch = execSync("git rev-parse --abbrev-ref HEAD", { encoding: "utf8" }).trim();
       const sep = "\x1f";
       const log = execSync(
-        `git log origin/${branch}..HEAD --pretty=format:%h${sep}%s${sep}%an${sep}%aI`,
+        `git log origin/${branch}..HEAD --pretty=format:%H${sep}%h${sep}%s${sep}%an${sep}%aI`,
         { encoding: "utf8" },
       ).trim();
       const commits: UnpushedCommit[] = log
         ? log.split("\n").map((line) => {
-            const [shortSha, message, author, date] = line.split(sep);
-            return { shortSha, message, author, date };
+            const [sha, shortSha, message, author, date] = line.split(sep);
+            return { sha, shortSha, message, author, date };
           })
         : [];
       return { status: "ok", commits };
@@ -310,6 +311,76 @@ export const getUnpushedCommits = createServerFn({ method: "GET" }).handler(
     }
   },
 );
+
+// Detalii complete pentru un commit local (nepublicat încă pe GitHub) — citite
+// direct din git, fiindcă GitHub API nu are cum să știe de el.
+export const getLocalCommitDetail = createServerFn({ method: "GET" })
+  .validator((data: { sha: string }) => data)
+  .handler(async ({ data }): Promise<GitHubCommitDetail> => {
+    try {
+      const sep = "\x1f";
+      const header = execFileSync(
+        "git",
+        ["show", "-s", `--pretty=format:%H${sep}%h${sep}%B${sep}%an${sep}%aI`, data.sha],
+        { encoding: "utf8" },
+      );
+      const [sha, shortSha, message, author, date] = header.split(sep);
+
+      const numstat = execFileSync("git", ["show", "--numstat", "--format=", data.sha], {
+        encoding: "utf8",
+      }).trim();
+      const nameStatus = execFileSync("git", ["show", "--name-status", "--format=", data.sha], {
+        encoding: "utf8",
+      }).trim();
+      const statusByFile = new Map<string, string>();
+      for (const line of nameStatus ? nameStatus.split("\n") : []) {
+        const [code, filename] = line.split("\t");
+        if (!filename) continue;
+        const status =
+          code?.[0] === "A" ? "added" : code?.[0] === "D" ? "removed" : code?.[0] === "R" ? "renamed" : "modified";
+        statusByFile.set(filename, status);
+      }
+
+      const files: GitHubCommitFile[] = (numstat ? numstat.split("\n") : []).map((line) => {
+        const [add, del, filename] = line.split("\t");
+        return {
+          filename,
+          status: statusByFile.get(filename) ?? "modified",
+          additions: add === "-" ? 0 : Number(add),
+          deletions: del === "-" ? 0 : Number(del),
+        };
+      });
+
+      return {
+        status: "ok",
+        sha,
+        shortSha,
+        message: message.trim(),
+        author,
+        date,
+        url: "",
+        filesChanged: files.length,
+        additions: files.reduce((s, f) => s + f.additions, 0),
+        deletions: files.reduce((s, f) => s + f.deletions, 0),
+        files,
+      };
+    } catch (e) {
+      return {
+        status: "error",
+        error: e instanceof Error ? e.message : String(e),
+        sha: data.sha,
+        shortSha: data.sha.slice(0, 7),
+        message: "",
+        author: "",
+        date: "",
+        url: "",
+        filesChanged: 0,
+        additions: 0,
+        deletions: 0,
+        files: [],
+      };
+    }
+  });
 
 export interface GitPushResult {
   status: "ok" | "error";

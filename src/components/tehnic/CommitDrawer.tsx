@@ -9,15 +9,25 @@ import {
   DrawerTitle,
   DrawerDescription,
 } from "@/components/ui/drawer";
-import type { GitHubCommit } from "@/lib/github.functions";
-import { getCommitDetail } from "@/lib/github.functions";
+import type { GitHubCommit, UnpushedCommit } from "@/lib/github.functions";
+import { getCommitDetail, getLocalCommitDetail } from "@/lib/github.functions";
 
-export function CommitDrawer({ commit, onClose }: { commit: GitHubCommit; onClose: () => void }) {
+export function CommitDrawer({
+  commit,
+  onClose,
+  local = false,
+}: {
+  commit: GitHubCommit | UnpushedCommit;
+  onClose: () => void;
+  local?: boolean;
+}) {
   const getDetail = useServerFn(getCommitDetail);
+  const getLocalDetail = useServerFn(getLocalCommitDetail);
   const { data, isLoading } = useQuery({
-    queryKey: ["commitDetail", commit.sha],
-    queryFn: () => getDetail({ data: { sha: commit.sha } }),
-    staleTime: 5 * 60_000,
+    queryKey: [local ? "localCommitDetail" : "commitDetail", commit.sha],
+    queryFn: () =>
+      local ? getLocalDetail({ data: { sha: commit.sha } }) : getDetail({ data: { sha: commit.sha } }),
+    staleTime: local ? 30_000 : 5 * 60_000,
   });
 
   const fmtDate = (iso: string) =>
@@ -115,14 +125,16 @@ export function CommitDrawer({ commit, onClose }: { commit: GitHubCommit; onClos
             </div>
           )}
 
-          <a
-            href={commit.url}
-            target="_blank"
-            rel="noreferrer"
-            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <ExternalLink className="h-3 w-3" /> Vezi pe GitHub
-          </a>
+          {!local && "url" in commit && commit.url && (
+            <a
+              href={commit.url}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ExternalLink className="h-3 w-3" /> Vezi pe GitHub
+            </a>
+          )}
         </div>
       </DrawerContent>
     </Drawer>

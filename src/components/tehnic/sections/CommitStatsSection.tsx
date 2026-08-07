@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { GitCommitHorizontal, Clock, Activity, UploadCloud } from "lucide-react";
@@ -10,8 +11,9 @@ import {
   adminStatusQuery,
   unpushedCommitsQuery,
 } from "@/lib/queries";
-import { pushToGitHub } from "@/lib/github.functions";
+import { pushToGitHub, type UnpushedCommit } from "@/lib/github.functions";
 import { StatCell } from "../StatCell";
+import { CommitDrawer } from "../CommitDrawer";
 
 export function CommitStatsSection() {
   useQuery(recentCommitsQuery);
@@ -19,6 +21,7 @@ export function CommitStatsSection() {
   const admin = useQuery(adminStatusQuery);
   const pushStatus = useQuery(githubPushStatusQuery);
   const unpushed = useQuery({ ...unpushedCommitsQuery, enabled: !!admin.data?.isAdmin });
+  const [selectedUnpushed, setSelectedUnpushed] = useState<UnpushedCommit | null>(null);
 
   const qc = useQueryClient();
   const pushFn = useServerFn(pushToGitHub);
@@ -85,7 +88,12 @@ export function CommitStatsSection() {
       {admin.data?.isAdmin && ahead > 0 && unpushed.data?.status === "ok" && unpushed.data.commits.length > 0 && (
         <div className="rounded-2xl border border-border bg-card divide-y divide-border/50">
           {unpushed.data.commits.map((c) => (
-            <div key={c.shortSha} className="px-3 py-2 text-xs">
+            <button
+              key={c.sha}
+              type="button"
+              onClick={() => setSelectedUnpushed(c)}
+              className="w-full px-3 py-2 text-xs text-left hover:bg-muted/40 transition-colors"
+            >
               <div className="flex items-center gap-2">
                 <span className="font-mono text-muted-foreground">{c.shortSha}</span>
                 <span className="truncate text-foreground">{c.message}</span>
@@ -93,7 +101,7 @@ export function CommitStatsSection() {
               <div className="text-[11px] text-muted-foreground">
                 {c.author} · {new Date(c.date).toLocaleString("ro-RO")}
               </div>
-            </div>
+            </button>
           ))}
         </div>
       )}
@@ -112,6 +120,14 @@ export function CommitStatsSection() {
               ? `Trimite pe GitHub (${ahead} commit${ahead !== 1 ? "-uri" : ""})`
               : "Sincronizat cu GitHub"}
         </button>
+      )}
+
+      {selectedUnpushed && (
+        <CommitDrawer
+          commit={selectedUnpushed}
+          local
+          onClose={() => setSelectedUnpushed(null)}
+        />
       )}
     </section>
   );
