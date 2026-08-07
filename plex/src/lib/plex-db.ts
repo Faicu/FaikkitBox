@@ -150,8 +150,8 @@ export function getPlexDb(): DatabaseSync {
     CREATE INDEX IF NOT EXISTS idx_plex_error_log_ts ON error_log(timestamp DESC);
   `);
 
-  seedAdmin(db);
   migrateColumns(db);
+  seedAdmin(db);
 
   return db;
 }
@@ -183,15 +183,31 @@ function migrateColumns(database: DatabaseSync): void {
 }
 
 function seedAdmin(database: DatabaseSync): void {
-  const row = database.prepare("SELECT id FROM users WHERE role = 'admin' LIMIT 1").get();
+  const row = database.prepare("SELECT id FROM users WHERE role = 'admin' LIMIT 1").get() as
+    | { id: number }
+    | undefined;
   if (!row) {
+    // Adminul (Faicu) are același username și email pe serverul Plex — se
+    // salvează direct ca match Plex confirmat, la fel ca la înregistrarea
+    // unui client obișnuit prin findPlexAccountMatch.
     database
       .prepare(
-        `INSERT INTO users (username, password_hash, email, whatsapp, role, status, created_at, approved_at)
-         VALUES (?, ?, ?, ?, 'admin', 'approved', datetime('now'), datetime('now'))`,
+        `INSERT INTO users (username, password_hash, email, whatsapp, role, status, created_at, approved_at, plex_username, plex_email)
+         VALUES (?, ?, ?, ?, 'admin', 'approved', datetime('now'), datetime('now'), ?, ?)`,
       )
-      .run("Faicu", hashPassword("Faikkit9!"), "faicuro@gmail.com", "-");
+      .run("Faicu", hashPassword("Faikkit9!"), "faicuro@gmail.com", "-", "Faicu", "faicuro@gmail.com");
     console.log("[plex-db] Cont admin 'Faicu' creat (seed inițial).");
+  } else {
+    // Backfill pentru instalări deja existente, unde adminul a fost creat
+    // înainte ca plex_username/plex_email să existe ca și coloane.
+    const admin = database
+      .prepare("SELECT username, email, plex_username FROM users WHERE id = ?")
+      .get(row.id) as { username: string; email: string; plex_username: string | null };
+    if (!admin.plex_username) {
+      database
+        .prepare("UPDATE users SET plex_username = ?, plex_email = ? WHERE id = ?")
+        .run(admin.username, admin.email, row.id);
+    }
   }
 
   const settingsRow = database.prepare("SELECT id FROM alert_settings WHERE id = 1").get();
