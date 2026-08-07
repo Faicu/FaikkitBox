@@ -29,7 +29,17 @@ export const Route = createFileRoute("/app")({
   component: AppPage,
 });
 
-type CurrentUser = { id: number; username: string; role: string; status: string; blocked: number };
+type CurrentUser = {
+  id: number;
+  username: string;
+  email: string;
+  role: string;
+  status: string;
+  blocked: number;
+  plex_username: string | null;
+  plex_email: string | null;
+  titlesCount: number;
+};
 
 function AppPage() {
   const navigate = useNavigate();
@@ -48,9 +58,18 @@ function AppPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-8 p-4">
-      <header className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">Salut, {user.username}</h1>
-        <div className="flex gap-3">
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold">Salut, {user.username}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Cont Plex: <span className="text-foreground">{user.plex_username ?? "—"}</span>
+            {" · "}
+            {user.plex_email ?? user.email}
+            {" · "}
+            <Badge variant="secondary">{user.titlesCount} titluri descărcate</Badge>
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-3">
           {user.role === "admin" && (
             <Button variant="outline" size="sm" asChild>
               <Link to="/admin">Panou Admin</Link>
@@ -345,7 +364,7 @@ function WatchersDialog({
         ) : (
           <ul className="space-y-2">
             {watchers.map((w) => (
-              <li key={w.userId} className="flex items-center justify-between rounded bg-muted p-2 text-sm">
+              <li key={w.userId} className="flex flex-col gap-1 rounded bg-muted p-2 text-sm sm:flex-row sm:items-center sm:justify-between">
                 <span className="font-medium">{w.username}</span>
                 <span className="text-xs text-muted-foreground">
                   {w.views} {w.views === 1 ? "vizionare" : "vizionări"} · ultima:{" "}
@@ -392,7 +411,7 @@ function MyLibraryWidget() {
         ) : (
           <ul className="space-y-2">
             {items.map((it) => (
-              <li key={it.id} className="flex items-center justify-between rounded-lg bg-muted/40 p-2">
+              <li key={it.id} className="flex flex-col gap-2 rounded-lg bg-muted/40 p-3 sm:flex-row sm:items-center sm:justify-between">
                 <span>
                   {it.title} {it.season ? `S${it.season}` : ""}{" "}
                   <span className="text-xs text-muted-foreground">

@@ -3,7 +3,7 @@ import { getPlexDb, getAlertSettings, updateAlertSettings, logActivity } from ".
 import { requireUser, requireAdminUser } from "./auth.server";
 import { pushToUser, pushToAdmins } from "./push-server";
 
-import { searchTmdb as tmdbSearch, getTmdbDetails } from "@faikkitbox/lib/tmdb.functions";
+import { tmdbFetch } from "@faikkitbox/lib/tmdb-client";
 import {
   checkPlexHasTitleInternal,
   getPlexEpisodesInSeasonInternal,
@@ -86,18 +86,97 @@ async function deleteTorrentByHash(hash: string): Promise<void> {
   }
 }
 
+// Reimplementate local peste tmdbFetch (client TMDB brut, plain function —
+// NU peste searchTmdb/getTmdbDetails din @faikkitbox/lib/tmdb.functions, care
+// sunt ele însele createServerFn: apelarea unui createServerFn "străin",
+// compilat în alt proiect, din interiorul unui server-fn propriu se compilează
+// ca un apel RPC către manifestul PROPRIU folosind un ID care aparține de
+// fapt build-ului FaikkitBox — manifestul plex nu-l are, deci eșuează mereu cu
+// "Server function info not found for <id>". De asta rescriem aici, direct.
+interface TmdbApiSearchItem {
+  id: number;
+  media_type?: string;
+  title?: string;
+  name?: string;
+  original_title?: string;
+  original_name?: string;
+  release_date?: string;
+  first_air_date?: string;
+  poster_path?: string | null;
+}
+
 export const searchTitles = createServerFn({ method: "GET" })
   .validator((data: { query: string }) => data)
   .handler(async ({ data }) => {
     await requireUser();
-    return tmdbSearch({ data: { query: data.query } });
+    const q = data.query.trim();
+    if (!q) return [];
+    try {
+      const json = await tmdbFetch<{ results?: TmdbApiSearchItem[] }>(
+        `/search/multi?query=${encodeURIComponent(q)}&include_adult=false&language=en-US&page=1`,
+      );
+      return (json.results ?? [])
+        .filter((r) => r.media_type === "movie" || r.media_type === "tv")
+        .slice(0, 8)
+        .map((r) => ({
+          id: r.id,
+          mediaType: r.media_type as "movie" | "tv",
+          title: r.media_type === "movie" ? (r.title ?? r.original_title ?? "") : (r.name ?? r.original_name ?? ""),
+          originalTitle:
+            r.media_type === "movie" ? (r.original_title ?? r.title ?? "") : (r.original_name ?? r.name ?? ""),
+          year:
+            r.media_type === "movie"
+              ? (r.release_date ?? "").slice(0, 4) || null
+              : (r.first_air_date ?? "").slice(0, 4) || null,
+          posterUrl: r.poster_path ? `https://image.tmdb.org/t/p/w342${r.poster_path}` : null,
+        }));
+    } catch {
+      return [];
+    }
   });
+
+interface TmdbApiDetails {
+  title?: string;
+  name?: string;
+  original_title?: string;
+  original_name?: string;
+  status?: string;
+  external_ids?: { imdb_id?: string | null };
+  seasons?: Array<{ season_number: number; episode_count: number; air_date: string | null }>;
+}
 
 export const getTitleDetails = createServerFn({ method: "GET" })
   .validator((data: { tmdbId: number; mediaType: "movie" | "tv" }) => data)
   .handler(async ({ data }) => {
     await requireUser();
-    return getTmdbDetails({ data: { id: data.tmdbId, mediaType: data.mediaType } });
+    try {
+      const path =
+        data.mediaType === "movie"
+          ? `/movie/${data.tmdbId}?append_to_response=external_ids`
+          : `/tv/${data.tmdbId}?append_to_response=external_ids`;
+      const item = await tmdbFetch<TmdbApiDetails>(path);
+      const title = data.mediaType === "movie" ? (item.title ?? item.original_title ?? "") : (item.name ?? item.original_name ?? "");
+      const originalTitle =
+        data.mediaType === "movie" ? (item.original_title ?? item.title ?? "") : (item.original_name ?? item.name ?? "");
+      const seasons =
+        data.mediaType === "tv"
+          ? (item.seasons ?? [])
+              .filter((s) => s.season_number > 0)
+              .map((s) => ({
+                seasonNumber: s.season_number,
+                episodeCount: s.episode_count,
+                airDate: s.air_date ?? null,
+              }))
+          : [];
+      return {
+        title,
+        originalTitle,
+        imdbId: item.external_ids?.imdb_id ?? null,
+        seasons,
+      };
+    } catch {
+      return { title: "", originalTitle: "", imdbId: null, seasons: [] };
+    }
   });
 
 export const checkPlexAvailability = createServerFn({ method: "GET" })
@@ -697,6 +776,51 @@ export const getFullPlexLibrary = createServerFn({ method: "GET" }).handler(asyn
     return items;
   } catch {
     return [];
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Postere pentru fundalul paginilor publice (/, /login, /register) — NU
+// necesită autentificare (pagina de start trebuie să arate fundalul înainte
+// de login). Cache în memorie 10 minute, ca să nu lovim Plex la fiecare
+// vizitator. Doar căile de thumb, proxate ulterior prin /api/plex-thumb (nu
+// expunem niciodată PLEX_TOKEN către browser).
+// ---------------------------------------------------------------------------
+let posterCache: { paths: string[]; at: number } | null = null;
+const POSTER_CACHE_MS = 10 * 60 * 1000;
+
+export const getPublicPosterPaths = createServerFn({ method: "GET" }).handler(async () => {
+  if (posterCache && Date.now() - posterCache.at < POSTER_CACHE_MS) return posterCache.paths;
+  const token = process.env.PLEX_TOKEN;
+  const base = process.env.PLEX_URL;
+  if (!token) return [];
+  try {
+    const headers = { Accept: "application/json", "X-Plex-Token": token };
+    const discovered = await discoverPlexUrl(token, base);
+    const sections = await fetchJson<{
+      MediaContainer?: { Directory?: Array<{ key?: string; type?: string }> };
+    }>(`${discovered.url}/library/sections`, { headers }, 8000);
+    const dirs = (sections?.MediaContainer?.Directory ?? []).filter(
+      (d) => d.type === "movie" || d.type === "show",
+    );
+    const paths: string[] = [];
+    for (const dir of dirs) {
+      const all = await fetchJson<{
+        MediaContainer?: { Metadata?: Array<{ thumb?: string }> };
+      }>(`${discovered.url}/library/sections/${dir.key}/all?sort=addedAt:desc`, { headers }, 10000);
+      for (const m of all?.MediaContainer?.Metadata ?? []) {
+        if (m.thumb) paths.push(m.thumb);
+      }
+    }
+    // amestecăm ca fundalul să nu fie mereu în aceeași ordine
+    for (let i = paths.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [paths[i], paths[j]] = [paths[j], paths[i]];
+    }
+    posterCache = { paths: paths.slice(0, 60), at: Date.now() };
+    return posterCache.paths;
+  } catch {
+    return posterCache?.paths ?? [];
   }
 });
 

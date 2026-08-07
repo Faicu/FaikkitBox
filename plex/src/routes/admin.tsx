@@ -121,11 +121,11 @@ function UsersSection() {
           {pending.length === 0 && <p className="text-sm text-muted-foreground">Niciunul.</p>}
           <ul className="space-y-2">
             {pending.map((u) => (
-              <li key={u.id} className="flex items-center justify-between rounded-lg bg-muted/40 p-2">
+              <li key={u.id} className="flex flex-col gap-2 rounded-lg bg-muted/40 p-3 sm:flex-row sm:items-center sm:justify-between">
                 <span>
                   {u.username} — {u.email} — {u.whatsapp}
                 </span>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <Button size="sm" onClick={() => approveUser({ data: { userId: u.id } }).then(load)}>
                     Aprobare Cont
                   </Button>
@@ -149,12 +149,12 @@ function UsersSection() {
         <CardContent>
           <ul className="space-y-2">
             {all.map((u) => (
-              <li key={u.id} className="flex items-center justify-between rounded-lg bg-muted/40 p-2">
+              <li key={u.id} className="flex flex-col gap-2 rounded-lg bg-muted/40 p-3 sm:flex-row sm:items-center sm:justify-between">
                 <span>
                   {u.username} — {u.role} — {u.status} {u.blocked ? "(blocat)" : ""}
                 </span>
                 {u.role !== "admin" && (
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     <Button
                       size="sm"
                       variant="outline"

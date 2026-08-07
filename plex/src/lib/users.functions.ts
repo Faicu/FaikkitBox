@@ -155,12 +155,19 @@ export const getCurrentUser = createServerFn({ method: "GET" }).handler(async ()
     | {
         id: number;
         username: string;
+        email: string;
         role: string;
         status: string;
         blocked: number;
+        plex_username: string | null;
+        plex_email: string | null;
       }
     | undefined;
-  return user ?? null;
+  if (!user) return null;
+  const { c: titlesCount } = db
+    .prepare("SELECT COUNT(*) as c FROM media_ownership WHERE user_id = ? AND is_owner = 1")
+    .get(userId) as { c: number };
+  return { ...user, titlesCount };
 });
 
 export const listPendingUsers = createServerFn({ method: "GET" }).handler(async () => {
