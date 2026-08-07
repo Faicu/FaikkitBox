@@ -12,7 +12,8 @@
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "build:all": "npm run build && npm --prefix plex run build"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "^1.2.12",

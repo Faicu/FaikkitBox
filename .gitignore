@@ -33,6 +33,7 @@ dist-ssr
 
 # Date persistente runtime (log descarcari filelist etc.)
 /data/
+plex/data/
 
 # Bun artifacts (proiect standardizat pe npm)
 bun.lockb

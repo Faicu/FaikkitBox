@@ -96,7 +96,7 @@ let plexHistoryCache: {
   expiresAt: number;
 } | null = null;
 
-async function fetchPlexHistory(
+export async function fetchPlexHistory(
   url: string,
   headers: Record<string, string>,
 ): Promise<{
