@@ -160,11 +160,25 @@ export function getPlexDb(): DatabaseSync {
 // ALTER TABLE ADD COLUMN nu are IF NOT EXISTS în SQLite, deci verificăm
 // pragma table_info înainte de a adăuga.
 function migrateColumns(database: DatabaseSync): void {
-  const cols = database.prepare("PRAGMA table_info(media_qualities)").all() as Array<{
+  const qualityCols = database.prepare("PRAGMA table_info(media_qualities)").all() as Array<{
     name: string;
   }>;
-  if (!cols.some((c) => c.name === "torrent_hash")) {
+  if (!qualityCols.some((c) => c.name === "torrent_hash")) {
     database.exec("ALTER TABLE media_qualities ADD COLUMN torrent_hash TEXT");
+  }
+
+  // plex_username/plex_email — contul Plex real care s-a potrivit la
+  // înregistrare (match pe username SAU email introdus de user contra
+  // plex.tv/api/v2/user + /friends). Necesare pentru a lega corect userul din
+  // portal de sesiunile/istoricul Plex (ex. "cine a vizionat", "cine redă
+  // acum") — nu putem presupune că username-ul din portal e identic cu cel
+  // din Plex, userul poate fi găsit doar prin email.
+  const userCols = database.prepare("PRAGMA table_info(users)").all() as Array<{ name: string }>;
+  if (!userCols.some((c) => c.name === "plex_username")) {
+    database.exec("ALTER TABLE users ADD COLUMN plex_username TEXT");
+  }
+  if (!userCols.some((c) => c.name === "plex_email")) {
+    database.exec("ALTER TABLE users ADD COLUMN plex_email TEXT");
   }
 }
 

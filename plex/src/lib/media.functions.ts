@@ -739,11 +739,18 @@ export const getWatchers = createServerFn({ method: "GET" })
       if (matches.length === 0) return [];
 
       const db = getPlexDb();
-      const users = db.prepare("SELECT id, username FROM users").all() as Array<{
+      const users = db.prepare("SELECT id, username, plex_username FROM users").all() as Array<{
         id: number;
         username: string;
+        plex_username: string | null;
       }>;
-      const byUsername = new Map(users.map((u) => [u.username.toLowerCase(), u]));
+      // Match pe contul Plex REAL, găsit și salvat la înregistrare
+      // (plex_username), nu pe username-ul ales în portal — pot diferi dacă
+      // userul s-a înregistrat/validat prin email. Fallback pe username doar
+      // pentru rânduri vechi/adminul seed, unde plex_username lipsește.
+      const byUsername = new Map(
+        users.map((u) => [(u.plex_username ?? u.username).toLowerCase(), u]),
+      );
 
       const seen = new Map<
         number,

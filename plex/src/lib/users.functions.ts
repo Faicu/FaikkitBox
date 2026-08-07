@@ -5,19 +5,36 @@ import { pushToAdmins } from "./push-server";
 import { discoverPlexUrl } from "@faikkitbox/lib/services/plex-shared";
 import { fetchJson } from "@faikkitbox/lib/services/shared";
 
-async function plexAccountMatches(usernameOrEmail: string): Promise<boolean> {
+type PlexAccountMatch = { username: string | null; email: string | null };
+
+// Caută pe serverul Plex (owner + friends) un cont al cărui username SAU email
+// se potrivește cu oricare dintre valorile date (username-ul și email-ul
+// introduse la înregistrare). Returnează contul Plex REAL găsit (username +
+// email așa cum sunt pe Plex, nu ce a introdus userul) — necesar pentru
+// funcțiile care leagă activitatea Plex (vizionări, redare curentă) de
+// userul din portal, unde nu putem presupune username-ul identic.
+async function findPlexAccountMatch(
+  candidates: string[],
+): Promise<PlexAccountMatch | null> {
   const token = process.env.PLEX_TOKEN;
-  if (!token) return true; // fail-open dacă nu avem token configurat (nu blocăm total portalul)
-  const needle = usernameOrEmail.trim().toLowerCase();
+  if (!token) return { username: null, email: null }; // fail-open dacă nu avem token (nu blocăm portalul), fără match salvat
+  const needles = candidates.map((c) => c.trim().toLowerCase()).filter(Boolean);
+  if (needles.length === 0) return null;
+
+  const isMatch = (username?: string, email?: string, title?: string) =>
+    needles.some(
+      (n) =>
+        username?.toLowerCase() === n || email?.toLowerCase() === n || title?.toLowerCase() === n,
+    );
+
   try {
-    // Owner-ul contului
     const account = await fetchJson<{ username?: string; email?: string }>(
       "https://plex.tv/api/v2/user",
       { headers: { Accept: "application/json", "X-Plex-Token": token } },
       8000,
     );
-    if (account.username?.toLowerCase() === needle || account.email?.toLowerCase() === needle) {
-      return true;
+    if (isMatch(account.username, account.email)) {
+      return { username: account.username ?? null, email: account.email ?? null };
     }
   } catch {
     // continuă cu friends
@@ -30,15 +47,12 @@ async function plexAccountMatches(usernameOrEmail: string): Promise<boolean> {
       { headers: { Accept: "application/json", "X-Plex-Token": token } },
       8000,
     );
-    return friends.some(
-      (f) =>
-        f.username?.toLowerCase() === needle ||
-        f.email?.toLowerCase() === needle ||
-        f.title?.toLowerCase() === needle,
-    );
+    const found = friends.find((f) => isMatch(f.username, f.email, f.title));
+    if (found) return { username: found.username ?? found.title ?? null, email: found.email ?? null };
   } catch {
-    return false;
+    return null;
   }
+  return null;
 }
 
 export const registerUser = createServerFn({ method: "POST" })
@@ -52,8 +66,8 @@ export const registerUser = createServerFn({ method: "POST" })
       throw new Error("Toate câmpurile sunt obligatorii.");
     }
 
-    const matches = await plexAccountMatches(username) || (await plexAccountMatches(email));
-    if (!matches) {
+    const plexMatch = await findPlexAccountMatch([username, email]);
+    if (!plexMatch) {
       throw new Error("Niciun cont pe Plex cu acest Username sau Email. Încearcă din nou.");
     }
 
@@ -63,10 +77,17 @@ export const registerUser = createServerFn({ method: "POST" })
 
     const info = db
       .prepare(
-        `INSERT INTO users (username, password_hash, email, whatsapp, role, status, created_at)
-         VALUES (?, ?, ?, ?, 'client', 'pending', datetime('now'))`,
+        `INSERT INTO users (username, password_hash, email, whatsapp, role, status, created_at, plex_username, plex_email)
+         VALUES (?, ?, ?, ?, 'client', 'pending', datetime('now'), ?, ?)`,
       )
-      .run(username, hashPassword(data.password), email, data.whatsapp);
+      .run(
+        username,
+        hashPassword(data.password),
+        email,
+        data.whatsapp,
+        plexMatch.username,
+        plexMatch.email,
+      );
 
     const userId = Number(info.lastInsertRowid);
     const session = await getSession();
