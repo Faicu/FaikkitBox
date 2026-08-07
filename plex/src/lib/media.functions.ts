@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getPlexDb, getAlertSettings, updateAlertSettings, logActivity } from "./plex-db";
 import { requireUser, requireAdminUser } from "./auth.server";
-import { pushToUser, pushToAdmins } from "./push";
+import { pushToUser, pushToAdmins } from "./push-server";
 
 import { searchTmdb as tmdbSearch, getTmdbDetails } from "@faikkitbox/lib/tmdb.functions";
 import {

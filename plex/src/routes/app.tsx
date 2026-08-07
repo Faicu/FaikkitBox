@@ -13,17 +13,17 @@ import {
   getWatchers,
 } from "../lib/media.functions";
 import { usePushNotifications } from "../hooks/use-push-notifications";
-import { Button } from "@faikkitbox/components/ui/button";
-import { Input } from "@faikkitbox/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@faikkitbox/components/ui/card";
-import { Badge } from "@faikkitbox/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
-} from "@faikkitbox/components/ui/dialog";
+} from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/app")({
   component: AppPage,

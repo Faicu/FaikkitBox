@@ -20,9 +20,9 @@ import {
   syncLibraryNow,
 } from "../lib/media.functions";
 import { getErrorLogs, clearErrorLogs } from "../lib/error-log";
-import { Button } from "@faikkitbox/components/ui/button";
-import { Input } from "@faikkitbox/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@faikkitbox/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export const Route = createFileRoute("/admin")({
   component: AdminPage,

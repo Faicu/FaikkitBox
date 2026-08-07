@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getPlexDb, hashPassword, verifyPassword, logActivity } from "./plex-db";
 import { getSession, requireAdminUser, requireSessionUser } from "./auth.server";
-import { pushToAdmins } from "./push";
+import { pushToAdmins } from "./push-server";
 import { discoverPlexUrl } from "@faikkitbox/lib/services/plex-shared";
 import { fetchJson } from "@faikkitbox/lib/services/shared";
 
