@@ -3,7 +3,7 @@ import { getPlexDb, hashPassword, verifyPassword, logActivity } from "./plex-db"
 import { getSession, requireAdminUser, requireSessionUser } from "./auth.server";
 import { pushToAdmins } from "./push-server";
 import { discoverPlexUrl } from "@faikkitbox/lib/services/plex-shared";
-import { fetchJson } from "@faikkitbox/lib/services/shared";
+import { fetchJson, fetchText } from "@faikkitbox/lib/services/shared";
 
 type PlexAccountMatch = { username: string | null; email: string | null };
 
@@ -40,15 +40,25 @@ async function findPlexAccountMatch(
     // continuă cu friends
   }
   try {
-    const friends = await fetchJson<
-      Array<{ username?: string; email?: string; title?: string }>
-    >(
-      "https://plex.tv/api/v2/friends",
-      { headers: { Accept: "application/json", "X-Plex-Token": token } },
+    // /api/v2/friends a fost retras de Plex (răspunde 410 Gone) — lista de
+    // utilizatori cu acces pe server e disponibilă în continuare doar prin
+    // endpoint-ul XML mai vechi /api/users (fiecare <User> are title,
+    // username, email ca atribute).
+    const xml = await fetchText(
+      "https://plex.tv/api/users",
+      { headers: { "X-Plex-Token": token } },
       8000,
     );
-    const found = friends.find((f) => isMatch(f.username, f.email, f.title));
-    if (found) return { username: found.username ?? found.title ?? null, email: found.email ?? null };
+    for (const match of xml.matchAll(/<User\b[^>]*>/g)) {
+      const tag = match[0];
+      const attr = (name: string) => tag.match(new RegExp(`${name}="([^"]*)"`))?.[1];
+      const username = attr("username");
+      const email = attr("email");
+      const title = attr("title");
+      if (isMatch(username, email, title)) {
+        return { username: username || title || null, email: email || null };
+      }
+    }
   } catch {
     return null;
   }
