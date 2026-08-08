@@ -39,6 +39,43 @@ function isTorrentComplete(progress: number, state: string): boolean {
   );
 }
 
+// Caută hash-ul unui torrent proaspăt adăugat, după nume — cu reîncercări.
+// La un singur apel imediat după upload, torrentul poate lipsi încă din
+// lista celor mai recente (metadata neînregistrată complet în qBittorrent),
+// sau poate fi "ascuns" de alte torrente adăugate în aceeași fereastră de
+// câteva minute — de-asta creștem limit-ul și reîncercăm cu pauză, în loc
+// de un singur `sleep + fetch` (a cauzat cazuri reale de hash nedisponibil,
+// vezi jurnalul de erori: Hellraiser II 2026-08-08).
+async function findTorrentHashByName(
+  qbitUrl: string,
+  cookie: string,
+  torrentName: string,
+  attempts = 5,
+  delayMs = 2000,
+): Promise<string | null> {
+  const needle = String(torrentName).toLowerCase().replace(/[^a-z0-9]/g, "");
+  for (let i = 0; i < attempts; i++) {
+    await new Promise((r) => setTimeout(r, delayMs));
+    try {
+      const listRes = await fetch(
+        `${qbitUrl}/api/v2/torrents/info?sort=added_on&reverse=true&limit=20`,
+        { headers: { Cookie: cookie }, signal: AbortSignal.timeout(10_000) },
+      );
+      if (listRes.ok) {
+        const list: QbitTorrentInfo[] = await listRes.json();
+        const match = list.find((t) => {
+          const hay = String(t.name ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+          return hay.includes(needle.slice(0, 30)) || needle.includes(hay.slice(0, 30));
+        });
+        if (match?.hash) return match.hash;
+      }
+    } catch (e) {
+      console.warn("[filelist] Nu am putut obține hash-ul torrentului:", e);
+    }
+  }
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // Background polling: verifică progresul torrentului și refresh Plex la final
 // ---------------------------------------------------------------------------
@@ -186,7 +223,7 @@ async function resumeOrphanedPolls(): Promise<void> {
 
   try {
     const log = await readDownloadLog();
-    const orphaned = log.filter((e) => e.completedAt === null && e.torrentHash);
+    const orphaned = log.filter((e) => e.completedAt === null);
     if (orphaned.length === 0) return;
 
     const qbitBase = process.env.QBIT_URL;
@@ -208,10 +245,17 @@ async function resumeOrphanedPolls(): Promise<void> {
     );
     for (const entry of orphaned) {
       const plexType = isMovieCategory(entry.category) ? "movie" : "show";
+      const hash = entry.torrentHash
+        ? entry.torrentHash
+        : await findTorrentHashByName(url, cookie, entry.name, 1, 0);
+      if (!hash) {
+        console.warn(`[filelist] Resume: hash tot indisponibil pentru "${entry.name}"`);
+        continue;
+      }
       pollUntilComplete(
         url,
         cookie,
-        entry.torrentHash!,
+        hash,
         plexType,
         entry.name,
         entry.id,
@@ -606,29 +650,8 @@ async function downloadFilelistCore(
       console.warn("qBit upload răspuns neașteptat:", uploadText);
     }
 
-    // 5. Găsește hash-ul torrentului proaspăt adăugat
-    await new Promise((r) => setTimeout(r, 2000));
-    let torrentHash: string | null = null;
-    try {
-      const listRes = await fetch(
-        `${url}/api/v2/torrents/info?sort=added_on&reverse=true&limit=5`,
-        {
-          headers: { Cookie: cookie },
-          signal: AbortSignal.timeout(10_000),
-        },
-      );
-      if (listRes.ok) {
-        const list: QbitTorrentInfo[] = await listRes.json();
-        const match = list.find((t) =>
-          String(t.name ?? "")
-            .toLowerCase()
-            .includes(params.torrentName.slice(0, 20).toLowerCase()),
-        );
-        torrentHash = match?.hash ?? null;
-      }
-    } catch (e) {
-      console.warn("[filelist] Nu am putut obține hash-ul torrentului:", e);
-    }
+    // 5. Găsește hash-ul torrentului proaspăt adăugat (cu reîncercări)
+    const torrentHash = await findTorrentHashByName(url, cookie, params.torrentName);
 
     // 6. Loghează descărcarea imediat (completedAt null = în curs)
     const catName = params.categoryName || CATEGORY_NAMES[catId] || `Cat ${catId}`;
