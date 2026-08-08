@@ -20,6 +20,7 @@ import {
   deleteFilelistLogEntry,
   backfillSubtitles,
   getBackfillState,
+  correctSubtitleForItem,
 } from "@/lib/filelist.functions";
 import type { FilelistLogEntry } from "@/lib/filelist.functions";
 import { isMovieCategory } from "@/lib/filelist/categories";
@@ -42,9 +43,11 @@ export function DownloadLogSection() {
   const deleteFn = useServerFn(deleteFilelistLogEntry);
   const backfillFn = useServerFn(backfillSubtitles);
   const stateFn = useServerFn(getBackfillState);
+  const correctFn = useServerFn(correctSubtitleForItem);
   const [visibleCount, setVisibleCount] = useState(3);
   const [backfilling, setBackfilling] = useState(false);
   const [progress, setProgress] = useState<{ total: number; done: number } | null>(null);
+  const [correctingId, setCorrectingId] = useState<number | null>(null);
   const [pendingDelete, setPendingDelete] = useState<{
     id: number;
     name: string;
@@ -93,6 +96,25 @@ export function DownloadLogSection() {
         }
       }
     }, 1500);
+  }
+
+  async function correctOne(id: number, name: string) {
+    setCorrectingId(id);
+    const toastId = toast.loading(`Verific subtitrarea pentru „${name}”…`);
+    const res = await correctFn({ data: { id } }).catch((e) => ({
+      status: "error" as const,
+      error: e instanceof Error ? e.message : String(e),
+    }));
+    setCorrectingId(null);
+    if (res.status !== "ok") {
+      toast.error("Eroare la corectarea subtitrării", { id: toastId, description: res.error });
+      return;
+    }
+    toast.success("Subtitrare verificată", {
+      id: toastId,
+      description: res.detail,
+      duration: 6000,
+    });
   }
 
   async function confirmDelete() {
@@ -204,15 +226,33 @@ export function DownloadLogSection() {
                   )}
                 </div>
               </div>
-              <button
-                onClick={() =>
-                  setPendingDelete({ id: e.id, name: e.name, hasHash: !!e.torrentHash })
-                }
-                className="shrink-0 mt-0.5 rounded-lg p-1.5 text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                title={e.torrentHash ? "Șterge din log + qBit + disk" : "Șterge din log"}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
+              <div className="flex shrink-0 items-center gap-0.5">
+                <button
+                  onClick={() => correctOne(e.id, e.name)}
+                  disabled={!e.torrentHash || correctingId === e.id}
+                  className="mt-0.5 rounded-lg p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors disabled:opacity-40"
+                  title={
+                    e.torrentHash
+                      ? "Verifică/corectează subtitrarea română doar pentru acest item"
+                      : "Hash indisponibil — nu pot verifica subtitrarea"
+                  }
+                >
+                  {correctingId === e.id ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Captions className="h-3.5 w-3.5" />
+                  )}
+                </button>
+                <button
+                  onClick={() =>
+                    setPendingDelete({ id: e.id, name: e.name, hasHash: !!e.torrentHash })
+                  }
+                  className="mt-0.5 rounded-lg p-1.5 text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                  title={e.torrentHash ? "Șterge din log + qBit + disk" : "Șterge din log"}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
             </div>
           ))}
         </div>

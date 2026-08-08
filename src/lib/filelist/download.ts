@@ -22,6 +22,7 @@ import { qbitLogin, qbitEnsureCookie, resetQbitCookie, qbitGet } from "../qbit-c
 import { readDownloadLog, readAllDownloadLogEntries, appendDownloadLog, markLogEntryComplete } from "./log";
 import { stripDiacritics, torrentMatchesTitle } from "./match";
 import { CORRECTED_OUTCOMES } from "./subtitle-outcomes";
+import type { SubtitleRunItem } from "./subtitles";
 // Import dinamic (nu static) — subtitles.ts foloseşte node:child_process/node:util
 // pentru ffprobe, care nu trebuie să ajungă în bundle-ul de client. download.ts
 // e statically importat de filelist.functions.ts, folosit și din componente
@@ -940,3 +941,63 @@ export const backfillSubtitles = createServerFn({ method: "POST" }).handler(
     return { status: "ok" };
   },
 );
+
+// Corectează subtitrarea pentru UN SINGUR item din jurnal (nu toată
+// biblioteca) — folosește exact aceeași logică (ensureRomanianSubtitle) ca
+// backfill-ul global, dar aplicată direct pe hash-ul torrentului cerut, fără
+// să mai listeze/itereze toate torrentele din qBittorrent.
+export type CorrectSubtitleResult =
+  | ({ status: "ok" } & SubtitleRunItem)
+  | { status: "error"; error: string };
+
+export const correctSubtitleForItem = createServerFn({ method: "POST" })
+  .validator((data: { id: number }) => data)
+  .handler(async ({ data }): Promise<CorrectSubtitleResult> => {
+    const { requireAdmin } = await import("../admin.server");
+    await requireAdmin();
+
+    const { getDb } = await import("../db");
+    const row = getDb()
+      .prepare("SELECT name, category, torrent_hash, imdb FROM downloads WHERE id = ?")
+      .get(data.id) as
+      | { name: string; category: number | null; torrent_hash: string | null; imdb: string | null }
+      | undefined;
+
+    if (!row) {
+      return { status: "error", error: "Intrarea nu a fost găsită în jurnal" };
+    }
+    if (!row.torrent_hash) {
+      return {
+        status: "error",
+        error: "Hash-ul torrentului lipsește — torrentul poate fi șters din qBittorrent",
+      };
+    }
+
+    const qbitBase = process.env.QBIT_URL ?? "http://192.168.1.192:25556";
+    const qbitUser = process.env.QBIT_USERNAME;
+    const qbitPass = process.env.QBIT_PASSWORD;
+    if (!qbitUser || !qbitPass) {
+      return { status: "error", error: "QBIT_USERNAME / QBIT_PASSWORD nu sunt configurate" };
+    }
+    const url = qbitBase.replace(/\/$/, "");
+
+    const { ensureRomanianSubtitle, logSubtitleRun } = await import("./subtitles");
+    const plexType = row.category !== null && isMovieCategory(row.category) ? "movie" : "show";
+
+    const result = await ensureRomanianSubtitle({
+      qbitUrl: url,
+      qbitUser,
+      qbitPass,
+      torrentHash: row.torrent_hash,
+      torrentName: row.name,
+      imdbId: row.imdb ?? undefined,
+      mediaType: plexType === "movie" ? "movie" : "tv",
+    });
+
+    await logSubtitleRun([result], "download");
+    if (CORRECTED_OUTCOMES.includes(result.outcome)) {
+      await refreshPlexLibrary(plexType).catch(() => {});
+    }
+
+    return { status: "ok", ...result };
+  });
