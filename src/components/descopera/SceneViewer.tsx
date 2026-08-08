@@ -70,6 +70,14 @@ export function SceneViewer({
             </div>
           )}
 
+          {detailsQuery.isLoading ? (
+            <div className="h-12 animate-pulse rounded-lg bg-muted/40" />
+          ) : detailsQuery.data?.overview ? (
+            <p className="text-sm leading-relaxed text-muted-foreground">
+              {detailsQuery.data.overview}
+            </p>
+          ) : null}
+
           <div className="flex items-center justify-between gap-2">
             {otherVideosCount > 0 ? (
               <button
