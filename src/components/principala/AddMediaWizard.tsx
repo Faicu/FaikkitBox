@@ -1,6 +1,7 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { Link } from "@tanstack/react-router";
 import {
   Search,
   Loader2,
@@ -12,6 +13,7 @@ import {
   ArrowLeft,
   Layers,
   Clapperboard,
+  ListChecks,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -27,7 +29,7 @@ import { detectQuality, groupTorrentsBySeasonEpisode } from "@/components/lansar
 import type { QualitySet } from "@/components/lansari/types";
 
 type Quality = "1080p" | "4K" | "4K HDR";
-type Step = "search" | "checking" | "tv-scope" | "result";
+type Step = "search" | "checking" | "tv-scope" | "result" | "done";
 type TvScope = "series" | "season" | "episode";
 
 interface CheckResult {
@@ -49,7 +51,10 @@ function bestOf(list: FilelistTorrent[]): FilelistTorrent | null {
   return list.length ? [...list].sort((a, b) => b.seeders - a.seeders)[0] : null;
 }
 
-function bestTorrentForQuality(torrents: FilelistTorrent[], quality: Quality): FilelistTorrent | null {
+function bestTorrentForQuality(
+  torrents: FilelistTorrent[],
+  quality: Quality,
+): FilelistTorrent | null {
   return bestOf(
     torrents.filter((t) => {
       const q = detectQuality(t.name);
@@ -60,7 +65,17 @@ function bestTorrentForQuality(torrents: FilelistTorrent[], quality: Quality): F
   );
 }
 
-export function AddMediaWizard({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function AddMediaWizard({
+  open,
+  onClose,
+  initialItem,
+}: {
+  open: boolean;
+  onClose: () => void;
+  // Sare peste pasul de căutare — folosit când wizard-ul e deschis direct
+  // dintr-un titlu deja identificat (ex. butonul "Adaugă" din Descoperă).
+  initialItem?: TmdbSearchResult | null;
+}) {
   const queryClient = useQueryClient();
   const { data: pinned = [] } = useQuery(pinnedItemsQuery);
 
@@ -83,6 +98,7 @@ export function AddMediaWizard({ open, onClose }: { open: boolean; onClose: () =
   const [tvSeason, setTvSeason] = useState<number | null>(null);
   const [tvEpisode, setTvEpisode] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
+  const [doneMessage, setDoneMessage] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function reset() {
@@ -96,12 +112,22 @@ export function AddMediaWizard({ open, onClose }: { open: boolean; onClose: () =
     setTvSeason(null);
     setTvEpisode(null);
     setBusy(false);
+    setDoneMessage(null);
   }
 
   function handleClose() {
     reset();
     onClose();
   }
+
+  // Deschis direct dintr-un titlu deja identificat (ex. Descoperă) — sare
+  // peste pasul de căutare și pornește direct verificarea.
+  useEffect(() => {
+    if (open && initialItem) {
+      selectItem(initialItem);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialItem?.id, initialItem?.mediaType]);
 
   function onQueryChange(value: string) {
     setQuery(value);
@@ -210,14 +236,19 @@ export function AddMediaWizard({ open, onClose }: { open: boolean; onClose: () =
   }
 
   async function downloadOne(torrent: FilelistTorrent) {
-    if (await downloadNow(torrent)) handleClose();
+    if (await downloadNow(torrent)) {
+      setDoneMessage(`„${torrent.name}” a fost adăugat în qBittorrent.`);
+      setStep("done");
+    }
   }
 
   // "Serial complet" — descarcă în serie (nu paralel, ca să nu suprasolicităm
   // qBittorrent/autentificarea) pachetul de sezon găsit pentru fiecare sezon
   // detectat pe Filelist la calitatea aleasă; sezoanele fără pachet disponibil
   // rămân nedescărcate (afișate separat), nu improvizăm cu episoade individuale.
-  async function downloadAllAvailableSeasons(seasonPacks: Array<{ season: number; torrent: FilelistTorrent }>) {
+  async function downloadAllAvailableSeasons(
+    seasonPacks: Array<{ season: number; torrent: FilelistTorrent }>,
+  ) {
     setBusy(true);
     let okCount = 0;
     for (const { torrent } of seasonPacks) {
@@ -227,7 +258,8 @@ export function AddMediaWizard({ open, onClose }: { open: boolean; onClose: () =
     setBusy(false);
     if (okCount > 0) {
       toast.success(`${okCount}/${seasonPacks.length} sezoane adăugate în qBittorrent`);
-      handleClose();
+      setDoneMessage(`${okCount}/${seasonPacks.length} sezoane adăugate în qBittorrent.`);
+      setStep("done");
     }
   }
 
@@ -268,7 +300,10 @@ export function AddMediaWizard({ open, onClose }: { open: boolean; onClose: () =
         description: `Se descarcă automat orice sezon nou apărut, la calitatea ${quality}.`,
         duration: 6000,
       });
-      handleClose();
+      setDoneMessage(
+        `Fixat pentru monitorizare automată — se descarcă orice sezon nou apărut, la calitatea ${quality}.`,
+      );
+      setStep("done");
     } catch (e) {
       toast.error("Eroare la fixare", {
         description: e instanceof Error ? e.message : String(e),
@@ -284,14 +319,20 @@ export function AddMediaWizard({ open, onClose }: { open: boolean; onClose: () =
   const selectedSeasonMeta = checkResult?.seasons.find((s) => s.seasonNumber === tvSeason) ?? null;
 
   // Rezultatul concret de arătat la pasul final, în funcție de tip și scop.
-  const movieMatch = !isTv && checkResult ? bestTorrentForQuality(checkResult.torrents, quality) : null;
+  const movieMatch =
+    !isTv && checkResult ? bestTorrentForQuality(checkResult.torrents, quality) : null;
   const seasonMatch =
     isTv && tvScope === "season" && selectedSeasonGroup
       ? bestOf(pickFromSet(selectedSeasonGroup.byQuality, quality))
       : null;
   const episodeMatch =
     isTv && tvScope === "episode" && selectedSeasonGroup && tvEpisode
-      ? bestOf(pickFromSet(selectedSeasonGroup.episodes.get(tvEpisode) ?? { t1080: [], t4k: [], t4kHdr: [] }, quality))
+      ? bestOf(
+          pickFromSet(
+            selectedSeasonGroup.episodes.get(tvEpisode) ?? { t1080: [], t4k: [], t4kHdr: [] },
+            quality,
+          ),
+        )
       : null;
   const seriesPacks =
     isTv && tvScope === "series" && checkResult
@@ -310,15 +351,14 @@ export function AddMediaWizard({ open, onClose }: { open: boolean; onClose: () =
           .filter((sn) => !seriesPacks.some((p) => p.season === sn))
       : [];
 
-  const showQualityAndAction =
-    checkResult && !checkResult.plexFound && (!isTv || tvScope !== null);
+  const showQualityAndAction = checkResult && !checkResult.plexFound && (!isTv || tvScope !== null);
 
   return (
     <Drawer open={open} onOpenChange={(o) => !o && handleClose()}>
       <DrawerContent className="max-h-[90vh]">
         <DrawerHeader className="text-left pb-0">
           <DrawerTitle className="flex items-center gap-2">
-            {(step === "result" || step === "tv-scope") && (
+            {(step === "result" || step === "tv-scope") && !initialItem && (
               <button
                 type="button"
                 onClick={reset}
@@ -332,7 +372,7 @@ export function AddMediaWizard({ open, onClose }: { open: boolean; onClose: () =
         </DrawerHeader>
 
         <div className="space-y-3 overflow-y-auto px-4 pb-6 pt-3">
-          {step === "search" && (
+          {step === "search" && !initialItem && (
             <>
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -358,7 +398,11 @@ export function AddMediaWizard({ open, onClose }: { open: boolean; onClose: () =
                       className="flex w-full items-center gap-2 rounded-xl bg-muted/60 p-2 text-left hover:bg-muted/80 transition-colors"
                     >
                       {r.posterUrl ? (
-                        <img src={r.posterUrl} alt="" className="h-12 w-8 rounded object-cover shrink-0" />
+                        <img
+                          src={r.posterUrl}
+                          alt=""
+                          className="h-12 w-8 rounded object-cover shrink-0"
+                        />
                       ) : (
                         <div className="h-12 w-8 rounded bg-muted shrink-0 flex items-center justify-center">
                           {r.mediaType === "movie" ? (
@@ -390,17 +434,18 @@ export function AddMediaWizard({ open, onClose }: { open: boolean; onClose: () =
             </>
           )}
 
-          {step === "checking" && (
+          {(step === "checking" || (step === "search" && initialItem)) && (
             <div className="flex flex-col items-center gap-3 py-10 text-sm text-muted-foreground">
               <Loader2 className="h-6 w-6 animate-spin" />
-              Verific Plex și Filelist pentru „{selected?.title}”…
+              Verific Plex și Filelist pentru „{selected?.title ?? initialItem?.title}”…
             </div>
           )}
 
           {step === "tv-scope" && checkResult && (
             <div className="space-y-4">
               <div className="text-sm text-muted-foreground">
-                Ce vrei să descarci din <span className="font-medium text-foreground">{selected?.title}</span>?
+                Ce vrei să descarci din{" "}
+                <span className="font-medium text-foreground">{selected?.title}</span>?
               </div>
               <div className="space-y-2">
                 <ScopeOption
@@ -459,20 +504,22 @@ export function AddMediaWizard({ open, onClose }: { open: boolean; onClose: () =
                     Episod
                   </div>
                   <div className="flex flex-wrap gap-1.5">
-                    {Array.from({ length: selectedSeasonMeta.episodeCount }, (_, i) => i + 1).map((ep) => (
-                      <button
-                        key={ep}
-                        type="button"
-                        onClick={() => setTvEpisode(ep)}
-                        className={`rounded-lg border px-2.5 py-1 text-sm font-medium transition-colors ${
-                          tvEpisode === ep
-                            ? "border-primary bg-primary/15 text-primary"
-                            : "border-border bg-muted/40 text-muted-foreground hover:bg-muted/60"
-                        }`}
-                      >
-                        E{String(ep).padStart(2, "0")}
-                      </button>
-                    ))}
+                    {Array.from({ length: selectedSeasonMeta.episodeCount }, (_, i) => i + 1).map(
+                      (ep) => (
+                        <button
+                          key={ep}
+                          type="button"
+                          onClick={() => setTvEpisode(ep)}
+                          className={`rounded-lg border px-2.5 py-1 text-sm font-medium transition-colors ${
+                            tvEpisode === ep
+                              ? "border-primary bg-primary/15 text-primary"
+                              : "border-border bg-muted/40 text-muted-foreground hover:bg-muted/60"
+                          }`}
+                        >
+                          E{String(ep).padStart(2, "0")}
+                        </button>
+                      ),
+                    )}
                   </div>
                 </div>
               )}
@@ -585,7 +632,12 @@ export function AddMediaWizard({ open, onClose }: { open: boolean; onClose: () =
                       />
                     )}
                     {isTv && tvScope === "season" && !seasonMatch && (
-                      <NotFoundWithPin quality={quality} busy={busy} onPin={pinForMonitoring} label="serialul" />
+                      <NotFoundWithPin
+                        quality={quality}
+                        busy={busy}
+                        onPin={pinForMonitoring}
+                        label="serialul"
+                      />
                     )}
 
                     {/* Episod */}
@@ -598,7 +650,12 @@ export function AddMediaWizard({ open, onClose }: { open: boolean; onClose: () =
                       />
                     )}
                     {isTv && tvScope === "episode" && !episodeMatch && (
-                      <NotFoundWithPin quality={quality} busy={busy} onPin={pinForMonitoring} label="serialul" />
+                      <NotFoundWithPin
+                        quality={quality}
+                        busy={busy}
+                        onPin={pinForMonitoring}
+                        label="serialul"
+                      />
                     )}
 
                     {/* Serial complet */}
@@ -608,14 +665,18 @@ export function AddMediaWizard({ open, onClose }: { open: boolean; onClose: () =
                           <div className="rounded-xl border border-border bg-card p-3 text-sm">
                             <div className="mb-1 font-medium">Sezoane disponibile acum:</div>
                             <div className="text-muted-foreground">
-                              {seriesPacks.map((p) => `S${String(p.season).padStart(2, "0")}`).join(", ")}
+                              {seriesPacks
+                                .map((p) => `S${String(p.season).padStart(2, "0")}`)
+                                .join(", ")}
                             </div>
                           </div>
                         )}
                         {seriesMissingSeasons.length > 0 && (
                           <div className="rounded-xl border border-border bg-card p-3 text-sm text-muted-foreground">
                             Încă nu au pachet complet la {quality}:{" "}
-                            {seriesMissingSeasons.map((s) => `S${String(s).padStart(2, "0")}`).join(", ")}
+                            {seriesMissingSeasons
+                              .map((s) => `S${String(s).padStart(2, "0")}`)
+                              .join(", ")}
                           </div>
                         )}
                         {seriesPacks.length > 0 && (
@@ -633,7 +694,11 @@ export function AddMediaWizard({ open, onClose }: { open: boolean; onClose: () =
                             onClick={pinForMonitoring}
                             className="flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-muted/40 py-2.5 text-sm font-semibold text-foreground hover:bg-muted/60 disabled:opacity-50"
                           >
-                            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pin className="h-4 w-4" />}
+                            {busy ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Pin className="h-4 w-4" />
+                            )}
                             Fixează pentru monitorizare automată ({quality})
                           </button>
                         )}
@@ -642,6 +707,29 @@ export function AddMediaWizard({ open, onClose }: { open: boolean; onClose: () =
                   </>
                 )
               )}
+            </div>
+          )}
+
+          {step === "done" && (
+            <div className="flex flex-col items-center gap-4 py-8 text-center">
+              <CheckCircle2 className="h-10 w-10 text-emerald-400" />
+              <p className="text-sm text-muted-foreground">{doneMessage}</p>
+              <div className="flex w-full flex-col gap-2">
+                <Link
+                  to="/lansari"
+                  onClick={handleClose}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-2.5 text-sm font-semibold text-primary-foreground"
+                >
+                  <ListChecks className="h-4 w-4" /> Vezi în Lansări
+                </Link>
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-muted/40 py-2.5 text-sm font-semibold text-foreground hover:bg-muted/60"
+                >
+                  Închide
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -668,9 +756,7 @@ function ScopeOption({
       type="button"
       onClick={onClick}
       className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-colors ${
-        active
-          ? "border-primary bg-primary/10"
-          : "border-border bg-muted/40 hover:bg-muted/60"
+        active ? "border-primary bg-primary/10" : "border-border bg-muted/40 hover:bg-muted/60"
       }`}
     >
       <span className={active ? "text-primary" : "text-muted-foreground"}>{icon}</span>
