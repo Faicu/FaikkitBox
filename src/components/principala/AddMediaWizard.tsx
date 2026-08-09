@@ -399,7 +399,7 @@ export function AddMediaWizard({
   const stepperIndex = stepperSteps.findIndex((s) => s.key === effectiveStep);
 
   return (
-    <Drawer open={open} onOpenChange={(o) => !o && handleClose()}>
+    <Drawer open={open} onOpenChange={(o) => !o && handleClose()} repositionInputs={false}>
       <DrawerContent className="max-h-[90dvh]">
         <DrawerHeader className="text-left pb-0">
           <div className="flex items-center gap-2">
