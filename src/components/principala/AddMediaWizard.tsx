@@ -52,6 +52,10 @@ function bestOf(list: FilelistTorrent[]): FilelistTorrent | null {
   return list.length ? [...list].sort((a, b) => b.seeders - a.seeders)[0] : null;
 }
 
+function hasAny(set: QualitySet): boolean {
+  return set.t1080.length > 0 || set.t4k.length > 0 || set.t4kHdr.length > 0;
+}
+
 function bestTorrentForQuality(
   torrents: FilelistTorrent[],
   quality: Quality,
@@ -318,6 +322,11 @@ export function AddMediaWizard({
   const seasonGroups = checkResult ? groupTorrentsBySeasonEpisode(checkResult.torrents) : [];
   const selectedSeasonGroup = seasonGroups.find((g) => g.seasonNum === tvSeason) ?? null;
   const selectedSeasonMeta = checkResult?.seasons.find((s) => s.seasonNumber === tvSeason) ?? null;
+  const availableSeasonsCount =
+    checkResult?.seasons.filter((s) => {
+      const g = seasonGroups.find((sg) => sg.seasonNum === s.seasonNumber);
+      return g && hasAny(g.byQuality);
+    }).length ?? 0;
 
   // Rezultatul concret de arătat la pasul final, în funcție de tip și scop.
   const movieMatch =
@@ -534,7 +543,7 @@ export function AddMediaWizard({
                 <ScopeOption
                   icon={<Layers className="h-4 w-4" />}
                   label="Serial complet"
-                  description="Toate sezoanele care au deja pachet disponibil pe Filelist"
+                  description={`${availableSeasonsCount}/${checkResult.seasons.length} sezoane au deja pachet pe Filelist`}
                   meta={`${checkResult.seasons.length} sezoane`}
                   active={tvScope === "series"}
                   onClick={() => setTvScope("series")}
@@ -543,7 +552,7 @@ export function AddMediaWizard({
                   icon={<Clapperboard className="h-4 w-4" />}
                   label="Un sezon anume"
                   description="Alege sezonul de mai jos"
-                  meta={`${checkResult.seasons.length} sezoane`}
+                  meta={`${availableSeasonsCount}/${checkResult.seasons.length} disponibile`}
                   active={tvScope === "season"}
                   onClick={() => setTvScope("season")}
                 />
@@ -562,23 +571,36 @@ export function AddMediaWizard({
                     Sezon
                   </div>
                   <div className="flex flex-wrap gap-1.5">
-                    {checkResult.seasons.map((s) => (
-                      <button
-                        key={s.seasonNumber}
-                        type="button"
-                        onClick={() => {
-                          setTvSeason(s.seasonNumber);
-                          setTvEpisode(null);
-                        }}
-                        className={`rounded-lg border px-2.5 py-1 text-sm font-medium transition-colors active:scale-95 ${
-                          tvSeason === s.seasonNumber
-                            ? "border-primary bg-primary/15 text-primary"
-                            : "border-border bg-muted/40 text-muted-foreground hover:bg-muted/60"
-                        }`}
-                      >
-                        S{String(s.seasonNumber).padStart(2, "0")}
-                      </button>
-                    ))}
+                    {checkResult.seasons.map((s) => {
+                      const g = seasonGroups.find((sg) => sg.seasonNum === s.seasonNumber);
+                      const available = !!g && hasAny(g.byQuality);
+                      return (
+                        <button
+                          key={s.seasonNumber}
+                          type="button"
+                          onClick={() => {
+                            setTvSeason(s.seasonNumber);
+                            setTvEpisode(null);
+                          }}
+                          className={`relative rounded-lg border px-2.5 py-1.5 text-sm font-medium transition-colors active:scale-95 ${
+                            tvSeason === s.seasonNumber
+                              ? "border-primary bg-primary/15 text-primary"
+                              : "border-border bg-muted/40 text-muted-foreground hover:bg-muted/60"
+                          }`}
+                          title={available ? "Are deja pachet pe Filelist" : undefined}
+                        >
+                          {available && (
+                            <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-emerald-400" />
+                          )}
+                          <div className="leading-tight">
+                            S{String(s.seasonNumber).padStart(2, "0")}
+                          </div>
+                          <div className="text-[9px] font-normal text-muted-foreground">
+                            {s.episodeCount} ep
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -590,20 +612,35 @@ export function AddMediaWizard({
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {Array.from({ length: selectedSeasonMeta.episodeCount }, (_, i) => i + 1).map(
-                      (ep) => (
-                        <button
-                          key={ep}
-                          type="button"
-                          onClick={() => setTvEpisode(ep)}
-                          className={`rounded-lg border px-2.5 py-1 text-sm font-medium transition-colors active:scale-95 ${
-                            tvEpisode === ep
-                              ? "border-primary bg-primary/15 text-primary"
-                              : "border-border bg-muted/40 text-muted-foreground hover:bg-muted/60"
-                          }`}
-                        >
-                          E{String(ep).padStart(2, "0")}
-                        </button>
-                      ),
+                      (ep) => {
+                        const available =
+                          !!selectedSeasonGroup &&
+                          hasAny(
+                            selectedSeasonGroup.episodes.get(ep) ?? {
+                              t1080: [],
+                              t4k: [],
+                              t4kHdr: [],
+                            },
+                          );
+                        return (
+                          <button
+                            key={ep}
+                            type="button"
+                            onClick={() => setTvEpisode(ep)}
+                            className={`relative rounded-lg border px-2.5 py-1 text-sm font-medium transition-colors active:scale-95 ${
+                              tvEpisode === ep
+                                ? "border-primary bg-primary/15 text-primary"
+                                : "border-border bg-muted/40 text-muted-foreground hover:bg-muted/60"
+                            }`}
+                            title={available ? "Are deja torrent pe Filelist" : undefined}
+                          >
+                            {available && (
+                              <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-emerald-400" />
+                            )}
+                            E{String(ep).padStart(2, "0")}
+                          </button>
+                        );
+                      },
                     )}
                   </div>
                 </div>

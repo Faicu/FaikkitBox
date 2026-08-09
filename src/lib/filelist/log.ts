@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import type { FilelistLogEntry, DownloadLogRow } from "./types";
 import { qbitLogin } from "../qbit-client";
+import { refreshPlexLibraryForCategory } from "./download";
 
 // ---------------------------------------------------------------------------
 // Log persistent al descărcărilor
@@ -149,7 +150,6 @@ export const deleteFilelistLogEntry = createServerFn({ method: "POST" })
       // Rescanează biblioteca Plex (filme sau seriale, după categorie) — ca
       // fișierul șters să dispară din Plex fără să aștepți scanarea automată.
       if (category !== null) {
-        const { refreshPlexLibraryForCategory } = await import("./download");
         refreshPlexLibraryForCategory(category).catch(() => {});
       }
 
