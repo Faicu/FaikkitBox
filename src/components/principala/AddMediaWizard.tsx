@@ -14,6 +14,8 @@ import {
   Layers,
   Clapperboard,
   ListChecks,
+  X,
+  Check,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -353,27 +355,103 @@ export function AddMediaWizard({
 
   const showQualityAndAction = checkResult && !checkResult.plexFound && (!isTv || tvScope !== null);
 
+  // Navigare "înapoi" reală (nu doar reset complet) — revine la pasul
+  // anterior semnificativ din flux, păstrând căutarea/rezultatele deja
+  // încărcate acolo unde are sens. Când wizard-ul e deschis prefill (din
+  // Descoperă), nu există pas de căutare la care să te întorci — înapoi
+  // închide direct.
+  function goBack() {
+    if (initialItem) {
+      handleClose();
+      return;
+    }
+    if (step === "tv-scope") {
+      setStep("search");
+      setSelected(null);
+      setCheckResult(null);
+      setTvScope("series");
+      setTvSeason(null);
+      setTvEpisode(null);
+      return;
+    }
+    if (step === "result") {
+      if (isTv) {
+        setStep("tv-scope");
+        return;
+      }
+      setStep("search");
+      setSelected(null);
+      setCheckResult(null);
+      return;
+    }
+  }
+
+  // Pașii afișați în indicatorul de progres — dinamici, în funcție de tip
+  // (serialele au un pas în plus, "Scop") și de faptul că pasul de căutare
+  // e sărit când wizard-ul a fost deschis prefill.
+  const stepperSteps: Array<{ key: Step; label: string }> = [
+    ...(initialItem ? [] : [{ key: "search" as Step, label: "Căutare" }]),
+    { key: "checking", label: "Verificare" },
+    ...(isTv ? [{ key: "tv-scope" as Step, label: "Scop" }] : []),
+    { key: "result", label: "Rezultat" },
+  ];
+  const effectiveStep = step === "search" && initialItem ? "checking" : step;
+  const stepperIndex = stepperSteps.findIndex((s) => s.key === effectiveStep);
+
   return (
     <Drawer open={open} onOpenChange={(o) => !o && handleClose()}>
       <DrawerContent className="max-h-[90vh]">
         <DrawerHeader className="text-left pb-0">
-          <DrawerTitle className="flex items-center gap-2">
-            {(step === "result" || step === "tv-scope") && !initialItem && (
+          <div className="flex items-center gap-2">
+            {(step === "result" || step === "tv-scope") && (
               <button
                 type="button"
-                onClick={reset}
-                className="rounded-lg p-1 text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                onClick={goBack}
+                className="shrink-0 rounded-lg p-1 text-muted-foreground hover:text-foreground hover:bg-muted/60"
               >
                 <ArrowLeft className="h-4 w-4" />
               </button>
             )}
-            Adaugă film/serial
-          </DrawerTitle>
+            <DrawerTitle className="flex-1">Adaugă film/serial</DrawerTitle>
+            <button
+              type="button"
+              onClick={handleClose}
+              className="shrink-0 rounded-lg p-1 text-muted-foreground hover:text-foreground hover:bg-muted/60"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          {step !== "done" && stepperSteps.length > 1 && (
+            <div className="flex items-center gap-1 pt-2">
+              {stepperSteps.map((s, i) => (
+                <div key={s.key} className="flex flex-1 items-center gap-1">
+                  <div
+                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold transition-colors ${
+                      i < stepperIndex
+                        ? "bg-primary text-primary-foreground"
+                        : i === stepperIndex
+                          ? "bg-primary/20 text-primary ring-1 ring-primary"
+                          : "bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    {i < stepperIndex ? <Check className="h-3 w-3" /> : i + 1}
+                  </div>
+                  {i < stepperSteps.length - 1 && (
+                    <div
+                      className={`h-0.5 flex-1 rounded-full transition-colors ${
+                        i < stepperIndex ? "bg-primary" : "bg-muted"
+                      }`}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </DrawerHeader>
 
         <div className="space-y-3 overflow-y-auto px-4 pb-6 pt-3">
           {step === "search" && !initialItem && (
-            <>
+            <div className="animate-in fade-in slide-in-from-left-2 duration-200 space-y-3">
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <input
@@ -431,21 +509,34 @@ export function AddMediaWizard({
                   ))}
                 </div>
               )}
-            </>
-          )}
-
-          {(step === "checking" || (step === "search" && initialItem)) && (
-            <div className="flex flex-col items-center gap-3 py-10 text-sm text-muted-foreground">
-              <Loader2 className="h-6 w-6 animate-spin" />
-              Verific Plex și Filelist pentru „{selected?.title ?? initialItem?.title}”…
             </div>
           )}
 
-          {step === "tv-scope" && checkResult && (
-            <div className="space-y-4">
+          {(step === "checking" || (step === "search" && initialItem)) && (
+            <div className="animate-in fade-in duration-200 space-y-4">
+              <div className="relative h-28 animate-pulse overflow-hidden rounded-2xl bg-muted/40" />
+              <div className="space-y-2">
+                <div className="h-4 w-2/3 animate-pulse rounded bg-muted/40" />
+                <div className="h-3 w-1/3 animate-pulse rounded bg-muted/40" />
+              </div>
+              <div className="flex items-center justify-center gap-2 pt-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Verific Plex și Filelist pentru „{selected?.title ?? initialItem?.title}”…
+              </div>
+            </div>
+          )}
+
+          {step === "tv-scope" && selected && checkResult && (
+            <div className="animate-in fade-in slide-in-from-right-2 duration-200 space-y-4">
+              <PosterHero
+                posterUrl={selected.posterUrl}
+                mediaType={selected.mediaType}
+                title={selected.title}
+                subtitle={checkResult.originalTitle}
+              />
               <div className="text-sm text-muted-foreground">
                 Ce vrei să descarci din{" "}
-                <span className="font-medium text-foreground">{selected?.title}</span>?
+                <span className="font-medium text-foreground">{selected.title}</span>?
               </div>
               <div className="space-y-2">
                 <ScopeOption
@@ -539,39 +630,21 @@ export function AddMediaWizard({
           )}
 
           {step === "result" && selected && checkResult && (
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 rounded-xl bg-muted/60 p-2">
-                {selected.posterUrl ? (
-                  <img
-                    src={selected.posterUrl}
-                    alt=""
-                    className="h-14 w-10 rounded object-cover shrink-0"
-                  />
-                ) : (
-                  <div className="h-14 w-10 rounded bg-muted shrink-0 flex items-center justify-center">
-                    {selected.mediaType === "movie" ? (
-                      <Film className="h-4 w-4 text-muted-foreground" />
-                    ) : (
-                      <Tv className="h-4 w-4 text-muted-foreground" />
-                    )}
-                  </div>
-                )}
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-semibold">
-                    {selected.title}
-                    {isTv && tvScope === "season" && tvSeason
-                      ? ` — S${String(tvSeason).padStart(2, "0")}`
-                      : ""}
-                    {isTv && tvScope === "episode" && tvSeason && tvEpisode
-                      ? ` — S${String(tvSeason).padStart(2, "0")}E${String(tvEpisode).padStart(2, "0")}`
-                      : ""}
-                  </div>
-                  <div className="truncate text-xs text-muted-foreground">
-                    {checkResult.originalTitle}
-                    {selected.year ? ` · ${selected.year}` : ""}
-                  </div>
-                </div>
-              </div>
+            <div className="animate-in fade-in slide-in-from-right-2 duration-200 space-y-4">
+              <PosterHero
+                posterUrl={selected.posterUrl}
+                mediaType={selected.mediaType}
+                title={
+                  selected.title +
+                  (isTv && tvScope === "season" && tvSeason
+                    ? ` — S${String(tvSeason).padStart(2, "0")}`
+                    : "") +
+                  (isTv && tvScope === "episode" && tvSeason && tvEpisode
+                    ? ` — S${String(tvSeason).padStart(2, "0")}E${String(tvEpisode).padStart(2, "0")}`
+                    : "")
+                }
+                subtitle={checkResult.originalTitle + (selected.year ? ` · ${selected.year}` : "")}
+              />
 
               {checkResult.plexFound ? (
                 <div className="flex items-center gap-2 rounded-xl bg-emerald-500/10 p-3 text-sm text-emerald-400">
@@ -587,20 +660,36 @@ export function AddMediaWizard({
                         Calitate
                       </div>
                       <div className="flex gap-2">
-                        {(["1080p", "4K", "4K HDR"] as Quality[]).map((q) => (
-                          <button
-                            key={q}
-                            type="button"
-                            onClick={() => setQuality(q)}
-                            className={`flex-1 rounded-xl border px-3 py-1.5 text-sm font-medium transition-colors ${
-                              quality === q
-                                ? "border-primary bg-primary/15 text-primary"
-                                : "border-border bg-muted/40 text-muted-foreground hover:bg-muted/60"
-                            }`}
-                          >
-                            {q}
-                          </button>
-                        ))}
+                        {(
+                          [
+                            { q: "1080p", color: "blue" },
+                            { q: "4K", color: "purple" },
+                            { q: "4K HDR", color: "amber" },
+                          ] as const
+                        ).map(({ q, color }) => {
+                          const active = quality === q;
+                          const styles = {
+                            blue: active
+                              ? "border-blue-400/70 bg-blue-500/30 text-blue-200 shadow-sm shadow-blue-500/30"
+                              : "border-blue-500/40 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 hover:text-blue-300",
+                            purple: active
+                              ? "border-purple-400/70 bg-purple-500/30 text-purple-200 shadow-sm shadow-purple-500/30"
+                              : "border-purple-500/40 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 hover:text-purple-300",
+                            amber: active
+                              ? "border-amber-400/70 bg-amber-500/30 text-amber-200 shadow-sm shadow-amber-500/30"
+                              : "border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 hover:text-amber-300",
+                          };
+                          return (
+                            <button
+                              key={q}
+                              type="button"
+                              onClick={() => setQuality(q)}
+                              className={`flex-1 rounded-xl border px-3 py-1.5 text-sm font-medium transition-colors ${styles[color]}`}
+                            >
+                              {q}
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
 
@@ -711,7 +800,7 @@ export function AddMediaWizard({
           )}
 
           {step === "done" && (
-            <div className="flex flex-col items-center gap-4 py-8 text-center">
+            <div className="animate-in fade-in zoom-in-95 duration-300 flex flex-col items-center gap-4 py-8 text-center">
               <CheckCircle2 className="h-10 w-10 text-emerald-400" />
               <p className="text-sm text-muted-foreground">{doneMessage}</p>
               <div className="flex w-full flex-col gap-2">
@@ -817,6 +906,60 @@ function NotFoundWithPin({
         {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pin className="h-4 w-4" />}
         Fixează {label} pentru monitorizare automată ({quality})
       </button>
+    </div>
+  );
+}
+
+function PosterHero({
+  posterUrl,
+  mediaType,
+  title,
+  subtitle,
+}: {
+  posterUrl: string | null;
+  mediaType: "movie" | "tv";
+  title: string;
+  subtitle: string;
+}) {
+  return (
+    <div className="relative h-28 overflow-hidden rounded-2xl bg-muted/60">
+      {posterUrl && (
+        <img
+          src={posterUrl}
+          alt=""
+          className="absolute inset-0 h-full w-full scale-110 object-cover opacity-30 blur-md"
+        />
+      )}
+      <div className="relative flex h-full items-center gap-3 p-3">
+        {posterUrl ? (
+          <img
+            src={posterUrl}
+            alt=""
+            className="h-full w-16 shrink-0 rounded-lg object-cover shadow-lg"
+          />
+        ) : (
+          <div className="flex h-full w-16 shrink-0 items-center justify-center rounded-lg bg-muted">
+            {mediaType === "movie" ? (
+              <Film className="h-5 w-5 text-muted-foreground" />
+            ) : (
+              <Tv className="h-5 w-5 text-muted-foreground" />
+            )}
+          </div>
+        )}
+        <div className="min-w-0 flex-1">
+          <span
+            className={`mb-1 inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+              mediaType === "movie"
+                ? "bg-amber-500/15 text-amber-400"
+                : "bg-blue-500/15 text-blue-400"
+            }`}
+          >
+            {mediaType === "movie" ? "Film" : "Serial"}
+          </span>
+          <div className="truncate text-base font-bold leading-tight">{title}</div>
+          <div className="truncate text-xs text-muted-foreground">{subtitle}</div>
+        </div>
+      </div>
     </div>
   );
 }
