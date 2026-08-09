@@ -543,6 +543,7 @@ export function AddMediaWizard({
                   icon={<Layers className="h-4 w-4" />}
                   label="Serial complet"
                   description="Toate sezoanele care au deja pachet disponibil pe Filelist"
+                  meta={`${checkResult.seasons.length} sezoane`}
                   active={tvScope === "series"}
                   onClick={() => setTvScope("series")}
                 />
@@ -550,6 +551,7 @@ export function AddMediaWizard({
                   icon={<Clapperboard className="h-4 w-4" />}
                   label="Un sezon anume"
                   description="Alege sezonul de mai jos"
+                  meta={`${checkResult.seasons.length} sezoane`}
                   active={tvScope === "season"}
                   onClick={() => setTvScope("season")}
                 />
@@ -576,7 +578,7 @@ export function AddMediaWizard({
                           setTvSeason(s.seasonNumber);
                           setTvEpisode(null);
                         }}
-                        className={`rounded-lg border px-2.5 py-1 text-sm font-medium transition-colors ${
+                        className={`rounded-lg border px-2.5 py-1 text-sm font-medium transition-colors active:scale-95 ${
                           tvSeason === s.seasonNumber
                             ? "border-primary bg-primary/15 text-primary"
                             : "border-border bg-muted/40 text-muted-foreground hover:bg-muted/60"
@@ -601,7 +603,7 @@ export function AddMediaWizard({
                           key={ep}
                           type="button"
                           onClick={() => setTvEpisode(ep)}
-                          className={`rounded-lg border px-2.5 py-1 text-sm font-medium transition-colors ${
+                          className={`rounded-lg border px-2.5 py-1 text-sm font-medium transition-colors active:scale-95 ${
                             tvEpisode === ep
                               ? "border-primary bg-primary/15 text-primary"
                               : "border-border bg-muted/40 text-muted-foreground hover:bg-muted/60"
@@ -684,7 +686,7 @@ export function AddMediaWizard({
                               key={q}
                               type="button"
                               onClick={() => setQuality(q)}
-                              className={`flex-1 rounded-xl border px-3 py-1.5 text-sm font-medium transition-colors ${styles[color]}`}
+                              className={`flex-1 rounded-xl border px-3 py-1.5 text-sm font-medium transition-colors active:scale-95 ${styles[color]}`}
                             >
                               {q}
                             </button>
@@ -831,12 +833,14 @@ function ScopeOption({
   icon,
   label,
   description,
+  meta,
   active,
   onClick,
 }: {
   icon: React.ReactNode;
   label: string;
   description: string;
+  meta?: string;
   active: boolean;
   onClick: () => void;
 }) {
@@ -844,7 +848,7 @@ function ScopeOption({
     <button
       type="button"
       onClick={onClick}
-      className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-colors ${
+      className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-colors active:scale-[0.98] ${
         active ? "border-primary bg-primary/10" : "border-border bg-muted/40 hover:bg-muted/60"
       }`}
     >
@@ -853,6 +857,11 @@ function ScopeOption({
         <div className="text-sm font-medium">{label}</div>
         <div className="text-xs text-muted-foreground">{description}</div>
       </div>
+      {meta && (
+        <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+          {meta}
+        </span>
+      )}
     </button>
   );
 }
