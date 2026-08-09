@@ -14,12 +14,11 @@ import {
   Layers,
   Clapperboard,
   ListChecks,
-  X,
   Check,
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { pinnedItemsQuery } from "@/lib/queries";
 import { searchTmdb, getTmdbDetails } from "@/lib/tmdb.functions";
 import type { TmdbSearchResult } from "@/lib/tmdb.functions";
@@ -399,9 +398,9 @@ export function AddMediaWizard({
   const stepperIndex = stepperSteps.findIndex((s) => s.key === effectiveStep);
 
   return (
-    <Drawer open={open} onOpenChange={(o) => !o && handleClose()} repositionInputs={false}>
-      <DrawerContent className="max-h-[90dvh]">
-        <DrawerHeader className="text-left pb-0">
+    <Dialog open={open} onOpenChange={(o) => !o && handleClose()}>
+      <DialogContent className="top-8 flex max-h-[calc(100dvh-4rem)] w-[calc(100%-2rem)] max-w-md translate-y-0 flex-col gap-0 overflow-hidden rounded-2xl p-0 sm:w-full">
+        <DialogHeader className="shrink-0 space-y-0 p-4 pb-0 text-left">
           <div className="flex items-center gap-2">
             {(step === "result" || step === "tv-scope") && (
               <button
@@ -412,14 +411,7 @@ export function AddMediaWizard({
                 <ArrowLeft className="h-4 w-4" />
               </button>
             )}
-            <DrawerTitle className="flex-1">Adaugă film/serial</DrawerTitle>
-            <button
-              type="button"
-              onClick={handleClose}
-              className="shrink-0 rounded-lg p-1 text-muted-foreground hover:text-foreground hover:bg-muted/60"
-            >
-              <X className="h-4 w-4" />
-            </button>
+            <DialogTitle className="flex-1 pr-6">Adaugă film/serial</DialogTitle>
           </div>
           {step !== "done" && stepperSteps.length > 1 && (
             <div className="flex items-center gap-1 pt-2">
@@ -447,9 +439,9 @@ export function AddMediaWizard({
               ))}
             </div>
           )}
-        </DrawerHeader>
+        </DialogHeader>
 
-        <div className="space-y-3 overflow-x-hidden overflow-y-auto px-4 pb-6 pt-3">
+        <div className="min-h-0 flex-1 space-y-3 overflow-x-hidden overflow-y-auto px-4 pb-6 pt-3">
           {step === "search" && !initialItem && (
             <div className="animate-in fade-in slide-in-from-left-2 duration-200 space-y-3">
               <div className="relative">
@@ -824,8 +816,8 @@ export function AddMediaWizard({
             </div>
           )}
         </div>
-      </DrawerContent>
-    </Drawer>
+      </DialogContent>
+    </Dialog>
   );
 }
 
