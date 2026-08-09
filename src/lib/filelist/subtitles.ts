@@ -68,6 +68,20 @@ function decodeToUtf8Text(buf: Buffer): { text: string; wasConverted: boolean } 
   return { text: iconv.decode(buf, FALLBACK_ENCODING), wasConverted: true };
 }
 
+// Verificare de limbă pentru un .srt deja bundle-uit în torrent — NU putem
+// presupune că, fiindcă e singurul .srt din torrent, e automat română (bug
+// real: unele lansări vin cu subtitrare engleză bundle-uită, care ar fi fost
+// redenumită orbește în .ro.srt și afișată greșit în Plex ca română).
+// Diacriticele (ă/â/î/ș/ț) sunt un semnal aproape sigur — engleza nu le are
+// niciodată; cuvinte uzuale RO sunt rezervă pentru fișiere fără diacritice.
+function looksRomanian(text: string): boolean {
+  const diacritics = (text.match(/[ăâîșțĂÂÎȘȚ]/g) ?? []).length;
+  if (diacritics >= 5) return true;
+  const lower = ` ${text.toLowerCase()} `;
+  const stopwords = [" și ", " pentru ", " este ", " sunt ", " care ", " această ", " nu "];
+  return stopwords.filter((w) => lower.includes(w)).length >= 3;
+}
+
 async function fileExists(absPath: string): Promise<boolean> {
   try {
     await access(absPath);
@@ -460,17 +474,36 @@ export async function ensureRomanianSubtitle(
 
   const srtFiles = downloadedFiles.filter((f) => f.name.toLowerCase().endsWith(".srt"));
 
-  // Caz 2: exact un .srt în torrent, deja identificabil ca subtitrarea
-  // filmului — redenumit/convertit dacă e cazul.
+  // Caz 2: exact un .srt în torrent — verificăm ÎNTÂI conținutul, nu
+  // presupunem că fiindcă e singurul, e automat română (lansările pot avea
+  // subtitrare engleză bundle-uită).
   if (srtFiles.length === 1) {
-    const { outcome, detail } = await handleTrackedSrt(srtFiles[0], targetSrtRelPath, mediaFile.piece_range, {
-      qbitUrl,
-      torrentHash,
-      qbitUser,
-      qbitPass,
-      savePath,
-    });
-    return item(torrentName, displayTitle, outcome, detail, { path: targetSrtRelPath });
+    const existingAbsPath = join(savePath, srtFiles[0].name);
+    const existingBuf = await readFile(existingAbsPath).catch(() => null);
+    const existingText = existingBuf ? decodeToUtf8Text(existingBuf).text : "";
+
+    if (existingBuf && looksRomanian(existingText)) {
+      const { outcome, detail } = await handleTrackedSrt(
+        srtFiles[0],
+        targetSrtRelPath,
+        mediaFile.piece_range,
+        { qbitUrl, torrentHash, qbitUser, qbitPass, savePath },
+      );
+      return item(torrentName, displayTitle, outcome, detail, { path: targetSrtRelPath });
+    }
+
+    // Nu pare română — o redenumim ca .en (nu o lăsăm ambiguă, ar putea fi
+    // preluată greșit de Plex ca subtitrare implicită) și continuăm mai jos
+    // să căutăm o subtitrare română reală, fără să atingem targetSrtRelPath.
+    if (existingBuf) {
+      const nonRoTarget =
+        mediaDir === "." ? `${mediaBaseName}.en.srt` : `${mediaDir}/${mediaBaseName}.en.srt`;
+      if (srtFiles[0].name !== nonRoTarget) {
+        await qbitRenameFile(qbitUrl, torrentHash, srtFiles[0].name, nonRoTarget, qbitUser, qbitPass).catch(
+          (e) => console.warn(`[subtitles] redenumire .srt non-RO eșuată:`, e),
+        );
+      }
+    }
   }
 
   // Mai multe .srt-uri — probabil deja există unul cu limba corectă marcată
