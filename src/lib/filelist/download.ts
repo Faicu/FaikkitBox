@@ -19,7 +19,12 @@ import {
   isMovieCategory,
 } from "./categories";
 import { qbitLogin, qbitEnsureCookie, resetQbitCookie, qbitGet } from "../qbit-client";
-import { readDownloadLog, readAllDownloadLogEntries, appendDownloadLog, markLogEntryComplete } from "./log";
+import {
+  readDownloadLog,
+  readAllDownloadLogEntries,
+  appendDownloadLog,
+  markLogEntryComplete,
+} from "./log";
 import { stripDiacritics, torrentMatchesTitle } from "./match";
 import { CORRECTED_OUTCOMES } from "./subtitle-outcomes";
 import type { SubtitleRunItem } from "./subtitles";
@@ -54,7 +59,9 @@ async function findTorrentHashByName(
   attempts = 5,
   delayMs = 2000,
 ): Promise<string | null> {
-  const needle = String(torrentName).toLowerCase().replace(/[^a-z0-9]/g, "");
+  const needle = String(torrentName)
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
   for (let i = 0; i < attempts; i++) {
     await new Promise((r) => setTimeout(r, delayMs));
     try {
@@ -65,7 +72,9 @@ async function findTorrentHashByName(
       if (listRes.ok) {
         const list: QbitTorrentInfo[] = await listRes.json();
         const match = list.find((t) => {
-          const hay = String(t.name ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+          const hay = String(t.name ?? "")
+            .toLowerCase()
+            .replace(/[^a-z0-9]/g, "");
           return hay.includes(needle.slice(0, 30)) || needle.includes(hay.slice(0, 30));
         });
         if (match?.hash) return match.hash;
@@ -73,6 +82,42 @@ async function findTorrentHashByName(
     } catch (e) {
       console.warn("[filelist] Nu am putut obține hash-ul torrentului:", e);
     }
+  }
+  return null;
+}
+
+// Căutare imediată (o singură trecere, fără reîncercări) a hash-ului unui
+// torrent după nume, în TOATĂ lista din qBittorrent — nu doar cele recente.
+// Folosită la oprirea unei descărcări în curs: dacă utilizatorul întrerupe
+// chiar în fereastra scurtă în care findTorrentHashByName încă reîncearcă
+// (vezi mai sus), jurnalul propriu poate avea torrent_hash încă null, dar
+// torrentul deja există în qBittorrent de ceva vreme — nu mai are rost să
+// limităm la ultimele 20 adăugate.
+export async function findTorrentHashNow(
+  qbitUrl: string,
+  cookie: string,
+  torrentName: string,
+): Promise<string | null> {
+  const needle = String(torrentName)
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+  try {
+    const listRes = await fetch(`${qbitUrl}/api/v2/torrents/info`, {
+      headers: { Cookie: cookie },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (listRes.ok) {
+      const list: QbitTorrentInfo[] = await listRes.json();
+      const match = list.find((t) => {
+        const hay = String(t.name ?? "")
+          .toLowerCase()
+          .replace(/[^a-z0-9]/g, "");
+        return hay.includes(needle.slice(0, 30)) || needle.includes(hay.slice(0, 30));
+      });
+      return match?.hash ?? null;
+    }
+  } catch (e) {
+    console.warn("[filelist] findTorrentHashNow eșuat:", e);
   }
   return null;
 }
@@ -829,7 +874,9 @@ async function runBackfillWork(url: string, qbitUser: string, qbitPass: string):
     // hash. Pentru restul (adăugate manual), categoria e dedusă din
     // save_path față de MEDIA_MOVIES_PATH/MEDIA_SERIES_PATH.
     const ownLog = await readAllDownloadLogEntries();
-    const ownLogByHash = new Map(ownLog.filter((e) => e.torrentHash).map((e) => [e.torrentHash!, e]));
+    const ownLogByHash = new Map(
+      ownLog.filter((e) => e.torrentHash).map((e) => [e.torrentHash!, e]),
+    );
     const moviesPath = process.env.MEDIA_MOVIES_PATH ?? "/media/ssd2tb/Filme";
     const seriesPath = process.env.MEDIA_SERIES_PATH ?? "/media/ssd2tb/Seriale";
 
@@ -947,8 +994,7 @@ export const backfillSubtitles = createServerFn({ method: "POST" }).handler(
 // backfill-ul global, dar aplicată direct pe hash-ul torrentului cerut, fără
 // să mai listeze/itereze toate torrentele din qBittorrent.
 export type CorrectSubtitleResult =
-  | ({ status: "ok" } & SubtitleRunItem)
-  | { status: "error"; error: string };
+  ({ status: "ok" } & SubtitleRunItem) | { status: "error"; error: string };
 
 export const correctSubtitleForItem = createServerFn({ method: "POST" })
   .validator((data: { id: number }) => data)

@@ -12,6 +12,7 @@ import {
   Loader2,
   Trash2,
   Captions,
+  OctagonX,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -52,6 +53,7 @@ export function DownloadLogSection() {
     id: number;
     name: string;
     hasHash: boolean;
+    isActive: boolean;
   } | null>(null);
 
   // Backfill-ul poate dura multe minute (zeci/sute de torrente) — pornim
@@ -119,10 +121,16 @@ export function DownloadLogSection() {
 
   async function confirmDelete() {
     if (!pendingDelete) return;
-    const { id, hasHash } = pendingDelete;
+    const { id, hasHash, isActive } = pendingDelete;
     const res = await deleteFn({ data: { id } });
     queryClient.invalidateQueries({ queryKey: ["filelistLog"] });
-    if (hasHash) {
+    if (isActive) {
+      if (res.qbitDeleted) toast.success("Descărcare oprită — torrent și fișiere parțiale șterse");
+      else
+        toast.warning(
+          "Șters din log, dar nu am găsit torrentul în qBittorrent (poate s-a terminat între timp)",
+        );
+    } else if (hasHash) {
       if (res.qbitDeleted) toast.success("Torrent și fișiere șterse din qBittorrent");
       else
         toast.warning("Șters din log, dar nu am putut șterge din qBittorrent (poate deja șters)");
@@ -154,9 +162,7 @@ export function DownloadLogSection() {
       </h3>
       {backfilling && (
         <div className="mb-2 px-1">
-          <Progress
-            value={progress ? (progress.done / Math.max(progress.total, 1)) * 100 : 0}
-          />
+          <Progress value={progress ? (progress.done / Math.max(progress.total, 1)) * 100 : 0} />
           <div className="mt-1 text-[11px] text-muted-foreground">
             {progress ? `${progress.done}/${progress.total} verificate` : "Pornesc verificarea…"}
           </div>
@@ -243,15 +249,37 @@ export function DownloadLogSection() {
                     <Captions className="h-3.5 w-3.5" />
                   )}
                 </button>
-                <button
-                  onClick={() =>
-                    setPendingDelete({ id: e.id, name: e.name, hasHash: !!e.torrentHash })
-                  }
-                  className="mt-0.5 rounded-lg p-1.5 text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                  title={e.torrentHash ? "Șterge din log + qBit + disk" : "Șterge din log"}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
+                {e.completedAt === null ? (
+                  <button
+                    onClick={() =>
+                      setPendingDelete({
+                        id: e.id,
+                        name: e.name,
+                        hasHash: !!e.torrentHash,
+                        isActive: true,
+                      })
+                    }
+                    className="mt-0.5 rounded-lg p-1.5 text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                    title="Oprește descărcarea în curs"
+                  >
+                    <OctagonX className="h-3.5 w-3.5" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={() =>
+                      setPendingDelete({
+                        id: e.id,
+                        name: e.name,
+                        hasHash: !!e.torrentHash,
+                        isActive: false,
+                      })
+                    }
+                    className="mt-0.5 rounded-lg p-1.5 text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                    title={e.torrentHash ? "Șterge din log + qBit + disk" : "Șterge din log"}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </div>
             </div>
           ))}
@@ -270,17 +298,25 @@ export function DownloadLogSection() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {pendingDelete?.hasHash ? "Ștergere completă" : "Ștergere din log"}
+              {pendingDelete?.isActive
+                ? "Oprire descărcare"
+                : pendingDelete?.hasHash
+                  ? "Ștergere completă"
+                  : "Ștergere din log"}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {pendingDelete?.hasHash
-                ? `Ștergi torrentul din log, din qBittorrent și fișierele de pe disk?\n\n${pendingDelete.name}`
-                : `Ștergi intrarea din log?\n\n${pendingDelete?.name}`}
+              {pendingDelete?.isActive
+                ? `Oprești descărcarea în curs și ștergi fișierele parțiale de pe disk?\n\n${pendingDelete.name}`
+                : pendingDelete?.hasHash
+                  ? `Ștergi torrentul din log, din qBittorrent și fișierele de pe disk?\n\n${pendingDelete.name}`
+                  : `Ștergi intrarea din log?\n\n${pendingDelete?.name}`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Anulează</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDelete}>Șterge</AlertDialogAction>
+            <AlertDialogAction onClick={confirmDelete}>
+              {pendingDelete?.isActive ? "Oprește" : "Șterge"}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

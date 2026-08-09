@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import type { FilelistLogEntry, DownloadLogRow } from "./types";
 import { qbitLogin } from "../qbit-client";
-import { refreshPlexLibraryForCategory } from "./download";
+import { refreshPlexLibraryForCategory, findTorrentHashNow } from "./download";
 
 // ---------------------------------------------------------------------------
 // Log persistent al descărcărilor
@@ -115,12 +115,14 @@ export const deleteFilelistLogEntry = createServerFn({ method: "POST" })
       const { getDb } = await import("../db");
       const db = getDb();
 
-      // Obținem hash-ul + categoria torrentului înainte de ștergere (categoria
-      // ne trebuie după ștergere, ca să știm ce secțiune Plex să rescanăm)
+      // Obținem hash-ul + numele + categoria torrentului înainte de ștergere
+      // (categoria ne trebuie după ștergere, ca să știm ce secțiune Plex să
+      // rescanăm; numele e rezervă pentru cazul hash-ului lipsă mai jos)
       const row = db
-        .prepare("SELECT torrent_hash, category FROM downloads WHERE id = ?")
-        .get(data.id) as { torrent_hash: string | null; category: number | null } | undefined;
-      const torrentHash = row?.torrent_hash ?? null;
+        .prepare("SELECT name, torrent_hash, category FROM downloads WHERE id = ?")
+        .get(data.id) as
+        { name: string; torrent_hash: string | null; category: number | null } | undefined;
+      let torrentHash = row?.torrent_hash ?? null;
       const category = row?.category ?? null;
 
       db.prepare("DELETE FROM downloads WHERE id = ?").run(data.id);
@@ -129,19 +131,29 @@ export const deleteFilelistLogEntry = createServerFn({ method: "POST" })
       // rescanarea Plex de mai jos, ca fișierele să fie deja șterse de pe
       // disk când Plex face scanarea, nu invers.
       let qbitDeleted = false;
-      if (torrentHash) {
+      if (row) {
         try {
           const qbitUrl = (process.env.QBIT_URL ?? "http://192.168.1.192:25556").replace(/\/$/, "");
           const user = process.env.QBIT_USERNAME ?? "";
           const pass = process.env.QBIT_PASSWORD ?? "";
           const cookie = await qbitLogin(qbitUrl, user, pass);
-          const form = new URLSearchParams({ hashes: torrentHash, deleteFiles: "true" });
-          const res = await fetch(`${qbitUrl}/api/v2/torrents/delete`, {
-            method: "POST",
-            headers: { "Content-Type": "application/x-www-form-urlencoded", Cookie: cookie },
-            body: form.toString(),
-          });
-          qbitDeleted = res.ok;
+          // Descărcare încă în curs, oprită înainte ca hash-ul să fi fost
+          // rezolvat (fereastra de reîncercări din downloadFilelistCore) —
+          // căutăm acum, direct în toată lista din qBittorrent, nu doar cele
+          // recente. Fără asta, ștergerea din jurnal nu oprea de fapt nimic
+          // în qBittorrent (torrentul continua să descarce pe disk).
+          if (!torrentHash) {
+            torrentHash = await findTorrentHashNow(qbitUrl, cookie, row.name);
+          }
+          if (torrentHash) {
+            const form = new URLSearchParams({ hashes: torrentHash, deleteFiles: "true" });
+            const res = await fetch(`${qbitUrl}/api/v2/torrents/delete`, {
+              method: "POST",
+              headers: { "Content-Type": "application/x-www-form-urlencoded", Cookie: cookie },
+              body: form.toString(),
+            });
+            qbitDeleted = res.ok;
+          }
         } catch (e) {
           console.warn("[filelist] Nu am putut șterge din qBit:", e);
         }
