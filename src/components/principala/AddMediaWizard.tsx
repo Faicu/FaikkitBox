@@ -400,7 +400,7 @@ export function AddMediaWizard({
 
   return (
     <Drawer open={open} onOpenChange={(o) => !o && handleClose()}>
-      <DrawerContent className="max-h-[90vh]">
+      <DrawerContent className="max-h-[90dvh]">
         <DrawerHeader className="text-left pb-0">
           <div className="flex items-center gap-2">
             {(step === "result" || step === "tv-scope") && (
@@ -449,7 +449,7 @@ export function AddMediaWizard({
           )}
         </DrawerHeader>
 
-        <div className="space-y-3 overflow-y-auto px-4 pb-6 pt-3">
+        <div className="space-y-3 overflow-x-hidden overflow-y-auto px-4 pb-6 pt-3">
           {step === "search" && !initialItem && (
             <div className="animate-in fade-in slide-in-from-left-2 duration-200 space-y-3">
               <div className="relative">
@@ -697,10 +697,10 @@ export function AddMediaWizard({
 
                     {/* Film */}
                     {!isTv && movieMatch && (
-                      <ActionButton
+                      <DownloadAction
                         busy={busy}
-                        icon={<Download className="h-4 w-4" />}
-                        label={`Descarcă acum — ${movieMatch.name}`}
+                        label="Descarcă acum"
+                        torrentName={movieMatch.name}
                         onClick={() => downloadOne(movieMatch)}
                       />
                     )}
@@ -715,10 +715,10 @@ export function AddMediaWizard({
 
                     {/* Sezon */}
                     {isTv && tvScope === "season" && seasonMatch && (
-                      <ActionButton
+                      <DownloadAction
                         busy={busy}
-                        icon={<Download className="h-4 w-4" />}
-                        label={`Descarcă sezonul — ${seasonMatch.name}`}
+                        label="Descarcă sezonul"
+                        torrentName={seasonMatch.name}
                         onClick={() => downloadOne(seasonMatch)}
                       />
                     )}
@@ -733,10 +733,10 @@ export function AddMediaWizard({
 
                     {/* Episod */}
                     {isTv && tvScope === "episode" && episodeMatch && (
-                      <ActionButton
+                      <DownloadAction
                         busy={busy}
-                        icon={<Download className="h-4 w-4" />}
-                        label={`Descarcă episodul — ${episodeMatch.name}`}
+                        label="Descarcă episodul"
+                        torrentName={episodeMatch.name}
                         onClick={() => downloadOne(episodeMatch)}
                       />
                     )}
@@ -887,6 +887,33 @@ function ActionButton({
       {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : icon}
       {label}
     </button>
+  );
+}
+
+// Numele torrentului merge SUB buton, nu în el — un nume lung fără spații
+// (ex. "Game.of.Thrones.S05.1080p...") nu are unde să se rupă în interiorul
+// unui buton flex, forțând scroll orizontal pe tot drawer-ul.
+function DownloadAction({
+  busy,
+  label,
+  torrentName,
+  onClick,
+}: {
+  busy: boolean;
+  label: string;
+  torrentName: string;
+  onClick: () => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <ActionButton
+        busy={busy}
+        icon={<Download className="h-4 w-4" />}
+        label={label}
+        onClick={onClick}
+      />
+      <p className="break-all text-center text-xs text-muted-foreground">{torrentName}</p>
+    </div>
   );
 }
 
