@@ -20,7 +20,8 @@ import { toast } from "sonner";
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { pinnedItemsQuery } from "@/lib/queries";
-import { searchTmdb, getTmdbDetails } from "@/lib/tmdb.functions";
+import { searchTmdb, getTmdbDetails, getTmdbSeasonEpisodes } from "@/lib/tmdb.functions";
+import type { TmdbEpisode } from "@/lib/tmdb.functions";
 import type { TmdbSearchResult } from "@/lib/tmdb.functions";
 import { checkPlexHasTitle, getPlexEpisodesInSeason } from "@/lib/services.functions";
 import { checkFilelistForItem, downloadFilelist } from "@/lib/filelist.functions";
@@ -89,6 +90,7 @@ export function AddMediaWizard({
   const plexFn = useServerFn(checkPlexHasTitle);
   const plexSeasonFn = useServerFn(getPlexEpisodesInSeason);
   const filelistFn = useServerFn(checkFilelistForItem);
+  const episodesFn = useServerFn(getTmdbSeasonEpisodes);
   const downloadFn = useServerFn(downloadFilelist);
   const setPinnedFn = useServerFn(setPinnedItems);
   const setWatchFn = useServerFn(setWatchSettings);
@@ -110,6 +112,14 @@ export function AddMediaWizard({
   // verificăm per-sezon). Populat în proceedToResult().
   const [plexSeasonEpisodes, setPlexSeasonEpisodes] = useState<number[] | null>(null);
   const [checkingPlexSeason, setCheckingPlexSeason] = useState(false);
+  // Titlurile episoadelor sezonului ales (RO, cu fallback EN din server) —
+  // cheia ține evidența pentru ce sezon sunt încărcate, ca să nu arătăm
+  // titluri vechi cât timp se încarcă cele noi.
+  const [episodeTitles, setEpisodeTitles] = useState<{
+    season: number;
+    episodes: TmdbEpisode[];
+  } | null>(null);
+  const [loadingEpisodeTitles, setLoadingEpisodeTitles] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function reset() {
@@ -126,6 +136,27 @@ export function AddMediaWizard({
     setDoneMessage(null);
     setPlexSeasonEpisodes(null);
     setCheckingPlexSeason(false);
+    setEpisodeTitles(null);
+    setLoadingEpisodeTitles(false);
+  }
+
+  // Încarcă titlurile episoadelor sezonului ales (folosit la alegerea unui
+  // episod anume și la afișarea titlului episodului în rezultat) — pornit
+  // odată cu alegerea sezonului, nu abia la Continuă, ca lista de episoade
+  // să aibă deja titlurile când utilizatorul ajunge acolo.
+  async function selectSeason(seasonNumber: number) {
+    setTvSeason(seasonNumber);
+    setTvEpisode(null);
+    if (!selected) return;
+    setLoadingEpisodeTitles(true);
+    try {
+      const episodes = await episodesFn({ data: { tmdbId: selected.id, seasonNum: seasonNumber } });
+      setEpisodeTitles({ season: seasonNumber, episodes });
+    } catch {
+      setEpisodeTitles({ season: seasonNumber, episodes: [] });
+    } finally {
+      setLoadingEpisodeTitles(false);
+    }
   }
 
   function handleClose() {
@@ -635,10 +666,7 @@ export function AddMediaWizard({
                         <button
                           key={s.seasonNumber}
                           type="button"
-                          onClick={() => {
-                            setTvSeason(s.seasonNumber);
-                            setTvEpisode(null);
-                          }}
+                          onClick={() => selectSeason(s.seasonNumber)}
                           className={`relative rounded-lg border px-2.5 py-1.5 text-sm font-medium transition-colors active:scale-95 ${
                             tvSeason === s.seasonNumber
                               ? "border-primary bg-primary/15 text-primary"
@@ -667,39 +695,56 @@ export function AddMediaWizard({
                   <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Episod
                   </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {Array.from({ length: selectedSeasonMeta.episodeCount }, (_, i) => i + 1).map(
-                      (ep) => {
-                        const available =
-                          !!selectedSeasonGroup &&
-                          hasAny(
-                            selectedSeasonGroup.episodes.get(ep) ?? {
-                              t1080: [],
-                              t4k: [],
-                              t4kHdr: [],
-                            },
+                  {loadingEpisodeTitles && episodeTitles?.season !== tvSeason ? (
+                    <div className="space-y-1.5">
+                      {Array.from({ length: 3 }).map((_, i) => (
+                        <div key={i} className="h-11 animate-pulse rounded-lg bg-muted/40" />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="max-h-56 space-y-1.5 overflow-y-auto pr-0.5">
+                      {Array.from({ length: selectedSeasonMeta.episodeCount }, (_, i) => i + 1).map(
+                        (ep) => {
+                          const available =
+                            !!selectedSeasonGroup &&
+                            hasAny(
+                              selectedSeasonGroup.episodes.get(ep) ?? {
+                                t1080: [],
+                                t4k: [],
+                                t4kHdr: [],
+                              },
+                            );
+                          const epTitle =
+                            episodeTitles?.season === tvSeason
+                              ? episodeTitles.episodes.find((e) => e.episodeNum === ep)?.title
+                              : undefined;
+                          return (
+                            <button
+                              key={ep}
+                              type="button"
+                              onClick={() => setTvEpisode(ep)}
+                              className={`flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-sm font-medium transition-colors active:scale-[0.98] ${
+                                tvEpisode === ep
+                                  ? "border-primary bg-primary/15 text-primary"
+                                  : "border-border bg-muted/40 text-muted-foreground hover:bg-muted/60"
+                              }`}
+                              title={available ? "Are deja torrent pe Filelist" : undefined}
+                            >
+                              <span className="shrink-0 tabular-nums">
+                                E{String(ep).padStart(2, "0")}
+                              </span>
+                              <span className="min-w-0 flex-1 truncate">
+                                {epTitle ?? `Episodul ${ep}`}
+                              </span>
+                              {available && (
+                                <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-400" />
+                              )}
+                            </button>
                           );
-                        return (
-                          <button
-                            key={ep}
-                            type="button"
-                            onClick={() => setTvEpisode(ep)}
-                            className={`relative rounded-lg border px-2.5 py-1 text-sm font-medium transition-colors active:scale-95 ${
-                              tvEpisode === ep
-                                ? "border-primary bg-primary/15 text-primary"
-                                : "border-border bg-muted/40 text-muted-foreground hover:bg-muted/60"
-                            }`}
-                            title={available ? "Are deja torrent pe Filelist" : undefined}
-                          >
-                            {available && (
-                              <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-emerald-400" />
-                            )}
-                            E{String(ep).padStart(2, "0")}
-                          </button>
-                        );
-                      },
-                    )}
-                  </div>
+                        },
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -733,7 +778,12 @@ export function AddMediaWizard({
                     ? ` — S${String(tvSeason).padStart(2, "0")}E${String(tvEpisode).padStart(2, "0")}`
                     : "")
                 }
-                subtitle={checkResult.originalTitle + (selected.year ? ` · ${selected.year}` : "")}
+                subtitle={
+                  isTv && tvScope === "episode" && episodeTitles?.season === tvSeason && tvEpisode
+                    ? (episodeTitles.episodes.find((e) => e.episodeNum === tvEpisode)?.title ??
+                      checkResult.originalTitle)
+                    : checkResult.originalTitle + (selected.year ? ` · ${selected.year}` : "")
+                }
               />
 
               {alreadyInPlex ? (

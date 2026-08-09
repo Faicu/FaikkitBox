@@ -229,13 +229,23 @@ export const getTmdbSeasonEpisodes = createServerFn({ method: "GET" })
   .validator((data: { tmdbId: number; seasonNum: number }) => data)
   .handler(async ({ data }): Promise<TmdbEpisode[]> => {
     try {
-      const season = await tmdbFetch<TmdbApiSeason>(`/tv/${data.tmdbId}/season/${data.seasonNum}`);
+      const path = `/tv/${data.tmdbId}/season/${data.seasonNum}`;
+      const season = await tmdbFetch<TmdbApiSeason>(`${path}?language=ro-RO`);
+      // TMDB nu are titluri RO pentru toate episoadele (mai ales lansări
+      // recente) — cădem pe engleză doar pentru cele fără traducere, nu
+      // pentru tot sezonul, ca să nu pierdem degeaba titlurile RO existente.
+      const missingRo = (season.episodes ?? []).some((e) => !e.name?.trim());
+      const seasonEn = missingRo ? await tmdbFetch<TmdbApiSeason>(path).catch(() => null) : null;
+      const enByNum = new Map((seasonEn?.episodes ?? []).map((e) => [e.episode_number, e.name]));
+
       const todayStr = new Date().toISOString().slice(0, 10);
       return (season.episodes ?? []).map((e) => {
         const airDate = e.air_date ?? null;
+        const title =
+          e.name?.trim() || enByNum.get(e.episode_number) || `Episodul ${e.episode_number}`;
         return {
           episodeNum: Number(e.episode_number),
-          title: e.name ?? `Episodul ${e.episode_number}`,
+          title,
           airDate,
           aired: airDate ? airDate < todayStr : false,
         };
