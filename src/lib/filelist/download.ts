@@ -19,7 +19,6 @@ import {
   isMovieCategory,
 } from "./categories";
 import { qbitLogin, qbitEnsureCookie, resetQbitCookie, qbitGet } from "../qbit-client";
-import { detectTorrentQuality } from "../torrent-quality";
 import {
   readDownloadLog,
   readAllDownloadLogEntries,
@@ -167,16 +166,13 @@ async function pollUntilComplete(
         const wasFirst = await markLogEntryComplete(torrentId);
         if (wasFirst) {
           console.log(`[filelist] "${torrentName}" complet — dau refresh Plex`);
-          import("../tmdb-title-lookup")
-            .then(({ buildTorrentDisplayName }) => buildTorrentDisplayName(torrentName, imdbId))
-            .catch(() => torrentName)
-            .then((displayName) =>
+          import("../notifications")
+            .then(({ buildTorrentCompleteNotification }) =>
+              buildTorrentCompleteNotification({ torrentName, imdb: imdbId }),
+            )
+            .then((n) =>
               import("../activity-log").then(({ logActivity }) =>
-                logActivity(
-                  "torrent_complete",
-                  `Torrent descărcat complet: [${detectTorrentQuality(torrentName)}] ${displayName}`,
-                  { torrentId },
-                ),
+                logActivity("torrent_complete", n.body, { torrentId }),
               ),
             )
             .catch(() => {});
@@ -710,21 +706,21 @@ async function downloadFilelistCore(
     const catName = params.categoryName || CATEGORY_NAMES[catId] || `Cat ${catId}`;
 
     if (!params.skipLog) {
-      const quality = detectTorrentQuality(params.torrentName);
-      import("../tmdb-title-lookup")
-        .then(({ buildTorrentDisplayName }) =>
-          buildTorrentDisplayName(params.torrentName, params.imdb),
+      import("../notifications")
+        .then(({ buildTorrentAddedNotification }) =>
+          buildTorrentAddedNotification({
+            torrentName: params.torrentName,
+            imdb: params.imdb,
+            auto: params.skipLog !== false,
+          }),
         )
-        .catch(() => params.torrentName)
-        .then((displayName) =>
+        .then((n) =>
           import("../activity-log").then(({ logActivity }) =>
-            logActivity(
-              "torrent_added",
-              params.skipLog === false
-                ? `Torrent adăugat: [${quality}] ${displayName}`
-                : `Auto-descărcat: [${quality}] ${displayName}`,
-              { category: catName, savePath, size: params.size },
-            ),
+            logActivity("torrent_added", n.body, {
+              category: catName,
+              savePath,
+              size: params.size,
+            }),
           ),
         )
         .catch(() => {});

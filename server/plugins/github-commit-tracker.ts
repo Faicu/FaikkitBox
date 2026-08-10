@@ -36,7 +36,7 @@ async function syncOnStart() {
     if (!Array.isArray(raw)) return;
 
     const { getDb } = await import("../../src/lib/db");
-    const { sendPushToAll } = await import("../../src/lib/push");
+    const { notifyGithubCommit } = await import("../../src/lib/notifications");
 
     const db = getDb();
     const stmt = db.prepare(
@@ -62,7 +62,7 @@ async function syncOnStart() {
         console.log(
           `[github-commit-tracker] Commit nou detectat (${sha.slice(0, 7)}), trimit push...`,
         );
-        await sendPushToAll(`📦 Commit nou — ${author}`, message).catch((err) => {
+        await notifyGithubCommit(author, message).catch((err) => {
           console.warn("[github-commit-tracker] Trimitere push eșuată:", err);
         });
       }

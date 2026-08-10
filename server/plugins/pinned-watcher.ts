@@ -105,6 +105,12 @@ export async function checkAll(force = false): Promise<void> {
     const { getPlexEpisodesInSeasonInternal, checkPlexHasTitleInternal } =
       await import("../../src/lib/services.functions");
     const { detectTorrentQuality } = await import("../../src/lib/torrent-quality");
+    const {
+      buildEpisodeAiredNotification,
+      buildNewTorrentsNotification,
+      buildAutoDownloadNotification,
+      buildPlexNotification,
+    } = await import("../../src/lib/notifications");
 
     const db = getDb();
 
@@ -177,10 +183,7 @@ export async function checkAll(force = false): Promise<void> {
               const epLabel = `${key}${latestAired.title ? ` — ${latestAired.title}` : ""}`;
               changes.push(`📅 Episod nou lansat: ${epLabel}`);
               journalEntries.push(`📅 Episod nou lansat: ${epLabel}`);
-              notifications.push({
-                title: `📅 ${item.title} — Episod nou`,
-                body: epLabel,
-              });
+              notifications.push(buildEpisodeAiredNotification(item.title, epLabel));
             }
             newLastAiredKey = key;
           }
@@ -236,10 +239,7 @@ export async function checkAll(force = false): Promise<void> {
                 : qualitiesFound.join(", ");
               changes.push(`🎞 Torrente noi: ${torrentLabel}`);
               journalEntries.push(`🎞 Torrente noi: ${torrentLabel}`);
-              notifications.push({
-                title: `🎞 ${item.title} — Torrente noi`,
-                body: torrentLabel,
-              });
+              notifications.push(buildNewTorrentsNotification(item.title, torrentLabel));
 
               // Auto-download: cel mai bun torrent din calitatea dorită —
               // DOAR dintre cele confirmate prin IMDb ID (matchedByImdb).
@@ -283,10 +283,9 @@ export async function checkAll(force = false): Promise<void> {
                         : displayName;
                       changes.push(`⬇️ Auto-descărcat (${quality}): ${displayName}`);
                       journalEntries.push(`⬇️ Auto-descărcat (${quality}): ${displayName}`);
-                      notifications.push({
-                        title: `⬇️ ${item.title} — Descărcare automată`,
-                        body: `${quality}: ${bodyName}`,
-                      });
+                      notifications.push(
+                        buildAutoDownloadNotification(item.title, quality, bodyName),
+                      );
                     } else {
                       console.warn(
                         `[pinned-watcher] Auto-download eșuat pentru "${item.title}": ${dlResult.error}`,
@@ -324,10 +323,7 @@ export async function checkAll(force = false): Promise<void> {
                   const qStr = ep.quality ? ` (${ep.quality})` : "";
                   changes.push(`📺 Episod nou în Plex: ${k}${qStr}`);
                   journalEntries.push(`📺 Episod nou în Plex: ${k}${qStr}`);
-                  notifications.push({
-                    title: `📺 ${item.title} — în Plex`,
-                    body: `${k}${qStr}`,
-                  });
+                  notifications.push(buildPlexNotification(item.title, `${k}${qStr}`));
                 }
               }
             }
@@ -344,10 +340,7 @@ export async function checkAll(force = false): Promise<void> {
                 const qStr = result.quality ? ` (${result.quality})` : "";
                 changes.push(`📺 Film adăugat în Plex${qStr}`);
                 journalEntries.push(`📺 Film adăugat în Plex${qStr}`);
-                notifications.push({
-                  title: `📺 ${item.title} — în Plex`,
-                  body: `Film disponibil${qStr}`,
-                });
+                notifications.push(buildPlexNotification(item.title, `Film disponibil${qStr}`));
               }
               newPlexMovieFound = result.found;
             }

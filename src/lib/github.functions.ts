@@ -65,7 +65,7 @@ function githubHeaders(): Record<string, string> {
 async function upsertCommits(commits: GitHubCommit[]): Promise<void> {
   try {
     const { getDb } = await import("./db");
-    const { sendPushToAll } = await import("./push");
+    const { notifyGithubCommit } = await import("./notifications");
     const db = getDb();
     const now = new Date().toISOString();
 
@@ -79,7 +79,7 @@ async function upsertCommits(commits: GitHubCommit[]): Promise<void> {
     for (const c of commits) {
       const result = stmt.run(c.sha, c.shortSha, c.message, c.author, c.date, c.url, now);
       if (result.changes > 0) {
-        await sendPushToAll(`📦 Commit nou — ${c.author}`, c.message).catch((err) => {
+        await notifyGithubCommit(c.author, c.message).catch((err) => {
           console.warn("[github] Trimitere push eșuată:", err);
         });
       }
@@ -291,7 +291,9 @@ export interface UnpushedCommit {
 // Detalii despre commit-urile locale nepublicate — afișate deasupra butonului
 // de push din pagina Tehnic, ca userul să vadă ce urmează să trimită.
 export const getUnpushedCommits = createServerFn({ method: "GET" }).handler(
-  async (): Promise<{ status: "ok"; commits: UnpushedCommit[] } | { status: "error"; error: string }> => {
+  async (): Promise<
+    { status: "ok"; commits: UnpushedCommit[] } | { status: "error"; error: string }
+  > => {
     try {
       const branch = execSync("git rev-parse --abbrev-ref HEAD", { encoding: "utf8" }).trim();
       const sep = "\x1f";
@@ -337,7 +339,13 @@ export const getLocalCommitDetail = createServerFn({ method: "GET" })
         const [code, filename] = line.split("\t");
         if (!filename) continue;
         const status =
-          code?.[0] === "A" ? "added" : code?.[0] === "D" ? "removed" : code?.[0] === "R" ? "renamed" : "modified";
+          code?.[0] === "A"
+            ? "added"
+            : code?.[0] === "D"
+              ? "removed"
+              : code?.[0] === "R"
+                ? "renamed"
+                : "modified";
         statusByFile.set(filename, status);
       }
 

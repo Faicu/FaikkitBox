@@ -1,7 +1,7 @@
 import { defineEventHandler, readRawBody, getHeader, createError } from "h3";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { getDb } from "../../../src/lib/db";
-import { sendPushToAll } from "../../../src/lib/push";
+import { notifyGithubCommit } from "../../../src/lib/notifications";
 
 export default defineEventHandler(async (event) => {
   const secret = process.env.GITHUB_WEBHOOK_SECRET;
@@ -56,7 +56,7 @@ export default defineEventHandler(async (event) => {
 
     const result = stmt.run(sha, sha.slice(0, 7), message, author, date, url, now);
     if (result.changes > 0) {
-      await sendPushToAll(`📦 Commit nou — ${author}`, message).catch((err) => {
+      await notifyGithubCommit(author, message).catch((err) => {
         console.warn("[github-webhook] Trimitere push eșuată:", err);
       });
     }
