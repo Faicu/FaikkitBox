@@ -26,7 +26,7 @@ Construit cu [TanStack Start](https://tanstack.com/start) (React 19 + TanStack R
 
 | Pagină | Ce arată |
 |---|---|
-| **Acasă** | Status live pentru toate serviciile într-un singur ecran: Plex, Immich, qBittorrent, gazdă, ultimul speedtest, jurnal de activitate. |
+| **Acasă** | Status live pentru toate serviciile într-un singur ecran: Plex, Immich, qBittorrent, gazdă, ultimul speedtest, jurnal de activitate. Buton **„Adaugă film/serial"** (admin) — wizard ghidat: căutare TMDB → verificare automată Plex + Filelist → alegere calitate/sezon/episod → confirmare și descărcare (sau fixare pentru monitorizare automată dacă nu există încă pe Filelist). |
 | **Plex** | Sesiuni active cu progres și stare (Redare/Pauză), episoade vizionate azi, utilizatori activi. |
 | **Immich** | Număr fișiere, spațiu ocupat, coadă de joburi active. |
 | **qBittorrent** | Viteze download/upload, torrente active/total, filtre pe stări, căutare în listă, pauză/reluare (global sau individual), ștergere torrent + fișiere. |
@@ -46,6 +46,10 @@ Alte capabilități transversale:
 ## Lansări — filme și seriale
 
 Căutare unificată (TMDB) pentru filme și seriale. Fiecare item fixat afișează poster, status Plex, descărcare de pe Filelist și, pentru seriale, countdown până la următorul episod.
+
+Aceeași identificare/descărcare e disponibilă și ca wizard ghidat (`AddMediaWizard.tsx`) — accesibil din butonul „Adaugă film/serial" de pe pagina Acasă, sau direct dintr-un titlu deja deschis în Descoperă (`SceneViewer.tsx`). Pentru seriale, wizard-ul cere explicit scopul (serial complet / un sezon / un episod) înainte de a căuta, ca să nu confunde un pachet de sezon nou apărut (FileList înlocuiește des episoadele individuale cu un pachet, la câteva ore după ultimul episod) cu un singur episod.
+
+„Ultimele torrente descărcate" (secțiune admin, Lansări) — rândurile sunt apăsabile, deschid un drawer de detalii (nume complet al lansării, dimensiune, cale de salvare, dată adăugare/finalizare) cu acțiunile „Corectează subtitrare" și „Oprește descărcarea"/„Șterge". Titlul afișat pe rând e numele real (RO, cu fallback EN) + sezon/episod, nu numele tehnic al fișierului torrent (`buildTorrentDisplayName`, `src/lib/tmdb-title-lookup.ts`).
 
 ### Status Plex
 
@@ -84,7 +88,7 @@ Fiecare rezultat păstrează `matchedVia` (prin ce criteriu a fost găsit) și `
 La finalul fiecărei descărcări (înainte de refresh-ul Plex), `ensureRomanianSubtitle` verifică automat:
 
 1. **Fișierul media are deja subtitrare română încorporată?** — detectat cu `ffprobe` (dacă e instalat pe server; dacă lipsește, se sare peste acest pas, nu blochează). Dacă da, nu mai face nimic.
-2. **Există un `.srt` în torrent, dar cu denumire greșită pentru Plex?** — Plex identifică limba unei subtitrări externe după numele fișierului (`<nume-media>.ro.srt`), nu după conținut. Dacă torrentul conține exact un `.srt` cu alt nume, e **redenumit prin API-ul qBittorrent** (`torrents/renameFile`) — obligatoriu prin API, nu direct pe disk, altfel qBittorrent pierde evidența fișierului și consideră torrentul incomplet.
+2. **Există un `.srt` în torrent, dar cu denumire greșită pentru Plex?** — Plex identifică limba unei subtitrări externe după numele fișierului (`<nume-media>.ro.srt`), nu după conținut. Dacă torrentul conține exact un `.srt`, conținutul e verificat întâi (diacritice ă/â/î/ș/ț ca semnal principal, cuvinte uzuale RO ca rezervă) — **nu se presupune** că e automat română doar pentru că e singurul fișier `.srt` din torrent (unele lansări vin cu subtitrare engleză bundle-uită). Dacă pare română, e **redenumit prin API-ul qBittorrent** (`torrents/renameFile`) — obligatoriu prin API, nu direct pe disk, altfel qBittorrent pierde evidența fișierului. Dacă nu pare română, e redenumit `.en.srt` (nu rămâne ambiguă pentru Plex) și se continuă la pasul 3, ca și cum n-ar fi existat niciun `.srt`.
 3. **Nicio subtitrare deloc?** — se caută pe **OpenSubtitles** (`OPENSUBTITLES_API_KEY` în `.env`) după IMDb id, limba română. Din rezultate se alege cel al cărui `release` se potrivește cel mai bine cu sursa/rezoluția torrentului (ex. WEB-DL/AMZN 1080p vs BluRay 2160p) — o subtitrare pentru altă sursă desincronizează timpii de afișare. Dacă OpenSubtitles nu are o potrivire clară (sursă+rezoluție), se caută și pe **subs.ro** (`SUBSRO_API_KEY` în `.env`) — arhivele de acolo conțin adesea mai multe variante (una per sursă/rezoluție), extrase și scorate la fel; câștigă oricare din cele două surse cu potrivirea mai bună. Dacă nici așa nu există o potrivire clară, se salvează totuși cel mai apropiat rezultat, dar cu un avertisment în log ("verifică sincronizarea").
 
 **Backfill**: butonul „Corectează subtitrări" din secțiunea Jurnal descărcări (Lansări) rulează aceeași verificare retroactiv pe toate torrentele deja din jurnal (`backfillSubtitles`, `src/lib/filelist/download.ts`).
@@ -97,9 +101,12 @@ Detectează, cu toggle independent per tip:
 
 - Torrente noi pe Filelist (opțional filtrat doar pe sezonul curent)
 - Episoade noi lansate (TMDB)
-- Episoade/filme noi apărute în Plex
+
+Un torrent nou găsit poate fi un pachet de sezon complet (nu doar ultimul episod cunoscut) — verificat explicit din numele lansării (`parseSeasonEpisodeFromName`, `src/lib/torrent-name-parse.ts`), nu presupus implicit, ca să nu eticheteze greșit un pachet de sezon ca fiind un singur episod.
 
 Prima verificare per item = baseline (fără notificări) — doar reține ce există deja, ca reper pentru „ce e nou" la verificările următoare. La finalizarea unei descărcări (automate sau manuale) sau la ștergerea unei intrări din jurnal, biblioteca Plex corespunzătoare (Filme/Seriale) e rescanată automat (`refreshPlexLibrary`, `src/lib/filelist/download.ts`).
+
+Conținutul (titlu + text) fiecărei notificări trimise de acest job trăiește în `src/lib/notifications.ts` — sursă unică, folosită și de `filelist/download.ts` (torrent adăugat/complet) și de tracking-ul de commit-uri GitHub, nu recalculat inline la fiecare loc care trimite o notificare.
 
 ---
 
@@ -156,7 +163,7 @@ src/
 server/
   plugins/            plugin-uri Nitro (fundal): pinned-watcher, plex-session-tracker,
                       github-commit-tracker, fast-shutdown
-  routes/             rute API: GitHub webhook, push subscription, SSE auto-reload
+  routes/             rute API: GitHub webhook, SSE auto-reload, proxy thumbnail-uri Plex
 public/               assets statice, Service Worker
 ```
 
@@ -188,7 +195,6 @@ cp .env.example .env
 | `GITHUB_WEBHOOK_SECRET` | Secret pentru validarea webhook-urilor GitHub |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | Chei VAPID pentru notificări web push |
 | `PLEX_COMPOSE_FILE` / `IMMICH_COMPOSE_FILE` | *(opțional)* Căi custom `docker-compose.yml` pentru butoanele de restart |
-| `SPEEDTEST_CACHE_FILE` | *(opțional)* Cale fișier cache ultimul rezultat Speedtest |
 | `SPEEDTEST_BIN` | *(opțional)* Cale completă binar `speedtest` (util dacă snap nu rulează din systemd) |
 | `PORT` | Port server (implicit `3000`) |
 | `NODE_ENV` | Mediu de rulare (`production` în producție) |
@@ -227,9 +233,10 @@ node .output/server/index.mjs
 sudo systemctl stop faikkitbox   # 1. oprește serviciul ÎNAINTE de build
 npm run build                    # 2. verifică că build-ul trece fără erori
 git add <fișiere> && git commit  # 3.
-git push origin main             # 4.
-sudo systemctl start faikkitbox  # 5. repornește cu build-ul nou
+sudo systemctl start faikkitbox  # 4. repornește cu build-ul nou
 ```
+
+**Push-ul către GitHub NU e automat** — commit-urile locale rămân nepublicate până când utilizatorul apasă butonul dedicat din pagina Tehnic (`pushToGitHub`, `src/lib/github.functions.ts`). E intenționat, nu o eroare de urmărit sau reparat — vezi `CLAUDE.md`.
 
 **De ce oprire înainte de build, nu doar la final:** `npm run build` scrie direct peste `.output/server/`, folosit de procesul live pentru chunk-uri SSR încărcate dinamic. Dacă serviciul rulează în timpul build-ului, o cerere poate nimeri exact în fereastra în care fișierele vechi au fost deja șterse/redenumite, dând `ERR_MODULE_NOT_FOUND` — a apărut recurent în istoric înainte de acest fix.
 
@@ -257,7 +264,7 @@ export const getSomething = createServerFn({ method: "GET" })
 
 În componente client, se apelează fie direct (SSR/loader), fie prin `useServerFn(fn)` din `@tanstack/react-start` când e nevoie într-un event handler (`onClick` etc.) — vezi orice `sections/*.tsx` din `lansari/`. Handler-ele `.handler()` pot `await import(...)` module server-only (ex. `admin.server.ts`) ca să nu ajungă în bundle-ul client.
 
-Plugin-urile de fundal (`server/plugins/*.ts`) nu au acces la request context — funcțiile server-only pe care le folosesc trebuie să aibă și o variantă „internă" (plain function, fără `createServerFn`), apelată prin `await import(...)` dinamic. Vezi `checkFilelistForItemInternal`, `checkPlexHasTitleInternal`, `downloadFilelistInternal`.
+Plugin-urile de fundal (`server/plugins/*.ts`) nu au acces la request context — funcțiile server-only pe care le folosesc trebuie să aibă și o variantă „internă" (plain function, fără `createServerFn`), apelată prin `await import(...)` dinamic. Vezi `checkFilelistForItemInternal`, `downloadFilelistInternal`, `getTmdbSeasonEpisodesInternal`.
 
 ### TanStack Query — convenția `queryOptions`
 
@@ -279,7 +286,8 @@ Pentru liste ce se încarcă incremental (ex. `DiscoverGrid`), se folosește `us
 | Pinned items (Lansări) | `pinned.functions.ts` | Tabelă SQLite `pinned_items`. `setPinnedItems` = full-replace (UI-ul de căutare din Lansări), `addPinnedItem` = insert unic (`PinToLansariButton` din Descoperă). Ambele trebuie să invalideze `["pinnedItems"]` (`pinnedItemsQuery`) ca să rămână sincron între pagini. |
 | Filelist | `filelist.functions.ts` (barrel) + `filelist/{types,categories,download,match,log}.ts` | `categories.ts` are `isMovieCategory`/`MOVIE_CATEGORIES`/`SERIES_CATEGORIES` — **nu reimplementa** verificarea film/serial în altă parte. `checkFilelistForItemInternal` (`download.ts`) e **sursa unică** pentru „există pe Filelist?" — nu duplica logica de căutare/matching. `refreshPlexLibrary`/`refreshPlexLibraryForCategory` sunt **singurul** punct care declanșează rescan Plex din acest modul. `match.ts` are `torrentMatchesTitle`/`stripDiacritics`. |
 | Erori aplicație | `error-log.ts`, `console-capture.ts`, `client-error-capture.ts` | Vezi [Sistemul de erori](#sistemul-de-erori-și-observabilitate). Nu adăuga apeluri `logError()` manuale lângă un `console.warn`/`console.error` — captarea globală le prinde deja automat; ar produce intrări duplicate. |
-| TMDB | `tmdb.functions.ts` (search/details/countdown/episoade), `tmdb.discover.functions.ts` (trending/popular/newest + feed clipuri video), `tmdb-client.ts` (fetch helper cu token Bearer) | `getTmdbDetails` întoarce și `literalTitle` (din `alternative_titles`, `type: "literal title"`) — folosește-l pentru orice căutare externă (Filelist), nu `originalTitle` brut, care rămâne în scriptul nativ pentru producții non-latine. Funcțiile de discover întorc `{ items/clips, degraded }` — `degraded: true` înseamnă eroare TMDB înghițită în try/catch, nu listă goală legitimă. |
+| TMDB | `tmdb.functions.ts` (search/details/countdown/episoade), `tmdb.discover.functions.ts` (trending/popular/newest + feed clipuri video), `tmdb-client.ts` (fetch helper cu token Bearer), `tmdb-title-lookup.ts` (titlu de afișat pornind de la IMDb id, pentru jurnal/notificări) | `getTmdbDetails` întoarce și `literalTitle` (din `alternative_titles`, `type: "literal title"`) — folosește-l pentru orice căutare externă (Filelist), nu `originalTitle` brut, care rămâne în scriptul nativ pentru producții non-latine. Funcțiile de discover întorc `{ items/clips, degraded }` — `degraded: true` înseamnă eroare TMDB înghițită în try/catch, nu listă goală legitimă. TMDB cache-uiește răspunsuri per URL exact — cererile pentru titluri de episoade (`getTmdbSeasonEpisodesInternal`) au cache-bust explicit, altfel un episod difuzat recent poate rămâne cu placeholder generic ore bune după ce TMDB are deja titlul real. |
+| Notificări push | `notifications.ts` (conținut: titlu+text per tip de eveniment), `push.ts` (trimitere efectivă, `sendPushToAll`), `torrent-quality.ts` + `torrent-name-parse.ts` (detectare calitate/sezon-episod din numele lansării) | Sursă unică pentru conținutul fiecărei notificări — orice modul nou care trebuie să notifice adaugă o funcție aici, nu construiește titlul/textul inline. |
 | Servicii dashboard | `services/{plex,immich,qbittorrent,host,plex-library,shared}.ts` + `services.functions.ts` | Agregă statusul pentru pagina principală și pentru status Plex per-item din Lansări (`checkPlexHasTitle`, `getPlexEpisodesInSeason`). |
 | Auth admin | `admin.functions.ts` + `admin.server.ts` | Sesiune cookie-based (`getSession()`), fără JWT. `adminStatusQuery` e cache-uit 30s — dacă testezi login/logout și nu vezi schimbarea imediat, e din cauza staleTime, nu un bug. |
 | DB | `db.ts` | SQLite nativ (`node:sqlite`), un singur fișier la `/opt/faikkitbox/data/faikkitbox.db` (override cu `FAIKKITBOX_DB_PATH`). Fără ORM/migrations tool — schema se creează cu `CREATE TABLE IF NOT EXISTS`, migrările incrementale via `PRAGMA user_version` (`runCleanups`); orice schimbare de schemă se adaugă acolo. |
@@ -292,7 +300,9 @@ Pentru liste ce se încarcă incremental (ex. `DiscoverGrid`), se folosește `us
 - `src/components/lansari/hooks.ts` — `useDownload()` (upload qBittorrent + toast + invalidare `filelistLog`), `useCountdown(targetIso)`.
 - `src/components/ui/alert-dialog.tsx` — wrapper Radix deja stilizat; folosește-l pentru orice confirmare distructivă în loc de `window.confirm()`.
 - Pagina Descoperă are două moduri (`grid`/`feed`) cu componente separate (`DiscoverGrid.tsx`, `FeedView.tsx`) care share doar `FilterTabs`, `PinToLansariButton`, `FilelistCheckButton`, `PlexLibraryStatus`. Dacă adaugi un filtru nou, verifică dacă trebuie propagat în ambele moduri.
+- `src/components/principala/AddMediaWizard.tsx` — wizard-ul de adăugare, deschis fie din pagina Acasă, fie prefill dintr-un titlu deja identificat (prop `initialItem`, folosit din `SceneViewer.tsx`). Reutilizează `DownloadConfirmDialog`, `detectQuality`/`groupTorrentsBySeasonEpisode`, `getTmdbSeasonEpisodesInternal` — nu duplică logica de căutare/descărcare deja existentă în Lansări.
+- Drawer-uri de detalii (rând apăsabil → panou cu informații suplimentare + acțiuni) urmează modelul `CommitDrawer.tsx`/`SubtitleFixDrawer.tsx` (Tehnic) și `DownloadLogEntryDrawer.tsx` (Lansări) — `Drawer`/`DrawerContent`/`DrawerHeader`/`DrawerTitle` din `components/ui/drawer.tsx`, stare `selected*` în componenta părinte, nu în drawer.
 
 ### Workflow obligatoriu
 
-Vezi `CLAUDE.md` la rădăcina proiectului — orice modificare de cod trebuie urmată de secvența completă din [Deploy](#deploy) (stop → build → commit → push → start) înainte de a considera o sarcină finalizată.
+Vezi `CLAUDE.md` la rădăcina proiectului — orice modificare de cod trebuie urmată de secvența completă din [Deploy](#deploy) (stop → build → commit → start) înainte de a considera o sarcină finalizată. Push-ul rămâne manual, din Tehnic.
