@@ -87,10 +87,6 @@ function matchesForQuality(torrents: FilelistTorrent[], quality: Quality): Filel
     .sort((a, b) => b.seeders - a.seeders);
 }
 
-function hasAny(set: QualitySet): boolean {
-  return set.t1080.length > 0 || set.t4k.length > 0 || set.t4kHdr.length > 0;
-}
-
 export function AddMediaWizard({
   open,
   onClose,
@@ -415,10 +411,10 @@ export function AddMediaWizard({
   const seasonGroups = checkResult ? groupTorrentsBySeasonEpisode(checkResult.torrents) : [];
   const selectedSeasonGroup = seasonGroups.find((g) => g.seasonNum === tvSeason) ?? null;
   const selectedSeasonMeta = checkResult?.seasons.find((s) => s.seasonNumber === tvSeason) ?? null;
-  const availableSeasonsCount =
+  const plexCompleteSeasonsCount =
     checkResult?.seasons.filter((s) => {
-      const g = seasonGroups.find((sg) => sg.seasonNum === s.seasonNumber);
-      return g && hasAny(g.byQuality);
+      const nums = plexBySeason.get(s.seasonNumber) ?? [];
+      return nums.length >= s.episodeCount && s.episodeCount > 0;
     }).length ?? 0;
 
   // Rezultatul concret de arătat la pasul final, în funcție de tip și scop —
@@ -679,7 +675,7 @@ export function AddMediaWizard({
                   <ScopeOption
                     icon={<Layers className="h-4 w-4" />}
                     label="Serial complet"
-                    description={`${availableSeasonsCount}/${checkResult.seasons.length} sezoane au deja pachet pe Filelist`}
+                    description={`${plexCompleteSeasonsCount}/${checkResult.seasons.length} sezoane sunt deja complete în Plex`}
                     meta={`${checkResult.seasons.length} sezoane`}
                     active={tvScope === "series"}
                     onClick={() => setTvScope("series")}
@@ -688,7 +684,7 @@ export function AddMediaWizard({
                     icon={<Clapperboard className="h-4 w-4" />}
                     label="Un sezon anume"
                     description="Alege sezonul de mai jos"
-                    meta={`${availableSeasonsCount}/${checkResult.seasons.length} disponibile`}
+                    meta={`${plexCompleteSeasonsCount}/${checkResult.seasons.length} complete în Plex`}
                     active={tvScope === "season"}
                     onClick={() => setTvScope("season")}
                   />
@@ -708,8 +704,6 @@ export function AddMediaWizard({
                     </div>
                     <div className="flex flex-wrap gap-1.5">
                       {checkResult.seasons.map((s) => {
-                        const g = seasonGroups.find((sg) => sg.seasonNum === s.seasonNumber);
-                        const available = !!g && hasAny(g.byQuality);
                         const plexNums = plexBySeason.get(s.seasonNumber) ?? [];
                         const plexFull = plexNums.length >= s.episodeCount && s.episodeCount > 0;
                         const plexPartial = plexNums.length > 0 && !plexFull;
@@ -723,14 +717,10 @@ export function AddMediaWizard({
                                 ? "border-primary bg-primary/15 text-primary"
                                 : "border-border bg-muted/40 text-muted-foreground hover:bg-muted/60"
                             }`}
-                            title={available ? "Are deja pachet pe Filelist" : undefined}
                           >
-                            {available && (
-                              <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-emerald-400" />
-                            )}
                             {(plexFull || plexPartial) && (
                               <span
-                                className={`absolute -left-0.5 -top-0.5 h-2 w-2 rounded-full ${
+                                className={`absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full ${
                                   plexFull ? "bg-amber-400" : "bg-amber-400/50"
                                 }`}
                                 title={
@@ -770,15 +760,6 @@ export function AddMediaWizard({
                           { length: selectedSeasonMeta.episodeCount },
                           (_, i) => i + 1,
                         ).map((ep) => {
-                          const available =
-                            !!selectedSeasonGroup &&
-                            hasAny(
-                              selectedSeasonGroup.episodes.get(ep) ?? {
-                                t1080: [],
-                                t4k: [],
-                                t4kHdr: [],
-                              },
-                            );
                           const inPlex = plexNumsForSeason?.includes(ep) ?? false;
                           const epTitle =
                             episodeTitles?.season === tvSeason
@@ -808,12 +789,6 @@ export function AddMediaWizard({
                                 >
                                   <CheckCircle2 className="h-2.5 w-2.5" /> Plex
                                 </span>
-                              )}
-                              {available && (
-                                <span
-                                  className="h-2 w-2 shrink-0 rounded-full bg-emerald-400"
-                                  title="Are deja torrent pe Filelist"
-                                />
                               )}
                             </button>
                           );
