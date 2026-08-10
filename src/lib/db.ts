@@ -109,7 +109,6 @@ export function getDb(): DatabaseSync {
       media_type TEXT NOT NULL,
       watch_filelist INTEGER NOT NULL DEFAULT 0,
       watch_tmdb INTEGER NOT NULL DEFAULT 0,
-      watch_plex INTEGER NOT NULL DEFAULT 0,
       watch_filelist_season INTEGER NOT NULL DEFAULT 0,
       auto_download INTEGER NOT NULL DEFAULT 0,
       auto_download_quality TEXT NOT NULL DEFAULT '1080p',
@@ -122,8 +121,6 @@ export function getDb(): DatabaseSync {
       last_checked_at TEXT,
       seen_torrent_ids TEXT NOT NULL DEFAULT '[]',
       last_aired_key TEXT,
-      plex_episode_keys TEXT NOT NULL DEFAULT '[]',
-      plex_movie_found INTEGER,
       PRIMARY KEY (id, media_type)
     );
 
@@ -244,6 +241,32 @@ function runCleanups(database: DatabaseSync): void {
         // coloana există deja dintr-o rulare anterioară
       }
       database.exec("PRAGMA user_version = 5");
+    }
+
+    if (version < 6) {
+      // v6: elimină watch_plex (pinned_watch_settings) și plex_episode_keys/
+      // plex_movie_found (pinned_watch_state) — funcția "apariție în Plex" a
+      // fost eliminată din aplicație (scenariu inexistent în fluxul real de
+      // lucru, tot ce ajunge în Plex trece deja prin Filelist).
+      try {
+        database.exec("ALTER TABLE pinned_watch_settings DROP COLUMN watch_plex");
+        console.log("[db] Migrare v6: eliminat pinned_watch_settings.watch_plex");
+      } catch {
+        // coloana nu există (deja eliminată sau tabel nou)
+      }
+      try {
+        database.exec("ALTER TABLE pinned_watch_state DROP COLUMN plex_episode_keys");
+        console.log("[db] Migrare v6: eliminat pinned_watch_state.plex_episode_keys");
+      } catch {
+        // coloana nu există
+      }
+      try {
+        database.exec("ALTER TABLE pinned_watch_state DROP COLUMN plex_movie_found");
+        console.log("[db] Migrare v6: eliminat pinned_watch_state.plex_movie_found");
+      } catch {
+        // coloana nu există
+      }
+      database.exec("PRAGMA user_version = 6");
     }
   } catch (e) {
     console.warn("[db] Curățare eșuată:", e);
