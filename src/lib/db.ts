@@ -1,12 +1,11 @@
 // ---------------------------------------------------------------------------
 // Bază de date SQLite (node:sqlite — nativ în Node 22.5+, zero dependențe)
 // Un singur fișier: /opt/faikkitbox/data/faikkitbox.db
-// Migrare automată din fișierele JSON vechi la prima pornire.
 // ---------------------------------------------------------------------------
 
 import { DatabaseSync } from "node:sqlite";
-import { readFile, mkdir, rename } from "node:fs/promises";
-import { existsSync, mkdirSync } from "node:fs";
+import { mkdir } from "node:fs/promises";
+import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 
 function dbPath(): string {
@@ -133,9 +132,6 @@ export function getDb(): DatabaseSync {
     );
     CREATE INDEX IF NOT EXISTS idx_error_log_timestamp ON error_log(timestamp DESC);
   `);
-
-  // Migrare din JSON (o singură dată, la prima pornire cu SQLite)
-  migrateFromJson(db).catch((e) => console.warn("[db] Migrare JSON eșuată:", e));
 
   // Curățări one-time, versionate cu PRAGMA user_version
   runCleanups(db);
@@ -270,82 +266,5 @@ function runCleanups(database: DatabaseSync): void {
     }
   } catch (e) {
     console.warn("[db] Curățare eșuată:", e);
-  }
-}
-
-async function migrateFromJson(database: DatabaseSync): Promise<void> {
-  // Activity log
-  const activityJson = process.env.ACTIVITY_LOG_PATH ?? "/opt/faikkitbox/data/activity-log.json";
-  if (existsSync(activityJson)) {
-    try {
-      const raw = await readFile(activityJson, "utf8");
-      const entries = JSON.parse(raw) as Array<{
-        id: string;
-        timestamp: string;
-        type: string;
-        message: string;
-        meta?: unknown;
-      }>;
-      const insert = database.prepare(
-        "INSERT OR IGNORE INTO activity (id, timestamp, type, message, meta) VALUES (?, ?, ?, ?, ?)",
-      );
-      let count = 0;
-      for (const e of entries) {
-        insert.run(e.id, e.timestamp, e.type, e.message, e.meta ? JSON.stringify(e.meta) : null);
-        count++;
-      }
-      await rename(activityJson, activityJson + ".migrated");
-      console.log(`[db] Migrat ${count} intrări activity din JSON → SQLite`);
-    } catch (e) {
-      console.warn("[db] Migrare activity-log.json eșuată:", e);
-    }
-  }
-
-  // Filelist downloads
-  const downloadsJson =
-    process.env.FILELIST_LOG_PATH ?? "/opt/faikkitbox/data/filelist-downloads.json";
-  if (existsSync(downloadsJson)) {
-    try {
-      const raw = await readFile(downloadsJson, "utf8");
-      const entries = JSON.parse(raw) as Array<{
-        id: number;
-        name: string;
-        size: number;
-        category: number;
-        categoryName: string;
-        freeleech: boolean;
-        internal: boolean;
-        savePath: string;
-        downloadedAt: string;
-        completedAt: string | null;
-        torrentHash?: string;
-      }>;
-      const insert = database.prepare(
-        `INSERT OR IGNORE INTO downloads
-         (id, name, size, category, category_name, freeleech, internal, save_path, downloaded_at, completed_at, torrent_hash)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      );
-      let count = 0;
-      for (const e of entries) {
-        insert.run(
-          e.id,
-          e.name,
-          e.size ?? 0,
-          e.category ?? 0,
-          e.categoryName ?? "",
-          e.freeleech ? 1 : 0,
-          e.internal ? 1 : 0,
-          e.savePath ?? "",
-          e.downloadedAt,
-          e.completedAt ?? null,
-          e.torrentHash ?? null,
-        );
-        count++;
-      }
-      await rename(downloadsJson, downloadsJson + ".migrated");
-      console.log(`[db] Migrat ${count} intrări downloads din JSON → SQLite`);
-    } catch (e) {
-      console.warn("[db] Migrare filelist-downloads.json eșuată:", e);
-    }
   }
 }
