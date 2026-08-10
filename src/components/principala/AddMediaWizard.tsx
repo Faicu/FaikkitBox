@@ -446,9 +446,16 @@ export function AddMediaWizard({
       : [];
   const episodeMatch =
     episodeMatches.find((t) => t.id === selectedTorrentId) ?? bestOf(episodeMatches);
+  // Sezoanele deja complete în Plex nu se mai propun la descărcare — nici ca
+  // pachet disponibil, nici ca "lipsă" (nu lipsesc, sunt deja deținute).
+  const isSeasonCompleteInPlex = (seasonNumber: number, episodeCount: number) => {
+    const nums = plexBySeason.get(seasonNumber) ?? [];
+    return episodeCount > 0 && nums.length >= episodeCount;
+  };
   const seriesPacks =
     isTv && tvScope === "series" && checkResult
       ? checkResult.seasons
+          .filter((s) => !isSeasonCompleteInPlex(s.seasonNumber, s.episodeCount))
           .map((s) => {
             const g = seasonGroups.find((sg) => sg.seasonNum === s.seasonNumber);
             const torrent = g ? bestOf(pickFromSet(g.byQuality, quality)) : null;
@@ -459,6 +466,7 @@ export function AddMediaWizard({
   const seriesMissingSeasons =
     isTv && tvScope === "series" && checkResult
       ? checkResult.seasons
+          .filter((s) => !isSeasonCompleteInPlex(s.seasonNumber, s.episodeCount))
           .map((s) => s.seasonNumber)
           .filter((sn) => !seriesPacks.some((p) => p.season === sn))
       : [];
