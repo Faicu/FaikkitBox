@@ -1076,15 +1076,15 @@ export function AddMediaWizard({
             <AlertDialogTitle>Confirmare descărcare</AlertDialogTitle>
             <AlertDialogDescription>
               Descarci pachetul complet pentru {confirmSeries?.length} sezon(oane)?
-              <div className="mt-2 space-y-1">
-                {confirmSeries?.map((p) => (
-                  <div key={p.season} className="break-all text-xs text-foreground">
-                    S{String(p.season).padStart(2, "0")} — {p.torrent.name}
-                  </div>
-                ))}
-              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <div className="space-y-1">
+            {confirmSeries?.map((p) => (
+              <div key={p.season} className="break-all text-xs text-foreground">
+                S{String(p.season).padStart(2, "0")} — {p.torrent.name}
+              </div>
+            ))}
+          </div>
           <AlertDialogFooter>
             <AlertDialogCancel>Anulează</AlertDialogCancel>
             <AlertDialogAction
