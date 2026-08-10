@@ -265,11 +265,22 @@ export async function checkAll(force = false): Promise<void> {
                       imdb: best.imdb ?? imdbId,
                     });
                     if (dlResult.status === "ok") {
-                      changes.push(`⬇️ Auto-descărcat (${quality}): ${best.name}`);
-                      journalEntries.push(`⬇️ Auto-descărcat (${quality}): ${best.name}`);
+                      const { buildTorrentDisplayName } =
+                        await import("../../src/lib/tmdb-title-lookup");
+                      const displayName = await buildTorrentDisplayName(
+                        best.name,
+                        best.imdb ?? imdbId,
+                      ).catch(() => best.name);
+                      // Body-ul notificării nu repetă numele serialului — titlul
+                      // notificării deja îl conține ("<serial> — Descărcare automată").
+                      const bodyName = displayName.startsWith(`${item.title} — `)
+                        ? displayName.slice(item.title.length + 3)
+                        : displayName;
+                      changes.push(`⬇️ Auto-descărcat (${quality}): ${displayName}`);
+                      journalEntries.push(`⬇️ Auto-descărcat (${quality}): ${displayName}`);
                       notifications.push({
                         title: `⬇️ ${item.title} — Descărcare automată`,
-                        body: `${quality}: ${best.name}`,
+                        body: `${quality}: ${bodyName}`,
                       });
                     } else {
                       console.warn(

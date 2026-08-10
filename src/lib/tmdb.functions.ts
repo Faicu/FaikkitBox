@@ -235,38 +235,49 @@ function isGenericEpisodePlaceholder(name: string | undefined, episodeNumber: nu
   return new RegExp(`^episodul\\s*${episodeNumber}$`, "i").test(n);
 }
 
+// Versiune internă (funcție simplă, fără createServerFn) — folosită și din
+// server/plugins (pinned-watcher.ts) sau alt cod server-side care nu poate
+// trece prin granița de server function (același pattern ca
+// checkFilelistForItemInternal din filelist/download.ts).
+export async function getTmdbSeasonEpisodesInternal(
+  tmdbId: number,
+  seasonNum: number,
+): Promise<TmdbEpisode[]> {
+  try {
+    const path = `/tv/${tmdbId}/season/${seasonNum}`;
+    const season = await tmdbFetch<TmdbApiSeason>(`${path}?language=ro-RO`);
+    // TMDB nu are titluri RO pentru toate episoadele (mai ales lansări
+    // recente) — cădem pe engleză doar pentru cele fără traducere reală,
+    // nu pentru tot sezonul, ca să nu pierdem degeaba titlurile RO existente.
+    const missingRo = (season.episodes ?? []).some((e) =>
+      isGenericEpisodePlaceholder(e.name, e.episode_number),
+    );
+    const seasonEn = missingRo ? await tmdbFetch<TmdbApiSeason>(path).catch(() => null) : null;
+    const enByNum = new Map((seasonEn?.episodes ?? []).map((e) => [e.episode_number, e.name]));
+
+    const todayStr = new Date().toISOString().slice(0, 10);
+    return (season.episodes ?? []).map((e) => {
+      const airDate = e.air_date ?? null;
+      const title = isGenericEpisodePlaceholder(e.name, e.episode_number)
+        ? (enByNum.get(e.episode_number)?.trim() ?? `Episodul ${e.episode_number}`)
+        : e.name!.trim();
+      return {
+        episodeNum: Number(e.episode_number),
+        title,
+        airDate,
+        aired: airDate ? airDate < todayStr : false,
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
 export const getTmdbSeasonEpisodes = createServerFn({ method: "GET" })
   .validator((data: { tmdbId: number; seasonNum: number }) => data)
-  .handler(async ({ data }): Promise<TmdbEpisode[]> => {
-    try {
-      const path = `/tv/${data.tmdbId}/season/${data.seasonNum}`;
-      const season = await tmdbFetch<TmdbApiSeason>(`${path}?language=ro-RO`);
-      // TMDB nu are titluri RO pentru toate episoadele (mai ales lansări
-      // recente) — cădem pe engleză doar pentru cele fără traducere reală,
-      // nu pentru tot sezonul, ca să nu pierdem degeaba titlurile RO existente.
-      const missingRo = (season.episodes ?? []).some((e) =>
-        isGenericEpisodePlaceholder(e.name, e.episode_number),
-      );
-      const seasonEn = missingRo ? await tmdbFetch<TmdbApiSeason>(path).catch(() => null) : null;
-      const enByNum = new Map((seasonEn?.episodes ?? []).map((e) => [e.episode_number, e.name]));
-
-      const todayStr = new Date().toISOString().slice(0, 10);
-      return (season.episodes ?? []).map((e) => {
-        const airDate = e.air_date ?? null;
-        const title = isGenericEpisodePlaceholder(e.name, e.episode_number)
-          ? (enByNum.get(e.episode_number)?.trim() ?? `Episodul ${e.episode_number}`)
-          : e.name!.trim();
-        return {
-          episodeNum: Number(e.episode_number),
-          title,
-          airDate,
-          aired: airDate ? airDate < todayStr : false,
-        };
-      });
-    } catch {
-      return [];
-    }
-  });
+  .handler(async ({ data }): Promise<TmdbEpisode[]> =>
+    getTmdbSeasonEpisodesInternal(data.tmdbId, data.seasonNum),
+  );
 
 export interface TvShowCountdown {
   status: "ok" | "error" | "not_found";

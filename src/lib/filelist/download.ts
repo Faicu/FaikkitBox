@@ -166,11 +166,15 @@ async function pollUntilComplete(
         const wasFirst = await markLogEntryComplete(torrentId);
         if (wasFirst) {
           console.log(`[filelist] "${torrentName}" complet — dau refresh Plex`);
-          import("../activity-log")
-            .then(({ logActivity }) =>
-              logActivity("torrent_complete", `Torrent descărcat complet: ${torrentName}`, {
-                torrentId,
-              }),
+          import("../tmdb-title-lookup")
+            .then(({ buildTorrentDisplayName }) => buildTorrentDisplayName(torrentName, imdbId))
+            .catch(() => torrentName)
+            .then((displayName) =>
+              import("../activity-log").then(({ logActivity }) =>
+                logActivity("torrent_complete", `Torrent descărcat complet: ${displayName}`, {
+                  torrentId,
+                }),
+              ),
             )
             .catch(() => {});
           try {
@@ -703,14 +707,20 @@ async function downloadFilelistCore(
     const catName = params.categoryName || CATEGORY_NAMES[catId] || `Cat ${catId}`;
 
     if (!params.skipLog) {
-      import("../activity-log")
-        .then(({ logActivity }) =>
-          logActivity(
-            "torrent_added",
-            params.skipLog === false
-              ? `Torrent adăugat: ${params.torrentName}`
-              : `Auto-descărcat: ${params.torrentName}`,
-            { category: catName, savePath, size: params.size },
+      import("../tmdb-title-lookup")
+        .then(({ buildTorrentDisplayName }) =>
+          buildTorrentDisplayName(params.torrentName, params.imdb),
+        )
+        .catch(() => params.torrentName)
+        .then((displayName) =>
+          import("../activity-log").then(({ logActivity }) =>
+            logActivity(
+              "torrent_added",
+              params.skipLog === false
+                ? `Torrent adăugat: ${displayName}`
+                : `Auto-descărcat: ${displayName}`,
+              { category: catName, savePath, size: params.size },
+            ),
           ),
         )
         .catch(() => {});

@@ -39,6 +39,103 @@ export async function lookupTitleByImdbId(imdbId: string): Promise<string | null
 }
 
 // ---------------------------------------------------------------------------
+// Nume de afișat în jurnal/notificări push, pornind de la un IMDb id — titlu
+// RO (cu fallback EN dacă TMDB n-are traducere) + An, pentru filme; pentru
+// seriale, "Titlu — SxxExx — Titlu episod" dacă numele lansării conține un
+// tipar SxxExx recunoscut (pachetele de sezon/nume neregulate cad pe doar
+// titlul serialului). Fail-soft: fără IMDb id sau la orice eroare TMDB,
+// întoarce numele tehnic al lansării neschimbat.
+// ---------------------------------------------------------------------------
+
+interface TmdbFindItem {
+  id: number;
+  title?: string;
+  name?: string;
+  release_date?: string;
+  first_air_date?: string;
+}
+interface TmdbFindResponseFull {
+  movie_results?: TmdbFindItem[];
+  tv_results?: TmdbFindItem[];
+}
+
+interface TmdbBasicInfo {
+  id: number;
+  mediaType: "movie" | "tv";
+  title: string;
+  year: string | null;
+}
+
+const infoCache = new Map<string, { expiresAt: number; value: TmdbBasicInfo | null }>();
+
+async function lookupTmdbInfoByImdbId(imdbId: string): Promise<TmdbBasicInfo | null> {
+  const key = imdbId.trim();
+  if (!key) return null;
+
+  const cached = infoCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) return cached.value;
+
+  let info: TmdbBasicInfo | null = null;
+  try {
+    const [ro, en] = await Promise.all([
+      tmdbFetch<TmdbFindResponseFull>(
+        `/find/${encodeURIComponent(key)}?external_source=imdb_id&language=ro-RO`,
+      ),
+      tmdbFetch<TmdbFindResponseFull>(
+        `/find/${encodeURIComponent(key)}?external_source=imdb_id`,
+      ).catch(() => null),
+    ]);
+    const movie = ro.movie_results?.[0];
+    const show = ro.tv_results?.[0];
+    if (movie) {
+      const enMovie = en?.movie_results?.[0];
+      info = {
+        id: movie.id,
+        mediaType: "movie",
+        title: movie.title?.trim() || enMovie?.title?.trim() || "",
+        year: (movie.release_date || enMovie?.release_date || "").slice(0, 4) || null,
+      };
+    } else if (show) {
+      const enShow = en?.tv_results?.[0];
+      info = {
+        id: show.id,
+        mediaType: "tv",
+        title: show.name?.trim() || enShow?.name?.trim() || "",
+        year: (show.first_air_date || enShow?.first_air_date || "").slice(0, 4) || null,
+      };
+    }
+  } catch {
+    info = null;
+  }
+
+  infoCache.set(key, { expiresAt: Date.now() + TITLE_CACHE_TTL, value: info });
+  return info;
+}
+
+export async function buildTorrentDisplayName(
+  torrentName: string,
+  imdbId: string | null | undefined,
+): Promise<string> {
+  if (!imdbId) return torrentName;
+  const info = await lookupTmdbInfoByImdbId(imdbId);
+  if (!info || !info.title) return torrentName;
+
+  if (info.mediaType === "movie") {
+    return info.year ? `${info.title} (${info.year})` : info.title;
+  }
+
+  const m = torrentName.match(/S(\d{2})E(\d{2})/i);
+  if (!m) return info.title;
+
+  const { getTmdbSeasonEpisodesInternal } = await import("./tmdb.functions");
+  const season = parseInt(m[1], 10);
+  const episode = parseInt(m[2], 10);
+  const episodes = await getTmdbSeasonEpisodesInternal(info.id, season);
+  const epTitle = episodes.find((e) => e.episodeNum === episode)?.title ?? `Episodul ${episode}`;
+  return `${info.title} — S${m[1]}E${m[2]} — ${epTitle}`;
+}
+
+// ---------------------------------------------------------------------------
 // Căutare IMDb id pornind de la numele tehnic al unei lansări — folosită
 // când torrentul n-a fost descărcat prin site (deci n-avem IMDb id salvat în
 // jurnalul propriu). Extrage un titlu + an aproximativ din numele lansării,
