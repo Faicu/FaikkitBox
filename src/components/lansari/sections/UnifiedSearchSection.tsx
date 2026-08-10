@@ -48,7 +48,6 @@ export function UnifiedSearchSection() {
       watchFilelist: false,
       watchFilelistSeason: false,
       watchTmdb: false,
-      watchPlex: false,
       autoDownload: false,
       autoDownloadQuality: "1080p" as const,
     };
@@ -194,7 +193,6 @@ export function UnifiedSearchSection() {
             watchFilelist: false,
             watchFilelistSeason: false,
             watchTmdb: false,
-            watchPlex: false,
             autoDownload: false,
             autoDownloadQuality: "1080p" as const,
           };

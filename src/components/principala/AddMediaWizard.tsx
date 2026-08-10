@@ -376,7 +376,6 @@ export function AddMediaWizard({
           watchFilelist: true,
           watchFilelistSeason: false,
           watchTmdb: false,
-          watchPlex: false,
           autoDownload: true,
           autoDownloadQuality: quality,
         },

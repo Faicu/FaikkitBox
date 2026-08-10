@@ -68,10 +68,6 @@ export function buildAutoDownloadNotification(
   return { title: `⬇️ ${showTitle} — Descărcare automată`, body: `${quality}: ${bodyName}` };
 }
 
-export function buildPlexNotification(showTitle: string, label: string): PushNotification {
-  return { title: `📺 ${showTitle} — în Plex`, body: label };
-}
-
 // --- Commit-uri GitHub (3 locuri: webhook, plugin de polling, funcție server) —
 // singurul caz din aplicație unde trimiterea e imediată, nu grupată/batch,
 // deci funcția trimite direct, nu doar construiește.

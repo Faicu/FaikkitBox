@@ -17,17 +17,14 @@ export function WatchTogglePanel({
   isAdmin: boolean;
   onChange: (patch: Partial<WatchSettings>) => void;
 }) {
-  const anyEnabled = settings.watchFilelist || settings.watchTmdb || settings.watchPlex;
+  const anyEnabled = settings.watchFilelist || settings.watchTmdb;
   const qualities: Array<"1080p" | "4K" | "4K HDR"> = ["1080p", "4K", "4K HDR"];
 
   function Toggle({
     toggleKey,
     label,
   }: {
-    toggleKey: keyof Pick<
-      WatchSettings,
-      "watchFilelist" | "watchFilelistSeason" | "watchTmdb" | "watchPlex"
-    >;
+    toggleKey: keyof Pick<WatchSettings, "watchFilelist" | "watchFilelistSeason" | "watchTmdb">;
     label: string;
   }) {
     const on = settings[toggleKey] as boolean;
@@ -53,14 +50,10 @@ export function WatchTogglePanel({
         Notificări automate · la fiecare 3 ore
       </div>
 
-      {/* Rând 1: Filelist (admin) + TMDB + Plex */}
+      {/* Rând 1: Filelist (admin) + TMDB */}
       <div className="flex flex-wrap gap-2">
         {isAdmin && <Toggle toggleKey="watchFilelist" label="Torrent nou Filelist" />}
         {mediaType === "tv" && <Toggle toggleKey="watchTmdb" label="Episod nou lansat" />}
-        <Toggle
-          toggleKey="watchPlex"
-          label={mediaType === "tv" ? "Episod nou în Plex" : "Film adăugat în Plex"}
-        />
       </div>
 
       {/* Rând 2: opțiuni Filelist (doar admin) */}
