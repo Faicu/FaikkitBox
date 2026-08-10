@@ -215,9 +215,22 @@ export async function checkAll(force = false): Promise<void> {
               const qualitiesFound = [
                 ...new Set(toNotify.map((t) => detectTorrentQuality(t.name))),
               ].sort((a, b) => ORDER.indexOf(a) - ORDER.indexOf(b));
-              const epLabel = latestAired
-                ? `${epKey(latestAired.season, latestAired.episode)}${latestAired.title ? ` — ${latestAired.title}` : ""}`
-                : "";
+
+              // FileList înlocuiește des episoadele individuale cu un pachet
+              // de sezon complet, la câteva ore după ultimul episod lansat —
+              // torrentul nou găsit poate fi acel pachet, nu neapărat
+              // "ultimul episod cunoscut" (latestAired). Verificăm numele
+              // real al torrentelor găsite, nu presupunem orbește.
+              const { parseSeasonEpisodeFromName } =
+                await import("../../src/lib/torrent-name-parse");
+              const seasonPack = toNotify
+                .map((t) => parseSeasonEpisodeFromName(t.name))
+                .find((p) => p && p.episode === null);
+              const epLabel = seasonPack
+                ? `Sezonul ${seasonPack.season} (pachet complet)`
+                : latestAired
+                  ? `${epKey(latestAired.season, latestAired.episode)}${latestAired.title ? ` — ${latestAired.title}` : ""}`
+                  : "";
               const torrentLabel = epLabel
                 ? `${epLabel}: ${qualitiesFound.join(", ")}`
                 : qualitiesFound.join(", ");

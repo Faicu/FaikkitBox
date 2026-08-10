@@ -6,6 +6,7 @@
 // ---------------------------------------------------------------------------
 
 import { tmdbFetch } from "./tmdb-client";
+import { parseSeasonEpisodeFromName } from "./torrent-name-parse";
 
 interface TmdbFindResponse {
   movie_results?: Array<{ title?: string }>;
@@ -124,15 +125,21 @@ export async function buildTorrentDisplayName(
     return info.year ? `${info.title} (${info.year})` : info.title;
   }
 
-  const m = torrentName.match(/S(\d{2})E(\d{2})/i);
-  if (!m) return info.title;
+  const parsed = parseSeasonEpisodeFromName(torrentName);
+  if (!parsed) return info.title;
+
+  const seasonPad = String(parsed.season).padStart(2, "0");
+  if (parsed.episode === null) {
+    // Pachet de sezon complet (fără Exx în nume) — FileList înlocuiește des
+    // episoadele individuale cu un pachet la câteva ore după ultimul episod
+    // lansat; nu-l etichetăm greșit ca fiind un singur episod.
+    return `${info.title} — Sezonul ${parsed.season} (pachet complet)`;
+  }
 
   const { getTmdbSeasonEpisodesInternal, findEpisodeTitle } = await import("./tmdb.functions");
-  const season = parseInt(m[1], 10);
-  const episode = parseInt(m[2], 10);
-  const episodes = await getTmdbSeasonEpisodesInternal(info.id, season);
-  const epTitle = findEpisodeTitle(episodes, episode);
-  return `${info.title} — S${m[1]}E${m[2]} — ${epTitle}`;
+  const episodes = await getTmdbSeasonEpisodesInternal(info.id, parsed.season);
+  const epTitle = findEpisodeTitle(episodes, parsed.episode);
+  return `${info.title} — S${seasonPad}E${String(parsed.episode).padStart(2, "0")} — ${epTitle}`;
 }
 
 // ---------------------------------------------------------------------------
