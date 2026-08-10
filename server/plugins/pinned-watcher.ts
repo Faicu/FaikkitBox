@@ -215,7 +215,9 @@ export async function checkAll(force = false): Promise<void> {
               const qualitiesFound = [
                 ...new Set(toNotify.map((t) => detectTorrentQuality(t.name))),
               ].sort((a, b) => ORDER.indexOf(a) - ORDER.indexOf(b));
-              const epLabel = latestAired ? epKey(latestAired.season, latestAired.episode) : "";
+              const epLabel = latestAired
+                ? `${epKey(latestAired.season, latestAired.episode)}${latestAired.title ? ` — ${latestAired.title}` : ""}`
+                : "";
               const torrentLabel = epLabel
                 ? `${epLabel}: ${qualitiesFound.join(", ")}`
                 : qualitiesFound.join(", ");
