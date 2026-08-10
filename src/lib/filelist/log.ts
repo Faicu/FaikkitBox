@@ -106,6 +106,18 @@ export const getFilelistDownloadLog = createServerFn({ method: "GET" }).handler(
   },
 );
 
+// Numele de afișat (titlu real RO + sezon/episod), aceeași logică folosită
+// și la notificări (buildTorrentDisplayName) — apelat doar per rând vizibil
+// din UI (nu pentru tot jurnalul deodată), cu cache intern de 1h pe IMDb id.
+export const resolveTorrentDisplayName = createServerFn({ method: "GET" })
+  .validator((data: { torrentName: string; imdb?: string | null }) => data)
+  .handler(async ({ data }): Promise<string> => {
+    const { buildTorrentDisplayName } = await import("../tmdb-title-lookup");
+    return buildTorrentDisplayName(data.torrentName, data.imdb ?? null).catch(
+      () => data.torrentName,
+    );
+  });
+
 export const deleteFilelistLogEntry = createServerFn({ method: "POST" })
   .validator((data: { id: number }) => data)
   .handler(async ({ data }): Promise<{ ok: boolean; qbitDeleted?: boolean }> => {

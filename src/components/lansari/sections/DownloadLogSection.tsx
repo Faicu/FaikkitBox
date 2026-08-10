@@ -1,19 +1,7 @@
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
-import {
-  History,
-  Film,
-  Tv,
-  HardDrive,
-  Zap,
-  ShieldCheck,
-  CheckCircle2,
-  Loader2,
-  Trash2,
-  Captions,
-  OctagonX,
-} from "lucide-react";
+import { History, Film, Tv, CheckCircle2, Loader2, Captions } from "lucide-react";
 import { toast } from "sonner";
 
 import { filelistLogQuery } from "@/lib/queries";
@@ -22,11 +10,12 @@ import {
   backfillSubtitles,
   getBackfillState,
   correctSubtitleForItem,
+  resolveTorrentDisplayName,
 } from "@/lib/filelist.functions";
 import type { FilelistLogEntry } from "@/lib/filelist.functions";
 import { isMovieCategory } from "@/lib/filelist/categories";
-import { formatBytes } from "@/lib/format";
 import { Progress } from "@/components/ui/progress";
+import { DownloadLogEntryDrawer } from "../DownloadLogEntryDrawer";
 import {
   AlertDialog,
   AlertDialogContent,
@@ -37,6 +26,60 @@ import {
   AlertDialogCancel,
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
+
+// ---------------------------------------------------------------------------
+// Rând individual — rezolvă numele de afișat (titlu real RO + sezon/episod)
+// doar pentru rândurile vizibile, nu pentru tot jurnalul deodată.
+// ---------------------------------------------------------------------------
+
+function DownloadLogRow({ entry, onClick }: { entry: FilelistLogEntry; onClick: () => void }) {
+  const nameFn = useServerFn(resolveTorrentDisplayName);
+  const { data: displayName } = useQuery({
+    queryKey: ["torrentDisplayName", entry.id, entry.name, entry.imdb],
+    queryFn: () => nameFn({ data: { torrentName: entry.name, imdb: entry.imdb ?? null } }),
+    staleTime: 60 * 60_000,
+    enabled: !!entry.imdb,
+  });
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-start gap-2.5 py-2 first:pt-0 last:pb-0 text-left hover:bg-muted/40 transition-colors rounded-lg px-1 -mx-1"
+    >
+      <div className="mt-0.5 shrink-0">
+        {isMovieCategory(entry.category) ? (
+          <Film className="h-4 w-4 text-amber-400" />
+        ) : (
+          <Tv className="h-4 w-4 text-blue-400" />
+        )}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="text-sm font-medium leading-tight break-words">
+          {displayName ?? entry.name}
+        </div>
+        <div className="mt-1">
+          {entry.completedAt ? (
+            <span className="flex items-center gap-1 text-[11px] text-emerald-400">
+              <CheckCircle2 className="h-3 w-3" /> Complet —{" "}
+              {new Date(entry.completedAt).toLocaleString("ro-RO", {
+                day: "numeric",
+                month: "short",
+                hour: "2-digit",
+                minute: "2-digit",
+                timeZone: "Europe/Bucharest",
+              })}
+            </span>
+          ) : (
+            <span className="flex items-center gap-1 text-[11px] text-amber-400">
+              <Loader2 className="h-3 w-3 animate-spin" /> În descărcare...
+            </span>
+          )}
+        </div>
+      </div>
+    </button>
+  );
+}
 
 export function DownloadLogSection() {
   const queryClient = useQueryClient();
@@ -49,6 +92,7 @@ export function DownloadLogSection() {
   const [backfilling, setBackfilling] = useState(false);
   const [progress, setProgress] = useState<{ total: number; done: number } | null>(null);
   const [correctingId, setCorrectingId] = useState<number | null>(null);
+  const [selectedEntry, setSelectedEntry] = useState<FilelistLogEntry | null>(null);
   const [pendingDelete, setPendingDelete] = useState<{
     id: number;
     name: string;
@@ -136,6 +180,7 @@ export function DownloadLogSection() {
         toast.warning("Șters din log, dar nu am putut șterge din qBittorrent (poate deja șters)");
     }
     setPendingDelete(null);
+    setSelectedEntry(null);
   }
 
   if (isLoading || !log || log.length === 0) return null;
@@ -171,117 +216,11 @@ export function DownloadLogSection() {
       <div className="rounded-2xl border border-border bg-card p-3">
         <div className="divide-y divide-border/60">
           {log.slice(0, visibleCount).map((e: FilelistLogEntry) => (
-            <div
+            <DownloadLogRow
               key={`${e.id}-${e.downloadedAt}`}
-              className="flex items-start gap-2.5 py-2 first:pt-0 last:pb-0"
-            >
-              <div className="mt-0.5 shrink-0">
-                {isMovieCategory(e.category) ? (
-                  <Film className="h-4 w-4 text-amber-400" />
-                ) : (
-                  <Tv className="h-4 w-4 text-blue-400" />
-                )}
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium leading-tight break-words">{e.name}</div>
-                <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
-                  <span>
-                    {new Date(e.downloadedAt).toLocaleString("ro-RO", {
-                      day: "numeric",
-                      month: "short",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                      timeZone: "Europe/Bucharest",
-                    })}
-                  </span>
-                  <span className="rounded bg-muted px-1.5 py-0.5 font-medium">
-                    {e.categoryName}
-                  </span>
-                  {e.size > 0 && (
-                    <span className="flex items-center gap-0.5">
-                      <HardDrive className="h-3 w-3" /> {formatBytes(e.size)}
-                    </span>
-                  )}
-                  {e.freeleech && (
-                    <span className="flex items-center gap-0.5 rounded bg-yellow-500/15 px-1.5 py-0.5 font-medium text-yellow-400">
-                      <Zap className="h-3 w-3" /> Freeleech
-                    </span>
-                  )}
-                  {e.internal && (
-                    <span className="flex items-center gap-0.5 rounded bg-purple-500/15 px-1.5 py-0.5 font-medium text-purple-400">
-                      <ShieldCheck className="h-3 w-3" /> Internal
-                    </span>
-                  )}
-                </div>
-                <div className="mt-1">
-                  {e.completedAt ? (
-                    <span className="flex items-center gap-1 text-[11px] text-emerald-400">
-                      <CheckCircle2 className="h-3 w-3" /> Complet —{" "}
-                      {new Date(e.completedAt).toLocaleString("ro-RO", {
-                        day: "numeric",
-                        month: "short",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                        timeZone: "Europe/Bucharest",
-                      })}
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-1 text-[11px] text-amber-400">
-                      <Loader2 className="h-3 w-3 animate-spin" /> În descărcare...
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div className="flex shrink-0 items-center gap-0.5">
-                <button
-                  onClick={() => correctOne(e.id, e.name)}
-                  disabled={!e.torrentHash || correctingId === e.id}
-                  className="mt-0.5 rounded-lg p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors disabled:opacity-40"
-                  title={
-                    e.torrentHash
-                      ? "Verifică/corectează subtitrarea română doar pentru acest item"
-                      : "Hash indisponibil — nu pot verifica subtitrarea"
-                  }
-                >
-                  {correctingId === e.id ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Captions className="h-3.5 w-3.5" />
-                  )}
-                </button>
-                {e.completedAt === null ? (
-                  <button
-                    onClick={() =>
-                      setPendingDelete({
-                        id: e.id,
-                        name: e.name,
-                        hasHash: !!e.torrentHash,
-                        isActive: true,
-                      })
-                    }
-                    className="mt-0.5 rounded-lg p-1.5 text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                    title="Oprește descărcarea în curs"
-                  >
-                    <OctagonX className="h-3.5 w-3.5" />
-                  </button>
-                ) : (
-                  <button
-                    onClick={() =>
-                      setPendingDelete({
-                        id: e.id,
-                        name: e.name,
-                        hasHash: !!e.torrentHash,
-                        isActive: false,
-                      })
-                    }
-                    className="mt-0.5 rounded-lg p-1.5 text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                    title={e.torrentHash ? "Șterge din log + qBit + disk" : "Șterge din log"}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                )}
-              </div>
-            </div>
+              entry={e}
+              onClick={() => setSelectedEntry(e)}
+            />
           ))}
         </div>
         {visibleCount < log.length && (
@@ -293,6 +232,23 @@ export function DownloadLogSection() {
           </button>
         )}
       </div>
+
+      {selectedEntry && (
+        <DownloadLogEntryDrawer
+          entry={selectedEntry}
+          onClose={() => setSelectedEntry(null)}
+          correcting={correctingId === selectedEntry.id}
+          onCorrectSubtitle={() => correctOne(selectedEntry.id, selectedEntry.name)}
+          onDelete={() =>
+            setPendingDelete({
+              id: selectedEntry.id,
+              name: selectedEntry.name,
+              hasHash: !!selectedEntry.torrentHash,
+              isActive: selectedEntry.completedAt === null,
+            })
+          }
+        />
+      )}
 
       <AlertDialog open={!!pendingDelete} onOpenChange={(open) => !open && setPendingDelete(null)}>
         <AlertDialogContent>
