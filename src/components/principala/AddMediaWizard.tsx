@@ -729,7 +729,7 @@ export function AddMediaWizard({
                             {(plexFull || plexPartial) && (
                               <span
                                 className={`absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full ${
-                                  plexFull ? "bg-amber-400" : "bg-amber-400/50"
+                                  plexFull ? "bg-emerald-400" : "bg-emerald-400/50"
                                 }`}
                                 title={
                                   plexFull
@@ -792,7 +792,7 @@ export function AddMediaWizard({
                               </span>
                               {inPlex && (
                                 <span
-                                  className="flex shrink-0 items-center gap-0.5 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-400"
+                                  className="flex shrink-0 items-center gap-0.5 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400"
                                   title="Deja în bibliotecă Plex"
                                 >
                                   <CheckCircle2 className="h-2.5 w-2.5" /> Plex
