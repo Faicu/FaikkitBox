@@ -1,9 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { readFile, writeFile, mkdir } from "node:fs/promises";
-import { dirname } from "node:path";
-import path from "node:path";
 import { randomUUID } from "node:crypto";
 
 export type SpeedtestHistoryEntry = {
@@ -32,12 +29,6 @@ export type SpeedtestResult = {
 };
 
 export type SpeedtestRunResponse = ({ ok: true } & SpeedtestResult) | { ok: false; error: string };
-
-function cacheFilePath() {
-  return (
-    process.env.SPEEDTEST_CACHE_FILE ?? path.join(process.cwd(), "data", "speedtest-last.json")
-  );
-}
 
 type BinaryConfig = {
   path: string;
@@ -75,21 +66,6 @@ function speedtestConfigs(): BinaryConfig[] {
     { path: "/usr/bin/speedtest-cli", args: pyArgs, parser: parsePythonCliJson },
     { path: "/usr/local/bin/speedtest-cli", args: pyArgs, parser: parsePythonCliJson },
   ];
-}
-
-async function readCache(): Promise<SpeedtestResult | null> {
-  try {
-    const raw = await readFile(cacheFilePath(), "utf8");
-    return JSON.parse(raw) as SpeedtestResult;
-  } catch {
-    return null;
-  }
-}
-
-async function writeCache(result: SpeedtestResult) {
-  const file = cacheFilePath();
-  await mkdir(dirname(file), { recursive: true });
-  await writeFile(file, JSON.stringify(result), "utf8");
 }
 
 function parseOoklaJson(raw: string): SpeedtestResult {
@@ -192,7 +168,7 @@ async function readLastFromHistory(): Promise<SpeedtestResult | null> {
 }
 
 export const getLastSpeedtest = createServerFn({ method: "GET" }).handler(async () => {
-  return (await readCache()) ?? (await readLastFromHistory());
+  return await readLastFromHistory();
 });
 
 export const getSpeedtestHistory = createServerFn({ method: "GET" }).handler(
@@ -247,7 +223,6 @@ export const runSpeedtest = createServerFn({ method: "POST" }).handler(
           env: { ...process.env, PATH: `${process.env.PATH ?? ""}:/usr/local/bin:/usr/bin:/bin` },
         });
         const result = parser(stdout);
-        await writeCache(result);
         await saveToHistory(result);
         return { ok: true, ...result };
       } catch (e) {
