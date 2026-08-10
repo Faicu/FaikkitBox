@@ -127,14 +127,11 @@ export function AddMediaWizard({
   const [tvEpisode, setTvEpisode] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [doneMessage, setDoneMessage] = useState<string | null>(null);
-  // Numerele episoadelor din sezonul ales care sunt deja în Plex — populat
-  // odată cu alegerea sezonului (selectSeason), ca să apară direct în lista
-  // de episoade, nu doar la finalul fluxului. Cheia ține evidența pentru ce
-  // sezon sunt încărcate, ca să nu arătăm date vechi cât se încarcă cele noi.
-  const [plexSeasonEpisodes, setPlexSeasonEpisodes] = useState<{
-    season: number;
-    nums: number[];
-  } | null>(null);
+  // Numerele episoadelor deja în Plex, per sezon — adus dintr-o dată pentru
+  // TOATE sezoanele imediat ce serialul e identificat (selectItem), nu doar
+  // pentru sezonul ales, ca badge-ul "Plex" să apară și pe butoanele de
+  // sezon, nu doar în lista de episoade a sezonului curent selectat.
+  const [plexBySeason, setPlexBySeason] = useState<Map<number, number[]>>(new Map());
   // Titlurile episoadelor sezonului ales (RO, cu fallback EN din server) —
   // cheia ține evidența pentru ce sezon sunt încărcate, ca să nu arătăm
   // titluri vechi cât timp se încarcă cele noi.
@@ -171,7 +168,7 @@ export function AddMediaWizard({
     setTvEpisode(null);
     setBusy(false);
     setDoneMessage(null);
-    setPlexSeasonEpisodes(null);
+    setPlexBySeason(new Map());
     setEpisodeTitles(null);
     setLoadingEpisodeTitles(false);
     setSelectedTorrentId(null);
@@ -179,27 +176,22 @@ export function AddMediaWizard({
     setConfirmSeries(null);
   }
 
-  // Încarcă titlurile episoadelor + statusul Plex al sezonului ales, în
-  // paralel — pornit odată cu alegerea sezonului, nu abia la Continuă, ca
-  // lista de episoade să arate deja ce există în Plex când utilizatorul
-  // ajunge acolo (nu doar ce e disponibil pe Filelist).
+  // Încarcă titlurile episoadelor sezonului ales. Statusul Plex e deja
+  // disponibil pentru toate sezoanele deodată (prefetch în selectItem), nu
+  // mai e nevoie să fie reluat aici.
   async function selectSeason(seasonNumber: number) {
     setTvSeason(seasonNumber);
     setTvEpisode(null);
     if (!selected || !checkResult) return;
     setLoadingEpisodeTitles(true);
-    const [episodesResult, plexResult] = await Promise.allSettled([
-      episodesFn({ data: { tmdbId: selected.id, seasonNum: seasonNumber } }),
-      plexSeasonFn({ data: { showTitle: checkResult.originalTitle, season: seasonNumber } }),
-    ]);
-    setEpisodeTitles({
-      season: seasonNumber,
-      episodes: episodesResult.status === "fulfilled" ? episodesResult.value : [],
-    });
-    setPlexSeasonEpisodes({
-      season: seasonNumber,
-      nums: plexResult.status === "fulfilled" ? plexResult.value.map((e) => e.num) : [],
-    });
+    try {
+      const episodes = await episodesFn({
+        data: { tmdbId: selected.id, seasonNum: seasonNumber },
+      });
+      setEpisodeTitles({ season: seasonNumber, episodes });
+    } catch {
+      setEpisodeTitles({ season: seasonNumber, episodes: [] });
+    }
     setLoadingEpisodeTitles(false);
   }
 
@@ -266,9 +258,23 @@ export function AddMediaWizard({
       // Pentru seriale, "există în Plex" e la nivel de titlu — nu spune nimic
       // despre sezonul/episodul cerut (un serial în producție poate avea
       // sezoane vechi complete și unul nou parțial). Mergem mereu la alegerea
-      // scopului; verificarea Plex per-sezon/episod se face după alegere,
-      // în proceedToResult().
+      // scopului; verificarea Plex per-sezon/episod (pentru TOATE sezoanele
+      // deodată, ca badge-ul "Plex" să apară deja pe butoanele de sezon) se
+      // face aici, înainte de a afișa pasul de scop.
       if (item.mediaType === "tv") {
+        if (seasons.length > 0) {
+          const plexResults = await Promise.allSettled(
+            seasons.map((s) =>
+              plexSeasonFn({ data: { showTitle: originalTitle, season: s.seasonNumber } }),
+            ),
+          );
+          const map = new Map<number, number[]>();
+          seasons.forEach((s, i) => {
+            const r = plexResults[i];
+            map.set(s.seasonNumber, r.status === "fulfilled" ? r.value.map((e) => e.num) : []);
+          });
+          setPlexBySeason(map);
+        }
         setStep("tv-scope");
       } else {
         setStep("result");
@@ -461,11 +467,9 @@ export function AddMediaWizard({
           .filter((sn) => !seriesPacks.some((p) => p.season === sn))
       : [];
 
-  // Numerele episoadelor deja în Plex pentru sezonul curent ales — null cât
-  // timp se încarcă sau dacă e alt sezon decât cel afișat acum (evită date
-  // vechi/inconsistente).
-  const plexNumsForSeason =
-    plexSeasonEpisodes?.season === tvSeason ? plexSeasonEpisodes.nums : null;
+  // Numerele episoadelor deja în Plex pentru sezonul curent ales — prefetch-uite
+  // pentru toate sezoanele deodată în selectItem().
+  const plexNumsForSeason = tvSeason !== null ? (plexBySeason.get(tvSeason) ?? null) : null;
 
   // Pentru filme, "există în Plex" e suficient (verificare atomică). Pentru
   // seriale, folosim strict verificarea per-sezon/episod — nu
@@ -509,7 +513,6 @@ export function AddMediaWizard({
     }
     if (step === "result") {
       if (isTv) {
-        setPlexSeasonEpisodes(null);
         setStep("tv-scope");
         return;
       }
@@ -520,7 +523,7 @@ export function AddMediaWizard({
     }
   }
 
-  // Statusul Plex al sezonului ales e deja încărcat din selectSeason() — aici
+  // Statusul Plex al sezonului ales e deja încărcat din selectItem() — aici
   // doar trecem la pasul de rezultat.
   function proceedToResult() {
     setStep("result");
@@ -707,6 +710,9 @@ export function AddMediaWizard({
                       {checkResult.seasons.map((s) => {
                         const g = seasonGroups.find((sg) => sg.seasonNum === s.seasonNumber);
                         const available = !!g && hasAny(g.byQuality);
+                        const plexNums = plexBySeason.get(s.seasonNumber) ?? [];
+                        const plexFull = plexNums.length >= s.episodeCount && s.episodeCount > 0;
+                        const plexPartial = plexNums.length > 0 && !plexFull;
                         return (
                           <button
                             key={s.seasonNumber}
@@ -721,6 +727,18 @@ export function AddMediaWizard({
                           >
                             {available && (
                               <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-emerald-400" />
+                            )}
+                            {(plexFull || plexPartial) && (
+                              <span
+                                className={`absolute -left-0.5 -top-0.5 h-2 w-2 rounded-full ${
+                                  plexFull ? "bg-amber-400" : "bg-amber-400/50"
+                                }`}
+                                title={
+                                  plexFull
+                                    ? "Sezon complet în Plex"
+                                    : `${plexNums.length}/${s.episodeCount} episoade în Plex`
+                                }
+                              />
                             )}
                             <div className="leading-tight">
                               S{String(s.seasonNumber).padStart(2, "0")}
