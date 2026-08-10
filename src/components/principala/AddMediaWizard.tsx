@@ -127,11 +127,14 @@ export function AddMediaWizard({
   const [tvEpisode, setTvEpisode] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [doneMessage, setDoneMessage] = useState<string | null>(null);
-  // Numerele episoadelor din sezonul ales care sunt deja în Plex — null
-  // înainte de verificare (sau când scopul e "serial complet", unde nu
-  // verificăm per-sezon). Populat în proceedToResult().
-  const [plexSeasonEpisodes, setPlexSeasonEpisodes] = useState<number[] | null>(null);
-  const [checkingPlexSeason, setCheckingPlexSeason] = useState(false);
+  // Numerele episoadelor din sezonul ales care sunt deja în Plex — populat
+  // odată cu alegerea sezonului (selectSeason), ca să apară direct în lista
+  // de episoade, nu doar la finalul fluxului. Cheia ține evidența pentru ce
+  // sezon sunt încărcate, ca să nu arătăm date vechi cât se încarcă cele noi.
+  const [plexSeasonEpisodes, setPlexSeasonEpisodes] = useState<{
+    season: number;
+    nums: number[];
+  } | null>(null);
   // Titlurile episoadelor sezonului ales (RO, cu fallback EN din server) —
   // cheia ține evidența pentru ce sezon sunt încărcate, ca să nu arătăm
   // titluri vechi cât timp se încarcă cele noi.
@@ -169,7 +172,6 @@ export function AddMediaWizard({
     setBusy(false);
     setDoneMessage(null);
     setPlexSeasonEpisodes(null);
-    setCheckingPlexSeason(false);
     setEpisodeTitles(null);
     setLoadingEpisodeTitles(false);
     setSelectedTorrentId(null);
@@ -177,23 +179,28 @@ export function AddMediaWizard({
     setConfirmSeries(null);
   }
 
-  // Încarcă titlurile episoadelor sezonului ales (folosit la alegerea unui
-  // episod anume și la afișarea titlului episodului în rezultat) — pornit
-  // odată cu alegerea sezonului, nu abia la Continuă, ca lista de episoade
-  // să aibă deja titlurile când utilizatorul ajunge acolo.
+  // Încarcă titlurile episoadelor + statusul Plex al sezonului ales, în
+  // paralel — pornit odată cu alegerea sezonului, nu abia la Continuă, ca
+  // lista de episoade să arate deja ce există în Plex când utilizatorul
+  // ajunge acolo (nu doar ce e disponibil pe Filelist).
   async function selectSeason(seasonNumber: number) {
     setTvSeason(seasonNumber);
     setTvEpisode(null);
-    if (!selected) return;
+    if (!selected || !checkResult) return;
     setLoadingEpisodeTitles(true);
-    try {
-      const episodes = await episodesFn({ data: { tmdbId: selected.id, seasonNum: seasonNumber } });
-      setEpisodeTitles({ season: seasonNumber, episodes });
-    } catch {
-      setEpisodeTitles({ season: seasonNumber, episodes: [] });
-    } finally {
-      setLoadingEpisodeTitles(false);
-    }
+    const [episodesResult, plexResult] = await Promise.allSettled([
+      episodesFn({ data: { tmdbId: selected.id, seasonNum: seasonNumber } }),
+      plexSeasonFn({ data: { showTitle: checkResult.originalTitle, season: seasonNumber } }),
+    ]);
+    setEpisodeTitles({
+      season: seasonNumber,
+      episodes: episodesResult.status === "fulfilled" ? episodesResult.value : [],
+    });
+    setPlexSeasonEpisodes({
+      season: seasonNumber,
+      nums: plexResult.status === "fulfilled" ? plexResult.value.map((e) => e.num) : [],
+    });
+    setLoadingEpisodeTitles(false);
   }
 
   function handleClose() {
@@ -454,22 +461,28 @@ export function AddMediaWizard({
           .filter((sn) => !seriesPacks.some((p) => p.season === sn))
       : [];
 
+  // Numerele episoadelor deja în Plex pentru sezonul curent ales — null cât
+  // timp se încarcă sau dacă e alt sezon decât cel afișat acum (evită date
+  // vechi/inconsistente).
+  const plexNumsForSeason =
+    plexSeasonEpisodes?.season === tvSeason ? plexSeasonEpisodes.nums : null;
+
   // Pentru filme, "există în Plex" e suficient (verificare atomică). Pentru
-  // seriale, folosim strict verificarea per-sezon/episod făcută la
-  // proceedToResult() — nu checkResult.plexFound (la nivel de titlu, ar
-  // bloca greșit un serial în producție care are doar sezoane vechi complete).
+  // seriale, folosim strict verificarea per-sezon/episod — nu
+  // checkResult.plexFound (la nivel de titlu, ar bloca greșit un serial în
+  // producție care are doar sezoane vechi complete).
   const plexSeasonComplete =
     isTv &&
     tvScope === "season" &&
-    plexSeasonEpisodes !== null &&
+    plexNumsForSeason !== null &&
     !!selectedSeasonMeta &&
-    plexSeasonEpisodes.length >= selectedSeasonMeta.episodeCount;
+    plexNumsForSeason.length >= selectedSeasonMeta.episodeCount;
   const plexEpisodeDone =
     isTv &&
     tvScope === "episode" &&
-    plexSeasonEpisodes !== null &&
+    plexNumsForSeason !== null &&
     tvEpisode !== null &&
-    plexSeasonEpisodes.includes(tvEpisode);
+    plexNumsForSeason.includes(tvEpisode);
   const alreadyInPlex =
     (!isTv && !!checkResult?.plexFound) || plexSeasonComplete || plexEpisodeDone;
 
@@ -507,27 +520,9 @@ export function AddMediaWizard({
     }
   }
 
-  // Verifică Plex strict pentru sezonul ales (nu tot serialul) înainte de a
-  // trece la rezultat — un serial în producție poate avea sezoane vechi
-  // complete în Plex și sezonul curent doar parțial, deci "serialul există
-  // în Plex" (verificare de titlu, la pasul anterior) nu spune nimic despre
-  // sezonul/episodul cerut acum.
-  async function proceedToResult() {
-    if ((tvScope === "season" || tvScope === "episode") && tvSeason !== null && checkResult) {
-      setCheckingPlexSeason(true);
-      try {
-        const eps = await plexSeasonFn({
-          data: { showTitle: checkResult.originalTitle, season: tvSeason },
-        });
-        setPlexSeasonEpisodes(eps.map((e) => e.num));
-      } catch {
-        setPlexSeasonEpisodes([]);
-      } finally {
-        setCheckingPlexSeason(false);
-      }
-    } else {
-      setPlexSeasonEpisodes(null);
-    }
+  // Statusul Plex al sezonului ales e deja încărcat din selectSeason() — aici
+  // doar trecem la pasul de rezultat.
+  function proceedToResult() {
     setStep("result");
   }
 
@@ -766,6 +761,7 @@ export function AddMediaWizard({
                                 t4kHdr: [],
                               },
                             );
+                          const inPlex = plexNumsForSeason?.includes(ep) ?? false;
                           const epTitle =
                             episodeTitles?.season === tvSeason
                               ? findEpisodeTitle(episodeTitles.episodes, ep)
@@ -780,7 +776,6 @@ export function AddMediaWizard({
                                   ? "border-primary bg-primary/15 text-primary"
                                   : "border-border bg-muted/40 text-muted-foreground hover:bg-muted/60"
                               }`}
-                              title={available ? "Are deja torrent pe Filelist" : undefined}
                             >
                               <span className="shrink-0 tabular-nums">
                                 E{String(ep).padStart(2, "0")}
@@ -788,8 +783,19 @@ export function AddMediaWizard({
                               <span className="min-w-0 flex-1 truncate">
                                 {epTitle ?? `Episodul ${ep}`}
                               </span>
+                              {inPlex && (
+                                <span
+                                  className="flex shrink-0 items-center gap-0.5 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-400"
+                                  title="Deja în bibliotecă Plex"
+                                >
+                                  <CheckCircle2 className="h-2.5 w-2.5" /> Plex
+                                </span>
+                              )}
                               {available && (
-                                <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-400" />
+                                <span
+                                  className="h-2 w-2 shrink-0 rounded-full bg-emerald-400"
+                                  title="Are deja torrent pe Filelist"
+                                />
                               )}
                             </button>
                           );
@@ -804,12 +810,12 @@ export function AddMediaWizard({
                   disabled={
                     (tvScope === "season" && tvSeason === null) ||
                     (tvScope === "episode" && (tvSeason === null || tvEpisode === null)) ||
-                    checkingPlexSeason
+                    loadingEpisodeTitles
                   }
                   onClick={proceedToResult}
                   className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-40"
                 >
-                  {checkingPlexSeason && <Loader2 className="h-4 w-4 animate-spin" />}
+                  {loadingEpisodeTitles && <Loader2 className="h-4 w-4 animate-spin" />}
                   Continuă
                 </button>
               </div>
@@ -852,10 +858,10 @@ export function AddMediaWizard({
                       {isTv &&
                         tvScope === "season" &&
                         selectedSeasonMeta &&
-                        plexSeasonEpisodes !== null &&
-                        plexSeasonEpisodes.length > 0 && (
+                        plexNumsForSeason !== null &&
+                        plexNumsForSeason.length > 0 && (
                           <div className="rounded-xl border border-border bg-card p-3 text-xs text-muted-foreground">
-                            {plexSeasonEpisodes.length}/{selectedSeasonMeta.episodeCount} episoade
+                            {plexNumsForSeason.length}/{selectedSeasonMeta.episodeCount} episoade
                             deja în Plex — descarci pachetul complet de sezon oricum, ca să prinzi
                             și episoadele lipsă/noi.
                           </div>
