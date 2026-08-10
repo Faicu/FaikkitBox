@@ -19,6 +19,7 @@ import {
   isMovieCategory,
 } from "./categories";
 import { qbitLogin, qbitEnsureCookie, resetQbitCookie, qbitGet } from "../qbit-client";
+import { detectTorrentQuality } from "../torrent-quality";
 import {
   readDownloadLog,
   readAllDownloadLogEntries,
@@ -171,9 +172,11 @@ async function pollUntilComplete(
             .catch(() => torrentName)
             .then((displayName) =>
               import("../activity-log").then(({ logActivity }) =>
-                logActivity("torrent_complete", `Torrent descărcat complet: ${displayName}`, {
-                  torrentId,
-                }),
+                logActivity(
+                  "torrent_complete",
+                  `Torrent descărcat complet: [${detectTorrentQuality(torrentName)}] ${displayName}`,
+                  { torrentId },
+                ),
               ),
             )
             .catch(() => {});
@@ -707,6 +710,7 @@ async function downloadFilelistCore(
     const catName = params.categoryName || CATEGORY_NAMES[catId] || `Cat ${catId}`;
 
     if (!params.skipLog) {
+      const quality = detectTorrentQuality(params.torrentName);
       import("../tmdb-title-lookup")
         .then(({ buildTorrentDisplayName }) =>
           buildTorrentDisplayName(params.torrentName, params.imdb),
@@ -717,8 +721,8 @@ async function downloadFilelistCore(
             logActivity(
               "torrent_added",
               params.skipLog === false
-                ? `Torrent adăugat: ${displayName}`
-                : `Auto-descărcat: ${displayName}`,
+                ? `Torrent adăugat: [${quality}] ${displayName}`
+                : `Auto-descărcat: [${quality}] ${displayName}`,
               { category: catName, savePath, size: params.size },
             ),
           ),

@@ -35,7 +35,12 @@ import {
 } from "@/components/ui/alert-dialog";
 import { DownloadConfirmDialog } from "@/components/lansari/DownloadConfirmDialog";
 import { pinnedItemsQuery } from "@/lib/queries";
-import { searchTmdb, getTmdbDetails, getTmdbSeasonEpisodes } from "@/lib/tmdb.functions";
+import {
+  searchTmdb,
+  getTmdbDetails,
+  getTmdbSeasonEpisodes,
+  findEpisodeTitle,
+} from "@/lib/tmdb.functions";
 import type { TmdbEpisode } from "@/lib/tmdb.functions";
 import type { TmdbSearchResult } from "@/lib/tmdb.functions";
 import { checkPlexHasTitle, getPlexEpisodesInSeason } from "@/lib/services.functions";
@@ -764,7 +769,7 @@ export function AddMediaWizard({
                             );
                           const epTitle =
                             episodeTitles?.season === tvSeason
-                              ? episodeTitles.episodes.find((e) => e.episodeNum === ep)?.title
+                              ? findEpisodeTitle(episodeTitles.episodes, ep)
                               : undefined;
                           return (
                             <button
@@ -827,8 +832,7 @@ export function AddMediaWizard({
                   }
                   subtitle={
                     isTv && tvScope === "episode" && episodeTitles?.season === tvSeason && tvEpisode
-                      ? (episodeTitles.episodes.find((e) => e.episodeNum === tvEpisode)?.title ??
-                        checkResult.originalTitle)
+                      ? findEpisodeTitle(episodeTitles.episodes, tvEpisode)
                       : checkResult.originalTitle + (selected.year ? ` · ${selected.year}` : "")
                   }
                 />

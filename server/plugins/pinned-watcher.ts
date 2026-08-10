@@ -53,17 +53,6 @@ async function getTmdbFilelistHints(
   }
 }
 
-function detectTorrentQuality(name: string): string {
-  const n = name.toLowerCase();
-  const is4k = /\b(4k|2160p)\b/.test(n);
-  const isHdr = /\b(dovi|hdr10|hdr|hlg)\b/.test(n);
-  if (is4k && isHdr) return "4K HDR";
-  if (is4k) return "4K";
-  if (/\b1080p\b/.test(n)) return "1080p";
-  if (/\b720p\b/.test(n)) return "720p";
-  return "SD";
-}
-
 function epKey(season: number, episode: number): string {
   return `S${String(season).padStart(2, "0")}E${String(episode).padStart(2, "0")}`;
 }
@@ -115,6 +104,7 @@ export async function checkAll(force = false): Promise<void> {
       await import("../../src/lib/filelist.functions");
     const { getPlexEpisodesInSeasonInternal, checkPlexHasTitleInternal } =
       await import("../../src/lib/services.functions");
+    const { detectTorrentQuality } = await import("../../src/lib/torrent-quality");
 
     const db = getDb();
 

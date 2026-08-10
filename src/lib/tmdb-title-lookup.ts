@@ -127,11 +127,11 @@ export async function buildTorrentDisplayName(
   const m = torrentName.match(/S(\d{2})E(\d{2})/i);
   if (!m) return info.title;
 
-  const { getTmdbSeasonEpisodesInternal } = await import("./tmdb.functions");
+  const { getTmdbSeasonEpisodesInternal, findEpisodeTitle } = await import("./tmdb.functions");
   const season = parseInt(m[1], 10);
   const episode = parseInt(m[2], 10);
   const episodes = await getTmdbSeasonEpisodesInternal(info.id, season);
-  const epTitle = episodes.find((e) => e.episodeNum === episode)?.title ?? `Episodul ${episode}`;
+  const epTitle = findEpisodeTitle(episodes, episode);
   return `${info.title} — S${m[1]}E${m[2]} — ${epTitle}`;
 }
 

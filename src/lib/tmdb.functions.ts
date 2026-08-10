@@ -225,6 +225,14 @@ export interface TmdbEpisode {
   aired: boolean;
 }
 
+// Găsește titlul unui episod dintr-o listă deja încărcată (getTmdbSeasonEpisodes*)
+// — sursă unică, folosită atât în wizard-ul "Adaugă film/serial" (AddMediaWizard)
+// cât și în buildTorrentDisplayName (tmdb-title-lookup.ts, pentru notificări),
+// ca să nu se repete același `.find(...) ?? fallback` în ambele locuri.
+export function findEpisodeTitle(episodes: TmdbEpisode[], episodeNum: number): string {
+  return episodes.find((e) => e.episodeNum === episodeNum)?.title ?? `Episodul ${episodeNum}`;
+}
+
 // TMDB, când nu are o traducere RO reală pentru un episod, nu întoarce câmp
 // gol — întoarce un placeholder generic "Episodul {N}" (autogenerat, în
 // funcție de limba cerută). E indistigabil de un titlu real doar uitându-te
