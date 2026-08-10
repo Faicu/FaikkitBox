@@ -245,21 +245,39 @@ export async function getTmdbSeasonEpisodesInternal(
 ): Promise<TmdbEpisode[]> {
   try {
     const path = `/tv/${tmdbId}/season/${seasonNum}`;
-    const season = await tmdbFetch<TmdbApiSeason>(`${path}?language=ro-RO`);
+    // Cache-bust (_=timestamp) — CDN-ul TMDB ține cache pe URL exact, iar un
+    // episod aterizat chiar azi (titlu adăugat abia după difuzare) poate
+    // rămâne cu placeholder generic minute/ore bune după ce TMDB chiar are
+    // deja titlul real, dacă lovim un răspuns cache-uit mai vechi. Confirmat
+    // reproductibil: același request fără cache-bust întorcea "Episode 8" în
+    // loc de titlul real "The Treasons at Tumbleton", la câteva ore după
+    // difuzare (House of the Dragon S03E08, 2026-08-09).
+    const bust = `_=${Date.now()}`;
+    const season = await tmdbFetch<TmdbApiSeason>(`${path}?language=ro-RO&${bust}`);
     // TMDB nu are titluri RO pentru toate episoadele (mai ales lansări
     // recente) — cădem pe engleză doar pentru cele fără traducere reală,
     // nu pentru tot sezonul, ca să nu pierdem degeaba titlurile RO existente.
     const missingRo = (season.episodes ?? []).some((e) =>
       isGenericEpisodePlaceholder(e.name, e.episode_number),
     );
-    const seasonEn = missingRo ? await tmdbFetch<TmdbApiSeason>(path).catch(() => null) : null;
+    const seasonEn = missingRo
+      ? await tmdbFetch<TmdbApiSeason>(`${path}?${bust}`).catch(() => null)
+      : null;
     const enByNum = new Map((seasonEn?.episodes ?? []).map((e) => [e.episode_number, e.name]));
 
     const todayStr = new Date().toISOString().slice(0, 10);
     return (season.episodes ?? []).map((e) => {
       const airDate = e.air_date ?? null;
+      const enName = enByNum.get(e.episode_number)?.trim();
+      // Dacă și titlul englez e tot un placeholder generic ("Episode 8" —
+      // TMDB întoarce mereu placeholder-ul în limba cerută, nu doar în RO),
+      // preferăm varianta noastră curată în română, nu textul englez brut.
+      const enIsGeneric =
+        enName && new RegExp(`^episode\\s*${e.episode_number}$`, "i").test(enName);
       const title = isGenericEpisodePlaceholder(e.name, e.episode_number)
-        ? (enByNum.get(e.episode_number)?.trim() ?? `Episodul ${e.episode_number}`)
+        ? enName && !enIsGeneric
+          ? enName
+          : `Episodul ${e.episode_number}`
         : e.name!.trim();
       return {
         episodeNum: Number(e.episode_number),
