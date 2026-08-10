@@ -205,6 +205,13 @@ export function AddMediaWizard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialItem?.id, initialItem?.mediaType]);
 
+  // Alegerea manuală de torrent e legată de o listă de candidați anume — dacă
+  // se schimbă calitatea, scopul sau sezonul/episodul ales, lista se schimbă
+  // și alegerea veche nu mai are sens (cade înapoi pe "cel mai bun" automat).
+  useEffect(() => {
+    setSelectedTorrentId(null);
+  }, [quality, tvScope, tvSeason, tvEpisode]);
+
   function onQueryChange(value: string) {
     setQuery(value);
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -411,11 +418,14 @@ export function AddMediaWizard({
   const seasonGroups = checkResult ? groupTorrentsBySeasonEpisode(checkResult.torrents) : [];
   const selectedSeasonGroup = seasonGroups.find((g) => g.seasonNum === tvSeason) ?? null;
   const selectedSeasonMeta = checkResult?.seasons.find((s) => s.seasonNumber === tvSeason) ?? null;
+  // Un sezon cu episodeCount 0 (anunțat, dar netransmis încă) nu poate fi
+  // niciodată "complet" — fără garda asta, 0 episoade în Plex >= 0 episoade
+  // TMDB ar da fals pozitiv.
+  const isSeasonCompleteInPlex = (seasonNumber: number, episodeCount: number) =>
+    episodeCount > 0 && (plexBySeason.get(seasonNumber)?.length ?? 0) >= episodeCount;
   const plexCompleteSeasonsCount =
-    checkResult?.seasons.filter((s) => {
-      const nums = plexBySeason.get(s.seasonNumber) ?? [];
-      return nums.length >= s.episodeCount && s.episodeCount > 0;
-    }).length ?? 0;
+    checkResult?.seasons.filter((s) => isSeasonCompleteInPlex(s.seasonNumber, s.episodeCount))
+      .length ?? 0;
 
   // Rezultatul concret de arătat la pasul final, în funcție de tip și scop —
   // lista completă de candidați (nu doar cel mai bun), ca adminul să poată
@@ -448,10 +458,6 @@ export function AddMediaWizard({
     episodeMatches.find((t) => t.id === selectedTorrentId) ?? bestOf(episodeMatches);
   // Sezoanele deja complete în Plex nu se mai propun la descărcare — nici ca
   // pachet disponibil, nici ca "lipsă" (nu lipsesc, sunt deja deținute).
-  const isSeasonCompleteInPlex = (seasonNumber: number, episodeCount: number) => {
-    const nums = plexBySeason.get(seasonNumber) ?? [];
-    return episodeCount > 0 && nums.length >= episodeCount;
-  };
   const seriesPacks =
     isTv && tvScope === "series" && checkResult
       ? checkResult.seasons
@@ -482,17 +488,25 @@ export function AddMediaWizard({
   const plexSeasonComplete =
     isTv &&
     tvScope === "season" &&
-    plexNumsForSeason !== null &&
     !!selectedSeasonMeta &&
-    plexNumsForSeason.length >= selectedSeasonMeta.episodeCount;
+    isSeasonCompleteInPlex(selectedSeasonMeta.seasonNumber, selectedSeasonMeta.episodeCount);
   const plexEpisodeDone =
     isTv &&
     tvScope === "episode" &&
     plexNumsForSeason !== null &&
     tvEpisode !== null &&
     plexNumsForSeason.includes(tvEpisode);
+  const plexSeriesComplete =
+    isTv &&
+    tvScope === "series" &&
+    !!checkResult &&
+    checkResult.seasons.length > 0 &&
+    checkResult.seasons.every((s) => isSeasonCompleteInPlex(s.seasonNumber, s.episodeCount));
   const alreadyInPlex =
-    (!isTv && !!checkResult?.plexFound) || plexSeasonComplete || plexEpisodeDone;
+    (!isTv && !!checkResult?.plexFound) ||
+    plexSeasonComplete ||
+    plexEpisodeDone ||
+    plexSeriesComplete;
 
   const showQualityAndAction = !!checkResult && !alreadyInPlex;
 
@@ -513,16 +527,21 @@ export function AddMediaWizard({
       setTvScope("series");
       setTvSeason(null);
       setTvEpisode(null);
+      setPlexBySeason(new Map());
+      setEpisodeTitles(null);
+      setSelectedTorrentId(null);
       return;
     }
     if (step === "result") {
       if (isTv) {
         setStep("tv-scope");
+        setSelectedTorrentId(null);
         return;
       }
       setStep("search");
       setSelected(null);
       setCheckResult(null);
+      setSelectedTorrentId(null);
       return;
     }
   }
@@ -762,6 +781,10 @@ export function AddMediaWizard({
                           <div key={i} className="h-11 animate-pulse rounded-lg bg-muted/40" />
                         ))}
                       </div>
+                    ) : selectedSeasonMeta.episodeCount === 0 ? (
+                      <div className="rounded-xl border border-border bg-card p-3 text-sm text-muted-foreground">
+                        Nu are încă niciun episod anunțat cu număr — alege alt sezon.
+                      </div>
                     ) : (
                       <div className="max-h-56 space-y-1.5 overflow-y-auto pr-0.5">
                         {Array.from(
@@ -852,6 +875,7 @@ export function AddMediaWizard({
                     {isTv &&
                       tvScope === "episode" &&
                       `Episodul S${String(tvSeason).padStart(2, "0")}E${String(tvEpisode).padStart(2, "0")} e deja în Plex`}
+                    {isTv && tvScope === "series" && "Toate sezoanele sunt deja complete în Plex"}
                   </div>
                 ) : (
                   showQualityAndAction && (
