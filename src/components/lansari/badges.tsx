@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import {
   CheckCircle2,
   XCircle,
@@ -31,9 +32,10 @@ export function TorrentPickerDialog({
   onPick: (t: FilelistTorrent) => void;
   onCancel: () => void;
 }) {
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+      style={{ pointerEvents: "auto" }}
       onClick={onCancel}
     >
       <div
@@ -87,7 +89,8 @@ export function TorrentPickerDialog({
           Anulează
         </button>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
