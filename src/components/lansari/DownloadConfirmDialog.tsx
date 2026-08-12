@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { Download, Users, Zap, HardDrive, ShieldCheck, ExternalLink, Info } from "lucide-react";
 
 import type { FilelistTorrent } from "@/lib/filelist.functions";
@@ -64,7 +65,7 @@ export function DownloadConfirmDialog({
   const [showInfo, setShowInfo] = useState(false);
   const infoText = matchInfoText(torrent);
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
       onClick={onCancel}
@@ -152,6 +153,7 @@ export function DownloadConfirmDialog({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
