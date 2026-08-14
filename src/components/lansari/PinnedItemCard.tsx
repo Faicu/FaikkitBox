@@ -98,7 +98,10 @@ export function PinnedItemCard({
       : latestSeasonFromTmdb;
   const showTitleForPlex = item.originalTitle || countdown?.showName || item.title;
 
-  const torrents = filelistData?.status === "ok" ? filelistData.torrents : [];
+  // Doar torrenturi cu ID IMDb confirmat de Filelist — cele găsite doar prin
+  // potrivire de text (fără IMDb pe Filelist) nu apar la butoanele de calitate.
+  const torrents =
+    filelistData?.status === "ok" ? filelistData.torrents.filter((t) => t.matchedByImdb) : [];
   // Sezoanele verificate în Plex pentru badge-ul principal vin din TMDB, nu
   // din Filelist — independent de starea "Mai multe detalii" a cardului.
   const allSeasonNums = (details?.seasons ?? []).map((s) => s.seasonNumber);
@@ -143,16 +146,6 @@ export function PinnedItemCard({
   if (isLoading) {
     return <div className="h-32 animate-pulse rounded-2xl border border-border bg-card" />;
   }
-
-  // Pentru seriale, ID-ul IMDb poate veni din countdown (fallback) — mai
-  // așteptăm acel query înainte să decidem că nu are ID confirmat.
-  const imdbResolving = item.mediaType === "tv" && !!details && countdownLoading;
-  if (imdbResolving) {
-    return <div className="h-32 animate-pulse rounded-2xl border border-border bg-card" />;
-  }
-
-  // Afișăm doar titlurile cu ID IMDb confirmat (din TMDB) — ascundem restul.
-  if (!itemImdbId) return null;
 
   if (item.mediaType === "movie") {
     return (
