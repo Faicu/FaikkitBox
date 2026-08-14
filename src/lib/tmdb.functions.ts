@@ -334,8 +334,8 @@ export interface TvShowCountdown {
 export const getTvShowCountdown = createServerFn({ method: "GET" })
   .validator((data: { imdbId: string | null; showTitle: string }) => data)
   .handler(async ({ data }): Promise<TvShowCountdown> => {
-    const { requireAdmin } = await import("./admin.server");
-    await requireAdmin();
+    const { requireAuth } = await import("./admin.server");
+    await requireAuth();
     try {
       let tvmazeShow: TvmazeShow | null = null;
 

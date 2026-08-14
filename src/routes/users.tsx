@@ -69,13 +69,7 @@ function ContactInfo({ user }: { user: UserAccount }) {
   );
 }
 
-function PendingSection({
-  pending,
-  onChanged,
-}: {
-  pending: UserAccount[];
-  onChanged: () => void;
-}) {
+function PendingSection({ pending, onChanged }: { pending: UserAccount[]; onChanged: () => void }) {
   const approveFn = useServerFn(approveUser);
   const deleteFn = useServerFn(deleteUser);
 

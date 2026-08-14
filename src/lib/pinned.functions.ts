@@ -47,8 +47,8 @@ export interface WatchSettings {
 
 export const getWatchSettings = createServerFn({ method: "GET" }).handler(
   async (): Promise<WatchSettings[]> => {
-    const { requireAdmin } = await import("./admin.server");
-    await requireAdmin();
+    const { requireAuth } = await import("./admin.server");
+    await requireAuth();
     const db = getDb();
     const rows = db
       .prepare(

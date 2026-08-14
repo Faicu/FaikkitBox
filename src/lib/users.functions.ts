@@ -55,9 +55,7 @@ export const approveUser = createServerFn({ method: "POST" })
     await requireAdmin();
     const { getDb } = await import("./db");
     const db = getDb();
-    db.prepare("UPDATE users SET status = 'approved' WHERE id = ? AND role = 'user'").run(
-      data.id,
-    );
+    db.prepare("UPDATE users SET status = 'approved' WHERE id = ? AND role = 'user'").run(data.id);
     return { ok: true };
   });
 

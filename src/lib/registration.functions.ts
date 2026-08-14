@@ -1,9 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 
 export const registerUser = createServerFn({ method: "POST" })
-  .validator(
-    (data: { username: string; password: string; email: string; phone: string }) => data,
-  )
+  .validator((data: { username: string; password: string; email: string; phone: string }) => data)
   .handler(async ({ data }): Promise<{ ok: boolean; error?: string }> => {
     const username = data.username.trim();
     const email = data.email.trim();
@@ -41,7 +39,15 @@ export const registerUser = createServerFn({ method: "POST" })
     db.prepare(
       `INSERT INTO users (username, password_hash, email, phone, role, status, plex_account_id, plex_username, plex_email)
        VALUES (?, ?, ?, ?, 'user', 'pending', ?, ?, ?)`,
-    ).run(username, hashPassword(data.password), email, phone, plexMatch.id, plexMatch.username, plexMatch.email);
+    ).run(
+      username,
+      hashPassword(data.password),
+      email,
+      phone,
+      plexMatch.id,
+      plexMatch.username,
+      plexMatch.email,
+    );
 
     return { ok: true };
   });

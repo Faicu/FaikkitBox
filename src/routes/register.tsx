@@ -2,7 +2,17 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
-import { UserPlus, Lock, User, Mail, Phone, Eye, EyeOff, Loader2, CheckCircle2 } from "lucide-react";
+import {
+  UserPlus,
+  Lock,
+  User,
+  Mail,
+  Phone,
+  Eye,
+  EyeOff,
+  Loader2,
+  CheckCircle2,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { PageShell } from "@/components/PageShell";
@@ -43,8 +53,8 @@ function RegisterPage() {
           </div>
           <h1 className="text-lg font-semibold">Cerere trimisă</h1>
           <p className="text-sm text-muted-foreground">
-            Contul tău a fost creat și așteaptă aprobare din partea unui administrator. Vei putea
-            să te autentifici după aprobare.
+            Contul tău a fost creat și așteaptă aprobare din partea unui administrator. Vei putea să
+            te autentifici după aprobare.
           </p>
           <Link
             to="/login"

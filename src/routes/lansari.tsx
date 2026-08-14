@@ -5,6 +5,7 @@ import { PageShell } from "@/components/PageShell";
 import { requireAuthBeforeLoad } from "@/lib/admin-route-guard";
 import { adminStatusQuery } from "@/lib/queries";
 import { UnifiedSearchSection } from "@/components/lansari/sections/UnifiedSearchSection";
+import { PinnedListSection } from "@/components/lansari/sections/PinnedListSection";
 import { FilelistSection } from "@/components/lansari/sections/FilelistSection";
 import { DownloadLogSection } from "@/components/lansari/sections/DownloadLogSection";
 
@@ -26,6 +27,7 @@ function LansariPage() {
           <FilelistSection />
         </>
       )}
+      <PinnedListSection />
       <DownloadLogSection />
     </PageShell>
   );

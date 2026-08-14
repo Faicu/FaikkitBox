@@ -6,58 +6,22 @@ import { useServerFn } from "@tanstack/react-start";
 import { pinnedItemsQuery } from "@/lib/queries";
 import { searchTmdb } from "@/lib/tmdb.functions";
 import type { TmdbSearchResult } from "@/lib/tmdb.functions";
-import { setPinnedItems, getWatchSettings, setWatchSettings } from "@/lib/pinned.functions";
-import type { WatchSettings } from "@/lib/pinned.functions";
+import { setPinnedItems } from "@/lib/pinned.functions";
 import type { PinnedItem } from "../types";
-import { PinnedItemCard } from "../PinnedItemCard";
 
 // ---------------------------------------------------------------------------
-// Secțiune de căutare unificată (TMDB)
+// Secțiune de căutare unificată (TMDB) — admin-only
 // ---------------------------------------------------------------------------
 
 export function UnifiedSearchSection() {
   const queryClient = useQueryClient();
   const { data: pinned = [] } = useQuery(pinnedItemsQuery);
-  const [watchMap, setWatchMap] = useState<Map<string, WatchSettings>>(new Map());
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<TmdbSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
   const searchFn = useServerFn(searchTmdb);
   const setPinnedFn = useServerFn(setPinnedItems);
-  const getWatchFn = useServerFn(getWatchSettings);
-  const setWatchFn = useServerFn(setWatchSettings);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    getWatchFn({})
-      .then((settings) => {
-        const map = new Map<string, WatchSettings>();
-        for (const s of settings) map.set(`${s.mediaType}-${s.id}`, s);
-        setWatchMap(map);
-      })
-      .catch(() => {});
-  }, []);
-
-  async function updateWatch(id: number, mediaType: "movie" | "tv", patch: Partial<WatchSettings>) {
-    const key = `${mediaType}-${id}`;
-    const current = watchMap.get(key) ?? {
-      id,
-      mediaType,
-      watchFilelist: false,
-      watchFilelistSeason: false,
-      watchTmdb: false,
-      autoDownload: false,
-      autoDownloadQuality: "1080p" as const,
-    };
-    const next = { ...current, ...patch };
-    // Dacă watchFilelist e dezactivat, dezactivăm și sub-toggle-urile
-    if (!next.watchFilelist) {
-      next.watchFilelistSeason = false;
-      next.autoDownload = false;
-    }
-    setWatchMap((m) => new Map(m).set(key, next));
-    await setWatchFn({ data: next }).catch(() => {});
-  }
 
   async function savePinned(list: PinnedItem[]) {
     await setPinnedFn({ data: { items: list } }).catch(() => {});
@@ -100,10 +64,6 @@ export function UnifiedSearchSection() {
     savePinned(next);
     setQuery("");
     setResults([]);
-  }
-
-  function unpin(id: number, mediaType: "movie" | "tv") {
-    savePinned(pinned.filter((p) => !(p.id === id && p.mediaType === mediaType)));
   }
 
   return (
@@ -179,29 +139,6 @@ export function UnifiedSearchSection() {
             })}
           </div>
         )}
-      </div>
-
-      <div className="mt-3 space-y-3">
-        {pinned.map((p) => {
-          const ws = watchMap.get(`${p.mediaType}-${p.id}`) ?? {
-            id: p.id,
-            mediaType: p.mediaType,
-            watchFilelist: false,
-            watchFilelistSeason: false,
-            watchTmdb: false,
-            autoDownload: false,
-            autoDownloadQuality: "1080p" as const,
-          };
-          return (
-            <PinnedItemCard
-              key={`${p.mediaType}-${p.id}`}
-              item={p}
-              watchSettings={ws}
-              onWatchChange={(patch) => updateWatch(p.id, p.mediaType, patch)}
-              onUnpin={() => unpin(p.id, p.mediaType)}
-            />
-          );
-        })}
       </div>
     </section>
   );

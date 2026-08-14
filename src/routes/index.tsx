@@ -271,9 +271,7 @@ function Overview() {
         </DrawerContent>
       </Drawer>
 
-      {isAuthenticated && (
-        <AddMediaWizard open={wizardOpen} onClose={() => setWizardOpen(false)} />
-      )}
+      {isAuthenticated && <AddMediaWizard open={wizardOpen} onClose={() => setWizardOpen(false)} />}
     </PageShell>
   );
 }
