@@ -12,7 +12,6 @@ import {
   UserPlus,
   Music,
   Image as ImageIcon,
-  Trophy,
   Clock3,
   Sparkles,
 } from "lucide-react";
@@ -187,45 +186,80 @@ function Overview() {
                   <div className="mt-0.5 text-sm font-semibold">Nimeni</div>
                 </div>
               )}
-              <div className="grid grid-cols-3 gap-1.5">
-                <MetricButton
-                  label="Vizionate azi"
-                  value={String(plex.data.episodesToday ?? 0)}
-                  onClick={stop(() => setPlexDrawer("views"))}
-                  compact
-                />
-                <MetricButton
-                  label="Utilizatori activi azi"
-                  value={String(plex.data.activeUsersToday ?? 0)}
-                  onClick={stop(() => setPlexDrawer("users"))}
-                  compact
-                />
+              <div className="grid grid-cols-2 gap-1.5">
                 <button
                   type="button"
-                  onClick={stop(() =>
-                    setPlexAddedMode((m) => (m === "movies" ? "episodes" : "movies")),
-                  )}
-                  className="rounded-lg bg-muted/40 px-2 py-1 text-left transition-colors hover:bg-muted/60 active:bg-muted"
-                  title="Comută filme/episoade adăugate (24h)"
+                  onClick={stop(() => setPlexDrawer("views"))}
+                  className="rounded-lg bg-muted/40 px-2.5 py-2 text-left transition-colors hover:bg-muted/60 active:bg-muted"
                 >
-                  <div className="flex items-center gap-1 text-[9px] uppercase tracking-wide text-muted-foreground">
-                    {plexAddedMode === "movies" ? (
-                      <Film className="h-3 w-3 text-amber-400" />
-                    ) : (
-                      <Tv className="h-3 w-3 text-blue-400" />
-                    )}
-                    24h
-                    <RefreshCw className="h-2.5 w-2.5 ml-auto" />
+                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                    Vizionate azi
                   </div>
-                  <div className="text-sm font-semibold tabular-nums">
-                    {String(
-                      (plexAddedMode === "movies"
-                        ? plex.data.moviesAddedLast24h
-                        : plex.data.episodesAddedLast24h) ?? 0,
-                    )}
+                  <div className="mt-0.5 text-lg font-semibold tabular-nums">
+                    {String(plex.data.episodesToday ?? 0)}
                   </div>
+                  {(plex.data.todayViews?.length ?? 0) > 0 && (
+                    <div className="mt-1 space-y-0.5 border-t border-border/60 pt-1">
+                      {plex.data.todayViews!.slice(0, 3).map((v, i) => (
+                        <div key={i} className="truncate text-[10px] text-muted-foreground">
+                          {v.show ?? v.title}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={stop(() => setPlexDrawer("users"))}
+                  className="rounded-lg bg-muted/40 px-2.5 py-2 text-left transition-colors hover:bg-muted/60 active:bg-muted"
+                >
+                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                    Utilizatori activi azi
+                  </div>
+                  <div className="mt-0.5 text-lg font-semibold tabular-nums">
+                    {String(plex.data.activeUsersToday ?? 0)}
+                  </div>
+                  {(plex.data.activeUsersTodayList?.length ?? 0) > 0 && (
+                    <div className="mt-1 space-y-0.5 border-t border-border/60 pt-1">
+                      {plex.data.activeUsersTodayList!.slice(0, 3).map((u, i) => (
+                        <div
+                          key={i}
+                          className="flex items-center justify-between gap-1 text-[10px] text-muted-foreground"
+                        >
+                          <span className="truncate">{u.user}</span>
+                          <span className="shrink-0 tabular-nums">{u.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </button>
               </div>
+
+              <button
+                type="button"
+                onClick={stop(() =>
+                  setPlexAddedMode((m) => (m === "movies" ? "episodes" : "movies")),
+                )}
+                className="flex w-full items-center gap-2 rounded-lg bg-muted/40 px-2.5 py-2 text-left transition-colors hover:bg-muted/60 active:bg-muted"
+                title="Comută filme/episoade adăugate (24h)"
+              >
+                {plexAddedMode === "movies" ? (
+                  <Film className="h-3.5 w-3.5 shrink-0 text-amber-400" />
+                ) : (
+                  <Tv className="h-3.5 w-3.5 shrink-0 text-blue-400" />
+                )}
+                <span className="flex-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                  {plexAddedMode === "movies" ? "Filme adăugate (24h)" : "Episoade adăugate (24h)"}
+                </span>
+                <span className="text-sm font-semibold tabular-nums">
+                  {String(
+                    (plexAddedMode === "movies"
+                      ? plex.data.moviesAddedLast24h
+                      : plex.data.episodesAddedLast24h) ?? 0,
+                  )}
+                </span>
+                <RefreshCw className="h-3 w-3 shrink-0 text-muted-foreground" />
+              </button>
 
               {plex.data.libraries.length > 0 && (
                 <div>
@@ -245,60 +279,6 @@ function Overview() {
                             {lib.count ?? "—"}
                           </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {((plex.data.topMovies?.length ?? 0) > 0 ||
-                (plex.data.topShows?.length ?? 0) > 0) && (
-                <div>
-                  <div className="mb-1.5 flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                    <Trophy className="h-3 w-3" /> Top vizionate
-                  </div>
-                  <div className="space-y-1">
-                    {[
-                      ...(plex.data.topMovies ?? []).map((t) => ({ ...t, isMovie: true })),
-                      ...(plex.data.topShows ?? []).map((t) => ({ ...t, isMovie: false })),
-                    ]
-                      .sort((a, b) => b.plays - a.plays)
-                      .slice(0, 5)
-                      .map((t, i) => (
-                        <div
-                          key={`${t.title}-${i}`}
-                          className="flex items-center gap-2 rounded-lg bg-muted/40 px-2 py-1.5"
-                        >
-                          {t.isMovie ? (
-                            <Film className="h-3.5 w-3.5 shrink-0 text-amber-400" />
-                          ) : (
-                            <Tv className="h-3.5 w-3.5 shrink-0 text-blue-400" />
-                          )}
-                          <span className="min-w-0 flex-1 truncate text-xs">{t.title}</span>
-                          <span className="shrink-0 text-[10px] font-medium tabular-nums text-muted-foreground">
-                            {t.plays} {t.plays === 1 ? "vizionare" : "vizionări"}
-                          </span>
-                        </div>
-                      ))}
-                  </div>
-                </div>
-              )}
-
-              {(plex.data.topWatchers?.length ?? 0) > 0 && (
-                <div>
-                  <div className="mb-1.5 flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                    <Users className="h-3 w-3" /> Top utilizatori
-                  </div>
-                  <div className="space-y-1">
-                    {plex.data.topWatchers!.slice(0, 5).map((w, i) => (
-                      <div
-                        key={`${w.user}-${i}`}
-                        className="flex items-center justify-between gap-2 rounded-lg bg-muted/40 px-2 py-1.5"
-                      >
-                        <span className="min-w-0 flex-1 truncate text-xs">{w.user}</span>
-                        <span className="shrink-0 text-[10px] font-medium tabular-nums text-muted-foreground">
-                          {w.plays} {w.plays === 1 ? "vizionare" : "vizionări"}
-                        </span>
                       </div>
                     ))}
                   </div>
@@ -449,36 +429,6 @@ function ServiceRow({
       )}
       {children && <div className="mt-3">{children}</div>}
     </Link>
-  );
-}
-
-function MetricButton({
-  label,
-  value,
-  icon,
-  onClick,
-  compact,
-}: {
-  label: string;
-  value: string;
-  icon?: React.ReactNode;
-  onClick: (e: React.MouseEvent) => void;
-  compact?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-lg bg-muted/40 text-left transition-colors hover:bg-muted/60 active:bg-muted ${compact ? "px-2 py-1" : "px-2.5 py-1.5"}`}
-    >
-      <div
-        className={`flex items-start gap-1 uppercase tracking-wide leading-tight text-muted-foreground ${compact ? "text-[9px]" : "text-[10px]"}`}
-      >
-        {icon}
-        <span>{label}</span>
-      </div>
-      <div className="text-sm font-semibold tabular-nums">{value}</div>
-    </button>
   );
 }
 
