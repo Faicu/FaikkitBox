@@ -144,6 +144,16 @@ export function PinnedItemCard({
     return <div className="h-32 animate-pulse rounded-2xl border border-border bg-card" />;
   }
 
+  // Pentru seriale, ID-ul IMDb poate veni din countdown (fallback) — mai
+  // așteptăm acel query înainte să decidem că nu are ID confirmat.
+  const imdbResolving = item.mediaType === "tv" && !!details && countdownLoading;
+  if (imdbResolving) {
+    return <div className="h-32 animate-pulse rounded-2xl border border-border bg-card" />;
+  }
+
+  // Afișăm doar titlurile cu ID IMDb confirmat (din TMDB) — ascundem restul.
+  if (!itemImdbId) return null;
+
   if (item.mediaType === "movie") {
     return (
       <MovieCard
