@@ -4,7 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { Box, GitCommitHorizontal, PlayCircle, Bell, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
-import { activityLogQuery, adminStatusQuery, commitsFromDbQuery } from "@/lib/queries";
+import { activityLogQuery, commitsFromDbQuery } from "@/lib/queries";
 import { getPinnedWatcherStatus, triggerPinnedWatcherCheck } from "@/lib/pinned.functions";
 import { PinnedWatcherNextRun } from "../PinnedWatcherNextRun";
 import { relativeTime } from "../utils";
@@ -34,8 +34,6 @@ const PLUGINS = [
 ];
 
 export function PluginStatusSection() {
-  const { data: adminData } = useQuery(adminStatusQuery);
-  const isAdmin = !!adminData?.isAdmin;
   const { data: log } = useQuery(activityLogQuery);
   const { data: commitsData } = useQuery(commitsFromDbQuery);
   const watcherStatusFn = useServerFn(getPinnedWatcherStatus);
@@ -118,7 +116,7 @@ export function PluginStatusSection() {
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-medium leading-tight">{p.label}</div>
                 <div className="text-[11px] text-muted-foreground">{p.description}</div>
-                {isPinnedWatcher && isAdmin && (
+                {isPinnedWatcher && (
                   <button
                     onClick={handleTrigger}
                     disabled={triggerState !== "idle"}

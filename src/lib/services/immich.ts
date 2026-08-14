@@ -32,6 +32,8 @@ let immichUploadsCache: {
 
 export const getImmich = createServerFn({ method: "GET" }).handler(
   async (): Promise<ImmichData> => {
+    const { requireAdmin } = await import("../admin.server");
+    await requireAdmin();
     const base = process.env.IMMICH_URL;
     const key = process.env.IMMICH_API_KEY;
     if (!base || !key)

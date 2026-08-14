@@ -68,6 +68,8 @@ export interface DiscoverPageResult {
 export const getDiscoverTitles = createServerFn({ method: "GET" })
   .validator((data: { mediaType: DiscoverMediaType; sort: DiscoverSort; page?: number }) => data)
   .handler(async ({ data }): Promise<DiscoverPageResult> => {
+    const { requireAdmin } = await import("./admin.server");
+    await requireAdmin();
     try {
       const items = await fetchDiscoverPage(data.mediaType, data.sort, data.page ?? 1);
       return { items, degraded: false };
@@ -108,6 +110,8 @@ async function fetchVideosFor(mediaType: DiscoverMediaType, id: number): Promise
 export const getTmdbVideos = createServerFn({ method: "GET" })
   .validator((data: { id: number; mediaType: DiscoverMediaType }) => data)
   .handler(async ({ data }): Promise<TmdbVideo[]> => {
+    const { requireAdmin } = await import("./admin.server");
+    await requireAdmin();
     try {
       return await fetchVideosFor(data.mediaType, data.id);
     } catch {
@@ -133,6 +137,8 @@ export interface FeedClipsResult {
 export const getFeedClips = createServerFn({ method: "GET" })
   .validator((data: { mediaType: DiscoverMediaType | "all"; sort: DiscoverSort }) => data)
   .handler(async ({ data }): Promise<FeedClipsResult> => {
+    const { requireAdmin } = await import("./admin.server");
+    await requireAdmin();
     try {
       const mediaTypes: DiscoverMediaType[] =
         data.mediaType === "all" ? ["movie", "tv"] : [data.mediaType];

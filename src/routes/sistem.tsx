@@ -26,19 +26,19 @@ import { CommandOutput } from "@/components/ServiceHeaderActions";
 import { TehnicSubNav } from "@/components/tehnic/TehnicSubNav";
 import { logAgentActivity, runAgentCommand } from "@/lib/agent.functions";
 import type { AgentCommand, AgentResult } from "@/lib/agent.functions";
-import { adminStatusQuery, hostQuery } from "@/lib/queries";
+import { hostQuery } from "@/lib/queries";
+import { requireAdminBeforeLoad } from "@/lib/admin-route-guard";
 
 import { formatBytes, formatSpeed, formatDurationHMS } from "@/lib/format";
 
 export const Route = createFileRoute("/sistem")({
+  beforeLoad: requireAdminBeforeLoad,
   head: () => ({ meta: [{ title: "Sistem — Monitor Server" }] }),
   component: HostPage,
 });
 
 function HostPage() {
   const { data, isLoading } = useQuery(hostQuery);
-  const { data: adminData } = useQuery(adminStatusQuery);
-  const isAdmin = adminData?.isAdmin ?? false;
   const status = isLoading ? "loading" : (data?.status ?? "error");
   const push = usePushNotifications();
 
@@ -79,16 +79,14 @@ function HostPage() {
       }
       right={
         <div className="flex items-center gap-2">
-          {isAdmin && (
-            <button
-              onClick={handleUpgrade}
-              disabled={upgrade.isPending}
-              className="flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-400 active:scale-95 transition-all disabled:opacity-50"
-            >
-              <PackageCheck className="h-3.5 w-3.5" />
-              {upgrade.isPending ? "Se actualizează…" : "Update Ubuntu"}
-            </button>
-          )}
+          <button
+            onClick={handleUpgrade}
+            disabled={upgrade.isPending}
+            className="flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-400 active:scale-95 transition-all disabled:opacity-50"
+          >
+            <PackageCheck className="h-3.5 w-3.5" />
+            {upgrade.isPending ? "Se actualizează…" : "Update Ubuntu"}
+          </button>
           {data?.status === "ok" && (data.uptimeSec ?? 9999) < 600 ? (
             <span
               title={`Server repornit recent — uptime ${Math.round((data.uptimeSec ?? 0) / 60)} min`}
@@ -107,7 +105,7 @@ function HostPage() {
 
       {lastCmd && <CommandOutput command={lastCmd.cmd} result={lastCmd.result} />}
 
-      {isAdmin && <PushNotificationsCard push={push} />}
+      <PushNotificationsCard push={push} />
 
       {data?.status === "error" && (
         <ErrorCard title="Metrici indisponibile" message={data.error ?? "Eroare necunoscută"} />

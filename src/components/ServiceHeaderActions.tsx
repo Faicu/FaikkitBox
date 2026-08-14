@@ -9,7 +9,7 @@ import {
   type AgentCommand,
   type AgentResult,
 } from "@/lib/agent.functions";
-import { adminStatusQuery, versionsQuery } from "@/lib/queries";
+import { versionsQuery } from "@/lib/queries";
 import type { ServiceVersion } from "@/lib/versions.functions";
 import { ServicePill } from "@/components/ServicePill";
 
@@ -33,13 +33,11 @@ type Props = {
 
 export function ServiceHeaderActions({ service, status, onRestart, onCommandResult }: Props) {
   const versions = useQuery(versionsQuery);
-  const admin = useQuery(adminStatusQuery);
   const run = useServerFn(runAgentCommand);
   const config = serviceConfig[service];
   const version = (versions.data as Partial<Record<Service, ServiceVersion>> | undefined)?.[
     service
   ];
-  const canManage = admin.data?.isAdmin === true;
 
   const mutation = useMutation({
     mutationFn: (command: AgentCommand) => run({ data: { cmd: command } }),
@@ -59,7 +57,7 @@ export function ServiceHeaderActions({ service, status, onRestart, onCommandResu
 
   return (
     <div className="flex items-center gap-2">
-      {canManage && version?.changelog && (
+      {version?.changelog && (
         <a
           href={version.changelog}
           target="_blank"
@@ -71,22 +69,20 @@ export function ServiceHeaderActions({ service, status, onRestart, onCommandResu
           <ExternalLink className="h-4 w-4" />
         </a>
       )}
-      {canManage && (
-        <button
-          type="button"
-          onClick={() => mutation.mutate(config.restartCmd)}
-          disabled={running === config.restartCmd}
-          className="flex h-9 items-center gap-1.5 rounded-lg border border-sky-500/30 bg-sky-500/15 px-3 text-xs font-medium text-sky-400 hover:bg-sky-500/25 disabled:opacity-50"
-          title={running === config.restartCmd ? "Se repornește..." : "Repornește"}
-          aria-label="Repornește"
-        >
-          <RotateCcw
-            className={`h-3.5 w-3.5 ${running === config.restartCmd ? "animate-spin" : ""}`}
-          />
-          {running === config.restartCmd ? "..." : "Restart"}
-        </button>
-      )}
-      {canManage && config.updateCmd && version?.upToDate === false && (
+      <button
+        type="button"
+        onClick={() => mutation.mutate(config.restartCmd)}
+        disabled={running === config.restartCmd}
+        className="flex h-9 items-center gap-1.5 rounded-lg border border-sky-500/30 bg-sky-500/15 px-3 text-xs font-medium text-sky-400 hover:bg-sky-500/25 disabled:opacity-50"
+        title={running === config.restartCmd ? "Se repornește..." : "Repornește"}
+        aria-label="Repornește"
+      >
+        <RotateCcw
+          className={`h-3.5 w-3.5 ${running === config.restartCmd ? "animate-spin" : ""}`}
+        />
+        {running === config.restartCmd ? "..." : "Restart"}
+      </button>
+      {config.updateCmd && version?.upToDate === false && (
         <button
           type="button"
           onClick={() => {

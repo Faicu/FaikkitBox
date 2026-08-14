@@ -36,7 +36,6 @@ export function ShowCard({
   countdown,
   countdownLoading,
   watchSettings,
-  isAdmin,
   onWatchChange,
   onUnpin,
 }: {
@@ -52,7 +51,6 @@ export function ShowCard({
   countdown: TvShowCountdown | null;
   countdownLoading: boolean;
   watchSettings: WatchSettings;
-  isAdmin: boolean;
   onWatchChange: (patch: Partial<WatchSettings>) => void;
   onUnpin: () => void;
 }) {
@@ -86,18 +84,16 @@ export function ShowCard({
                 <span className="font-semibold text-sm leading-tight line-clamp-2 flex-1">
                   {item.title}
                 </span>
-                {isAdmin && (
-                  <button
-                    onClick={() => {
-                      onUnpin();
-                      qc.removeQueries({ queryKey: ["tmdbDetails", "tv", item.id] });
-                    }}
-                    className="shrink-0 text-muted-foreground hover:text-foreground mt-0.5"
-                    title="Scoate din listă"
-                  >
-                    <PinOff className="h-3.5 w-3.5" />
-                  </button>
-                )}
+                <button
+                  onClick={() => {
+                    onUnpin();
+                    qc.removeQueries({ queryKey: ["tmdbDetails", "tv", item.id] });
+                  }}
+                  className="shrink-0 text-muted-foreground hover:text-foreground mt-0.5"
+                  title="Scoate din listă"
+                >
+                  <PinOff className="h-3.5 w-3.5" />
+                </button>
               </div>
               <div className="flex items-center gap-1.5 mt-1">
                 <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-400">
@@ -194,46 +190,36 @@ export function ShowCard({
               </div>
             ) : null}
 
-            {/* Secțiunea Filelist — doar pentru admin */}
-            {isAdmin && (
-              <div className="border-t border-border pt-3">
-                <div className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground flex items-center gap-1">
-                  <Download className="h-3 w-3" /> Descarcă de pe Filelist
-                  {filelistLoading && <Loader2 className="h-3 w-3 animate-spin ml-1" />}
-                </div>
-                {!filelistLoading && torrents.length === 0 ? (
-                  <div className="text-xs text-muted-foreground">
-                    Niciun torrent găsit pe Filelist.
-                  </div>
-                ) : seasonGroups.length === 0 && !filelistLoading ? (
-                  <div className="text-xs text-muted-foreground">
-                    Niciun torrent cu sezon detectat.
-                  </div>
-                ) : (
-                  <div className="space-y-1.5">
-                    {seasonGroups.map((group) => (
-                      <SeasonPanel
-                        key={group.seasonNum}
-                        showTitle={showTitle}
-                        tmdbId={item.id}
-                        group={group}
-                        downloading={downloading}
-                        onDownload={handleDownload}
-                      />
-                    ))}
-                  </div>
-                )}
+            <div className="border-t border-border pt-3">
+              <div className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground flex items-center gap-1">
+                <Download className="h-3 w-3" /> Descarcă de pe Filelist
+                {filelistLoading && <Loader2 className="h-3 w-3 animate-spin ml-1" />}
               </div>
-            )}
+              {!filelistLoading && torrents.length === 0 ? (
+                <div className="text-xs text-muted-foreground">
+                  Niciun torrent găsit pe Filelist.
+                </div>
+              ) : seasonGroups.length === 0 && !filelistLoading ? (
+                <div className="text-xs text-muted-foreground">
+                  Niciun torrent cu sezon detectat.
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  {seasonGroups.map((group) => (
+                    <SeasonPanel
+                      key={group.seasonNum}
+                      showTitle={showTitle}
+                      tmdbId={item.id}
+                      group={group}
+                      downloading={downloading}
+                      onDownload={handleDownload}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
 
-            {isAdmin && (
-              <WatchTogglePanel
-                mediaType="tv"
-                settings={watchSettings}
-                isAdmin={isAdmin}
-                onChange={onWatchChange}
-              />
-            )}
+            <WatchTogglePanel mediaType="tv" settings={watchSettings} onChange={onWatchChange} />
 
             {/* Următorul episod — jos, după Filelist */}
             {countdown?.status === "ok" && countdown.next && (

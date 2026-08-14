@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Gauge, ArrowDown, ArrowUp, Activity } from "lucide-react";
@@ -13,7 +13,8 @@ import {
   DrawerTitle,
   DrawerDescription,
 } from "@/components/ui/drawer";
-import { adminStatusQuery, lastSpeedtestQuery, speedtestHistoryQuery } from "@/lib/queries";
+import { lastSpeedtestQuery, speedtestHistoryQuery } from "@/lib/queries";
+import { requireAdminBeforeLoad } from "@/lib/admin-route-guard";
 import { runSpeedtest } from "@/lib/speedtest.functions";
 import { formatSpeed } from "@/lib/format";
 import { Metric } from "@/components/tehnic/Metric";
@@ -25,6 +26,7 @@ import { SpeedtestChart } from "@/components/tehnic/sections/SpeedtestChart";
 import { TehnicSubNav } from "@/components/tehnic/TehnicSubNav";
 
 export const Route = createFileRoute("/tehnic")({
+  beforeLoad: requireAdminBeforeLoad,
   head: () => ({
     meta: [{ title: "Tehnic — Monitor Server" }],
   }),
@@ -32,7 +34,6 @@ export const Route = createFileRoute("/tehnic")({
 });
 
 function TehnicPage() {
-  const admin = useQuery(adminStatusQuery);
   const speedtest = useQuery(lastSpeedtestQuery);
   const speedtestHistory = useQuery(speedtestHistoryQuery);
   const [speedtestDrawer, setSpeedtestDrawer] = useState(false);
@@ -179,25 +180,16 @@ function TehnicPage() {
               <SpeedtestChart history={speedtestHistory.data!} />
             )}
 
-            {admin.data?.isAdmin ? (
-              <button
-                type="button"
-                onClick={() => speedtestMutation.mutate()}
-                disabled={speedtestMutation.isPending}
-                className="w-full rounded-xl border border-rose-500/30 bg-rose-500/15 px-3 py-2.5 text-sm font-medium text-rose-400 hover:bg-rose-500/25 disabled:opacity-50"
-              >
-                {speedtestMutation.isPending
-                  ? "Se rulează testul... (poate dura 30-60s)"
-                  : "Rulează test nou"}
-              </button>
-            ) : (
-              <div className="rounded-xl border border-border bg-muted/30 p-3 text-center text-xs text-muted-foreground">
-                Necesită autentificare admin pentru a rula un test nou.{" "}
-                <Link to="/login" className="text-primary underline">
-                  Autentificare
-                </Link>
-              </div>
-            )}
+            <button
+              type="button"
+              onClick={() => speedtestMutation.mutate()}
+              disabled={speedtestMutation.isPending}
+              className="w-full rounded-xl border border-rose-500/30 bg-rose-500/15 px-3 py-2.5 text-sm font-medium text-rose-400 hover:bg-rose-500/25 disabled:opacity-50"
+            >
+              {speedtestMutation.isPending
+                ? "Se rulează testul... (poate dura 30-60s)"
+                : "Rulează test nou"}
+            </button>
 
             {speedtestError && (
               <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-400">

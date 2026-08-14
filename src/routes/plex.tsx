@@ -28,11 +28,13 @@ import {
   DrawerDescription,
 } from "@/components/ui/drawer";
 import { plexQuery, plexSessionsQuery } from "@/lib/queries";
+import { requireAdminBeforeLoad } from "@/lib/admin-route-guard";
 import { formatMsWithSeconds } from "@/lib/format";
 import type { PlexHistoryEntry } from "@/lib/services.functions";
 import type { AgentCommand, AgentResult } from "@/lib/agent.functions";
 
 export const Route = createFileRoute("/plex")({
+  beforeLoad: requireAdminBeforeLoad,
   head: () => ({ meta: [{ title: "Plex — Monitor Server" }] }),
   component: PlexPage,
 });

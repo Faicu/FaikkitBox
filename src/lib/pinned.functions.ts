@@ -11,6 +11,8 @@ export interface PinnedItemDb {
 
 export const getPinnedItems = createServerFn({ method: "GET" }).handler(
   async (): Promise<PinnedItemDb[]> => {
+    const { requireAdmin } = await import("./admin.server");
+    await requireAdmin();
     const db = getDb();
     const rows = db
       .prepare(
@@ -45,6 +47,8 @@ export interface WatchSettings {
 
 export const getWatchSettings = createServerFn({ method: "GET" }).handler(
   async (): Promise<WatchSettings[]> => {
+    const { requireAdmin } = await import("./admin.server");
+    await requireAdmin();
     const db = getDb();
     const rows = db
       .prepare(
@@ -168,6 +172,8 @@ export const setPinnedItems = createServerFn({ method: "POST" })
   });
 
 export const getPinnedWatcherStatus = createServerFn({ method: "GET" }).handler(async () => {
+  const { requireAdmin } = await import("./admin.server");
+  await requireAdmin();
   const { getDb } = await import("./db");
   const db = getDb();
 

@@ -12,13 +12,11 @@ export function FilelistCheckButton({
   originalTitle,
   imdbId,
   mediaType,
-  isAdmin,
 }: {
   title: string;
   originalTitle: string;
   imdbId: string | null;
   mediaType: DiscoverMediaType;
-  isAdmin: boolean;
 }) {
   const [checked, setChecked] = useState(false);
   const checkFn = useServerFn(checkFilelistForItem);
@@ -28,8 +26,6 @@ export function FilelistCheckButton({
     queryFn: () => checkFn({ data: { title, originalTitle, imdbId, mediaType } }),
     enabled: checked,
   });
-
-  if (!isAdmin) return null;
 
   if (!checked) {
     return (

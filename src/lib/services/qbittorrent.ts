@@ -92,6 +92,8 @@ export const qbitAction = createServerFn({ method: "POST" })
   });
 
 export const getQbit = createServerFn({ method: "GET" }).handler(async (): Promise<QbitData> => {
+  const { requireAdmin } = await import("../admin.server");
+  await requireAdmin();
   const base = process.env.QBIT_URL;
   const user = process.env.QBIT_USERNAME;
   const pass = process.env.QBIT_PASSWORD;

@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Search, Pin, Loader2, Film, Tv } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 
-import { adminStatusQuery, pinnedItemsQuery } from "@/lib/queries";
+import { pinnedItemsQuery } from "@/lib/queries";
 import { searchTmdb } from "@/lib/tmdb.functions";
 import type { TmdbSearchResult } from "@/lib/tmdb.functions";
 import { setPinnedItems, getWatchSettings, setWatchSettings } from "@/lib/pinned.functions";
@@ -16,8 +16,6 @@ import { PinnedItemCard } from "../PinnedItemCard";
 // ---------------------------------------------------------------------------
 
 export function UnifiedSearchSection() {
-  const { data: adminData } = useQuery(adminStatusQuery);
-  const isAdmin = !!adminData?.isAdmin;
   const queryClient = useQueryClient();
   const { data: pinned = [] } = useQuery(pinnedItemsQuery);
   const [watchMap, setWatchMap] = useState<Map<string, WatchSettings>>(new Map());
@@ -169,15 +167,13 @@ export function UnifiedSearchSection() {
                         .join(" · ") || "—"}
                     </div>
                   </div>
-                  {isAdmin && (
-                    <button
-                      onClick={() => pin(r)}
-                      disabled={alreadyPinned}
-                      className="flex shrink-0 items-center gap-1 rounded-lg bg-primary/15 px-2 py-1 text-[11px] font-medium text-primary disabled:opacity-40"
-                    >
-                      <Pin className="h-3.5 w-3.5" /> {alreadyPinned ? "Fixat" : "Fixează"}
-                    </button>
-                  )}
+                  <button
+                    onClick={() => pin(r)}
+                    disabled={alreadyPinned}
+                    className="flex shrink-0 items-center gap-1 rounded-lg bg-primary/15 px-2 py-1 text-[11px] font-medium text-primary disabled:opacity-40"
+                  >
+                    <Pin className="h-3.5 w-3.5" /> {alreadyPinned ? "Fixat" : "Fixează"}
+                  </button>
                 </div>
               );
             })}
@@ -201,7 +197,6 @@ export function UnifiedSearchSection() {
               key={`${p.mediaType}-${p.id}`}
               item={p}
               watchSettings={ws}
-              isAdmin={isAdmin}
               onWatchChange={(patch) => updateWatch(p.id, p.mediaType, patch)}
               onUnpin={() => unpin(p.id, p.mediaType)}
             />

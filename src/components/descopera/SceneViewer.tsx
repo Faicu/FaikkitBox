@@ -14,11 +14,9 @@ import { PlexLibraryStatus } from "./PlexLibraryStatus";
 
 export function SceneViewer({
   item,
-  isAdmin,
   onClose,
 }: {
   item: DiscoverTitle;
-  isAdmin: boolean;
   onClose: () => void;
 }) {
   const videosFn = useServerFn(getTmdbVideos);
@@ -118,7 +116,6 @@ export function SceneViewer({
                 }
                 imdbId={imdbId}
                 mediaType={item.mediaType}
-                isAdmin={isAdmin}
               />
               <PinToLansariButton
                 id={item.id}
@@ -126,9 +123,8 @@ export function SceneViewer({
                 originalTitle={detailsQuery.data?.originalTitle ?? item.title}
                 posterUrl={item.posterUrl}
                 mediaType={item.mediaType}
-                isAdmin={isAdmin}
               />
-              {isAdmin && !detailsQuery.isLoading && (
+              {!detailsQuery.isLoading && (
                 <button
                   type="button"
                   onClick={() => setWizardOpen(true)}
@@ -142,20 +138,18 @@ export function SceneViewer({
         </DrawerContent>
       </Drawer>
 
-      {isAdmin && (
-        <AddMediaWizard
-          open={wizardOpen}
-          onClose={() => setWizardOpen(false)}
-          initialItem={{
-            id: item.id,
-            mediaType: item.mediaType,
-            title: item.title,
-            originalTitle: detailsQuery.data?.originalTitle ?? item.title,
-            year: item.year,
-            posterUrl: item.posterUrl,
-          }}
-        />
-      )}
+      <AddMediaWizard
+        open={wizardOpen}
+        onClose={() => setWizardOpen(false)}
+        initialItem={{
+          id: item.id,
+          mediaType: item.mediaType,
+          title: item.title,
+          originalTitle: detailsQuery.data?.originalTitle ?? item.title,
+          year: item.year,
+          posterUrl: item.posterUrl,
+        }}
+      />
     </>
   );
 }

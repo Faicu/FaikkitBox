@@ -11,7 +11,7 @@ import {
   DrawerTitle,
   DrawerDescription,
 } from "@/components/ui/drawer";
-import { adminStatusQuery, errorLogQuery } from "@/lib/queries";
+import { errorLogQuery } from "@/lib/queries";
 import { clearErrorLogs } from "@/lib/error-log";
 import { relativeTime } from "../utils";
 
@@ -31,9 +31,7 @@ const SOURCE_FILTERS = [
 const LAST_VIEWED_KEY = "errorLogLastViewedAt";
 
 export function ErrorLogSection() {
-  const admin = useQuery(adminStatusQuery);
-  const isAdmin = !!admin.data?.isAdmin;
-  const errorLog = useQuery({ ...errorLogQuery, enabled: isAdmin });
+  const errorLog = useQuery(errorLogQuery);
   const [open, setOpen] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [sourceFilter, setSourceFilter] = useState("all");
@@ -58,8 +56,6 @@ export function ErrorLogSection() {
       // localStorage indisponibil (private browsing etc.) — necitite dezactivate
     }
   }, []);
-
-  if (!isAdmin) return null;
 
   const allEntries = errorLog.data ?? [];
   const unreadCount = lastViewedAt

@@ -35,7 +35,6 @@ export function MovieCard({
   isOpen,
   onToggleOpen,
   watchSettings,
-  isAdmin,
   onWatchChange,
   onUnpin,
 }: {
@@ -47,7 +46,6 @@ export function MovieCard({
   isOpen: boolean;
   onToggleOpen: () => void;
   watchSettings: WatchSettings;
-  isAdmin: boolean;
   onWatchChange: (patch: Partial<WatchSettings>) => void;
   onUnpin: () => void;
 }) {
@@ -98,18 +96,16 @@ export function MovieCard({
                   <span className="font-semibold text-sm leading-tight line-clamp-2 flex-1">
                     {item.title}
                   </span>
-                  {isAdmin && (
-                    <button
-                      onClick={() => {
-                        onUnpin();
-                        qc.removeQueries({ queryKey: ["tmdbDetails", "movie", item.id] });
-                      }}
-                      className="shrink-0 text-muted-foreground hover:text-foreground mt-0.5"
-                      title="Scoate din listă"
-                    >
-                      <PinOff className="h-3.5 w-3.5" />
-                    </button>
-                  )}
+                  <button
+                    onClick={() => {
+                      onUnpin();
+                      qc.removeQueries({ queryKey: ["tmdbDetails", "movie", item.id] });
+                    }}
+                    className="shrink-0 text-muted-foreground hover:text-foreground mt-0.5"
+                    title="Scoate din listă"
+                  >
+                    <PinOff className="h-3.5 w-3.5" />
+                  </button>
                 </div>
                 <div className="flex items-center gap-1.5 mt-1">
                   <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400">
@@ -164,51 +160,46 @@ export function MovieCard({
             </button>
             {isOpen && (
               <>
-                {isAdmin && (
-                  <div className="border-t border-border pt-3">
-                    <div className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground flex items-center gap-1">
-                      <Download className="h-3 w-3" /> Descarcă de pe Filelist
-                      {filelistLoading && <Loader2 className="h-3 w-3 animate-spin ml-1" />}
-                    </div>
-                    {!filelistLoading && torrents.length === 0 ? (
-                      <div className="text-xs text-muted-foreground">
-                        Niciun torrent găsit pe Filelist.
-                      </div>
-                    ) : (
-                      <div className="flex gap-2">
-                        <QualityDownloadButton
-                          label="1080p"
-                          torrents={t1080}
-                          plexQuality={plexQuality}
-                          downloading={downloading}
-                          onDownload={(t, l) => setConfirm({ torrent: t, label: l })}
-                        />
-                        <QualityDownloadButton
-                          label="4K"
-                          torrents={t4k}
-                          plexQuality={plexQuality}
-                          downloading={downloading}
-                          onDownload={(t, l) => setConfirm({ torrent: t, label: l })}
-                        />
-                        <QualityDownloadButton
-                          label="4K HDR"
-                          torrents={t4kHdr}
-                          plexQuality={plexQuality}
-                          downloading={downloading}
-                          onDownload={(t, l) => setConfirm({ torrent: t, label: l })}
-                        />
-                      </div>
-                    )}
+                <div className="border-t border-border pt-3">
+                  <div className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground flex items-center gap-1">
+                    <Download className="h-3 w-3" /> Descarcă de pe Filelist
+                    {filelistLoading && <Loader2 className="h-3 w-3 animate-spin ml-1" />}
                   </div>
-                )}
-                {isAdmin && (
-                  <WatchTogglePanel
-                    mediaType="movie"
-                    settings={watchSettings}
-                    isAdmin={isAdmin}
-                    onChange={onWatchChange}
-                  />
-                )}
+                  {!filelistLoading && torrents.length === 0 ? (
+                    <div className="text-xs text-muted-foreground">
+                      Niciun torrent găsit pe Filelist.
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <QualityDownloadButton
+                        label="1080p"
+                        torrents={t1080}
+                        plexQuality={plexQuality}
+                        downloading={downloading}
+                        onDownload={(t, l) => setConfirm({ torrent: t, label: l })}
+                      />
+                      <QualityDownloadButton
+                        label="4K"
+                        torrents={t4k}
+                        plexQuality={plexQuality}
+                        downloading={downloading}
+                        onDownload={(t, l) => setConfirm({ torrent: t, label: l })}
+                      />
+                      <QualityDownloadButton
+                        label="4K HDR"
+                        torrents={t4kHdr}
+                        plexQuality={plexQuality}
+                        downloading={downloading}
+                        onDownload={(t, l) => setConfirm({ torrent: t, label: l })}
+                      />
+                    </div>
+                  )}
+                </div>
+                <WatchTogglePanel
+                  mediaType="movie"
+                  settings={watchSettings}
+                  onChange={onWatchChange}
+                />
               </>
             )}
           </div>

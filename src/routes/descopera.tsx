@@ -1,16 +1,16 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
 import { LayoutGrid, Zap } from "lucide-react";
 
 import { PageShell } from "@/components/PageShell";
 import { DiscoverGrid } from "@/components/descopera/DiscoverGrid";
 import { FeedView } from "@/components/descopera/FeedView";
 import { FilterTabs } from "@/components/descopera/FilterTabs";
-import { adminStatusQuery } from "@/lib/queries";
+import { requireAdminBeforeLoad } from "@/lib/admin-route-guard";
 import type { DiscoverMediaType, DiscoverSort } from "@/lib/tmdb.discover.functions";
 
 export const Route = createFileRoute("/descopera")({
+  beforeLoad: requireAdminBeforeLoad,
   head: () => ({
     meta: [{ title: "Descoperă — Monitor Server" }],
   }),
@@ -18,9 +18,6 @@ export const Route = createFileRoute("/descopera")({
 });
 
 function DescoperaPage() {
-  const { data: adminData } = useQuery(adminStatusQuery);
-  const isAdmin = !!adminData?.isAdmin;
-
   const [mode, setMode] = useState<"grid" | "feed">("grid");
   const [sort, setSort] = useState<DiscoverSort>("trending");
   const [media, setMedia] = useState<DiscoverMediaType | "all">("all");
@@ -63,9 +60,9 @@ function DescoperaPage() {
       />
 
       {mode === "grid" ? (
-        <DiscoverGrid sort={sort} media={media} isAdmin={isAdmin} searchQuery={searchQuery} />
+        <DiscoverGrid sort={sort} media={media} searchQuery={searchQuery} />
       ) : (
-        <FeedView sort={sort} media={media} isAdmin={isAdmin} />
+        <FeedView sort={sort} media={media} />
       )}
     </PageShell>
   );

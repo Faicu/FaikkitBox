@@ -168,11 +168,15 @@ async function readLastFromHistory(): Promise<SpeedtestResult | null> {
 }
 
 export const getLastSpeedtest = createServerFn({ method: "GET" }).handler(async () => {
+  const { requireAdmin } = await import("./admin.server");
+  await requireAdmin();
   return await readLastFromHistory();
 });
 
 export const getSpeedtestHistory = createServerFn({ method: "GET" }).handler(
   async (): Promise<SpeedtestHistoryEntry[]> => {
+    const { requireAdmin } = await import("./admin.server");
+    await requireAdmin();
     try {
       const { getDb } = await import("./db");
       const db = getDb();

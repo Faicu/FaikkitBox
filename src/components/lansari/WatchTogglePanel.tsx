@@ -9,12 +9,10 @@ import type { WatchSettings } from "@/lib/pinned.functions";
 export function WatchTogglePanel({
   mediaType,
   settings,
-  isAdmin,
   onChange,
 }: {
   mediaType: "movie" | "tv";
   settings: WatchSettings;
-  isAdmin: boolean;
   onChange: (patch: Partial<WatchSettings>) => void;
 }) {
   const anyEnabled = settings.watchFilelist || settings.watchTmdb;
@@ -50,14 +48,14 @@ export function WatchTogglePanel({
         Notificări automate · la fiecare 3 ore
       </div>
 
-      {/* Rând 1: Filelist (admin) + TMDB */}
+      {/* Rând 1: Filelist + TMDB */}
       <div className="flex flex-wrap gap-2">
-        {isAdmin && <Toggle toggleKey="watchFilelist" label="Torrent nou Filelist" />}
+        <Toggle toggleKey="watchFilelist" label="Torrent nou Filelist" />
         {mediaType === "tv" && <Toggle toggleKey="watchTmdb" label="Episod nou lansat" />}
       </div>
 
-      {/* Rând 2: opțiuni Filelist (doar admin) */}
-      {isAdmin && settings.watchFilelist && (
+      {/* Rând 2: opțiuni Filelist */}
+      {settings.watchFilelist && (
         <div className="flex flex-wrap gap-2 pl-3 border-l-2 border-primary/20">
           {mediaType === "tv" && (
             <Toggle toggleKey="watchFilelistSeason" label="Doar sezonul curent" />

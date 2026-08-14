@@ -92,6 +92,8 @@ async function upsertCommits(commits: GitHubCommit[]): Promise<void> {
 // Fetch GitHub + upsert în DB (rulat periodic din React Query)
 export const getRecentCommits = createServerFn({ method: "GET" }).handler(
   async (): Promise<GitHubCommitsResult> => {
+    const { requireAdmin } = await import("./admin.server");
+    await requireAdmin();
     try {
       const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/commits?per_page=20`, {
         headers: githubHeaders(),
@@ -123,6 +125,8 @@ export const getRecentCommits = createServerFn({ method: "GET" }).handler(
 // Citește commits din DB — sursa principală pentru timeline
 export const getCommitsFromDb = createServerFn({ method: "GET" }).handler(
   async (): Promise<GitHubCommitsResult> => {
+    const { requireAdmin } = await import("./admin.server");
+    await requireAdmin();
     try {
       const { getDb } = await import("./db");
       const db = getDb();
@@ -160,6 +164,8 @@ export const getCommitsFromDb = createServerFn({ method: "GET" }).handler(
 export const getCommitDetail = createServerFn({ method: "GET" })
   .validator((data: { sha: string }) => data)
   .handler(async ({ data }): Promise<GitHubCommitDetail> => {
+    const { requireAdmin } = await import("./admin.server");
+    await requireAdmin();
     try {
       const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/commits/${data.sha}`, {
         headers: githubHeaders(),
@@ -260,6 +266,8 @@ export interface GitPushStatus {
 // raportăm ahead/behind față de ultima referință cunoscută.
 export const getGitPushStatus = createServerFn({ method: "GET" }).handler(
   async (): Promise<{ status: "ok"; data: GitPushStatus } | { status: "error"; error: string }> => {
+    const { requireAdmin } = await import("./admin.server");
+    await requireAdmin();
     try {
       const branch = execSync("git rev-parse --abbrev-ref HEAD", { encoding: "utf8" }).trim();
       try {
@@ -294,6 +302,8 @@ export const getUnpushedCommits = createServerFn({ method: "GET" }).handler(
   async (): Promise<
     { status: "ok"; commits: UnpushedCommit[] } | { status: "error"; error: string }
   > => {
+    const { requireAdmin } = await import("./admin.server");
+    await requireAdmin();
     try {
       const branch = execSync("git rev-parse --abbrev-ref HEAD", { encoding: "utf8" }).trim();
       const sep = "\x1f";
@@ -319,6 +329,8 @@ export const getUnpushedCommits = createServerFn({ method: "GET" }).handler(
 export const getLocalCommitDetail = createServerFn({ method: "GET" })
   .validator((data: { sha: string }) => data)
   .handler(async ({ data }): Promise<GitHubCommitDetail> => {
+    const { requireAdmin } = await import("./admin.server");
+    await requireAdmin();
     try {
       const sep = "\x1f";
       const header = execFileSync(

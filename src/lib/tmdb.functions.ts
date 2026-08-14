@@ -100,6 +100,8 @@ export interface TmdbSearchResult {
 export const searchTmdb = createServerFn({ method: "GET" })
   .validator((data: { query: string }) => data)
   .handler(async ({ data }): Promise<TmdbSearchResult[]> => {
+    const { requireAdmin } = await import("./admin.server");
+    await requireAdmin();
     const q = data.query.trim();
     if (!q) return [];
     try {
@@ -154,6 +156,8 @@ export interface TmdbDetails {
 export const getTmdbDetails = createServerFn({ method: "GET" })
   .validator((data: { id: number; mediaType: "movie" | "tv" }) => data)
   .handler(async ({ data }): Promise<TmdbDetails> => {
+    const { requireAdmin } = await import("./admin.server");
+    await requireAdmin();
     try {
       if (data.mediaType === "movie") {
         const movie = await tmdbFetch<TmdbApiMovie>(
@@ -301,9 +305,11 @@ export async function getTmdbSeasonEpisodesInternal(
 
 export const getTmdbSeasonEpisodes = createServerFn({ method: "GET" })
   .validator((data: { tmdbId: number; seasonNum: number }) => data)
-  .handler(async ({ data }): Promise<TmdbEpisode[]> =>
-    getTmdbSeasonEpisodesInternal(data.tmdbId, data.seasonNum),
-  );
+  .handler(async ({ data }): Promise<TmdbEpisode[]> => {
+    const { requireAdmin } = await import("./admin.server");
+    await requireAdmin();
+    return getTmdbSeasonEpisodesInternal(data.tmdbId, data.seasonNum);
+  });
 
 export interface TvShowCountdown {
   status: "ok" | "error" | "not_found";
@@ -328,6 +334,8 @@ export interface TvShowCountdown {
 export const getTvShowCountdown = createServerFn({ method: "GET" })
   .validator((data: { imdbId: string | null; showTitle: string }) => data)
   .handler(async ({ data }): Promise<TvShowCountdown> => {
+    const { requireAdmin } = await import("./admin.server");
+    await requireAdmin();
     try {
       let tvmazeShow: TvmazeShow | null = null;
 

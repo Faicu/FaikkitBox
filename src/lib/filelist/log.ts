@@ -102,6 +102,8 @@ export async function markLogEntryComplete(torrentId: number): Promise<boolean> 
 
 export const getFilelistDownloadLog = createServerFn({ method: "GET" }).handler(
   async (): Promise<FilelistLogEntry[]> => {
+    const { requireAdmin } = await import("../admin.server");
+    await requireAdmin();
     return readDownloadLog();
   },
 );
@@ -112,6 +114,8 @@ export const getFilelistDownloadLog = createServerFn({ method: "GET" }).handler(
 export const resolveTorrentDisplayName = createServerFn({ method: "GET" })
   .validator((data: { torrentName: string; imdb?: string | null }) => data)
   .handler(async ({ data }): Promise<string> => {
+    const { requireAdmin } = await import("../admin.server");
+    await requireAdmin();
     const { buildTorrentDisplayName } = await import("../tmdb-title-lookup");
     return buildTorrentDisplayName(data.torrentName, data.imdb ?? null).catch(
       () => data.torrentName,

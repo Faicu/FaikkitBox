@@ -24,12 +24,14 @@ import { ErrorCard } from "@/components/ErrorCard";
 import { ServiceHeaderActions, CommandOutput } from "@/components/ServiceHeaderActions";
 import { useServiceRecovery } from "@/components/useServiceRecovery";
 import { TehnicSubNav } from "@/components/tehnic/TehnicSubNav";
-import { qbitQuery, adminStatusQuery } from "@/lib/queries";
+import { qbitQuery } from "@/lib/queries";
+import { requireAdminBeforeLoad } from "@/lib/admin-route-guard";
 import type { AgentCommand, AgentResult } from "@/lib/agent.functions";
 import { formatBytes, formatSpeed, formatEta } from "@/lib/format";
 import { qbitAction } from "@/lib/services.functions";
 
 export const Route = createFileRoute("/qbit")({
+  beforeLoad: requireAdminBeforeLoad,
   head: () => ({ meta: [{ title: "qBittorrent — Monitor Server" }] }),
   component: QbitPage,
 });
@@ -62,8 +64,6 @@ function stateBadge(state: string) {
 
 function QbitPage() {
   const { data, isLoading } = useQuery(qbitQuery);
-  const admin = useQuery(adminStatusQuery);
-  const isAdmin = !!admin.data?.isAdmin;
   const status = isLoading ? "loading" : (data?.status ?? "error");
   const { recovering, startRecovery } = useServiceRecovery(data?.status);
   const queryClient = useQueryClient();
@@ -140,24 +140,22 @@ function QbitPage() {
 
       {data?.status === "ok" && (
         <>
-          {isAdmin && (
-            <div className="flex gap-2">
-              <button
-                onClick={() => mutation.mutate({ hashes: "all", action: "resume" })}
-                disabled={pendingAll}
-                className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/15 px-3 py-2 text-sm font-medium text-emerald-400 hover:bg-emerald-500/25 disabled:opacity-50"
-              >
-                <Play className="h-4 w-4" /> Reia toate
-              </button>
-              <button
-                onClick={() => mutation.mutate({ hashes: "all", action: "pause" })}
-                disabled={pendingAll}
-                className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-amber-500/30 bg-amber-500/15 px-3 py-2 text-sm font-medium text-amber-400 hover:bg-amber-500/25 disabled:opacity-50"
-              >
-                <Pause className="h-4 w-4" /> Oprește toate
-              </button>
-            </div>
-          )}
+          <div className="flex gap-2">
+            <button
+              onClick={() => mutation.mutate({ hashes: "all", action: "resume" })}
+              disabled={pendingAll}
+              className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/15 px-3 py-2 text-sm font-medium text-emerald-400 hover:bg-emerald-500/25 disabled:opacity-50"
+            >
+              <Play className="h-4 w-4" /> Reia toate
+            </button>
+            <button
+              onClick={() => mutation.mutate({ hashes: "all", action: "pause" })}
+              disabled={pendingAll}
+              className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-amber-500/30 bg-amber-500/15 px-3 py-2 text-sm font-medium text-amber-400 hover:bg-amber-500/25 disabled:opacity-50"
+            >
+              <Pause className="h-4 w-4" /> Oprește toate
+            </button>
+          </div>
 
           <div className="grid grid-cols-2 gap-2">
             <StatCard
@@ -385,47 +383,41 @@ function QbitPage() {
                             >
                               {b.text}
                             </span>
-                            {isAdmin && (
-                              <button
-                                onClick={() =>
-                                  mutation.mutate({
-                                    hashes: [t.hash],
-                                    action: isPaused ? "resume" : "pause",
-                                  })
-                                }
-                                disabled={busy}
-                                title={isPaused ? "Reia" : "Oprește"}
-                                className={`rounded-md border p-1 transition disabled:opacity-50 ${
-                                  isPaused
-                                    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"
-                                    : "border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20"
-                                }`}
-                              >
-                                {isPaused ? (
-                                  <Play className="h-3.5 w-3.5" />
-                                ) : (
-                                  <Pause className="h-3.5 w-3.5" />
-                                )}
-                              </button>
-                            )}
-                            {isAdmin && (
-                              <button
-                                onClick={() => {
-                                  if (
-                                    !confirm(
-                                      `Ștergi torrentul și fișierele de pe disk?\n\n${t.name}`,
-                                    )
-                                  )
-                                    return;
-                                  mutation.mutate({ hashes: [t.hash], action: "delete" });
-                                }}
-                                disabled={busy}
-                                title="Șterge torrent + fișiere"
-                                className="rounded-md border border-red-500/30 bg-red-500/10 p-1 text-red-400 hover:bg-red-500/20 transition disabled:opacity-50"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                            )}
+                            <button
+                              onClick={() =>
+                                mutation.mutate({
+                                  hashes: [t.hash],
+                                  action: isPaused ? "resume" : "pause",
+                                })
+                              }
+                              disabled={busy}
+                              title={isPaused ? "Reia" : "Oprește"}
+                              className={`rounded-md border p-1 transition disabled:opacity-50 ${
+                                isPaused
+                                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"
+                                  : "border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20"
+                              }`}
+                            >
+                              {isPaused ? (
+                                <Play className="h-3.5 w-3.5" />
+                              ) : (
+                                <Pause className="h-3.5 w-3.5" />
+                              )}
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (
+                                  !confirm(`Ștergi torrentul și fișierele de pe disk?\n\n${t.name}`)
+                                )
+                                  return;
+                                mutation.mutate({ hashes: [t.hash], action: "delete" });
+                              }}
+                              disabled={busy}
+                              title="Șterge torrent + fișiere"
+                              className="rounded-md border border-red-500/30 bg-red-500/10 p-1 text-red-400 hover:bg-red-500/20 transition disabled:opacity-50"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
                           </div>
                         </div>
                         <div className="mt-2">

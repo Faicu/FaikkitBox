@@ -20,12 +20,10 @@ function useDebouncedValue(value: string, delay: number) {
 export function DiscoverGrid({
   sort,
   media,
-  isAdmin,
   searchQuery,
 }: {
   sort: DiscoverSort;
   media: DiscoverMediaType | "all";
-  isAdmin: boolean;
   searchQuery: string;
 }) {
   const [selected, setSelected] = useState<DiscoverTitle | null>(null);
@@ -188,9 +186,7 @@ export function DiscoverGrid({
         </>
       )}
 
-      {selected && (
-        <SceneViewer item={selected} isAdmin={isAdmin} onClose={() => setSelected(null)} />
-      )}
+      {selected && <SceneViewer item={selected} onClose={() => setSelected(null)} />}
     </div>
   );
 }

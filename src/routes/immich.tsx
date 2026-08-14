@@ -10,10 +10,12 @@ import { ServiceHeaderActions, CommandOutput } from "@/components/ServiceHeaderA
 import { useServiceRecovery } from "@/components/useServiceRecovery";
 import { TehnicSubNav } from "@/components/tehnic/TehnicSubNav";
 import { immichQuery } from "@/lib/queries";
+import { requireAdminBeforeLoad } from "@/lib/admin-route-guard";
 import { formatBytes } from "@/lib/format";
 import type { AgentCommand, AgentResult } from "@/lib/agent.functions";
 
 export const Route = createFileRoute("/immich")({
+  beforeLoad: requireAdminBeforeLoad,
   head: () => ({ meta: [{ title: "Immich — Monitor Server" }] }),
   component: ImmichPage,
 });

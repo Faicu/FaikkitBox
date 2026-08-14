@@ -849,11 +849,15 @@ let backfillProgress: BackfillProgress | null = null;
 let lastBackfillResult: BackfillSubtitlesResult | null = null;
 
 export const getBackfillState = createServerFn({ method: "GET" }).handler(
-  async (): Promise<BackfillState> => ({
-    running: backfillRunning,
-    progress: backfillProgress,
-    lastResult: backfillRunning ? null : lastBackfillResult,
-  }),
+  async (): Promise<BackfillState> => {
+    const { requireAdmin } = await import("../admin.server");
+    await requireAdmin();
+    return {
+      running: backfillRunning,
+      progress: backfillProgress,
+      lastResult: backfillRunning ? null : lastBackfillResult,
+    };
+  },
 );
 
 async function runBackfillWork(url: string, qbitUser: string, qbitPass: string): Promise<void> {

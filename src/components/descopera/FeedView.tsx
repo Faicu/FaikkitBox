@@ -9,15 +9,7 @@ import { getTmdbDetails } from "@/lib/tmdb.functions";
 import { FilelistCheckButton } from "./FilelistCheckButton";
 import { PinToLansariButton } from "./PinToLansariButton";
 
-function FeedCard({
-  clip,
-  isActive,
-  isAdmin,
-}: {
-  clip: FeedClip;
-  isActive: boolean;
-  isAdmin: boolean;
-}) {
+function FeedCard({ clip, isActive }: { clip: FeedClip; isActive: boolean }) {
   const detailsFn = useServerFn(getTmdbDetails);
   const detailsQuery = useQuery({
     queryKey: ["tmdbDetails", clip.mediaType, clip.id],
@@ -61,7 +53,6 @@ function FeedCard({
                 }
                 imdbId={imdbId}
                 mediaType={clip.mediaType}
-                isAdmin={isAdmin}
               />
               <PinToLansariButton
                 id={clip.id}
@@ -69,7 +60,6 @@ function FeedCard({
                 originalTitle={detailsQuery.data?.originalTitle ?? clip.title}
                 posterUrl={clip.posterUrl}
                 mediaType={clip.mediaType}
-                isAdmin={isAdmin}
               />
             </div>
           </div>
@@ -92,11 +82,9 @@ function FeedCard({
 export function FeedView({
   sort,
   media,
-  isAdmin,
 }: {
   sort: DiscoverSort;
   media: DiscoverMediaType | "all";
-  isAdmin: boolean;
 }) {
   const feedFn = useServerFn(getFeedClips);
   const query = useQuery({
@@ -193,7 +181,7 @@ export function FeedView({
           }}
           className="h-full w-full snap-start"
         >
-          <FeedCard clip={clip} isActive={i === activeIndex} isAdmin={isAdmin} />
+          <FeedCard clip={clip} isActive={i === activeIndex} />
         </div>
       ))}
     </div>

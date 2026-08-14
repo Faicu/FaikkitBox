@@ -18,13 +18,11 @@ import { ShowCard } from "./ShowCard";
 export function PinnedItemCard({
   item,
   watchSettings,
-  isAdmin,
   onWatchChange,
   onUnpin,
 }: {
   item: PinnedItem;
   watchSettings: WatchSettings;
-  isAdmin: boolean;
   onWatchChange: (patch: Partial<WatchSettings>) => void;
   onUnpin: () => void;
 }) {
@@ -157,7 +155,6 @@ export function PinnedItemCard({
         isOpen={isOpen}
         onToggleOpen={() => setIsOpen((v) => !v)}
         watchSettings={watchSettings}
-        isAdmin={isAdmin}
         onWatchChange={onWatchChange}
         onUnpin={onUnpin}
       />
@@ -178,7 +175,6 @@ export function PinnedItemCard({
       countdown={countdown ?? null}
       countdownLoading={countdownLoading}
       watchSettings={watchSettings}
-      isAdmin={isAdmin}
       onWatchChange={onWatchChange}
       onUnpin={onUnpin}
     />

@@ -13,22 +13,18 @@ export function PinToLansariButton({
   originalTitle,
   posterUrl,
   mediaType,
-  isAdmin,
 }: {
   id: number;
   title: string;
   originalTitle: string;
   posterUrl: string | null;
   mediaType: DiscoverMediaType;
-  isAdmin: boolean;
 }) {
   const queryClient = useQueryClient();
   const addPinnedFn = useServerFn(addPinnedItem);
   const [pinning, setPinning] = useState(false);
 
-  const pinnedQuery = useQuery({ ...pinnedItemsQuery, enabled: isAdmin });
-
-  if (!isAdmin) return null;
+  const pinnedQuery = useQuery(pinnedItemsQuery);
 
   const isPinned = pinnedQuery.data?.some((p) => p.id === id && p.mediaType === mediaType) ?? false;
 

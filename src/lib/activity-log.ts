@@ -102,6 +102,8 @@ export async function logActivity(
 
 export const getActivityLog = createServerFn({ method: "GET" }).handler(
   async (): Promise<ActivityEntry[]> => {
+    const { requireAdmin } = await import("./admin.server");
+    await requireAdmin();
     try {
       const { getDb } = await import("./db");
       const db = getDb();

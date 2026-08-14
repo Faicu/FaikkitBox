@@ -8,7 +8,6 @@ import {
   recentCommitsQuery,
   commitsFromDbQuery,
   githubPushStatusQuery,
-  adminStatusQuery,
   unpushedCommitsQuery,
 } from "@/lib/queries";
 import { pushToGitHub, type UnpushedCommit } from "@/lib/github.functions";
@@ -18,9 +17,8 @@ import { CommitDrawer } from "../CommitDrawer";
 export function CommitStatsSection() {
   useQuery(recentCommitsQuery);
   const { data: commitsData, isLoading } = useQuery(commitsFromDbQuery);
-  const admin = useQuery(adminStatusQuery);
   const pushStatus = useQuery(githubPushStatusQuery);
-  const unpushed = useQuery({ ...unpushedCommitsQuery, enabled: !!admin.data?.isAdmin });
+  const unpushed = useQuery(unpushedCommitsQuery);
   const [selectedUnpushed, setSelectedUnpushed] = useState<UnpushedCommit | null>(null);
 
   const qc = useQueryClient();
@@ -85,7 +83,7 @@ export function CommitStatsSection() {
         )}
       </div>
 
-      {admin.data?.isAdmin && ahead > 0 && unpushed.data?.status === "ok" && unpushed.data.commits.length > 0 && (
+      {ahead > 0 && unpushed.data?.status === "ok" && unpushed.data.commits.length > 0 && (
         <div className="rounded-2xl border border-border bg-card divide-y divide-border/50">
           {unpushed.data.commits.map((c) => (
             <button
@@ -106,21 +104,19 @@ export function CommitStatsSection() {
         </div>
       )}
 
-      {admin.data?.isAdmin && (
-        <button
-          type="button"
-          onClick={() => pushMutation.mutate()}
-          disabled={pushMutation.isPending || ahead === 0}
-          className="flex w-full items-center justify-center gap-2 rounded-xl border border-sky-500/30 bg-sky-500/15 px-3 py-2.5 text-sm font-medium text-sky-400 hover:bg-sky-500/25 disabled:opacity-50"
-        >
-          <UploadCloud className="h-4 w-4" />
-          {pushMutation.isPending
-            ? "Se trimite pe GitHub..."
-            : ahead > 0
-              ? `Trimite pe GitHub (${ahead} commit${ahead !== 1 ? "-uri" : ""})`
-              : "Sincronizat cu GitHub"}
-        </button>
-      )}
+      <button
+        type="button"
+        onClick={() => pushMutation.mutate()}
+        disabled={pushMutation.isPending || ahead === 0}
+        className="flex w-full items-center justify-center gap-2 rounded-xl border border-sky-500/30 bg-sky-500/15 px-3 py-2.5 text-sm font-medium text-sky-400 hover:bg-sky-500/25 disabled:opacity-50"
+      >
+        <UploadCloud className="h-4 w-4" />
+        {pushMutation.isPending
+          ? "Se trimite pe GitHub..."
+          : ahead > 0
+            ? `Trimite pe GitHub (${ahead} commit${ahead !== 1 ? "-uri" : ""})`
+            : "Sincronizat cu GitHub"}
+      </button>
 
       {selectedUnpushed && (
         <CommitDrawer
