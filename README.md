@@ -11,6 +11,7 @@ Construit cu [TanStack Start](https://tanstack.com/start) (React 19 + TanStack R
 ## Cuprins
 
 - [Funcționalități](#funcționalități)
+- [Autentificare și conturi](#autentificare-și-conturi)
 - [Lansări — filme și seriale](#lansări--filme-și-seriale)
 - [Sistemul de erori și observabilitate](#sistemul-de-erori-și-observabilitate)
 - [Stack tehnic](#stack-tehnic)
@@ -24,22 +25,60 @@ Construit cu [TanStack Start](https://tanstack.com/start) (React 19 + TanStack R
 
 ## Funcționalități
 
-| Pagină | Ce arată |
-|---|---|
-| **Acasă** | Status live pentru toate serviciile într-un singur ecran: Plex, Immich, qBittorrent, gazdă, ultimul speedtest, jurnal de activitate. Buton **„Adaugă film/serial"** (admin) — wizard ghidat: căutare TMDB → verificare automată Plex + Filelist → alegere calitate/sezon/episod → confirmare și descărcare (sau fixare pentru monitorizare automată dacă nu există încă pe Filelist). |
-| **Plex** | Sesiuni active cu progres și stare (Redare/Pauză), episoade vizionate azi, utilizatori activi. |
-| **Immich** | Număr fișiere, spațiu ocupat, coadă de joburi active. |
-| **qBittorrent** | Viteze download/upload, torrente active/total, filtre pe stări, căutare în listă, pauză/reluare (global sau individual), ștergere torrent + fișiere. |
-| **Sistem** | CPU, memorie, swap, uptime, discuri (viteze read/write), rețea, senzori temperatură, top procese și top I/O disc, aplicații monitorizate, mentenanță (update Ubuntu, restart servicii). |
-| **Tehnic** | Speedtest (test nou + istoric grafic), status plugin-uri server, statistici commit-uri, jurnal de activitate, **widget Erori aplicație** (vezi mai jos). |
-| **Descoperă** | Explorare TMDB (grid + feed video) cu status Plex și Filelist per titlu, fixare directă în Lansări. |
-| **Lansări** | Căutare, monitorizare automată și descărcare filme/seriale (detalii mai jos). |
+| Pagină | Acces | Ce arată |
+|---|---|---|
+| **Acasă** (`/`) | Public | Singura pagină accesibilă fără cont. Status live Plex (sesiuni, biblioteci, top vizionate, recent adăugate). Buton **„Adaugă film/serial"** (necesită cont aprobat) — wizard ghidat: căutare TMDB → verificare automată Plex + Filelist → alegere calitate/sezon/episod → confirmare și descărcare (sau fixare pentru monitorizare automată dacă nu există încă pe Filelist). Vizitatorilor neautentificați li se arată un CTA cu butoane **Înregistrare**/**Autentificare**. |
+| **Descoperă** (`/descopera`) | Orice cont aprobat | Explorare TMDB (grid + feed video) cu status Plex și Filelist per titlu, fixare directă în Lansări (per cont — vezi [Autentificare și conturi](#autentificare-și-conturi)). |
+| **Lansări** (`/lansari`) | Orice cont aprobat (căutarea TMDB și căutarea manuală Filelist — doar admin) | Listă proprie de fixări, monitorizare automată și descărcare filme/seriale (detalii mai jos). |
+| **Plex** | Admin | Sesiuni active cu progres și stare (Redare/Pauză), episoade vizionate azi, utilizatori activi. |
+| **Immich** | Admin | Număr fișiere, spațiu ocupat, coadă de joburi active. |
+| **qBittorrent** | Admin | Viteze download/upload, torrente active/total, filtre pe stări, căutare în listă, pauză/reluare (global sau individual), ștergere torrent + fișiere. |
+| **Sistem** | Admin | CPU, memorie, swap, uptime, discuri (viteze read/write), rețea, senzori temperatură, top procese și top I/O disc, aplicații monitorizate, mentenanță (update Ubuntu, restart servicii). |
+| **Tehnic** | Admin | Speedtest (test nou + istoric grafic), status plugin-uri server, statistici commit-uri, jurnal de activitate, **widget Erori aplicație** (vezi mai jos). |
+| **Utilizatori** (`/users`) | Admin | Cereri de aprobare cont, listă conturi (admin + obișnuite), click pe orice cont deschide detalii complete (contact, legătură Plex, fixări, descărcări inițiate, activitate Plex, istoric autentificări). |
 
 Alte capabilități transversale:
 
-- **Notificări push** — web push pentru commit-uri GitHub, actualizări Lansări, și erori noi ale aplicației. Funcționează fără browser deschis; recuperează automat notificările pierdute în timpul unui restart.
+- **Notificări push** — web push pentru commit-uri GitHub, actualizări Lansări, cereri noi de aprobare cont, și erori noi ale aplicației. Funcționează fără browser deschis; recuperează automat notificările pierdute în timpul unui restart.
 - **Verificare versiuni** — indicator Plex/Immich (actualizat / necesită update) în header-ul fiecărei pagini de serviciu, cu acțiune de restart pentru containerul Docker.
-- **Autentificare admin** — sesiune cookie-based (user/parolă + secret de sesiune) pentru funcțiile administrative.
+- **Autentificare multi-rol** — vezi secțiunea următoare.
+
+---
+
+## Autentificare și conturi
+
+Sistem cu două roluri, o singură tabelă `users` (nu conturi separate pentru admin/user):
+
+| Rol | Cum se obține | Acces |
+|---|---|---|
+| **Admin** | Creat manual de un alt admin, din pagina Utilizatori (`addAdminUser`). Aprobat automat (`status='approved'`). | Toate paginile. |
+| **User obișnuit** | Auto-înregistrare publică (`/register`) + aprobare manuală de admin. | Acasă (public oricum), Descoperă, Lansări (fără cele două module cu bară de căutare, admin-only) — vezi tabelul de mai sus. |
+
+**Înregistrare** (`registerUser`, `src/lib/registration.functions.ts`) — formular Username/Parolă/Email/Telefon (WhatsApp). Username-ul **sau** email-ul introdus trebuie să corespundă unui cont din biblioteca Plex (`matchPlexAccount`, `src/lib/plex-users.server.ts` — interoghează `plex.tv/api/users`, parsat manual din XML, cache 5 min; API-ul ignoră `Accept: application/json`), altfel cererea e respinsă direct, cu mesaj clar. Contul creat intră cu `status='pending'` — nu poate face login până nu e aprobat. Fiecare cerere nouă generează automat o intrare `account_request` în Jurnalul de activitate + notificare push.
+
+**Aprobare** (`/users`, pagina Utilizatori) — admin vede cererile pending cu detalii (contact + legătura Plex găsită) și poate Aproba sau Respinge (respingerea șterge direct rândul — nu există status `rejected`). Orice cont existent poate fi „revocat" (șters) din secțiunea Utilizatori aprobați.
+
+**Login unificat** (`/login`) — aceeași pagină și logică pentru admin și utilizatori obișnuiți; `adminLogin` verifică username+parolă în `users` fără filtrare pe rol, respinge conturile `pending`. Fiecare login reușit scrie un rând în `user_logins` (dată, IP, user-agent) + actualizează `users.last_login_at` — istoric vizibil în pagina de detalii a contului.
+
+**Doi guarzi de rută**, exportați din `src/lib/admin-route-guard.ts`:
+
+```ts
+requireAdminBeforeLoad   // doar admin — Plex, qBit, Immich, Sistem, Tehnic, Utilizatori
+requireAuthBeforeLoad    // orice cont aprobat — Descoperă, Lansări
+```
+
+...și echivalentul lor la nivel de server function, în `admin.server.ts`:
+
+```ts
+requireAdmin()   // aruncă 401 dacă session.data.admin nu e true
+requireAuth()    // aruncă 401 dacă session.data.userId lipsește (orice rol aprobat trece)
+```
+
+**Important:** guard-ul de rută protejează doar navigarea. Fiecare server function apelată de o pagină trebuie să aibă *și ea* `requireAdmin()`/`requireAuth()` — altfel poate fi apelată direct, ocolind complet pagina. Când adaugi o funcție nouă, verifică ce pagină o folosește și alege guard-ul potrivit; dacă e folosită din mai multe pagini cu niveluri de acces diferite, ia nivelul cel mai permisiv dintre ele care rămâne totuși sigur.
+
+**Fixările din Lansări sunt per-utilizator** — `pinned_items` are `user_id` (migrarea v9); fiecare cont vede și gestionează doar propria listă. `pinned_watch_settings`/`pinned_watch_state` (config urmărire + auto-download) rămân **globale**, per titlu — dacă doi useri fixează același film cu auto-download activat, verificarea/descărcarea rulează o singură dată, nu duplicat (`pinned-watcher.ts` face `GROUP BY` explicit pe asta).
+
+**Legătura cu Plex** (`plex_account_id`/`plex_username`/`plex_email` pe fiecare cont) alimentează pagina de detalii din Utilizatori: activitate Plex recentă (`getPlexUserHistory`, auto-populează cache-ul dacă e rece, nu depinde pasiv de polling-ul de pe Acasă) și, în viitor, biblioteca Plex personalizată de pe Acasă (status "văzut de mine" per titlu — funcționalitate planificată, nu încă implementată).
 
 ---
 
@@ -159,7 +198,8 @@ src/
     services/           Plex, Immich, qBittorrent, Host — agregare status dashboard
     filelist/           căutare unificată, client qBittorrent, categorii, download, jurnal
     *.functions.ts      server functions TanStack (admin, github, push, tmdb, pinned...)
-  routes/             pagini: index, plex, immich, qbit, sistem, tehnic, lansari, login
+  routes/             pagini: index, descopera, lansari, plex, immich, qbit, sistem,
+                      tehnic, users, login, register
 server/
   plugins/            plugin-uri Nitro (fundal): pinned-watcher, plex-session-tracker,
                       github-commit-tracker, fast-shutdown
@@ -283,14 +323,14 @@ Pentru liste ce se încarcă incremental (ex. `DiscoverGrid`), se folosește `us
 
 | Domeniu | Fișiere | Note |
 |---|---|---|
-| Pinned items (Lansări) | `pinned.functions.ts` | Tabelă SQLite `pinned_items`. `setPinnedItems` = full-replace (UI-ul de căutare din Lansări), `addPinnedItem` = insert unic (`PinToLansariButton` din Descoperă). Ambele trebuie să invalideze `["pinnedItems"]` (`pinnedItemsQuery`) ca să rămână sincron între pagini. |
+| Pinned items (Lansări) | `pinned.functions.ts` | Tabelă SQLite `pinned_items`, **per-utilizator** (`user_id`, din `session.data.userId` prin `requireAuth()`). `setPinnedItems` = full-replace scopat pe user (UI-ul de căutare din Lansări), `addPinnedItem` = insert unic scopat pe user (`PinToLansariButton` din Descoperă). Ambele trebuie să invalideze `["pinnedItems"]` (`pinnedItemsQuery`) ca să rămână sincron între pagini. `pinned_watch_settings`/`pinned_watch_state` rămân globale, per titlu — nu adăuga `user_id` acolo fără să actualizezi și `pinned-watcher.ts` (are deja `GROUP BY` explicit ca să nu proceseze duplicat un titlu fixat de mai mulți useri). |
 | Filelist | `filelist.functions.ts` (barrel) + `filelist/{types,categories,download,match,log}.ts` | `categories.ts` are `isMovieCategory`/`MOVIE_CATEGORIES`/`SERIES_CATEGORIES` — **nu reimplementa** verificarea film/serial în altă parte. `checkFilelistForItemInternal` (`download.ts`) e **sursa unică** pentru „există pe Filelist?" — nu duplica logica de căutare/matching. `refreshPlexLibrary`/`refreshPlexLibraryForCategory` sunt **singurul** punct care declanșează rescan Plex din acest modul. `match.ts` are `torrentMatchesTitle`/`stripDiacritics`. |
 | Erori aplicație | `error-log.ts`, `console-capture.ts`, `client-error-capture.ts` | Vezi [Sistemul de erori](#sistemul-de-erori-și-observabilitate). Nu adăuga apeluri `logError()` manuale lângă un `console.warn`/`console.error` — captarea globală le prinde deja automat; ar produce intrări duplicate. |
 | TMDB | `tmdb.functions.ts` (search/details/countdown/episoade), `tmdb.discover.functions.ts` (trending/popular/newest + feed clipuri video), `tmdb-client.ts` (fetch helper cu token Bearer), `tmdb-title-lookup.ts` (titlu de afișat pornind de la IMDb id, pentru jurnal/notificări) | `getTmdbDetails` întoarce și `literalTitle` (din `alternative_titles`, `type: "literal title"`) — folosește-l pentru orice căutare externă (Filelist), nu `originalTitle` brut, care rămâne în scriptul nativ pentru producții non-latine. Funcțiile de discover întorc `{ items/clips, degraded }` — `degraded: true` înseamnă eroare TMDB înghițită în try/catch, nu listă goală legitimă. TMDB cache-uiește răspunsuri per URL exact — cererile pentru titluri de episoade (`getTmdbSeasonEpisodesInternal`) au cache-bust explicit, altfel un episod difuzat recent poate rămâne cu placeholder generic ore bune după ce TMDB are deja titlul real. |
 | Notificări push | `notifications.ts` (conținut: titlu+text per tip de eveniment), `push.ts` (trimitere efectivă, `sendPushToAll`), `torrent-quality.ts` + `torrent-name-parse.ts` (detectare calitate/sezon-episod din numele lansării) | Sursă unică pentru conținutul fiecărei notificări — orice modul nou care trebuie să notifice adaugă o funcție aici, nu construiește titlul/textul inline. |
 | Servicii dashboard | `services/{plex,immich,qbittorrent,host,plex-library,shared}.ts` + `services.functions.ts` | Agregă statusul pentru pagina principală și pentru status Plex per-item din Lansări (`checkPlexHasTitle`, `getPlexEpisodesInSeason`). |
-| Auth admin | `admin.functions.ts` + `admin.server.ts` | Sesiune cookie-based (`getSession()`), fără JWT. `adminStatusQuery` e cache-uit 30s — dacă testezi login/logout și nu vezi schimbarea imediat, e din cauza staleTime, nu un bug. |
-| DB | `db.ts` | SQLite nativ (`node:sqlite`), un singur fișier la `/opt/faikkitbox/data/faikkitbox.db` (override cu `FAIKKITBOX_DB_PATH`). Fără ORM/migrations tool — schema se creează cu `CREATE TABLE IF NOT EXISTS`, migrările incrementale via `PRAGMA user_version` (`runCleanups`); orice schimbare de schemă se adaugă acolo. |
+| Autentificare | `admin.functions.ts` (login/logout/status + CRUD conturi admin), `admin.server.ts` (`getSession`, `requireAdmin`, `requireAuth`), `admin-route-guard.ts` (guarzi de rută), `registration.functions.ts`, `users.functions.ts` (listare/aprobare/detalii conturi), `plex-users.server.ts` (potrivire cont Plex), `password.ts` (hash scrypt) | Sesiune cookie-based (`getSession()`), fără JWT. Vezi [Autentificare și conturi](#autentificare-și-conturi) pentru fluxul complet. `adminStatusQuery` e cache-uit 30s — dacă testezi login/logout și nu vezi schimbarea imediat, e din cauza staleTime, nu un bug. |
+| DB | `db.ts` | SQLite nativ (`node:sqlite`), un singur fișier la `/opt/faikkitbox/data/faikkitbox.db` (override cu `FAIKKITBOX_DB_PATH`). Fără ORM/migrations tool — schema se creează cu `CREATE TABLE IF NOT EXISTS`, migrările incrementale via `PRAGMA user_version` (`runCleanups`, la `v11` — vezi și rândul de mai sus pentru migrarea `users`/`pinned_items`); orice schimbare de schemă se adaugă acolo. |
 
 ### Componente Lansări/Descoperă — puncte de refolosit
 
