@@ -12,13 +12,13 @@ export interface PinnedItemDb {
 export const getPinnedItems = createServerFn({ method: "GET" }).handler(
   async (): Promise<PinnedItemDb[]> => {
     const { requireAuth } = await import("./admin.server");
-    await requireAuth();
+    const session = await requireAuth();
     const db = getDb();
     const rows = db
       .prepare(
-        "SELECT id, media_type, title, original_title, poster_url FROM pinned_items ORDER BY sort_order ASC, added_at ASC",
+        "SELECT id, media_type, title, original_title, poster_url FROM pinned_items WHERE user_id = ? ORDER BY sort_order ASC, added_at ASC",
       )
-      .all() as Array<{
+      .all(session.data.userId!) as Array<{
       id: number;
       media_type: string;
       title: string;
@@ -121,19 +121,21 @@ export const addPinnedItem = createServerFn({ method: "POST" })
   .validator((data: PinnedItemDb) => data)
   .handler(async ({ data }): Promise<{ added: boolean }> => {
     const { requireAuth } = await import("./admin.server");
-    await requireAuth();
+    const session = await requireAuth();
+    const userId = session.data.userId!;
     const db = getDb();
     const exists = db
-      .prepare("SELECT 1 FROM pinned_items WHERE id = ? AND media_type = ?")
-      .get(data.id, data.mediaType);
+      .prepare("SELECT 1 FROM pinned_items WHERE user_id = ? AND id = ? AND media_type = ?")
+      .get(userId, data.id, data.mediaType);
     if (exists) return { added: false };
     const maxOrder = db
-      .prepare("SELECT COALESCE(MAX(sort_order), -1) as m FROM pinned_items")
-      .get() as { m: number };
+      .prepare("SELECT COALESCE(MAX(sort_order), -1) as m FROM pinned_items WHERE user_id = ?")
+      .get(userId) as { m: number };
     db.prepare(
-      `INSERT INTO pinned_items (id, media_type, title, original_title, poster_url, sort_order)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO pinned_items (user_id, id, media_type, title, original_title, poster_url, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
     ).run(
+      userId,
       data.id,
       data.mediaType,
       data.title,
@@ -148,17 +150,27 @@ export const setPinnedItems = createServerFn({ method: "POST" })
   .validator((data: { items: PinnedItemDb[] }) => data)
   .handler(async ({ data }): Promise<void> => {
     const { requireAuth } = await import("./admin.server");
-    await requireAuth();
+    const session = await requireAuth();
+    const userId = session.data.userId!;
     const db = getDb();
-    db.prepare("DELETE FROM pinned_items").run();
+    db.prepare("DELETE FROM pinned_items WHERE user_id = ?").run(userId);
     const stmt = db.prepare(
-      `INSERT INTO pinned_items (id, media_type, title, original_title, poster_url, sort_order)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO pinned_items (user_id, id, media_type, title, original_title, poster_url, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
     );
     data.items.forEach((item, i) => {
-      stmt.run(item.id, item.mediaType, item.title, item.originalTitle, item.posterUrl ?? null, i);
+      stmt.run(
+        userId,
+        item.id,
+        item.mediaType,
+        item.title,
+        item.originalTitle,
+        item.posterUrl ?? null,
+        i,
+      );
     });
-    // Curăță setările/starea de watch pentru itemele care nu mai sunt fixate
+    // Curăță setările/starea de watch pentru itemele pe care NIMENI nu le
+    // mai are fixate (watch settings sunt globale per titlu, nu per user).
     db.prepare(
       `DELETE FROM pinned_watch_settings WHERE NOT EXISTS (
          SELECT 1 FROM pinned_items pi WHERE pi.id = pinned_watch_settings.id AND pi.media_type = pinned_watch_settings.media_type

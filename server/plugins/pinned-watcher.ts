@@ -108,14 +108,19 @@ export async function checkAll(force = false): Promise<void> {
 
     const db = getDb();
 
+    // pinned_items e per-utilizator — mai mulți useri pot fixa același
+    // titlu. GROUP BY colapsează la un singur rând per (id, media_type),
+    // ca verificarea/auto-download-ul să ruleze o singură dată, nu
+    // duplicat per user.
     const items = db
       .prepare(
-        `SELECT pi.id, pi.media_type, pi.title, pi.original_title,
+        `SELECT pi.id, pi.media_type, MIN(pi.title) as title, MIN(pi.original_title) as original_title,
                 pw.watch_filelist, pw.watch_filelist_season, pw.watch_tmdb,
                 pw.auto_download, pw.auto_download_quality
          FROM pinned_items pi
          JOIN pinned_watch_settings pw ON pw.id = pi.id AND pw.media_type = pi.media_type
-         WHERE pw.watch_filelist = 1 OR pw.watch_tmdb = 1`,
+         WHERE pw.watch_filelist = 1 OR pw.watch_tmdb = 1
+         GROUP BY pi.id, pi.media_type`,
       )
       .all() as Array<{
       id: number;

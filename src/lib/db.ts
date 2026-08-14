@@ -84,6 +84,7 @@ export function getDb(): DatabaseSync {
     CREATE INDEX IF NOT EXISTS idx_speedtest_ts ON speedtest_history(timestamp DESC);
 
     CREATE TABLE IF NOT EXISTS pinned_items (
+      user_id INTEGER NOT NULL,
       id INTEGER NOT NULL,
       media_type TEXT NOT NULL,
       title TEXT NOT NULL,
@@ -91,7 +92,7 @@ export function getDb(): DatabaseSync {
       poster_url TEXT,
       sort_order INTEGER NOT NULL DEFAULT 0,
       added_at TEXT NOT NULL DEFAULT (datetime('now')),
-      PRIMARY KEY (id, media_type)
+      PRIMARY KEY (user_id, id, media_type)
     );
 
     CREATE TABLE IF NOT EXISTS plex_active_sessions (
@@ -330,6 +331,55 @@ function runCleanups(database: DatabaseSync): void {
         console.warn("[db] Migrare v8 eșuată:", e);
       }
       database.exec("PRAGMA user_version = 8");
+    }
+
+    if (version < 9) {
+      // v9: pinned_items devine per-utilizator (fiecare user vede/gestionează
+      // propria listă de fixări în Lansări), dar pinned_watch_settings și
+      // pinned_watch_state rămân globale per titlu (id, media_type) — dacă
+      // doi useri fixează același film, verificarea/auto-download-ul rulează
+      // o singură dată pentru acel titlu, nu duplicat per user.
+      try {
+        const cols = database.prepare("PRAGMA table_info(pinned_items)").all() as Array<{
+          name: string;
+        }>;
+        const hasUserId = cols.some((c) => c.name === "user_id");
+        if (!hasUserId) {
+          const admin = database
+            .prepare("SELECT id FROM users WHERE role = 'admin' ORDER BY id ASC LIMIT 1")
+            .get() as { id: number } | undefined;
+
+          database.exec(`
+            CREATE TABLE pinned_items_new (
+              user_id INTEGER NOT NULL,
+              id INTEGER NOT NULL,
+              media_type TEXT NOT NULL,
+              title TEXT NOT NULL,
+              original_title TEXT NOT NULL,
+              poster_url TEXT,
+              sort_order INTEGER NOT NULL DEFAULT 0,
+              added_at TEXT NOT NULL DEFAULT (datetime('now')),
+              PRIMARY KEY (user_id, id, media_type)
+            );
+          `);
+          if (admin) {
+            database
+              .prepare(
+                `INSERT INTO pinned_items_new (user_id, id, media_type, title, original_title, poster_url, sort_order, added_at)
+                 SELECT ?, id, media_type, title, original_title, poster_url, sort_order, added_at FROM pinned_items`,
+              )
+              .run(admin.id);
+          }
+          database.exec("DROP TABLE pinned_items");
+          database.exec("ALTER TABLE pinned_items_new RENAME TO pinned_items");
+          console.log(
+            `[db] Migrare v9: pinned_items devine per-utilizator (fixările existente → admin id=${admin?.id ?? "necunoscut"})`,
+          );
+        }
+      } catch (e) {
+        console.warn("[db] Migrare v9 eșuată:", e);
+      }
+      database.exec("PRAGMA user_version = 9");
     }
   } catch (e) {
     console.warn("[db] Curățare eșuată:", e);
