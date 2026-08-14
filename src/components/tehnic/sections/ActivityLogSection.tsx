@@ -83,7 +83,7 @@ export function ActivityLogSection() {
   };
 
   const timeline: TimelineItem[] = [
-    ...(log ?? []).map((entry): TimelineItem => ({
+    ...(Array.isArray(log) ? log : []).map((entry): TimelineItem => ({
       kind: "activity",
       ts: new Date(entry.timestamp).getTime(),
       entry,

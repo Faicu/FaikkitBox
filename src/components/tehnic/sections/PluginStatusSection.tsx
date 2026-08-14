@@ -90,7 +90,7 @@ export function PluginStatusSection() {
   }
 
   function lastActivity(type: string | null): string | null {
-    if (!type || !log) return null;
+    if (!type || !Array.isArray(log)) return null;
     const entry = log.find((e) => e.type === type);
     return entry ? entry.timestamp : null;
   }
