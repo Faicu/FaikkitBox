@@ -1,5 +1,13 @@
 import { createServerFn } from "@tanstack/react-start";
 import { randomUUID } from "node:crypto";
+import {
+  PUSH_TITLES,
+  PUSH_URLS,
+  buildServerStartMessage,
+  buildServerStopMessage,
+  buildPlexWatchStartMessage,
+  buildPlexWatchStopMessage,
+} from "./notifications";
 
 // ---------------------------------------------------------------------------
 // Tipuri
@@ -42,52 +50,6 @@ export interface ActivityEntry {
 // ---------------------------------------------------------------------------
 // Persistență: SQLite (node:sqlite nativ)
 // ---------------------------------------------------------------------------
-
-const PUSH_TITLES: Record<ActivityType, string> = {
-  server_start: "🟢 Serverul a pornit",
-  server_stop: "🔴 Serverul s-a oprit",
-  plex_watch_start: "🎬 Vizionare începută",
-  plex_watch_stop: "🎬 Vizionare încheiată",
-  // torrent_added/torrent_complete diferă manual/automat — titlul real vine
-  // din options.title (n.title din notifications.ts), asta e doar fallback.
-  torrent_added: "⬇️ Descărcare Inițiată",
-  torrent_complete: "✅ Descărcare Completă",
-  immich_upload: "📷 Immich",
-  service_restart: "🔄 Serviciu Repornit",
-  service_update: "⬆️ Actualizare Aplicată",
-  ubuntu_update: "🐧 Ubuntu Actualizat",
-  qbit_action: "⚙️ Acțiune qBittorrent",
-  // Gol intenționat: pinned-watcher.ts trimite singur push-uri cu titluri/emoji
-  // mai specifice pentru evenimentele de pinned_update, deci logActivity nu
-  // trebuie să mai trimită unul generic pentru acest tip.
-  pinned_update: "",
-  app_error: "⚠️ Eroare Nouă Aplicație",
-  // O singură intrare de log per rulare (descărcare unică sau backfill întreg
-  // — vezi logSubtitleRun în src/lib/filelist/subtitles.ts), deci un singur
-  // push per rulare, nu per torrent.
-  subtitle_fix: "💬 Corecție Subtitrare",
-  account_request: "🆕 Cerere Aprobare Cont",
-};
-
-// Pagina spre care duce apăsarea notificării — implicit per tip; se poate
-// suprascrie punctual din `options.url` la apel (ex. n-are sens aici).
-const PUSH_URLS: Record<ActivityType, string> = {
-  server_start: "/sistem",
-  server_stop: "/sistem",
-  plex_watch_start: "/plex",
-  plex_watch_stop: "/plex",
-  torrent_added: "/lansari",
-  torrent_complete: "/lansari",
-  immich_upload: "/immich",
-  service_restart: "/sistem",
-  service_update: "/sistem",
-  ubuntu_update: "/sistem",
-  qbit_action: "/qbit",
-  pinned_update: "/lansari",
-  app_error: "/tehnic",
-  subtitle_fix: "/lansari",
-  account_request: "/users",
-};
 
 export async function logActivity(
   type: ActivityType,
@@ -225,7 +187,7 @@ export async function trackPlexSessions(
       db.prepare("DELETE FROM plex_active_sessions WHERE key = ?").run(key);
       const what = row.grandparent_title ? `${row.grandparent_title} — ${row.title}` : row.title;
       const progress = fmtProgress(row.last_view_offset_ms, row.duration_ms);
-      await logActivity("plex_watch_stop", `${row.user}: ${what}${progress}`, {
+      await logActivity("plex_watch_stop", buildPlexWatchStopMessage(row.user, what, progress), {
         user: row.user,
         title: row.title,
         grandparentTitle: row.grandparent_title || undefined,
@@ -252,7 +214,7 @@ export async function trackPlexSessions(
       );
 
       const what = s.grandparentTitle ? `${s.grandparentTitle} — ${s.title}` : s.title;
-      await logActivity("plex_watch_start", `${s.user}: ${what}`, {
+      await logActivity("plex_watch_start", buildPlexWatchStartMessage(s.user, what), {
         user: s.user,
         title: s.title,
         grandparentTitle: s.grandparentTitle,
@@ -381,7 +343,7 @@ async function logServerStartOnce(): Promise<void> {
     const os = await import("node:os");
     const cause =
       os.uptime() < 120 ? "după repornirea sistemului" : "pornire manuală a serviciului";
-    await logActivity("server_start", `Cauză: ${cause}, ora ${nowHM()}`);
+    await logActivity("server_start", buildServerStartMessage(cause, nowHM()));
   } catch {
     // logare best-effort — nu blocăm pornirea serverului
   }
@@ -414,7 +376,7 @@ function logServerStopSync(): void {
     if (codeRestartDetected || isCodeRestartSync()) return;
     const db = dbModuleRef.getDb();
     const cause = crashCause ?? "oprire manuală / redeploy";
-    const message = `Cauză: ${cause}, ora ${nowHM()}`;
+    const message = buildServerStopMessage(cause, nowHM());
     db.prepare(
       "INSERT INTO activity (id, timestamp, type, message, meta) VALUES (?, ?, ?, ?, ?)",
     ).run(cryptoRef.randomUUID(), new Date().toISOString(), "server_stop", message, null);
