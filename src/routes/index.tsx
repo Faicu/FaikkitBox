@@ -359,23 +359,22 @@ function ServiceRow({
   className?: string;
 }) {
   return (
-    <Link
-      to={to}
-      className={`block rounded-2xl border border-border bg-card p-4 active:scale-[0.99] transition-transform ${className ?? ""}`}
-    >
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <span className={`${accent}`}>{icon}</span>
-          <span className="font-semibold">{title}</span>
-          <ServicePill status={status} />
+    <div className={`rounded-2xl border border-border bg-card p-4 ${className ?? ""}`}>
+      <Link to={to} className="block active:scale-[0.99] transition-transform">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <span className={`${accent}`}>{icon}</span>
+            <span className="font-semibold">{title}</span>
+            <ServicePill status={status} />
+          </div>
+          <ChevronRight className="h-4 w-4 text-muted-foreground" />
         </div>
-        <ChevronRight className="h-4 w-4 text-muted-foreground" />
-      </div>
-      {status === "error" && error && (
-        <p className="mt-2 text-xs text-red-400 break-words">{error}</p>
-      )}
+        {status === "error" && error && (
+          <p className="mt-2 text-xs text-red-400 break-words">{error}</p>
+        )}
+      </Link>
       {children && <div className="mt-3">{children}</div>}
-    </Link>
+    </div>
   );
 }
 
