@@ -1,7 +1,6 @@
 import { useSession } from "@tanstack/react-start/server";
-import { createHash, timingSafeEqual } from "node:crypto";
 
-export type AdminSession = { admin?: boolean };
+export type AdminSession = { admin?: boolean; username?: string };
 
 function sessionConfig() {
   const password = process.env.SESSION_SECRET;
@@ -19,12 +18,6 @@ function sessionConfig() {
       path: "/",
     },
   };
-}
-
-export function eq(a: string, b: string) {
-  const ha = createHash("sha256").update(a, "utf8").digest();
-  const hb = createHash("sha256").update(b, "utf8").digest();
-  return timingSafeEqual(ha, hb);
 }
 
 export async function getSession() {

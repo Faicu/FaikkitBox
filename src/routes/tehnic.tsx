@@ -22,6 +22,7 @@ import { PluginStatusSection } from "@/components/tehnic/sections/PluginStatusSe
 import { CommitStatsSection } from "@/components/tehnic/sections/CommitStatsSection";
 import { ActivityLogSection } from "@/components/tehnic/sections/ActivityLogSection";
 import { ErrorLogSection } from "@/components/tehnic/sections/ErrorLogSection";
+import { AdminUsersSection } from "@/components/tehnic/sections/AdminUsersSection";
 import { SpeedtestChart } from "@/components/tehnic/sections/SpeedtestChart";
 import { TehnicSubNav } from "@/components/tehnic/TehnicSubNav";
 
@@ -208,6 +209,9 @@ function TehnicPage() {
 
       {/* Jurnal activitate */}
       <ActivityLogSection />
+
+      {/* Conturi admin */}
+      <AdminUsersSection />
     </PageShell>
   );
 }

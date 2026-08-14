@@ -7,6 +7,7 @@ import { DatabaseSync } from "node:sqlite";
 import { mkdir } from "node:fs/promises";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
+import { hashPassword } from "./password";
 
 function dbPath(): string {
   return process.env.FAIKKITBOX_DB_PATH ?? "/opt/faikkitbox/data/faikkitbox.db";
@@ -131,6 +132,13 @@ export function getDb(): DatabaseSync {
       stack TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_error_log_timestamp ON error_log(timestamp DESC);
+
+    CREATE TABLE IF NOT EXISTS admin_users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `);
 
   // Curățări one-time, versionate cu PRAGMA user_version
@@ -263,6 +271,30 @@ function runCleanups(database: DatabaseSync): void {
         // coloana nu există
       }
       database.exec("PRAGMA user_version = 6");
+    }
+
+    if (version < 7) {
+      // v7: conturile de admin trec din variabile de mediu (ADMIN_USER /
+      // ADMIN_PASS) în DB, cu suport pentru mai multe conturi. La prima
+      // rulare după migrare, dacă tabela e goală și env vars sunt setate,
+      // contul existent e migrat automat — ca să nu rămână nimeni blocat
+      // afară. După asta, gestionarea se face din UI (Tehnic).
+      try {
+        const count = database.prepare("SELECT COUNT(*) as c FROM admin_users").get() as {
+          c: number;
+        };
+        const envUser = process.env.ADMIN_USER;
+        const envPass = process.env.ADMIN_PASS;
+        if (count.c === 0 && envUser && envPass) {
+          database
+            .prepare("INSERT INTO admin_users (username, password_hash) VALUES (?, ?)")
+            .run(envUser, hashPassword(envPass));
+          console.log(`[db] Migrare v7: cont admin migrat din .env → DB ("${envUser}")`);
+        }
+      } catch (e) {
+        console.warn("[db] Migrare v7 eșuată:", e);
+      }
+      database.exec("PRAGMA user_version = 7");
     }
   } catch (e) {
     console.warn("[db] Curățare eșuată:", e);
