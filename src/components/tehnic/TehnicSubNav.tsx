@@ -5,6 +5,7 @@ const items = [
   { to: "/plex", label: "Plex" },
   { to: "/immich", label: "Immich" },
   { to: "/qbit", label: "qBit" },
+  { to: "/users", label: "Utilizatori" },
   { to: "/sistem", label: "Sistem" },
 ] as const;
 
