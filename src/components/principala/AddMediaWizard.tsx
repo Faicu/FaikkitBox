@@ -34,7 +34,7 @@ import {
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
 import { DownloadConfirmDialog } from "@/components/lansari/DownloadConfirmDialog";
-import { pinnedItemsQuery } from "@/lib/queries";
+import { pinnedItemsQuery, adminStatusQuery } from "@/lib/queries";
 import {
   searchTmdb,
   getTmdbDetails,
@@ -100,6 +100,8 @@ export function AddMediaWizard({
 }) {
   const queryClient = useQueryClient();
   const { data: pinned = [] } = useQuery(pinnedItemsQuery);
+  const { data: adminData } = useQuery(adminStatusQuery);
+  const isAdmin = !!adminData?.isAdmin;
 
   const searchFn = useServerFn(searchTmdb);
   const detailsFn = useServerFn(getTmdbDetails);
@@ -932,11 +934,13 @@ export function AddMediaWizard({
                       {/* Film */}
                       {!isTv && movieMatch && (
                         <>
-                          <TorrentPicker
-                            matches={movieMatches}
-                            selectedId={movieMatch.id}
-                            onSelect={setSelectedTorrentId}
-                          />
+                          {isAdmin && (
+                            <TorrentPicker
+                              matches={movieMatches}
+                              selectedId={movieMatch.id}
+                              onSelect={setSelectedTorrentId}
+                            />
+                          )}
                           <ActionButton
                             busy={busy}
                             icon={<Download className="h-4 w-4" />}
@@ -959,11 +963,13 @@ export function AddMediaWizard({
                       {/* Sezon */}
                       {isTv && tvScope === "season" && seasonMatch && (
                         <>
-                          <TorrentPicker
-                            matches={seasonMatches}
-                            selectedId={seasonMatch.id}
-                            onSelect={setSelectedTorrentId}
-                          />
+                          {isAdmin && (
+                            <TorrentPicker
+                              matches={seasonMatches}
+                              selectedId={seasonMatch.id}
+                              onSelect={setSelectedTorrentId}
+                            />
+                          )}
                           <ActionButton
                             busy={busy}
                             icon={<Download className="h-4 w-4" />}
@@ -986,11 +992,13 @@ export function AddMediaWizard({
                       {/* Episod */}
                       {isTv && tvScope === "episode" && episodeMatch && (
                         <>
-                          <TorrentPicker
-                            matches={episodeMatches}
-                            selectedId={episodeMatch.id}
-                            onSelect={setSelectedTorrentId}
-                          />
+                          {isAdmin && (
+                            <TorrentPicker
+                              matches={episodeMatches}
+                              selectedId={episodeMatch.id}
+                              onSelect={setSelectedTorrentId}
+                            />
+                          )}
                           <ActionButton
                             busy={busy}
                             icon={<Download className="h-4 w-4" />}
