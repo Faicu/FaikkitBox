@@ -193,7 +193,7 @@ export const getUserDetail = createServerFn({ method: "GET" })
     }>;
 
     const plexActivity = user.plex_username
-      ? (await import("./services/plex")).getCachedPlexUserHistory(user.plex_username)
+      ? await (await import("./services/plex")).getPlexUserHistory(user.plex_username)
       : [];
 
     return {
