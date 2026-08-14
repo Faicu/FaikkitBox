@@ -35,7 +35,7 @@ export async function buildTorrentAddedNotification(params: {
   const prefix = params.auto ? "Auto-descărcat" : "Torrent adăugat";
   return {
     title: "⬇️ Torrent",
-    body: `${prefix}: [${quality}] ${displayName}`,
+    body: `${prefix}: ${displayName} [${quality}]`,
     image,
     url: "/lansari",
   };
@@ -52,7 +52,7 @@ export async function buildTorrentCompleteNotification(params: {
   const quality = detectTorrentQuality(params.torrentName);
   return {
     title: "✅ Torrent",
-    body: `Torrent descărcat complet: [${quality}] ${displayName}`,
+    body: `Torrent descărcat complet: ${displayName} [${quality}]`,
     image,
     url: "/lansari",
   };
@@ -81,7 +81,7 @@ export function buildAutoDownloadNotification(
 ): PushNotification {
   return {
     title: `⬇️ ${showTitle} — Descărcare automată`,
-    body: `${quality}: ${bodyName}`,
+    body: `${bodyName} [${quality}]`,
     url: "/lansari",
   };
 }
