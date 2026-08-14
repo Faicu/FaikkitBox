@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as UsersRouteImport } from './routes/users'
 import { Route as TehnicRouteImport } from './routes/tehnic'
 import { Route as SistemRouteImport } from './routes/sistem'
+import { Route as RegisterRouteImport } from './routes/register'
 import { Route as QbitRouteImport } from './routes/qbit'
 import { Route as PlexRouteImport } from './routes/plex'
 import { Route as LoginRouteImport } from './routes/login'
@@ -33,6 +34,11 @@ const TehnicRoute = TehnicRouteImport.update({
 const SistemRoute = SistemRouteImport.update({
   id: '/sistem',
   path: '/sistem',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RegisterRoute = RegisterRouteImport.update({
+  id: '/register',
+  path: '/register',
   getParentRoute: () => rootRouteImport,
 } as any)
 const QbitRoute = QbitRouteImport.update({
@@ -79,6 +85,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/plex': typeof PlexRoute
   '/qbit': typeof QbitRoute
+  '/register': typeof RegisterRoute
   '/sistem': typeof SistemRoute
   '/tehnic': typeof TehnicRoute
   '/users': typeof UsersRoute
@@ -91,6 +98,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/plex': typeof PlexRoute
   '/qbit': typeof QbitRoute
+  '/register': typeof RegisterRoute
   '/sistem': typeof SistemRoute
   '/tehnic': typeof TehnicRoute
   '/users': typeof UsersRoute
@@ -104,6 +112,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/plex': typeof PlexRoute
   '/qbit': typeof QbitRoute
+  '/register': typeof RegisterRoute
   '/sistem': typeof SistemRoute
   '/tehnic': typeof TehnicRoute
   '/users': typeof UsersRoute
@@ -118,6 +127,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/plex'
     | '/qbit'
+    | '/register'
     | '/sistem'
     | '/tehnic'
     | '/users'
@@ -130,6 +140,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/plex'
     | '/qbit'
+    | '/register'
     | '/sistem'
     | '/tehnic'
     | '/users'
@@ -142,6 +153,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/plex'
     | '/qbit'
+    | '/register'
     | '/sistem'
     | '/tehnic'
     | '/users'
@@ -155,6 +167,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   PlexRoute: typeof PlexRoute
   QbitRoute: typeof QbitRoute
+  RegisterRoute: typeof RegisterRoute
   SistemRoute: typeof SistemRoute
   TehnicRoute: typeof TehnicRoute
   UsersRoute: typeof UsersRoute
@@ -181,6 +194,13 @@ declare module '@tanstack/react-router' {
       path: '/sistem'
       fullPath: '/sistem'
       preLoaderRoute: typeof SistemRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/register': {
+      id: '/register'
+      path: '/register'
+      fullPath: '/register'
+      preLoaderRoute: typeof RegisterRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/qbit': {
@@ -243,6 +263,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   PlexRoute: PlexRoute,
   QbitRoute: QbitRoute,
+  RegisterRoute: RegisterRoute,
   SistemRoute: SistemRoute,
   TehnicRoute: TehnicRoute,
   UsersRoute: UsersRoute,

@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -102,6 +102,13 @@ function LoginPage() {
             "Autentificare"
           )}
         </button>
+
+        <p className="text-center text-xs text-muted-foreground">
+          Nu ai cont?{" "}
+          <Link to="/register" className="font-medium text-primary hover:underline">
+            Înregistrează-te
+          </Link>
+        </p>
       </form>
     </PageShell>
   );
