@@ -12,6 +12,7 @@ import {
 import { plexLibraryBrowseQuery } from "@/lib/queries";
 import { getPlexTitleDetail } from "@/lib/services.functions";
 import { formatMs } from "@/lib/format";
+import { formatDateTime } from "@/components/tehnic/utils";
 import type { PlexBrowseItem } from "@/lib/services/plex-browse";
 
 const PAGE_SIZE = 10;
@@ -25,13 +26,11 @@ function itemLabel(item: PlexBrowseItem): string {
   return `${item.show ?? "—"}${seasonEp ? ` — ${seasonEp}` : ""}${item.title ? ` · ${item.title}` : ""}`;
 }
 
+// addedAt e unix timestamp în secunde (convenția Plex) — formatDateTime
+// lucrează cu ISO, de-aia conversia
 function addedDate(unixSec: number): string {
   if (!unixSec) return "—";
-  return new Date(unixSec * 1000).toLocaleDateString("ro-RO", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
+  return formatDateTime(new Date(unixSec * 1000).toISOString());
 }
 
 export function PlexLibraryBrowse() {
@@ -51,7 +50,7 @@ export function PlexLibraryBrowse() {
   const d = detail.data?.status === "ok" ? detail.data.detail : null;
 
   return (
-    <div>
+    <div className="rounded-2xl border border-border bg-card p-4">
       <div className="mb-1.5 flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
         <Library className="h-3 w-3" /> Bibliotecă completă
       </div>

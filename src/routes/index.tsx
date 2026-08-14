@@ -255,12 +255,16 @@ function Overview() {
                   </div>
                 </div>
               )}
-
-              {isAuthenticated && <PlexLibraryBrowse />}
             </div>
           )}
         </ServiceRow>
       </div>
+
+      {isAuthenticated && (
+        <div className="mt-4">
+          <PlexLibraryBrowse />
+        </div>
+      )}
 
       <Drawer open={plexDrawer === "views"} onOpenChange={(o) => !o && setPlexDrawer(null)}>
         <DrawerContent className="max-h-[85vh]">

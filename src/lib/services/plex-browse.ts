@@ -14,6 +14,7 @@ import {
   type PlexApiResponse,
   type PlexMetadataItem,
 } from "./plex-shared";
+import { ROMANIAN_LANG_CODES } from "../filelist/subtitles";
 
 export interface PlexBrowseItem {
   ratingKey: string;
@@ -126,7 +127,7 @@ export interface PlexTitleDetail {
 function isRomanianStream(s: { language?: string; languageCode?: string }): boolean {
   const code = (s.languageCode ?? "").toLowerCase();
   const lang = (s.language ?? "").toLowerCase();
-  return code === "ron" || code === "rum" || code === "ro" || lang.includes("roman");
+  return ROMANIAN_LANG_CODES.includes(code) || lang.includes("roman");
 }
 
 export const getPlexTitleDetail = createServerFn({ method: "GET" })
