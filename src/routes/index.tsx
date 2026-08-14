@@ -51,6 +51,7 @@ function Overview() {
     plexSessions.data?.status === "ok" ? plexSessions.data.sessions : plex.data?.sessions;
   const [plexDrawer, setPlexDrawer] = useState<"views" | "users" | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [recentVisible, setRecentVisible] = useState(10);
 
   const stop = (fn: () => void) => (e: React.MouseEvent) => {
     e.preventDefault();
@@ -197,7 +198,7 @@ function Overview() {
                   </div>
                   {(plex.data.todayViews?.length ?? 0) > 0 && (
                     <div className="mt-1.5 space-y-0.5 border-t border-border/60 pt-1.5 text-left">
-                      {plex.data.todayViews!.slice(0, 3).map((v, i) => (
+                      {plex.data.todayViews!.slice(0, 5).map((v, i) => (
                         <div key={i} className="truncate text-[10px] text-muted-foreground">
                           {v.show ?? v.title}
                         </div>
@@ -220,7 +221,7 @@ function Overview() {
                   </div>
                   {(plex.data.activeUsersTodayList?.length ?? 0) > 0 && (
                     <div className="mt-1.5 space-y-0.5 border-t border-border/60 pt-1.5 text-left">
-                      {plex.data.activeUsersTodayList!.slice(0, 3).map((u, i) => (
+                      {plex.data.activeUsersTodayList!.slice(0, 5).map((u, i) => (
                         <div
                           key={i}
                           className="flex items-center justify-between gap-1 text-[10px] text-muted-foreground"
@@ -262,7 +263,7 @@ function Overview() {
                     <Clock3 className="h-3 w-3" /> Recent adăugate
                   </div>
                   <div className="space-y-1">
-                    {plex.data.recentlyAdded.slice(0, 5).map((r, i) => (
+                    {plex.data.recentlyAdded.slice(0, recentVisible).map((r, i) => (
                       <div
                         key={`${r.title}-${i}`}
                         className="flex items-center gap-2 rounded-lg bg-muted/40 px-2 py-1.5"
@@ -279,6 +280,15 @@ function Overview() {
                       </div>
                     ))}
                   </div>
+                  {plex.data.recentlyAdded.length > recentVisible && (
+                    <button
+                      type="button"
+                      onClick={stop(() => setRecentVisible((v) => v + 10))}
+                      className="mt-1.5 w-full rounded-lg bg-muted/50 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground"
+                    >
+                      Afișează mai mult
+                    </button>
+                  )}
                 </div>
               )}
             </div>

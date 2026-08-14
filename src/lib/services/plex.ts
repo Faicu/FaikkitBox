@@ -422,7 +422,7 @@ export const getPlex = createServerFn({ method: "GET" }).handler(async (): Promi
         (a: PlexMetadataItem, b: PlexMetadataItem) =>
           Number(b.addedAt ?? 0) - Number(a.addedAt ?? 0),
       )
-      .slice(0, 8);
+      .slice(0, 50);
 
     const libraries: PlexLibrary[] = await Promise.all(
       libsMd.map(async (l: PlexDirectoryLike) => {
@@ -473,7 +473,7 @@ export const getPlex = createServerFn({ method: "GET" }).handler(async (): Promi
       platform: mc.platform,
       sessions,
       libraries,
-      recentlyAdded: recentMd.slice(0, 8).map((m: PlexMetadataItem) => {
+      recentlyAdded: recentMd.slice(0, 50).map((m: PlexMetadataItem) => {
         let title = m.title;
         if (m.grandparentTitle) {
           const season = m.parentIndex ? `S${String(m.parentIndex).padStart(2, "0")}` : null;
