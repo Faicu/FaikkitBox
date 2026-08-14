@@ -1,6 +1,21 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { PlayCircle, ChevronRight, Users, Tv, Film, RefreshCw, Plus } from "lucide-react";
+import {
+  PlayCircle,
+  ChevronRight,
+  Users,
+  Tv,
+  Film,
+  RefreshCw,
+  Plus,
+  LogIn,
+  UserPlus,
+  Music,
+  Image as ImageIcon,
+  Trophy,
+  Clock3,
+  Sparkles,
+} from "lucide-react";
 import { useState } from "react";
 
 import { PageShell } from "@/components/PageShell";
@@ -47,7 +62,7 @@ function Overview() {
   };
 
   return (
-    <PageShell title="FaikkitBox Dashboard" subtitle="Totul în timp real">
+    <PageShell title="FaikkitBox" subtitle="Panou de Administrare Plex">
       {isAuthenticated ? (
         <button
           type="button"
@@ -57,12 +72,29 @@ function Overview() {
           <Plus className="h-4 w-4" /> Adaugă film/serial
         </button>
       ) : (
-        <Link
-          to="/login"
-          className="mb-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-border bg-card py-3 text-sm font-semibold text-muted-foreground transition-colors hover:bg-muted/60 active:scale-[0.99]"
-        >
-          <Plus className="h-4 w-4" /> Autentifică-te pentru a adăuga
-        </Link>
+        <div className="mb-4 rounded-2xl border border-primary/30 bg-primary/5 p-4 text-center">
+          <Sparkles className="mx-auto h-6 w-6 text-primary" />
+          <p className="mt-2 text-sm font-semibold text-foreground">
+            Autentifică-te ca să adaugi filme și seriale
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Contul tău trebuie să corespundă unui membru din biblioteca Plex.
+          </p>
+          <div className="mt-3 flex gap-2">
+            <Link
+              to="/register"
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-border bg-card py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted/60 active:scale-[0.99]"
+            >
+              <UserPlus className="h-4 w-4" /> Înregistrare
+            </Link>
+            <Link
+              to="/login"
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-primary py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 active:scale-[0.99]"
+            >
+              <LogIn className="h-4 w-4" /> Autentificare
+            </Link>
+          </div>
+        </div>
       )}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <ServiceRow
@@ -194,6 +226,110 @@ function Overview() {
                   </div>
                 </button>
               </div>
+
+              {plex.data.libraries.length > 0 && (
+                <div>
+                  <div className="mb-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                    Biblioteci
+                  </div>
+                  <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+                    {plex.data.libraries.map((lib) => (
+                      <div
+                        key={lib.key}
+                        className="flex items-center gap-1.5 rounded-lg bg-muted/40 px-2 py-1.5"
+                      >
+                        {libIcon(lib.type)}
+                        <div className="min-w-0">
+                          <div className="truncate text-[11px] leading-tight">{lib.title}</div>
+                          <div className="text-xs font-semibold tabular-nums">
+                            {lib.count ?? "—"}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {((plex.data.topMovies?.length ?? 0) > 0 ||
+                (plex.data.topShows?.length ?? 0) > 0) && (
+                <div>
+                  <div className="mb-1.5 flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                    <Trophy className="h-3 w-3" /> Top vizionate
+                  </div>
+                  <div className="space-y-1">
+                    {[
+                      ...(plex.data.topMovies ?? []).map((t) => ({ ...t, isMovie: true })),
+                      ...(plex.data.topShows ?? []).map((t) => ({ ...t, isMovie: false })),
+                    ]
+                      .sort((a, b) => b.plays - a.plays)
+                      .slice(0, 5)
+                      .map((t, i) => (
+                        <div
+                          key={`${t.title}-${i}`}
+                          className="flex items-center gap-2 rounded-lg bg-muted/40 px-2 py-1.5"
+                        >
+                          {t.isMovie ? (
+                            <Film className="h-3.5 w-3.5 shrink-0 text-amber-400" />
+                          ) : (
+                            <Tv className="h-3.5 w-3.5 shrink-0 text-blue-400" />
+                          )}
+                          <span className="min-w-0 flex-1 truncate text-xs">{t.title}</span>
+                          <span className="shrink-0 text-[10px] font-medium tabular-nums text-muted-foreground">
+                            {t.plays} {t.plays === 1 ? "vizionare" : "vizionări"}
+                          </span>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              {(plex.data.topWatchers?.length ?? 0) > 0 && (
+                <div>
+                  <div className="mb-1.5 flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                    <Users className="h-3 w-3" /> Top utilizatori
+                  </div>
+                  <div className="space-y-1">
+                    {plex.data.topWatchers!.slice(0, 5).map((w, i) => (
+                      <div
+                        key={`${w.user}-${i}`}
+                        className="flex items-center justify-between gap-2 rounded-lg bg-muted/40 px-2 py-1.5"
+                      >
+                        <span className="min-w-0 flex-1 truncate text-xs">{w.user}</span>
+                        <span className="shrink-0 text-[10px] font-medium tabular-nums text-muted-foreground">
+                          {w.plays} {w.plays === 1 ? "vizionare" : "vizionări"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {plex.data.recentlyAdded.length > 0 && (
+                <div>
+                  <div className="mb-1.5 flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                    <Clock3 className="h-3 w-3" /> Recent adăugate
+                  </div>
+                  <div className="space-y-1">
+                    {plex.data.recentlyAdded.slice(0, 5).map((r, i) => (
+                      <div
+                        key={`${r.title}-${i}`}
+                        className="flex items-center gap-2 rounded-lg bg-muted/40 px-2 py-1.5"
+                      >
+                        {r.type === "movie" ? (
+                          <Film className="h-3.5 w-3.5 shrink-0 text-amber-400" />
+                        ) : (
+                          <Tv className="h-3.5 w-3.5 shrink-0 text-blue-400" />
+                        )}
+                        <span className="min-w-0 flex-1 truncate text-xs">{r.title}</span>
+                        <span className="shrink-0 text-[10px] text-muted-foreground">
+                          {relativeTime(r.addedAt)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </ServiceRow>
@@ -344,4 +480,24 @@ function MetricButton({
       <div className="text-sm font-semibold tabular-nums">{value}</div>
     </button>
   );
+}
+
+function libIcon(type: string) {
+  if (type === "movie") return <Film className="h-3.5 w-3.5 shrink-0 text-amber-400" />;
+  if (type === "show") return <Tv className="h-3.5 w-3.5 shrink-0 text-blue-400" />;
+  if (type === "artist") return <Music className="h-3.5 w-3.5 shrink-0 text-purple-400" />;
+  if (type === "photo") return <ImageIcon className="h-3.5 w-3.5 shrink-0 text-emerald-400" />;
+  return <Film className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />;
+}
+
+// addedAt e unix timestamp în secunde (convenția Plex)
+function relativeTime(unixSec: number): string {
+  if (!unixSec) return "—";
+  const diffSec = Math.floor(Date.now() / 1000) - unixSec;
+  if (diffSec < 60) return "acum";
+  if (diffSec < 3600) return `acum ${Math.floor(diffSec / 60)}m`;
+  if (diffSec < 86400) return `acum ${Math.floor(diffSec / 3600)}h`;
+  const days = Math.floor(diffSec / 86400);
+  if (days < 30) return `acum ${days}z`;
+  return new Date(unixSec * 1000).toLocaleDateString("ro-RO", { day: "numeric", month: "short" });
 }

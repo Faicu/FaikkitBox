@@ -83,7 +83,8 @@ export function AppHeader({ title, subtitle, right }: Props) {
         </div>
         <div className="flex items-center gap-2">
           {right}
-          {sync.data?.status === "ok" &&
+          {admin.data?.isAdmin &&
+            sync.data?.status === "ok" &&
             (() => {
               const s = sync.data.data;
               const orange = updateAvailable || !s.isSynced;
