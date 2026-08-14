@@ -569,6 +569,8 @@ export const checkFilelistForItem = createServerFn({ method: "GET" })
     }) => data,
   )
   .handler(async ({ data }): Promise<FilelistSearchResult> => {
+    const { requireAuth } = await import("../admin.server");
+    await requireAuth();
     return checkFilelistForItemInternal(data);
   });
 
@@ -782,6 +784,8 @@ export const downloadFilelist = createServerFn({ method: "POST" })
     }),
   )
   .handler(async ({ data }): Promise<FilelistDownloadResult> => {
+    const { requireAuth } = await import("../admin.server");
+    await requireAuth();
     return downloadFilelistCore({ ...data, skipLog: false });
   });
 

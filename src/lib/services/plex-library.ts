@@ -201,6 +201,8 @@ export const getPlexEpisodesInSeason = createServerFn({ method: "GET" })
   .validator((data: { showTitle: string; season: number }) => data)
   .handler(
     async ({ data }): Promise<{ num: number; quality: string | null; watched: boolean }[]> => {
+      const { requireAuth } = await import("../admin.server");
+      await requireAuth();
       const token = process.env.PLEX_TOKEN;
       const base = process.env.PLEX_URL;
       if (!token) return [];
@@ -217,6 +219,8 @@ export const getPlexEpisodesInSeason = createServerFn({ method: "GET" })
 export const checkPlexHasTitle = createServerFn({ method: "GET" })
   .validator((data: { title: string; originalTitle: string; mediaType: "movie" | "tv" }) => data)
   .handler(async ({ data }): Promise<{ found: boolean; quality: string | null } | null> => {
+    const { requireAuth } = await import("../admin.server");
+    await requireAuth();
     const token = process.env.PLEX_TOKEN;
     const base = process.env.PLEX_URL;
     if (!token) return null;

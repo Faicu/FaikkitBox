@@ -13,7 +13,7 @@ import {
   DrawerDescription,
 } from "@/components/ui/drawer";
 import { AddMediaWizard } from "@/components/principala/AddMediaWizard";
-import { plexQuery, plexSessionsQuery } from "@/lib/queries";
+import { plexQuery, plexSessionsQuery, adminStatusQuery } from "@/lib/queries";
 import { formatSpeed } from "@/lib/format";
 
 export const Route = createFileRoute("/")({
@@ -32,6 +32,8 @@ export const Route = createFileRoute("/")({
 function Overview() {
   const plex = useQuery(plexQuery);
   const plexSessions = useQuery(plexSessionsQuery);
+  const { data: adminData } = useQuery(adminStatusQuery);
+  const isAuthenticated = !!adminData?.isAuthenticated;
   const sessions =
     plexSessions.data?.status === "ok" ? plexSessions.data.sessions : plex.data?.sessions;
   const [plexDrawer, setPlexDrawer] = useState<"views" | "users" | null>(null);
@@ -46,13 +48,22 @@ function Overview() {
 
   return (
     <PageShell title="FaikkitBox Dashboard" subtitle="Totul în timp real">
-      <button
-        type="button"
-        onClick={() => setWizardOpen(true)}
-        className="mb-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-border bg-card py-3 text-sm font-semibold text-foreground transition-colors hover:bg-muted/60 active:scale-[0.99]"
-      >
-        <Plus className="h-4 w-4" /> Adaugă film/serial
-      </button>
+      {isAuthenticated ? (
+        <button
+          type="button"
+          onClick={() => setWizardOpen(true)}
+          className="mb-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-border bg-card py-3 text-sm font-semibold text-foreground transition-colors hover:bg-muted/60 active:scale-[0.99]"
+        >
+          <Plus className="h-4 w-4" /> Adaugă film/serial
+        </button>
+      ) : (
+        <Link
+          to="/login"
+          className="mb-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-border bg-card py-3 text-sm font-semibold text-muted-foreground transition-colors hover:bg-muted/60 active:scale-[0.99]"
+        >
+          <Plus className="h-4 w-4" /> Autentifică-te pentru a adăuga
+        </Link>
+      )}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <ServiceRow
           className="sm:col-span-2"
@@ -260,7 +271,9 @@ function Overview() {
         </DrawerContent>
       </Drawer>
 
-      <AddMediaWizard open={wizardOpen} onClose={() => setWizardOpen(false)} />
+      {isAuthenticated && (
+        <AddMediaWizard open={wizardOpen} onClose={() => setWizardOpen(false)} />
+      )}
     </PageShell>
   );
 }

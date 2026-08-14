@@ -11,6 +11,8 @@ export interface PinnedItemDb {
 
 export const getPinnedItems = createServerFn({ method: "GET" }).handler(
   async (): Promise<PinnedItemDb[]> => {
+    const { requireAuth } = await import("./admin.server");
+    await requireAuth();
     const db = getDb();
     const rows = db
       .prepare(
@@ -86,6 +88,8 @@ export const setWatchSettings = createServerFn({ method: "POST" })
     }) => data,
   )
   .handler(async ({ data }): Promise<void> => {
+    const { requireAuth } = await import("./admin.server");
+    await requireAuth();
     const db = getDb();
     db.prepare(
       `INSERT INTO pinned_watch_settings (id, media_type, watch_filelist, watch_filelist_season, watch_tmdb, auto_download, auto_download_quality) VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -143,6 +147,8 @@ export const addPinnedItem = createServerFn({ method: "POST" })
 export const setPinnedItems = createServerFn({ method: "POST" })
   .validator((data: { items: PinnedItemDb[] }) => data)
   .handler(async ({ data }): Promise<void> => {
+    const { requireAuth } = await import("./admin.server");
+    await requireAuth();
     const db = getDb();
     db.prepare("DELETE FROM pinned_items").run();
     const stmt = db.prepare(
