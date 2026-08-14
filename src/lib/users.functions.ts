@@ -10,6 +10,7 @@ export interface UserAccount {
   plexUsername: string | null;
   plexEmail: string | null;
   createdAt: string;
+  lastLoginAt: string | null;
 }
 
 export const listUsers = createServerFn({ method: "GET" }).handler(
@@ -20,7 +21,7 @@ export const listUsers = createServerFn({ method: "GET" }).handler(
     const db = getDb();
     const rows = db
       .prepare(
-        `SELECT id, username, email, phone, role, status, plex_username, plex_email, created_at
+        `SELECT id, username, email, phone, role, status, plex_username, plex_email, created_at, last_login_at
          FROM users ORDER BY status ASC, created_at DESC`,
       )
       .all() as Array<{
@@ -33,6 +34,7 @@ export const listUsers = createServerFn({ method: "GET" }).handler(
       plex_username: string | null;
       plex_email: string | null;
       created_at: string;
+      last_login_at: string | null;
     }>;
     return rows.map((r) => ({
       id: r.id,
@@ -44,6 +46,7 @@ export const listUsers = createServerFn({ method: "GET" }).handler(
       plexUsername: r.plex_username,
       plexEmail: r.plex_email,
       createdAt: r.created_at,
+      lastLoginAt: r.last_login_at,
     }));
   },
 );
@@ -70,4 +73,171 @@ export const deleteUser = createServerFn({ method: "POST" })
     const db = getDb();
     db.prepare("DELETE FROM users WHERE id = ? AND role = 'user'").run(data.id);
     return { ok: true };
+  });
+
+// ---------------------------------------------------------------------------
+// Detalii complete pentru un cont — pagina Utilizatori, la click pe un rând
+// ---------------------------------------------------------------------------
+
+export interface UserPinnedItem {
+  id: number;
+  mediaType: "movie" | "tv";
+  title: string;
+  originalTitle: string;
+  posterUrl: string | null;
+  addedAt: string;
+}
+
+export interface UserLoginEntry {
+  id: number;
+  loggedInAt: string;
+  ip: string | null;
+  userAgent: string | null;
+}
+
+export interface UserPlexActivityEntry {
+  title: string;
+  show: string | null;
+  season: number | null;
+  episode: number | null;
+  type: string;
+  viewedAt: number;
+  player: string | null;
+}
+
+export interface UserDownloadEntry {
+  id: number;
+  name: string;
+  size: number;
+  categoryName: string;
+  downloadedAt: string;
+  completedAt: string | null;
+}
+
+export interface UserDetail extends UserAccount {
+  plexAccountId: number | null;
+  pinnedItems: UserPinnedItem[];
+  logins: UserLoginEntry[];
+  plexActivity: UserPlexActivityEntry[];
+  downloads: UserDownloadEntry[];
+}
+
+export const getUserDetail = createServerFn({ method: "GET" })
+  .validator((data: { id: number }) => data)
+  .handler(async ({ data }): Promise<UserDetail | null> => {
+    const { requireAdmin } = await import("./admin.server");
+    await requireAdmin();
+    const { getDb } = await import("./db");
+    const db = getDb();
+
+    const user = db
+      .prepare(
+        `SELECT id, username, email, phone, role, status, plex_account_id, plex_username, plex_email, created_at, last_login_at
+         FROM users WHERE id = ?`,
+      )
+      .get(data.id) as
+      | {
+          id: number;
+          username: string;
+          email: string | null;
+          phone: string | null;
+          role: string;
+          status: string;
+          plex_account_id: number | null;
+          plex_username: string | null;
+          plex_email: string | null;
+          created_at: string;
+          last_login_at: string | null;
+        }
+      | undefined;
+    if (!user) return null;
+
+    const pinnedRows = db
+      .prepare(
+        `SELECT id, media_type, title, original_title, poster_url, added_at
+         FROM pinned_items WHERE user_id = ? ORDER BY added_at DESC`,
+      )
+      .all(user.id) as Array<{
+      id: number;
+      media_type: string;
+      title: string;
+      original_title: string;
+      poster_url: string | null;
+      added_at: string;
+    }>;
+
+    const loginRows = db
+      .prepare(
+        `SELECT id, logged_in_at, ip, user_agent FROM user_logins
+         WHERE user_id = ? ORDER BY logged_in_at DESC LIMIT 25`,
+      )
+      .all(user.id) as Array<{
+      id: number;
+      logged_in_at: string;
+      ip: string | null;
+      user_agent: string | null;
+    }>;
+
+    const downloadRows = db
+      .prepare(
+        `SELECT id, name, size, category_name, downloaded_at, completed_at
+         FROM downloads WHERE requested_by_user_id = ? ORDER BY downloaded_at DESC LIMIT 50`,
+      )
+      .all(user.id) as Array<{
+      id: number;
+      name: string;
+      size: number | null;
+      category_name: string | null;
+      downloaded_at: string;
+      completed_at: string | null;
+    }>;
+
+    const plexActivity = user.plex_username
+      ? (await import("./services/plex")).getCachedPlexUserHistory(user.plex_username)
+      : [];
+
+    return {
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      phone: user.phone,
+      role: user.role as "admin" | "user",
+      status: user.status as "pending" | "approved",
+      plexAccountId: user.plex_account_id,
+      plexUsername: user.plex_username,
+      plexEmail: user.plex_email,
+      createdAt: user.created_at,
+      lastLoginAt: user.last_login_at,
+      pinnedItems: pinnedRows.map((r) => ({
+        id: r.id,
+        mediaType: r.media_type as "movie" | "tv",
+        title: r.title,
+        originalTitle: r.original_title,
+        posterUrl: r.poster_url,
+        addedAt: r.added_at,
+      })),
+      logins: loginRows.map((r) => ({
+        id: r.id,
+        loggedInAt: r.logged_in_at,
+        ip: r.ip,
+        userAgent: r.user_agent,
+      })),
+      downloads: downloadRows.map((r) => ({
+        id: r.id,
+        name: r.name,
+        size: r.size ?? 0,
+        categoryName: r.category_name ?? "",
+        downloadedAt: r.downloaded_at,
+        completedAt: r.completed_at,
+      })),
+      plexActivity: plexActivity.slice(0, 30).map((e) => ({
+        title: e.title,
+        show: e.show ?? null,
+        season: e.season ?? null,
+        episode: e.episode ?? null,
+        type: e.type,
+        viewedAt: e.viewedAt,
+        player: e.player ?? null,
+      })),
+    };
   });

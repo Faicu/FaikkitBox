@@ -23,6 +23,7 @@ function rowToEntry(r: DownloadLogRow): FilelistLogEntry {
     completedAt: r.completed_at ?? null,
     torrentHash: r.torrent_hash ?? undefined,
     imdb: r.imdb ?? undefined,
+    requestedByUserId: r.requested_by_user_id,
   };
 }
 
@@ -59,8 +60,8 @@ export async function appendDownloadLog(entry: FilelistLogEntry): Promise<void> 
     getDb()
       .prepare(
         `INSERT OR REPLACE INTO downloads
-       (id, name, size, category, category_name, freeleech, internal, save_path, downloaded_at, completed_at, torrent_hash, imdb)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, name, size, category, category_name, freeleech, internal, save_path, downloaded_at, completed_at, torrent_hash, imdb, requested_by_user_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         entry.id,
@@ -75,6 +76,7 @@ export async function appendDownloadLog(entry: FilelistLogEntry): Promise<void> 
         entry.completedAt,
         entry.torrentHash ?? null,
         entry.imdb ?? null,
+        entry.requestedByUserId ?? null,
       );
   } catch (e) {
     console.warn("[filelist] Nu am putut scrie log-ul de descărcări:", e);

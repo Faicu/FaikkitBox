@@ -588,6 +588,7 @@ interface DownloadFilelistParams {
   internal?: boolean;
   skipLog?: boolean;
   imdb?: string | null;
+  requestedByUserId?: number | null;
 }
 
 // Implementare comună pentru descărcare + upload la qBittorrent, folosită atât
@@ -738,6 +739,7 @@ async function downloadFilelistCore(
       completedAt: null,
       torrentHash: torrentHash ?? undefined,
       imdb: params.imdb ?? undefined,
+      requestedByUserId: params.requestedByUserId ?? null,
     });
 
     // 7. Pornește polling background — refresh Plex și marchează complet DOAR la final
@@ -785,8 +787,12 @@ export const downloadFilelist = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }): Promise<FilelistDownloadResult> => {
     const { requireAuth } = await import("../admin.server");
-    await requireAuth();
-    return downloadFilelistCore({ ...data, skipLog: false });
+    const session = await requireAuth();
+    return downloadFilelistCore({
+      ...data,
+      skipLog: false,
+      requestedByUserId: session.data.userId ?? null,
+    });
   });
 
 // Versiune internă pentru plugin (fără requireAdmin)

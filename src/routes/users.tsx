@@ -7,6 +7,7 @@ import { toast } from "sonner";
 
 import { PageShell } from "@/components/PageShell";
 import { TehnicSubNav } from "@/components/tehnic/TehnicSubNav";
+import { UserDetailDrawer } from "@/components/tehnic/UserDetailDrawer";
 import { requireAdminBeforeLoad } from "@/lib/admin-route-guard";
 import { addAdminUser, deleteAdminUser } from "@/lib/admin.functions";
 import { listUsers, approveUser, deleteUser, type UserAccount } from "@/lib/users.functions";
@@ -20,6 +21,7 @@ export const Route = createFileRoute("/users")({
 function UsersPage() {
   const listFn = useServerFn(listUsers);
   const qc = useQueryClient();
+  const [selectedId, setSelectedId] = useState<number | null>(null);
 
   const { data: users = [], isLoading } = useQuery({
     queryKey: ["users"],
@@ -42,10 +44,18 @@ function UsersPage() {
         </div>
       ) : (
         <>
-          <PendingSection pending={pending} onChanged={invalidate} />
-          <ApprovedUsersSection users={approvedUsers} onChanged={invalidate} />
-          <AdminSection admins={admins} onChanged={invalidate} />
+          <PendingSection pending={pending} onChanged={invalidate} onSelect={setSelectedId} />
+          <ApprovedUsersSection
+            users={approvedUsers}
+            onChanged={invalidate}
+            onSelect={setSelectedId}
+          />
+          <AdminSection admins={admins} onChanged={invalidate} onSelect={setSelectedId} />
         </>
+      )}
+
+      {selectedId != null && (
+        <UserDetailDrawer userId={selectedId} onClose={() => setSelectedId(null)} />
       )}
     </PageShell>
   );
@@ -69,7 +79,15 @@ function ContactInfo({ user }: { user: UserAccount }) {
   );
 }
 
-function PendingSection({ pending, onChanged }: { pending: UserAccount[]; onChanged: () => void }) {
+function PendingSection({
+  pending,
+  onChanged,
+  onSelect,
+}: {
+  pending: UserAccount[];
+  onChanged: () => void;
+  onSelect: (id: number) => void;
+}) {
   const approveFn = useServerFn(approveUser);
   const deleteFn = useServerFn(deleteUser);
 
@@ -100,7 +118,11 @@ function PendingSection({ pending, onChanged }: { pending: UserAccount[]; onChan
       </h2>
       <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 divide-y divide-amber-500/15">
         {pending.map((u) => (
-          <div key={u.id} className="flex items-start justify-between gap-2 px-3 py-3">
+          <div
+            key={u.id}
+            onClick={() => onSelect(u.id)}
+            className="flex items-start justify-between gap-2 px-3 py-3 cursor-pointer hover:bg-amber-500/10 transition-colors"
+          >
             <div className="min-w-0">
               <div className="truncate text-sm font-medium">{u.username}</div>
               <ContactInfo user={u} />
@@ -109,7 +131,10 @@ function PendingSection({ pending, onChanged }: { pending: UserAccount[]; onChan
             <div className="flex shrink-0 items-center gap-1.5">
               <button
                 type="button"
-                onClick={() => approveMutation.mutate(u.id)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  approveMutation.mutate(u.id);
+                }}
                 disabled={approveMutation.isPending || rejectMutation.isPending}
                 title="Aprobă"
                 className="rounded-md border border-emerald-500/30 bg-emerald-500/10 p-1.5 text-emerald-400 hover:bg-emerald-500/20 transition disabled:opacity-30"
@@ -118,7 +143,8 @@ function PendingSection({ pending, onChanged }: { pending: UserAccount[]; onChan
               </button>
               <button
                 type="button"
-                onClick={() => {
+                onClick={(e) => {
+                  e.stopPropagation();
                   if (confirm(`Respingi cererea lui "${u.username}"?`)) {
                     rejectMutation.mutate(u.id);
                   }
@@ -140,9 +166,11 @@ function PendingSection({ pending, onChanged }: { pending: UserAccount[]; onChan
 function ApprovedUsersSection({
   users,
   onChanged,
+  onSelect,
 }: {
   users: UserAccount[];
   onChanged: () => void;
+  onSelect: (id: number) => void;
 }) {
   const deleteFn = useServerFn(deleteUser);
 
@@ -167,7 +195,11 @@ function ApprovedUsersSection({
           </div>
         ) : (
           users.map((u) => (
-            <div key={u.id} className="flex items-start justify-between gap-2 px-3 py-2.5">
+            <div
+              key={u.id}
+              onClick={() => onSelect(u.id)}
+              className="flex items-start justify-between gap-2 px-3 py-2.5 cursor-pointer hover:bg-muted/40 transition-colors"
+            >
               <div className="min-w-0">
                 <div className="truncate text-sm font-medium">{u.username}</div>
                 <ContactInfo user={u} />
@@ -175,7 +207,8 @@ function ApprovedUsersSection({
               </div>
               <button
                 type="button"
-                onClick={() => {
+                onClick={(e) => {
+                  e.stopPropagation();
                   if (confirm(`Revoci accesul lui "${u.username}"?`)) deleteMutation.mutate(u.id);
                 }}
                 disabled={deleteMutation.isPending}
@@ -192,7 +225,15 @@ function ApprovedUsersSection({
   );
 }
 
-function AdminSection({ admins, onChanged }: { admins: UserAccount[]; onChanged: () => void }) {
+function AdminSection({
+  admins,
+  onChanged,
+  onSelect,
+}: {
+  admins: UserAccount[];
+  onChanged: () => void;
+  onSelect: (id: number) => void;
+}) {
   const addFn = useServerFn(addAdminUser);
   const deleteFn = useServerFn(deleteAdminUser);
 
@@ -238,7 +279,11 @@ function AdminSection({ admins, onChanged }: { admins: UserAccount[]; onChanged:
           <div className="px-3 py-4 text-xs text-muted-foreground text-center">Niciun cont.</div>
         ) : (
           admins.map((u) => (
-            <div key={u.id} className="flex items-center justify-between gap-2 px-3 py-2.5">
+            <div
+              key={u.id}
+              onClick={() => onSelect(u.id)}
+              className="flex items-center justify-between gap-2 px-3 py-2.5 cursor-pointer hover:bg-muted/40 transition-colors"
+            >
               <div className="min-w-0">
                 <div className="truncate text-sm font-medium">{u.username}</div>
                 <div className="text-[11px] text-muted-foreground">
@@ -247,7 +292,8 @@ function AdminSection({ admins, onChanged }: { admins: UserAccount[]; onChanged:
               </div>
               <button
                 type="button"
-                onClick={() => {
+                onClick={(e) => {
+                  e.stopPropagation();
                   if (confirm(`Ștergi contul "${u.username}"?`)) deleteMutation.mutate(u.id);
                 }}
                 disabled={deleteMutation.isPending || admins.length <= 1}

@@ -31,6 +31,17 @@ export const adminLogin = createServerFn({ method: "POST" })
       username: row.username,
       role: row.role as "admin" | "user",
     });
+
+    const { getRequestIP, getRequestHeader } = await import("@tanstack/react-start/server");
+    const ip = getRequestIP() ?? null;
+    const userAgent = getRequestHeader("user-agent") ?? null;
+    db.prepare("UPDATE users SET last_login_at = datetime('now') WHERE id = ?").run(row.id);
+    db.prepare("INSERT INTO user_logins (user_id, ip, user_agent) VALUES (?, ?, ?)").run(
+      row.id,
+      ip,
+      userAgent,
+    );
+
     return { ok: true as const };
   });
 

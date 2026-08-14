@@ -145,8 +145,18 @@ export function getDb(): DatabaseSync {
       plex_account_id INTEGER,
       plex_username TEXT,
       plex_email TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      last_login_at TEXT
     );
+
+    CREATE TABLE IF NOT EXISTS user_logins (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      logged_in_at TEXT NOT NULL DEFAULT (datetime('now')),
+      ip TEXT,
+      user_agent TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_user_logins_user ON user_logins(user_id, logged_in_at DESC);
   `);
 
   // Curățări one-time, versionate cu PRAGMA user_version
@@ -380,6 +390,48 @@ function runCleanups(database: DatabaseSync): void {
         console.warn("[db] Migrare v9 eșuată:", e);
       }
       database.exec("PRAGMA user_version = 9");
+    }
+
+    if (version < 10) {
+      // v10: istoric de autentificări per cont (pentru pagina de detalii
+      // din Utilizatori) — last_login_at pe users + tabelă user_logins cu
+      // fiecare login (IP, user-agent).
+      try {
+        database.exec("ALTER TABLE users ADD COLUMN last_login_at TEXT");
+        console.log("[db] Migrare v10: adăugat users.last_login_at");
+      } catch {
+        // coloana există deja dintr-o rulare anterioară
+      }
+      try {
+        database.exec(`
+          CREATE TABLE IF NOT EXISTS user_logins (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            logged_in_at TEXT NOT NULL DEFAULT (datetime('now')),
+            ip TEXT,
+            user_agent TEXT
+          );
+          CREATE INDEX IF NOT EXISTS idx_user_logins_user ON user_logins(user_id, logged_in_at DESC);
+        `);
+        console.log("[db] Migrare v10: creată tabela user_logins");
+      } catch (e) {
+        console.warn("[db] Migrare v10 eșuată (user_logins):", e);
+      }
+      database.exec("PRAGMA user_version = 10");
+    }
+
+    if (version < 11) {
+      // v11: atribuie descărcările contului care le-a inițiat (pentru
+      // secțiunea de detalii din Utilizatori) — doar descărcările de acum
+      // înainte; cele vechi rămân neatribuite (NULL), fiindcă nu exista
+      // legătura de cont la momentul lor.
+      try {
+        database.exec("ALTER TABLE downloads ADD COLUMN requested_by_user_id INTEGER");
+        console.log("[db] Migrare v11: adăugat downloads.requested_by_user_id");
+      } catch {
+        // coloana există deja dintr-o rulare anterioară
+      }
+      database.exec("PRAGMA user_version = 11");
     }
   } catch (e) {
     console.warn("[db] Curățare eșuată:", e);

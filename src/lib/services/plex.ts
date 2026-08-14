@@ -90,6 +90,14 @@ let plexHistoryCache: {
   expiresAt: number;
 } | null = null;
 
+// Istoricul de vizionare al unui user Plex, din cache-ul deja populat de
+// pollingul dashboard-ului (getPlex, la fiecare 10s) — fără cerere Plex
+// suplimentară. Dacă cache-ul e rece, întoarce listă goală (nu merită o
+// cerere dedicată doar pentru o vizualizare ocazională în pagina de detalii).
+export function getCachedPlexUserHistory(username: string): PlexHistoryEntry[] {
+  return plexHistoryCache?.userHistory[username] ?? [];
+}
+
 async function fetchPlexHistory(
   url: string,
   headers: Record<string, string>,
