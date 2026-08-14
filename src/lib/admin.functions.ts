@@ -1,11 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
 
-export interface AdminUser {
-  id: number;
-  username: string;
-  createdAt: string;
-}
-
 export const adminLogin = createServerFn({ method: "POST" })
   .validator((data: { user: string; pass: string }) => data)
   .handler(async ({ data }) => {
@@ -61,21 +55,6 @@ export const getAdminStatus = createServerFn({ method: "GET" }).handler(async ()
 // ---------------------------------------------------------------------------
 // Gestionare conturi admin (necesită login admin) — vezi pagina Utilizatori
 // ---------------------------------------------------------------------------
-
-export const listAdminUsers = createServerFn({ method: "GET" }).handler(
-  async (): Promise<AdminUser[]> => {
-    const { requireAdmin } = await import("./admin.server");
-    await requireAdmin();
-    const { getDb } = await import("./db");
-    const db = getDb();
-    const rows = db
-      .prepare(
-        "SELECT id, username, created_at FROM users WHERE role = 'admin' ORDER BY created_at ASC",
-      )
-      .all() as Array<{ id: number; username: string; created_at: string }>;
-    return rows.map((r) => ({ id: r.id, username: r.username, createdAt: r.created_at }));
-  },
-);
 
 export const addAdminUser = createServerFn({ method: "POST" })
   .validator((data: { username: string; password: string }) => data)
