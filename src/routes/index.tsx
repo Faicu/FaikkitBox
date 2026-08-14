@@ -240,11 +240,11 @@ function Overview() {
                   <div className="mb-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
                     Biblioteci
                   </div>
-                  <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+                  <div className="flex flex-wrap justify-center gap-1.5">
                     {plex.data.libraries.map((lib) => (
                       <div
                         key={lib.key}
-                        className="flex flex-col items-center gap-1 rounded-lg bg-muted/40 py-2.5 text-center"
+                        className="flex w-[110px] flex-col items-center gap-1 rounded-lg bg-muted/40 py-2.5 text-center"
                       >
                         {libIcon(lib.type)}
                         <div className="text-lg font-bold tabular-nums">{lib.count ?? "—"}</div>
