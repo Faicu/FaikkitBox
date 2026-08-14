@@ -8,3 +8,12 @@ export async function requireAdminBeforeLoad() {
     throw redirect({ to: "/login" });
   }
 }
+
+// Orice cont autentificat (admin sau user obișnuit aprobat) — pentru rute
+// deschise oricui e logat, dar nu vizitatorilor anonimi.
+export async function requireAuthBeforeLoad() {
+  const { isAuthenticated } = await getAdminStatus();
+  if (!isAuthenticated) {
+    throw redirect({ to: "/login" });
+  }
+}

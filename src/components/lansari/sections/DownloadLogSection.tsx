@@ -4,7 +4,7 @@ import { useState } from "react";
 import { History, Film, Tv, CheckCircle2, Loader2, Captions } from "lucide-react";
 import { toast } from "sonner";
 
-import { filelistLogQuery } from "@/lib/queries";
+import { filelistLogQuery, adminStatusQuery } from "@/lib/queries";
 import {
   deleteFilelistLogEntry,
   backfillSubtitles,
@@ -83,6 +83,8 @@ function DownloadLogRow({ entry, onClick }: { entry: FilelistLogEntry; onClick: 
 
 export function DownloadLogSection() {
   const queryClient = useQueryClient();
+  const { data: adminData } = useQuery(adminStatusQuery);
+  const isAdmin = !!adminData?.isAdmin;
   const { data: log, isLoading } = useQuery(filelistLogQuery);
   const deleteFn = useServerFn(deleteFilelistLogEntry);
   const backfillFn = useServerFn(backfillSubtitles);
@@ -191,19 +193,21 @@ export function DownloadLogSection() {
         <span className="flex items-center gap-1">
           <History className="h-3.5 w-3.5" /> Ultimele torrente descărcate
         </span>
-        <button
-          onClick={runBackfill}
-          disabled={backfilling}
-          className="flex items-center gap-1 rounded-lg px-1.5 py-1 normal-case tracking-normal text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors disabled:opacity-50"
-          title="Verifică/corectează subtitrarea română pentru toate descărcările din jurnal"
-        >
-          {backfilling ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <Captions className="h-3.5 w-3.5" />
-          )}
-          Corectează subtitrări
-        </button>
+        {isAdmin && (
+          <button
+            onClick={runBackfill}
+            disabled={backfilling}
+            className="flex items-center gap-1 rounded-lg px-1.5 py-1 normal-case tracking-normal text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors disabled:opacity-50"
+            title="Verifică/corectează subtitrarea română pentru toate descărcările din jurnal"
+          >
+            {backfilling ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Captions className="h-3.5 w-3.5" />
+            )}
+            Corectează subtitrări
+          </button>
+        )}
       </h3>
       {backfilling && (
         <div className="mb-2 px-1">
@@ -238,6 +242,7 @@ export function DownloadLogSection() {
           entry={selectedEntry}
           onClose={() => setSelectedEntry(null)}
           correcting={correctingId === selectedEntry.id}
+          isAdmin={isAdmin}
           onCorrectSubtitle={() => correctOne(selectedEntry.id, selectedEntry.name)}
           onDelete={() =>
             setPendingDelete({

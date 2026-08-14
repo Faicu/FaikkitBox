@@ -6,11 +6,11 @@ import { PageShell } from "@/components/PageShell";
 import { DiscoverGrid } from "@/components/descopera/DiscoverGrid";
 import { FeedView } from "@/components/descopera/FeedView";
 import { FilterTabs } from "@/components/descopera/FilterTabs";
-import { requireAdminBeforeLoad } from "@/lib/admin-route-guard";
+import { requireAuthBeforeLoad } from "@/lib/admin-route-guard";
 import type { DiscoverMediaType, DiscoverSort } from "@/lib/tmdb.discover.functions";
 
 export const Route = createFileRoute("/descopera")({
-  beforeLoad: requireAdminBeforeLoad,
+  beforeLoad: requireAuthBeforeLoad,
   head: () => ({
     meta: [{ title: "Descoperă — Monitor Server" }],
   }),

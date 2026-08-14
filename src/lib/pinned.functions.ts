@@ -120,8 +120,8 @@ export const setWatchSettings = createServerFn({ method: "POST" })
 export const addPinnedItem = createServerFn({ method: "POST" })
   .validator((data: PinnedItemDb) => data)
   .handler(async ({ data }): Promise<{ added: boolean }> => {
-    const { requireAdmin } = await import("./admin.server");
-    await requireAdmin();
+    const { requireAuth } = await import("./admin.server");
+    await requireAuth();
     const db = getDb();
     const exists = db
       .prepare("SELECT 1 FROM pinned_items WHERE id = ? AND media_type = ?")

@@ -5,6 +5,12 @@ import { adminStatusQuery } from "@/lib/queries";
 
 const publicItems = [{ to: "/", label: "Acasă", icon: LayoutDashboard }] as const;
 
+const authItems = [
+  { to: "/", label: "Acasă", icon: LayoutDashboard },
+  { to: "/descopera", label: "Descoperă", icon: Compass },
+  { to: "/lansari", label: "Lansări", icon: Flame },
+] as const;
+
 const adminItems = [
   { to: "/", label: "Acasă", icon: LayoutDashboard },
   { to: "/descopera", label: "Descoperă", icon: Compass },
@@ -15,7 +21,11 @@ const adminItems = [
 export function BottomNav() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const admin = useQuery(adminStatusQuery);
-  const items = admin.data?.isAdmin ? adminItems : publicItems;
+  const items = admin.data?.isAdmin
+    ? adminItems
+    : admin.data?.isAuthenticated
+      ? authItems
+      : publicItems;
   return (
     <nav
       className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/60 bg-card/70 backdrop-blur-xl"

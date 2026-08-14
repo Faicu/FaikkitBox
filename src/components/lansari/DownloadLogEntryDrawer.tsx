@@ -43,12 +43,14 @@ export function DownloadLogEntryDrawer({
   onCorrectSubtitle,
   correcting,
   onDelete,
+  isAdmin,
 }: {
   entry: FilelistLogEntry;
   onClose: () => void;
   onCorrectSubtitle: () => void;
   correcting: boolean;
   onDelete: () => void;
+  isAdmin: boolean;
 }) {
   const nameFn = useServerFn(resolveTorrentDisplayName);
   const { data: displayName } = useQuery({
@@ -128,41 +130,47 @@ export function DownloadLogEntryDrawer({
             )}
           </div>
 
-          <div className="flex gap-2 pt-1">
-            <button
-              type="button"
-              onClick={onCorrectSubtitle}
-              disabled={!entry.torrentHash || correcting}
-              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-border bg-muted/40 py-2 text-xs font-medium text-foreground hover:bg-muted/60 transition-colors disabled:opacity-40"
-              title={
-                entry.torrentHash
-                  ? "Verifică/corectează subtitrarea română pentru acest item"
-                  : "Hash indisponibil — nu pot verifica subtitrarea"
-              }
-            >
-              {correcting ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Captions className="h-3.5 w-3.5" />
-              )}
-              Corectează subtitrare
-            </button>
-            <button
-              type="button"
-              onClick={onDelete}
-              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-border bg-muted/40 py-2 text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors"
-              title={
-                isActive
-                  ? "Oprește descărcarea în curs"
-                  : entry.torrentHash
-                    ? "Șterge din log + qBit + disk"
-                    : "Șterge din log"
-              }
-            >
-              {isActive ? <OctagonX className="h-3.5 w-3.5" /> : <Trash2 className="h-3.5 w-3.5" />}
-              {isActive ? "Oprește" : "Șterge"}
-            </button>
-          </div>
+          {isAdmin && (
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                onClick={onCorrectSubtitle}
+                disabled={!entry.torrentHash || correcting}
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-border bg-muted/40 py-2 text-xs font-medium text-foreground hover:bg-muted/60 transition-colors disabled:opacity-40"
+                title={
+                  entry.torrentHash
+                    ? "Verifică/corectează subtitrarea română pentru acest item"
+                    : "Hash indisponibil — nu pot verifica subtitrarea"
+                }
+              >
+                {correcting ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Captions className="h-3.5 w-3.5" />
+                )}
+                Corectează subtitrare
+              </button>
+              <button
+                type="button"
+                onClick={onDelete}
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-border bg-muted/40 py-2 text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors"
+                title={
+                  isActive
+                    ? "Oprește descărcarea în curs"
+                    : entry.torrentHash
+                      ? "Șterge din log + qBit + disk"
+                      : "Șterge din log"
+                }
+              >
+                {isActive ? (
+                  <OctagonX className="h-3.5 w-3.5" />
+                ) : (
+                  <Trash2 className="h-3.5 w-3.5" />
+                )}
+                {isActive ? "Oprește" : "Șterge"}
+              </button>
+            </div>
+          )}
         </div>
       </DrawerContent>
     </Drawer>

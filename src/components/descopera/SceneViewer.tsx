@@ -103,6 +103,16 @@ export function SceneViewer({
               )}
             </div>
 
+            {!detailsQuery.isLoading && (
+              <button
+                type="button"
+                onClick={() => setWizardOpen(true)}
+                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-primary py-3 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/20 transition-transform hover:bg-primary/90 active:scale-[0.99]"
+              >
+                <Plus className="h-4 w-4" /> Adaugă film/serial
+              </button>
+            )}
+
             <div className="flex flex-wrap items-center gap-2">
               <PlexLibraryStatus
                 title={item.title}
@@ -124,15 +134,6 @@ export function SceneViewer({
                 posterUrl={item.posterUrl}
                 mediaType={item.mediaType}
               />
-              {!detailsQuery.isLoading && (
-                <button
-                  type="button"
-                  onClick={() => setWizardOpen(true)}
-                  className="flex items-center gap-1 rounded-lg bg-primary/15 px-2 py-1 text-[11px] font-medium text-primary"
-                >
-                  <Plus className="h-3.5 w-3.5" /> Adaugă
-                </button>
-              )}
             </div>
           </div>
         </DrawerContent>
