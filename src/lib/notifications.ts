@@ -32,10 +32,9 @@ export async function buildTorrentAddedNotification(params: {
     params.imdb ? lookupPosterUrlByImdbId(params.imdb).catch(() => null) : Promise.resolve(null),
   ]);
   const quality = detectTorrentQuality(params.torrentName);
-  const prefix = params.auto ? "Auto-descărcat" : "Torrent adăugat";
   return {
-    title: "⬇️ Torrent",
-    body: `${prefix}: ${displayName} [${quality}]`,
+    title: params.auto ? "⬇️ Descărcare Automată" : "⬇️ Descărcare Inițiată",
+    body: `${displayName} [${quality}]`,
     image,
     url: "/lansari",
   };
@@ -51,8 +50,8 @@ export async function buildTorrentCompleteNotification(params: {
   ]);
   const quality = detectTorrentQuality(params.torrentName);
   return {
-    title: "✅ Torrent",
-    body: `Torrent descărcat complet: ${displayName} [${quality}]`,
+    title: "✅ Descărcare Completă",
+    body: `${displayName} [${quality}]`,
     image,
     url: "/lansari",
   };
@@ -65,13 +64,14 @@ export async function buildTorrentCompleteNotification(params: {
 
 export function buildEpisodeAiredNotification(
   showTitle: string,
+  epKey: string,
   epLabel: string,
 ): PushNotification {
-  return { title: `📅 ${showTitle} — Episod nou`, body: epLabel, url: "/lansari" };
+  return { title: `📅 ${showTitle} ${epKey} Lansat`, body: epLabel, url: "/lansari" };
 }
 
 export function buildNewTorrentsNotification(showTitle: string, label: string): PushNotification {
-  return { title: `🎞 ${showTitle} — Torrente noi`, body: label, url: "/lansari" };
+  return { title: `🎞 ${showTitle} - Disponibil`, body: label, url: "/lansari" };
 }
 
 export function buildAutoDownloadNotification(
@@ -80,8 +80,8 @@ export function buildAutoDownloadNotification(
   bodyName: string,
 ): PushNotification {
   return {
-    title: `⬇️ ${showTitle} — Descărcare automată`,
-    body: `${bodyName} [${quality}]`,
+    title: `⬇️ ${showTitle}`,
+    body: `Descărcare Automată: ${bodyName} [${quality}]`,
     url: "/lansari",
   };
 }

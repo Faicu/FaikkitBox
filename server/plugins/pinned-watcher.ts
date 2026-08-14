@@ -177,7 +177,7 @@ export async function checkAll(force = false): Promise<void> {
               const epLabel = `${key}${latestAired.title ? ` — ${latestAired.title}` : ""}`;
               changes.push(`📅 Episod nou lansat: ${epLabel}`);
               journalEntries.push(`📅 Episod nou lansat: ${epLabel}`);
-              notifications.push(buildEpisodeAiredNotification(item.title, epLabel));
+              notifications.push(buildEpisodeAiredNotification(item.title, key, epLabel));
             }
             newLastAiredKey = key;
           }

@@ -44,27 +44,29 @@ export interface ActivityEntry {
 // ---------------------------------------------------------------------------
 
 const PUSH_TITLES: Record<ActivityType, string> = {
-  server_start: "🟢 Server",
-  server_stop: "🔴 Server",
-  plex_watch_start: "🎬 Plex",
-  plex_watch_stop: "🎬 Plex",
-  torrent_added: "⬇️ Torrent",
-  torrent_complete: "✅ Torrent",
+  server_start: "🟢 Serverul a pornit",
+  server_stop: "🔴 Serverul s-a oprit",
+  plex_watch_start: "🎬 Vizionare începută",
+  plex_watch_stop: "🎬 Vizionare încheiată",
+  // torrent_added/torrent_complete diferă manual/automat — titlul real vine
+  // din options.title (n.title din notifications.ts), asta e doar fallback.
+  torrent_added: "⬇️ Descărcare Inițiată",
+  torrent_complete: "✅ Descărcare Completă",
   immich_upload: "📷 Immich",
-  service_restart: "🔄 Serviciu",
-  service_update: "⬆️ Update",
-  ubuntu_update: "🐧 Ubuntu",
-  qbit_action: "⚙️ qBittorrent",
+  service_restart: "🔄 Serviciu Repornit",
+  service_update: "⬆️ Actualizare Aplicată",
+  ubuntu_update: "🐧 Ubuntu Actualizat",
+  qbit_action: "⚙️ Acțiune qBittorrent",
   // Gol intenționat: pinned-watcher.ts trimite singur push-uri cu titluri/emoji
   // mai specifice pentru evenimentele de pinned_update, deci logActivity nu
   // trebuie să mai trimită unul generic pentru acest tip.
   pinned_update: "",
-  app_error: "⚠️ Eroare aplicație",
+  app_error: "⚠️ Eroare Nouă Aplicație",
   // O singură intrare de log per rulare (descărcare unică sau backfill întreg
   // — vezi logSubtitleRun în src/lib/filelist/subtitles.ts), deci un singur
   // push per rulare, nu per torrent.
-  subtitle_fix: "💬 Subtitrare",
-  account_request: "🆕 Cerere cont",
+  subtitle_fix: "💬 Corecție Subtitrare",
+  account_request: "🆕 Cerere Aprobare Cont",
 };
 
 // Pagina spre care duce apăsarea notificării — implicit per tip; se poate
@@ -91,7 +93,7 @@ export async function logActivity(
   type: ActivityType,
   message: string,
   meta?: Record<string, ActivityMetaValue>,
-  options?: { skipPush?: boolean; image?: string | null; url?: string },
+  options?: { skipPush?: boolean; image?: string | null; url?: string; title?: string },
 ): Promise<void> {
   try {
     const { getDb } = await import("./db");
@@ -112,7 +114,7 @@ export async function logActivity(
   // Trimite notificare push (fire and forget) — tipurile cu titlu gol nu
   // trimit push, la fel ca apelurile care cer explicit skipPush (ex.
   // subtitle_fix pentru o descărcare unde n-a fost nevoie de nicio corecție)
-  const pushTitle = PUSH_TITLES[type];
+  const pushTitle = options?.title ?? PUSH_TITLES[type];
   if (pushTitle && !options?.skipPush) {
     import("./push")
       .then(({ sendPushToAll }) =>
@@ -223,11 +225,11 @@ export async function trackPlexSessions(
       db.prepare("DELETE FROM plex_active_sessions WHERE key = ?").run(key);
       const what = row.grandparent_title ? `${row.grandparent_title} — ${row.title}` : row.title;
       const progress = fmtProgress(row.last_view_offset_ms, row.duration_ms);
-      await logActivity(
-        "plex_watch_stop",
-        `${row.user} a terminat vizionarea: ${what}${progress}`,
-        { user: row.user, title: row.title, grandparentTitle: row.grandparent_title || undefined },
-      );
+      await logActivity("plex_watch_stop", `${row.user}: ${what}${progress}`, {
+        user: row.user,
+        title: row.title,
+        grandparentTitle: row.grandparent_title || undefined,
+      });
     }
   }
 
@@ -250,7 +252,7 @@ export async function trackPlexSessions(
       );
 
       const what = s.grandparentTitle ? `${s.grandparentTitle} — ${s.title}` : s.title;
-      await logActivity("plex_watch_start", `${s.user} a început vizionarea: ${what}`, {
+      await logActivity("plex_watch_start", `${s.user}: ${what}`, {
         user: s.user,
         title: s.title,
         grandparentTitle: s.grandparentTitle,
@@ -352,6 +354,14 @@ async function isCodeRestart(): Promise<boolean> {
   }
 }
 
+function nowHM(): string {
+  return new Date().toLocaleTimeString("ro-RO", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Europe/Bucharest",
+  });
+}
+
 async function logServerStartOnce(): Promise<void> {
   try {
     const dbModule = await import("./db");
@@ -366,7 +376,12 @@ async function logServerStartOnce(): Promise<void> {
     if (recent.c > 0) return;
     // Nu logăm dacă e un restart cauzat de un build recent (modificare cod)
     if (await isCodeRestart()) return;
-    await logActivity("server_start", "Serverul FaikkitBox a pornit");
+    // Cauza: sistemul repornit de curând (uptime OS mic) vs doar serviciul
+    // (systemctl start), cu sistemul deja pornit de mai mult timp.
+    const os = await import("node:os");
+    const cause =
+      os.uptime() < 120 ? "după repornirea sistemului" : "pornire manuală a serviciului";
+    await logActivity("server_start", `Cauză: ${cause}, ora ${nowHM()}`);
   } catch {
     // logare best-effort — nu blocăm pornirea serverului
   }
@@ -388,21 +403,29 @@ function isCodeRestartSync(): boolean {
   }
 }
 
+// Setat de handler-ele uncaughtException/unhandledRejection de mai jos —
+// singura sursă de "cauză" pe care o putem distinge realist la oprire.
+let crashCause: string | null = null;
+
 function logServerStopSync(): void {
   try {
     if (!dbModuleRef || !cryptoRef) return;
     // Nu logăm dacă e un restart cauzat de un build recent (verificare async sau sync fallback)
     if (codeRestartDetected || isCodeRestartSync()) return;
     const db = dbModuleRef.getDb();
+    const cause = crashCause ?? "oprire manuală / redeploy";
+    const message = `Cauză: ${cause}, ora ${nowHM()}`;
     db.prepare(
       "INSERT INTO activity (id, timestamp, type, message, meta) VALUES (?, ?, ?, ?, ?)",
-    ).run(
-      cryptoRef.randomUUID(),
-      new Date().toISOString(),
-      "server_stop",
-      "Serverul FaikkitBox s-a oprit",
-      null,
-    );
+    ).run(cryptoRef.randomUUID(), new Date().toISOString(), "server_stop", message, null);
+    // Push best-effort, fără await — la oprire avem doar 300ms (fast-shutdown.ts)
+    // înainte de ieșirea forțată, insuficient garantat pentru un round-trip
+    // web-push, dar merită încercat când apucă.
+    import("./push")
+      .then(({ sendPushToAll }) =>
+        sendPushToAll(PUSH_TITLES.server_stop, message, { url: PUSH_URLS.server_stop }),
+      )
+      .catch(() => {});
   } catch {
     // logare best-effort — nu blocăm oprirea serverului
   }
@@ -449,4 +472,21 @@ if (
   // termine graceful shutdown-ul.
   process.on("SIGTERM", logOnce);
   process.on("SIGINT", logOnce);
+  // Singura sursă realistă de "cauză" la oprire: dacă procesul moare din cauza
+  // unei erori neprinse, marcăm asta înainte de exit. A avea un listener pe
+  // uncaughtException/unhandledRejection dezactivează crash-ul implicit al
+  // Node — trebuie să ieșim noi explicit, altfel procesul rămâne agățat în
+  // loc să pice curat (și systemd să-l repornească). console-capture.ts
+  // prinde deja console.error pentru Jurnalul de erori, deci logăm eroarea o
+  // singură dată aici, nu duplicat.
+  process.on("uncaughtException", (e) => {
+    crashCause = `eroare neașteptată (${e.message})`;
+    console.error("[activity-log] uncaughtException:", e);
+    process.exit(1);
+  });
+  process.on("unhandledRejection", (e) => {
+    crashCause = `promisiune neprinsă (${e instanceof Error ? e.message : String(e)})`;
+    console.error("[activity-log] unhandledRejection:", e);
+    process.exit(1);
+  });
 }

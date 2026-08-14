@@ -176,7 +176,7 @@ async function pollUntilComplete(
                   "torrent_complete",
                   n.body,
                   { torrentId },
-                  { image: n.image, url: n.url },
+                  { image: n.image, url: n.url, title: n.title },
                 ),
               ),
             )
@@ -730,7 +730,7 @@ async function downloadFilelistCore(
                 savePath,
                 size: params.size,
               },
-              { image: n.image, url: n.url },
+              { image: n.image, url: n.url, title: n.title },
             ),
           ),
         )
