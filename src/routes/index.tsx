@@ -6,7 +6,6 @@ import {
   Users,
   Tv,
   Film,
-  RefreshCw,
   Plus,
   LogIn,
   UserPlus,
@@ -51,7 +50,6 @@ function Overview() {
   const sessions =
     plexSessions.data?.status === "ok" ? plexSessions.data.sessions : plex.data?.sessions;
   const [plexDrawer, setPlexDrawer] = useState<"views" | "users" | null>(null);
-  const [plexAddedMode, setPlexAddedMode] = useState<"movies" | "episodes">("movies");
   const [wizardOpen, setWizardOpen] = useState(false);
 
   const stop = (fn: () => void) => (e: React.MouseEvent) => {
@@ -234,32 +232,6 @@ function Overview() {
                   )}
                 </button>
               </div>
-
-              <button
-                type="button"
-                onClick={stop(() =>
-                  setPlexAddedMode((m) => (m === "movies" ? "episodes" : "movies")),
-                )}
-                className="flex w-full items-center gap-2 rounded-lg bg-muted/40 px-2.5 py-2 text-left transition-colors hover:bg-muted/60 active:bg-muted"
-                title="Comută filme/episoade adăugate (24h)"
-              >
-                {plexAddedMode === "movies" ? (
-                  <Film className="h-3.5 w-3.5 shrink-0 text-amber-400" />
-                ) : (
-                  <Tv className="h-3.5 w-3.5 shrink-0 text-blue-400" />
-                )}
-                <span className="flex-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                  {plexAddedMode === "movies" ? "Filme adăugate (24h)" : "Episoade adăugate (24h)"}
-                </span>
-                <span className="text-sm font-semibold tabular-nums">
-                  {String(
-                    (plexAddedMode === "movies"
-                      ? plex.data.moviesAddedLast24h
-                      : plex.data.episodesAddedLast24h) ?? 0,
-                  )}
-                </span>
-                <RefreshCw className="h-3 w-3 shrink-0 text-muted-foreground" />
-              </button>
 
               {plex.data.libraries.length > 0 && (
                 <div>
