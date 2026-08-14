@@ -49,5 +49,11 @@ export const registerUser = createServerFn({ method: "POST" })
       plexMatch.email,
     );
 
+    const { logActivity } = await import("./activity-log");
+    await logActivity(
+      "account_request",
+      `Cerere nouă de aprobare cont: ${username} (Plex: ${plexMatch.username})`,
+    );
+
     return { ok: true };
   });

@@ -19,7 +19,8 @@ export type ActivityType =
   | "qbit_action"
   | "pinned_update"
   | "app_error"
-  | "subtitle_fix";
+  | "subtitle_fix"
+  | "account_request";
 
 export type JsonValue = string | number | boolean | null | undefined;
 
@@ -63,6 +64,7 @@ const PUSH_TITLES: Record<ActivityType, string> = {
   // — vezi logSubtitleRun în src/lib/filelist/subtitles.ts), deci un singur
   // push per rulare, nu per torrent.
   subtitle_fix: "💬 Subtitrare",
+  account_request: "🆕 Cerere cont",
 };
 
 export async function logActivity(

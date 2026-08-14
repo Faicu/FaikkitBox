@@ -14,6 +14,7 @@ import {
   GitCommitHorizontal,
   AlertTriangle,
   Captions,
+  UserPlus,
 } from "lucide-react";
 
 import { activityLogQuery, recentCommitsQuery, commitsFromDbQuery } from "@/lib/queries";
@@ -36,6 +37,7 @@ const FILTER_GROUPS: { key: string; label: string }[] = [
   { key: "updates", label: "Updates" },
   { key: "commits", label: "Commits" },
   { key: "lansari", label: "Lansări" },
+  { key: "conturi", label: "Conturi" },
   { key: "erori", label: "Erori" },
 ];
 
@@ -54,6 +56,7 @@ const TYPE_TO_GROUP: Record<string, string> = {
   ubuntu_update: "updates",
   pinned_update: "lansari",
   app_error: "erori",
+  account_request: "conturi",
 };
 
 export function ActivityLogSection() {
@@ -80,6 +83,7 @@ export function ActivityLogSection() {
     subtitle_fix: <Captions className="h-3.5 w-3.5 text-teal-400" />,
     pinned_update: <Bell className="h-3.5 w-3.5 text-sky-400" />,
     app_error: <AlertTriangle className="h-3.5 w-3.5 text-red-400" />,
+    account_request: <UserPlus className="h-3.5 w-3.5 text-amber-400" />,
   };
 
   const timeline: TimelineItem[] = [
@@ -157,9 +161,7 @@ export function ActivityLogSection() {
                   key={entry.id}
                   onClick={hasSubtitleDetails ? () => setSelectedSubtitleEntry(entry) : undefined}
                   className={`w-full flex items-start gap-2.5 px-3 py-2.5 text-left ${
-                    hasSubtitleDetails
-                      ? "hover:bg-muted/40 transition-colors cursor-pointer"
-                      : ""
+                    hasSubtitleDetails ? "hover:bg-muted/40 transition-colors cursor-pointer" : ""
                   }`}
                 >
                   <div className="mt-0.5 shrink-0">
