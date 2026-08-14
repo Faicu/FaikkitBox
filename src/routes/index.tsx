@@ -176,28 +176,27 @@ function Overview() {
                   })}
                 </div>
               ) : (
-                <div className="rounded-lg bg-muted/40 px-2.5 py-1.5">
-                  <div className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                    <Users className="h-3.5 w-3.5" />
-                    Se uită acum
-                  </div>
-                  <div className="mt-0.5 text-sm font-semibold">Nimeni</div>
+                <div className="flex flex-col items-center gap-1 rounded-lg bg-muted/40 py-4 text-center">
+                  <Users className="h-5 w-5 text-muted-foreground/60" />
+                  <div className="text-sm font-semibold">Nimeni nu se uită acum</div>
                 </div>
               )}
               <div className="grid grid-cols-2 gap-1.5">
                 <button
                   type="button"
                   onClick={stop(() => setPlexDrawer("views"))}
-                  className="rounded-lg bg-muted/40 px-2.5 py-2 text-left transition-colors hover:bg-muted/60 active:bg-muted"
+                  className="rounded-lg bg-muted/40 px-2.5 py-2.5 text-center transition-colors hover:bg-muted/60 active:bg-muted"
                 >
-                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                    Vizionate azi
-                  </div>
-                  <div className="mt-0.5 text-lg font-semibold tabular-nums">
-                    {String(plex.data.episodesToday ?? 0)}
+                  <div className="flex flex-col items-center">
+                    <div className="text-2xl font-bold tabular-nums">
+                      {String(plex.data.episodesToday ?? 0)}
+                    </div>
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                      Vizionate azi
+                    </div>
                   </div>
                   {(plex.data.todayViews?.length ?? 0) > 0 && (
-                    <div className="mt-1 space-y-0.5 border-t border-border/60 pt-1">
+                    <div className="mt-1.5 space-y-0.5 border-t border-border/60 pt-1.5 text-left">
                       {plex.data.todayViews!.slice(0, 3).map((v, i) => (
                         <div key={i} className="truncate text-[10px] text-muted-foreground">
                           {v.show ?? v.title}
@@ -209,16 +208,18 @@ function Overview() {
                 <button
                   type="button"
                   onClick={stop(() => setPlexDrawer("users"))}
-                  className="rounded-lg bg-muted/40 px-2.5 py-2 text-left transition-colors hover:bg-muted/60 active:bg-muted"
+                  className="rounded-lg bg-muted/40 px-2.5 py-2.5 text-center transition-colors hover:bg-muted/60 active:bg-muted"
                 >
-                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                    Utilizatori activi azi
-                  </div>
-                  <div className="mt-0.5 text-lg font-semibold tabular-nums">
-                    {String(plex.data.activeUsersToday ?? 0)}
+                  <div className="flex flex-col items-center">
+                    <div className="text-2xl font-bold tabular-nums">
+                      {String(plex.data.activeUsersToday ?? 0)}
+                    </div>
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                      Utilizatori activi azi
+                    </div>
                   </div>
                   {(plex.data.activeUsersTodayList?.length ?? 0) > 0 && (
-                    <div className="mt-1 space-y-0.5 border-t border-border/60 pt-1">
+                    <div className="mt-1.5 space-y-0.5 border-t border-border/60 pt-1.5 text-left">
                       {plex.data.activeUsersTodayList!.slice(0, 3).map((u, i) => (
                         <div
                           key={i}
@@ -242,14 +243,12 @@ function Overview() {
                     {plex.data.libraries.map((lib) => (
                       <div
                         key={lib.key}
-                        className="flex items-center gap-1.5 rounded-lg bg-muted/40 px-2 py-1.5"
+                        className="flex flex-col items-center gap-1 rounded-lg bg-muted/40 py-2.5 text-center"
                       >
                         {libIcon(lib.type)}
-                        <div className="min-w-0">
-                          <div className="truncate text-[11px] leading-tight">{lib.title}</div>
-                          <div className="text-xs font-semibold tabular-nums">
-                            {lib.count ?? "—"}
-                          </div>
+                        <div className="text-lg font-bold tabular-nums">{lib.count ?? "—"}</div>
+                        <div className="truncate text-[10px] leading-tight text-muted-foreground">
+                          {lib.title}
                         </div>
                       </div>
                     ))}
@@ -405,11 +404,11 @@ function ServiceRow({
 }
 
 function libIcon(type: string) {
-  if (type === "movie") return <Film className="h-3.5 w-3.5 shrink-0 text-amber-400" />;
-  if (type === "show") return <Tv className="h-3.5 w-3.5 shrink-0 text-blue-400" />;
-  if (type === "artist") return <Music className="h-3.5 w-3.5 shrink-0 text-purple-400" />;
-  if (type === "photo") return <ImageIcon className="h-3.5 w-3.5 shrink-0 text-emerald-400" />;
-  return <Film className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />;
+  if (type === "movie") return <Film className="h-4 w-4 shrink-0 text-amber-400" />;
+  if (type === "show") return <Tv className="h-4 w-4 shrink-0 text-blue-400" />;
+  if (type === "artist") return <Music className="h-4 w-4 shrink-0 text-purple-400" />;
+  if (type === "photo") return <ImageIcon className="h-4 w-4 shrink-0 text-emerald-400" />;
+  return <Film className="h-4 w-4 shrink-0 text-muted-foreground" />;
 }
 
 // addedAt e unix timestamp în secunde (convenția Plex)
