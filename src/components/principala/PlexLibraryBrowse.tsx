@@ -67,7 +67,14 @@ export function PlexLibraryBrowse() {
             }}
             className="flex w-full items-center gap-2 rounded-lg bg-muted/40 px-2 py-1.5 text-left transition-colors hover:bg-muted/60 active:bg-muted"
           >
-            {item.type === "movie" ? (
+            {item.thumb ? (
+              <img
+                src={`/api/plex-thumb?path=${encodeURIComponent(item.thumb)}`}
+                className="h-8 w-8 shrink-0 rounded object-cover bg-muted"
+                loading="lazy"
+                alt=""
+              />
+            ) : item.type === "movie" ? (
               <Film className="h-3.5 w-3.5 shrink-0 text-amber-400" />
             ) : (
               <Tv className="h-3.5 w-3.5 shrink-0 text-blue-400" />
@@ -96,22 +103,34 @@ export function PlexLibraryBrowse() {
       <Drawer open={!!selectedKey} onOpenChange={(o) => !o && setSelectedKey(null)}>
         <DrawerContent className="max-h-[85vh]">
           <DrawerHeader className="pb-2 text-left">
-            <DrawerTitle className="flex items-center gap-2 text-base">
-              {d?.type === "movie" ? (
-                <Film className="h-4 w-4 text-amber-400 shrink-0" />
-              ) : (
-                <Tv className="h-4 w-4 text-blue-400 shrink-0" />
+            <div className="flex items-start gap-3">
+              {d?.thumb && (
+                <img
+                  src={`/api/plex-thumb?path=${encodeURIComponent(d.thumb)}`}
+                  className="h-20 w-14 shrink-0 rounded-lg object-cover bg-muted"
+                  loading="lazy"
+                  alt=""
+                />
               )}
-              {d ? (d.type === "movie" ? d.title : (d.show ?? d.title)) : "Se încarcă…"}
-            </DrawerTitle>
-            {d?.type === "episode" && (
-              <DrawerDescription className="text-left text-sm font-medium text-foreground leading-snug mt-1">
-                {d.season != null && d.episode != null
-                  ? `S${String(d.season).padStart(2, "0")}E${String(d.episode).padStart(2, "0")}`
-                  : ""}
-                {d.title ? ` · ${d.title}` : ""}
-              </DrawerDescription>
-            )}
+              <div className="min-w-0">
+                <DrawerTitle className="flex items-center gap-2 text-base">
+                  {d?.type === "movie" ? (
+                    <Film className="h-4 w-4 text-amber-400 shrink-0" />
+                  ) : (
+                    <Tv className="h-4 w-4 text-blue-400 shrink-0" />
+                  )}
+                  {d ? (d.type === "movie" ? d.title : (d.show ?? d.title)) : "Se încarcă…"}
+                </DrawerTitle>
+                {d?.type === "episode" && (
+                  <DrawerDescription className="text-left text-sm font-medium text-foreground leading-snug mt-1">
+                    {d.season != null && d.episode != null
+                      ? `S${String(d.season).padStart(2, "0")}E${String(d.episode).padStart(2, "0")}`
+                      : ""}
+                    {d.title ? ` · ${d.title}` : ""}
+                  </DrawerDescription>
+                )}
+              </div>
+            </div>
           </DrawerHeader>
 
           <div className="px-4 pb-6 space-y-3 overflow-y-auto max-h-[65vh]">
