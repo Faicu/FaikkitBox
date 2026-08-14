@@ -68,11 +68,11 @@ export function PinnedItemCard({
   const itemOriginalTitle =
     details?.literalTitle || details?.originalTitle || item.originalTitle || item.title;
 
-  // checkFilelistForItem caută întâi după IMDB ID, apoi titlul original,
-  // apoi titlul afișat — aceeași sursă unică folosită și de Descoperă.
-  // Contul Filelist are o limită orară de cereri, deci verificarea pornește
-  // doar când utilizatorul deschide "Mai multe detalii" la card, nu automat
-  // pentru toate itemele fixate la încărcarea paginii.
+  // checkFilelistForItem caută exclusiv după IMDB ID — aceeași sursă unică
+  // folosită și de Descoperă. Contul Filelist are o limită orară de cereri,
+  // deci verificarea pornește doar când utilizatorul deschide "Mai multe
+  // detalii" la card, nu automat pentru toate itemele fixate la încărcarea
+  // paginii.
   const { data: filelistData, isLoading: filelistLoading } = useQuery({
     queryKey: ["filelistForItem", item.mediaType, item.id, itemOriginalTitle, itemImdbId],
     queryFn: () =>
@@ -98,10 +98,7 @@ export function PinnedItemCard({
       : latestSeasonFromTmdb;
   const showTitleForPlex = item.originalTitle || countdown?.showName || item.title;
 
-  // Doar torrenturi cu ID IMDb confirmat de Filelist — cele găsite doar prin
-  // potrivire de text (fără IMDb pe Filelist) nu apar la butoanele de calitate.
-  const torrents =
-    filelistData?.status === "ok" ? filelistData.torrents.filter((t) => t.matchedByImdb) : [];
+  const torrents = filelistData?.status === "ok" ? filelistData.torrents : [];
   // Sezoanele verificate în Plex pentru badge-ul principal vin din TMDB, nu
   // din Filelist — independent de starea "Mai multe detalii" a cardului.
   const allSeasonNums = (details?.seasons ?? []).map((s) => s.seasonNumber);

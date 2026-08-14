@@ -7,44 +7,16 @@ import { formatBytes } from "@/lib/format";
 
 // ---------------------------------------------------------------------------
 // Explicație text pentru criteriul care a găsit torrentul — vezi
-// checkFilelistForItemInternal (src/lib/filelist/download.ts) pentru logica
-// de căutare (IMDB ID → titlu original → titlu englez).
+// checkFilelistForItemInternal (src/lib/filelist/download.ts): căutarea se
+// face exclusiv după ID IMDB.
 // ---------------------------------------------------------------------------
 
 function matchInfoText(torrent: FilelistTorrent): string | null {
-  if (!torrent.matchedVia) return null;
-
-  if (torrent.matchedVia === "titles_match") {
-    let text = "Titlul original și titlul englez/internațional sunt identice pentru acest titlu";
-    if (torrent.matchedQuery) text += `: "${torrent.matchedQuery}"`;
-    text +=
-      ". Găsit pe Filelist prin potrivire de text în numele lansării (nu are ID IMDB pe Filelist" +
-      (torrent.imdb ? ", deși are unul asociat: " + torrent.imdb : "") +
-      ").";
-    return text;
-  }
-
-  const criteriuLabel =
-    torrent.matchedVia === "imdb"
-      ? "IMDB ID"
-      : torrent.matchedVia === "original_title"
-        ? "titlul original"
-        : "titlul englez/internațional";
-
-  let text = `Găsit pe Filelist prin ${criteriuLabel}`;
-  if (torrent.matchedQuery) text += `: "${torrent.matchedQuery}"`;
-  text += ".";
-
-  if (torrent.matchedVia === "imdb") {
-    text +=
-      " Cel mai fiabil criteriu — potrivire exactă pe ID-ul IMDB, indiferent cum e denumită lansarea.";
-  } else {
-    text += ` Torrentul a fost identificat prin potrivire de text în numele lansării (nu are ID IMDB pe Filelist${
-      torrent.imdb ? ", deși are unul asociat: " + torrent.imdb : ""
-    }).`;
-  }
-
-  return text;
+  if (!torrent.matchedByImdb) return null;
+  return (
+    `Găsit pe Filelist prin IMDB ID${torrent.imdb ? `: "${torrent.imdb}"` : ""}.` +
+    " Cel mai fiabil criteriu — potrivire exactă pe ID-ul IMDB, indiferent cum e denumită lansarea."
+  );
 }
 
 // ---------------------------------------------------------------------------

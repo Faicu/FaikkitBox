@@ -25,7 +25,6 @@ import {
   appendDownloadLog,
   markLogEntryComplete,
 } from "./log";
-import { stripDiacritics, torrentMatchesTitle } from "./match";
 import { CORRECTED_OUTCOMES } from "./subtitle-outcomes";
 import type { SubtitleRunItem } from "./subtitles";
 // Import dinamic (nu static) — subtitles.ts foloseşte node:child_process/node:util
@@ -503,51 +502,19 @@ export async function checkFilelistForItemInternal(data: {
   }
 
   const category: FilelistCategory = data.mediaType === "movie" ? "movies" : "series";
-  const original = stripDiacritics(data.originalTitle || "").trim();
-  const english = stripDiacritics(data.title || "").trim();
 
-  const cacheKey = `${category}|${data.imdbId ?? ""}|${original}|${english}`;
+  const cacheKey = `${category}|${data.imdbId ?? ""}`;
   const cached = filelistCheckCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached.result;
 
-  const nameQueries = [original, english].filter(
-    (q, i, arr) => q.length > 0 && arr.indexOf(q) === i,
-  );
-  if (nameQueries.length === 0 && !data.imdbId) return { status: "ok", torrents: [] };
+  if (!data.imdbId) return { status: "ok", torrents: [] };
 
   try {
-    let found: FilelistTorrent[] = [];
-
-    if (data.imdbId) {
-      const byImdb = await searchFilelistRaw(data.imdbId, category, "imdb");
-      found = byImdb.map((t) => ({
-        ...t,
-        matchedByImdb: true,
-        matchedVia: "imdb",
-        matchedQuery: data.imdbId ?? undefined,
-      }));
-    }
-
-    for (const q of nameQueries) {
-      if (found.length > 0) break;
-      const via: "original_title" | "english_title" | "titles_match" =
-        original && original === english
-          ? "titles_match"
-          : q === original
-            ? "original_title"
-            : "english_title";
-      const byName = await searchFilelistRaw(q, category, "name");
-      found = byName
-        .filter(
-          (t) => torrentMatchesTitle(t.name, original) || torrentMatchesTitle(t.name, english),
-        )
-        .map((t) => ({
-          ...t,
-          matchedByImdb: !!(t.imdb && data.imdbId && t.imdb === data.imdbId),
-          matchedVia: via,
-          matchedQuery: q,
-        }));
-    }
+    const byImdb = await searchFilelistRaw(data.imdbId, category, "imdb");
+    const found: FilelistTorrent[] = byImdb.map((t) => ({
+      ...t,
+      matchedByImdb: true,
+    }));
 
     found.sort((a, b) => {
       const da = a.upload_date ? new Date(a.upload_date).getTime() : 0;
