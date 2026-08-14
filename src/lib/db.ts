@@ -402,21 +402,8 @@ function runCleanups(database: DatabaseSync): void {
       } catch {
         // coloana există deja dintr-o rulare anterioară
       }
-      try {
-        database.exec(`
-          CREATE TABLE IF NOT EXISTS user_logins (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            logged_in_at TEXT NOT NULL DEFAULT (datetime('now')),
-            ip TEXT,
-            user_agent TEXT
-          );
-          CREATE INDEX IF NOT EXISTS idx_user_logins_user ON user_logins(user_id, logged_in_at DESC);
-        `);
-        console.log("[db] Migrare v10: creată tabela user_logins");
-      } catch (e) {
-        console.warn("[db] Migrare v10 eșuată (user_logins):", e);
-      }
+      // user_logins e creată deja de blocul de schemă de mai sus (rulează la
+      // fiecare pornire, indiferent de versiune) — nimic de migrat aici.
       database.exec("PRAGMA user_version = 10");
     }
 

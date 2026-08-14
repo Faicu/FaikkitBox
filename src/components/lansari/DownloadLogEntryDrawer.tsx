@@ -25,17 +25,7 @@ import { resolveTorrentDisplayName } from "@/lib/filelist.functions";
 import type { FilelistLogEntry } from "@/lib/filelist.functions";
 import { isMovieCategory } from "@/lib/filelist/categories";
 import { formatBytes } from "@/lib/format";
-
-function fmtDate(iso: string) {
-  return new Date(iso).toLocaleString("ro-RO", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "Europe/Bucharest",
-  });
-}
+import { formatDateTime as fmtDate } from "@/components/tehnic/utils";
 
 export function DownloadLogEntryDrawer({
   entry,

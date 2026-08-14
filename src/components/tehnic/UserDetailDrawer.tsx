@@ -26,18 +26,7 @@ import {
 } from "@/components/ui/drawer";
 import { getUserDetail } from "@/lib/users.functions";
 import { formatBytes } from "@/lib/format";
-
-function fmtDate(iso: string | null) {
-  if (!iso) return "Niciodată";
-  return new Date(iso).toLocaleString("ro-RO", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "Europe/Bucharest",
-  });
-}
+import { formatDateTime as fmtDate } from "./utils";
 
 export function UserDetailDrawer({ userId, onClose }: { userId: number; onClose: () => void }) {
   const detailFn = useServerFn(getUserDetail);
