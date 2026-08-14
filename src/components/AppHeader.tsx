@@ -51,7 +51,7 @@ export function AppHeader({ title, subtitle, right }: Props) {
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-lg font-semibold leading-tight text-gradient-primary">{title}</h1>
-            {admin.data?.isAdmin && (
+            {admin.data?.isAdmin ? (
               <span
                 className="inline-flex cursor-pointer select-none items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-400 ring-1 ring-emerald-500/25 active:bg-emerald-500/30"
                 title="Ține apăsat pentru deconectare"
@@ -63,6 +63,20 @@ export function AppHeader({ title, subtitle, right }: Props) {
               >
                 <ShieldCheck className="h-3 w-3" /> Admin
               </span>
+            ) : (
+              admin.data?.isAuthenticated && (
+                <span
+                  className="inline-flex cursor-pointer select-none items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border active:bg-muted/70"
+                  title="Ține apăsat pentru deconectare"
+                  onMouseDown={startLongPress}
+                  onMouseUp={cancelLongPress}
+                  onMouseLeave={cancelLongPress}
+                  onTouchStart={startLongPress}
+                  onTouchEnd={cancelLongPress}
+                >
+                  {admin.data.username}
+                </span>
+              )
             )}
           </div>
           {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
@@ -111,12 +125,12 @@ export function AppHeader({ title, subtitle, right }: Props) {
                 </button>
               );
             })()}
-          {!admin.data?.isAdmin && (
+          {!admin.data?.isAuthenticated && (
             <Link
               to="/login"
               className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-muted-foreground hover:text-foreground"
-              aria-label="Autentificare admin"
-              title="Autentificare admin"
+              aria-label="Autentificare"
+              title="Autentificare"
             >
               <Lock className="h-4 w-4" />
             </Link>

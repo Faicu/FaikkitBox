@@ -1,6 +1,11 @@
 import { useSession } from "@tanstack/react-start/server";
 
-export type AdminSession = { admin?: boolean; username?: string };
+export type AdminSession = {
+  admin?: boolean;
+  userId?: number;
+  username?: string;
+  role?: "admin" | "user";
+};
 
 function sessionConfig() {
   const password = process.env.SESSION_SECRET;
@@ -24,6 +29,15 @@ export async function getSession() {
   // Nu e un React Hook — e un helper server-side din @tanstack/react-start.
   // eslint-disable-next-line react-hooks/rules-of-hooks
   return useSession<AdminSession>(sessionConfig());
+}
+
+// Orice cont autentificat (admin sau user obișnuit, ambele aprobate).
+export async function requireAuth() {
+  const session = await getSession();
+  if (!session.data.userId) {
+    throw new Response("Unauthorized", { status: 401 });
+  }
+  return session;
 }
 
 export async function requireAdmin() {

@@ -15,15 +15,28 @@ export const adminLogin = createServerFn({ method: "POST" })
 
     const db = getDb();
     const row = db
-      .prepare("SELECT username, password_hash FROM users WHERE username = ? AND role = 'admin'")
-      .get(data.user) as { username: string; password_hash: string } | undefined;
+      .prepare("SELECT id, username, password_hash, role, status FROM users WHERE username = ?")
+      .get(data.user) as
+      | { id: number; username: string; password_hash: string; role: string; status: string }
+      | undefined;
 
     if (!row || !verifyPassword(data.pass, row.password_hash)) {
       return { ok: false as const, error: "Utilizator sau parolă greșită." };
     }
+    if (row.status !== "approved") {
+      return {
+        ok: false as const,
+        error: "Contul așteaptă aprobare din partea unui administrator.",
+      };
+    }
 
     const session = await getSession();
-    await session.update({ admin: true, username: row.username });
+    await session.update({
+      admin: row.role === "admin",
+      userId: row.id,
+      username: row.username,
+      role: row.role as "admin" | "user",
+    });
     return { ok: true as const };
   });
 
@@ -37,7 +50,12 @@ export const adminLogout = createServerFn({ method: "POST" }).handler(async () =
 export const getAdminStatus = createServerFn({ method: "GET" }).handler(async () => {
   const { getSession } = await import("./admin.server");
   const session = await getSession();
-  return { isAdmin: !!session.data.admin, username: session.data.username ?? null };
+  return {
+    isAdmin: !!session.data.admin,
+    isAuthenticated: !!session.data.userId,
+    username: session.data.username ?? null,
+    role: session.data.role ?? null,
+  };
 });
 
 // ---------------------------------------------------------------------------
