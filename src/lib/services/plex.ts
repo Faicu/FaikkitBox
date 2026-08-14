@@ -108,6 +108,22 @@ export async function getPlexUserHistory(username: string): Promise<PlexHistoryE
   }
 }
 
+// Istoricul TUTUROR utilizatorilor Plex — folosit pentru "cine a mai văzut
+// acest titlu" în pagina de bibliotecă de pe Acasă. Aceeași sursă/cache ca
+// getPlexUserHistory, doar că întoarce toată harta, nu doar un user.
+export async function getAllPlexUserHistory(): Promise<Record<string, PlexHistoryEntry[]>> {
+  const token = process.env.PLEX_TOKEN;
+  if (!token) return {};
+  try {
+    const { url } = await discoverPlexUrl(token, process.env.PLEX_URL);
+    const headers = { Accept: "application/json", "X-Plex-Token": token };
+    const history = await fetchPlexHistory(url, headers);
+    return history.userHistory;
+  } catch {
+    return {};
+  }
+}
+
 async function fetchPlexHistory(
   url: string,
   headers: Record<string, string>,

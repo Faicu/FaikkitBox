@@ -11,7 +11,6 @@ import {
   UserPlus,
   Music,
   Image as ImageIcon,
-  Clock3,
   Sparkles,
 } from "lucide-react";
 import { useState } from "react";
@@ -26,6 +25,7 @@ import {
   DrawerDescription,
 } from "@/components/ui/drawer";
 import { AddMediaWizard } from "@/components/principala/AddMediaWizard";
+import { PlexLibraryBrowse } from "@/components/principala/PlexLibraryBrowse";
 import { plexQuery, plexSessionsQuery, adminStatusQuery } from "@/lib/queries";
 import { formatSpeed } from "@/lib/format";
 
@@ -51,7 +51,6 @@ function Overview() {
     plexSessions.data?.status === "ok" ? plexSessions.data.sessions : plex.data?.sessions;
   const [plexDrawer, setPlexDrawer] = useState<"views" | "users" | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
-  const [recentVisible, setRecentVisible] = useState(10);
 
   const stop = (fn: () => void) => (e: React.MouseEvent) => {
     e.preventDefault();
@@ -257,40 +256,7 @@ function Overview() {
                 </div>
               )}
 
-              {plex.data.recentlyAdded.length > 0 && (
-                <div>
-                  <div className="mb-1.5 flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                    <Clock3 className="h-3 w-3" /> Recent adăugate
-                  </div>
-                  <div className="space-y-1">
-                    {plex.data.recentlyAdded.slice(0, recentVisible).map((r, i) => (
-                      <div
-                        key={`${r.title}-${i}`}
-                        className="flex items-center gap-2 rounded-lg bg-muted/40 px-2 py-1.5"
-                      >
-                        {r.type === "movie" ? (
-                          <Film className="h-3.5 w-3.5 shrink-0 text-amber-400" />
-                        ) : (
-                          <Tv className="h-3.5 w-3.5 shrink-0 text-blue-400" />
-                        )}
-                        <span className="min-w-0 flex-1 truncate text-xs">{r.title}</span>
-                        <span className="shrink-0 text-[10px] text-muted-foreground">
-                          {relativeTime(r.addedAt)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                  {plex.data.recentlyAdded.length > recentVisible && (
-                    <button
-                      type="button"
-                      onClick={stop(() => setRecentVisible((v) => v + 10))}
-                      className="mt-1.5 w-full rounded-lg bg-muted/50 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground"
-                    >
-                      Afișează mai mult
-                    </button>
-                  )}
-                </div>
-              )}
+              {isAuthenticated && <PlexLibraryBrowse />}
             </div>
           )}
         </ServiceRow>
@@ -419,16 +385,4 @@ function libIcon(type: string) {
   if (type === "artist") return <Music className="h-4 w-4 shrink-0 text-purple-400" />;
   if (type === "photo") return <ImageIcon className="h-4 w-4 shrink-0 text-emerald-400" />;
   return <Film className="h-4 w-4 shrink-0 text-muted-foreground" />;
-}
-
-// addedAt e unix timestamp în secunde (convenția Plex)
-function relativeTime(unixSec: number): string {
-  if (!unixSec) return "—";
-  const diffSec = Math.floor(Date.now() / 1000) - unixSec;
-  if (diffSec < 60) return "acum";
-  if (diffSec < 3600) return `acum ${Math.floor(diffSec / 60)}m`;
-  if (diffSec < 86400) return `acum ${Math.floor(diffSec / 3600)}h`;
-  const days = Math.floor(diffSec / 86400);
-  if (days < 30) return `acum ${days}z`;
-  return new Date(unixSec * 1000).toLocaleDateString("ro-RO", { day: "numeric", month: "short" });
 }

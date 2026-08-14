@@ -6,8 +6,15 @@ import { getLastSpeedtest, getSpeedtestHistory } from "./speedtest.functions";
 import { getActivityLog } from "./activity-log";
 import { getErrorLogs } from "./error-log";
 import { getFilelistDownloadLog } from "./filelist.functions";
-import { getRecentCommits, getCommitsFromDb, getGitHubSyncStatus, getGitPushStatus, getUnpushedCommits } from "./github.functions";
+import {
+  getRecentCommits,
+  getCommitsFromDb,
+  getGitHubSyncStatus,
+  getGitPushStatus,
+  getUnpushedCommits,
+} from "./github.functions";
 import { getPinnedItems } from "./pinned.functions";
+import { getPlexLibraryBrowse } from "./services.functions";
 
 // Interval de bază pentru statistici live (Plex/Immich/qBit/Host)
 const REFRESH_MS = 1000;
@@ -156,4 +163,10 @@ export const pinnedItemsQuery = queryOptions({
   queryKey: ["pinnedItems"],
   queryFn: () => getPinnedItems(),
   staleTime: 10_000,
+});
+
+export const plexLibraryBrowseQuery = queryOptions({
+  queryKey: ["plexLibraryBrowse"],
+  queryFn: () => getPlexLibraryBrowse(),
+  staleTime: 60_000,
 });

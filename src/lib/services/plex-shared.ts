@@ -14,10 +14,13 @@ export interface PlexConnectionCandidate {
 export interface PlexStream {
   streamType?: number;
   decision?: string;
+  language?: string;
+  languageCode?: string;
 }
 
 export interface PlexMediaPart {
   file?: string;
+  duration?: number;
   Stream?: PlexStream[];
 }
 
@@ -42,6 +45,7 @@ export interface PlexMetadataItem {
   thumb?: string;
   accountID?: number;
   viewedAt?: number;
+  summary?: string;
   Media?: PlexMedia[];
   User?: { title?: string };
   Player?: { title?: string; device?: string; product?: string; state?: string };
