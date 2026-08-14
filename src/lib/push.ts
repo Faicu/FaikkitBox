@@ -12,7 +12,11 @@ function ensureVapid() {
   vapidConfigured = true;
 }
 
-export async function sendPushToAll(title: string, body: string): Promise<void> {
+export async function sendPushToAll(
+  title: string,
+  body: string,
+  opts?: { image?: string | null; url?: string },
+): Promise<void> {
   try {
     ensureVapid();
     const { getDb } = await import("./db");
@@ -24,7 +28,12 @@ export async function sendPushToAll(title: string, body: string): Promise<void> 
       auth: string;
     }>;
 
-    const payload = JSON.stringify({ title, body });
+    const payload = JSON.stringify({
+      title,
+      body,
+      image: opts?.image ?? undefined,
+      url: opts?.url ?? "/",
+    });
     const dead: string[] = [];
 
     await Promise.allSettled(

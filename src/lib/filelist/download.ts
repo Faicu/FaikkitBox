@@ -172,7 +172,12 @@ async function pollUntilComplete(
             )
             .then((n) =>
               import("../activity-log").then(({ logActivity }) =>
-                logActivity("torrent_complete", n.body, { torrentId }),
+                logActivity(
+                  "torrent_complete",
+                  n.body,
+                  { torrentId },
+                  { image: n.image, url: n.url },
+                ),
               ),
             )
             .catch(() => {});
@@ -717,11 +722,16 @@ async function downloadFilelistCore(
         )
         .then((n) =>
           import("../activity-log").then(({ logActivity }) =>
-            logActivity("torrent_added", n.body, {
-              category: catName,
-              savePath,
-              size: params.size,
-            }),
+            logActivity(
+              "torrent_added",
+              n.body,
+              {
+                category: catName,
+                savePath,
+                size: params.size,
+              },
+              { image: n.image, url: n.url },
+            ),
           ),
         )
         .catch(() => {});

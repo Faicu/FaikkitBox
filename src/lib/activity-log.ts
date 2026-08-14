@@ -67,11 +67,31 @@ const PUSH_TITLES: Record<ActivityType, string> = {
   account_request: "🆕 Cerere cont",
 };
 
+// Pagina spre care duce apăsarea notificării — implicit per tip; se poate
+// suprascrie punctual din `options.url` la apel (ex. n-are sens aici).
+const PUSH_URLS: Record<ActivityType, string> = {
+  server_start: "/sistem",
+  server_stop: "/sistem",
+  plex_watch_start: "/plex",
+  plex_watch_stop: "/plex",
+  torrent_added: "/lansari",
+  torrent_complete: "/lansari",
+  immich_upload: "/immich",
+  service_restart: "/sistem",
+  service_update: "/sistem",
+  ubuntu_update: "/sistem",
+  qbit_action: "/qbit",
+  pinned_update: "/lansari",
+  app_error: "/tehnic",
+  subtitle_fix: "/lansari",
+  account_request: "/users",
+};
+
 export async function logActivity(
   type: ActivityType,
   message: string,
   meta?: Record<string, ActivityMetaValue>,
-  options?: { skipPush?: boolean },
+  options?: { skipPush?: boolean; image?: string | null; url?: string },
 ): Promise<void> {
   try {
     const { getDb } = await import("./db");
@@ -94,7 +114,14 @@ export async function logActivity(
   // subtitle_fix pentru o descărcare unde n-a fost nevoie de nicio corecție)
   const pushTitle = PUSH_TITLES[type];
   if (pushTitle && !options?.skipPush) {
-    import("./push").then(({ sendPushToAll }) => sendPushToAll(pushTitle, message)).catch(() => {});
+    import("./push")
+      .then(({ sendPushToAll }) =>
+        sendPushToAll(pushTitle, message, {
+          image: options?.image,
+          url: options?.url ?? PUSH_URLS[type],
+        }),
+      )
+      .catch(() => {});
   }
 }
 

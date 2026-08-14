@@ -158,7 +158,12 @@ export async function checkAll(force = false): Promise<void> {
         const lastAiredKey: string | null = stateRow?.last_aired_key ?? null;
 
         const changes: string[] = [];
-        const notifications: Array<{ title: string; body: string }> = [];
+        const notifications: Array<{
+          title: string;
+          body: string;
+          image?: string | null;
+          url?: string;
+        }> = [];
         const journalEntries: string[] = [];
         let newLastAiredKey = lastAiredKey;
 
@@ -326,7 +331,7 @@ export async function checkAll(force = false): Promise<void> {
           await logActivity("pinned_update", `${item.title}: ${entry}`, { title: item.title });
         }
         for (const notif of notifications) {
-          await sendPushToAll(notif.title, notif.body);
+          await sendPushToAll(notif.title, notif.body, { image: notif.image, url: notif.url });
         }
       } catch (e) {
         console.warn(`[pinned-watcher] Eroare la "${item.title}":`, e);

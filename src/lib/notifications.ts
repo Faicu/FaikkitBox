@@ -1,8 +1,8 @@
 // ---------------------------------------------------------------------------
-// Sursă unică pentru CONȚINUTUL (titlu + text) notificărilor push din
-// aplicație — trimiterea efectivă rămâne în push.ts (sendPushToAll, singura
-// funcție care vorbește cu web-push), dar construirea textului nu mai e
-// împrăștiată sau duplicată în fiecare modul care are nevoie să notifice.
+// Sursă unică pentru CONȚINUTUL (titlu + text + imagine + link) notificărilor
+// push din aplicație — trimiterea efectivă rămâne în push.ts (sendPushToAll,
+// singura funcție care vorbește cu web-push), dar construirea conținutului nu
+// mai e împrăștiată sau duplicată în fiecare modul care are nevoie să notifice.
 //
 // Torrentele (download.ts, pinned-watcher.ts) folosesc buildTorrentDisplayName
 // (tmdb-title-lookup.ts) + detectTorrentQuality (torrent-quality.ts) — aceeași
@@ -10,12 +10,14 @@
 // ---------------------------------------------------------------------------
 
 import { sendPushToAll } from "./push";
-import { buildTorrentDisplayName } from "./tmdb-title-lookup";
+import { buildTorrentDisplayName, lookupPosterUrlByImdbId } from "./tmdb-title-lookup";
 import { detectTorrentQuality } from "./torrent-quality";
 
 export interface PushNotification {
   title: string;
   body: string;
+  image?: string | null;
+  url?: string;
 }
 
 // --- Torrente (filelist/download.ts) ----------------------------------------
@@ -25,39 +27,51 @@ export async function buildTorrentAddedNotification(params: {
   imdb?: string | null;
   auto: boolean; // true = "Auto-descărcat" (pornit din pinned-watcher), false = "Torrent adăugat" (manual)
 }): Promise<PushNotification> {
-  const displayName = await buildTorrentDisplayName(params.torrentName, params.imdb).catch(
-    () => params.torrentName,
-  );
+  const [displayName, image] = await Promise.all([
+    buildTorrentDisplayName(params.torrentName, params.imdb).catch(() => params.torrentName),
+    params.imdb ? lookupPosterUrlByImdbId(params.imdb).catch(() => null) : Promise.resolve(null),
+  ]);
   const quality = detectTorrentQuality(params.torrentName);
   const prefix = params.auto ? "Auto-descărcat" : "Torrent adăugat";
-  return { title: "⬇️ Torrent", body: `${prefix}: [${quality}] ${displayName}` };
+  return {
+    title: "⬇️ Torrent",
+    body: `${prefix}: [${quality}] ${displayName}`,
+    image,
+    url: "/lansari",
+  };
 }
 
 export async function buildTorrentCompleteNotification(params: {
   torrentName: string;
   imdb?: string | null;
 }): Promise<PushNotification> {
-  const displayName = await buildTorrentDisplayName(params.torrentName, params.imdb).catch(
-    () => params.torrentName,
-  );
+  const [displayName, image] = await Promise.all([
+    buildTorrentDisplayName(params.torrentName, params.imdb).catch(() => params.torrentName),
+    params.imdb ? lookupPosterUrlByImdbId(params.imdb).catch(() => null) : Promise.resolve(null),
+  ]);
   const quality = detectTorrentQuality(params.torrentName);
-  return { title: "✅ Torrent", body: `Torrent descărcat complet: [${quality}] ${displayName}` };
+  return {
+    title: "✅ Torrent",
+    body: `Torrent descărcat complet: [${quality}] ${displayName}`,
+    image,
+    url: "/lansari",
+  };
 }
 
 // --- Monitorizare (server/plugins/pinned-watcher.ts) ------------------------
-// Construiesc doar {title, body} — pinned-watcher le pune într-o listă și le
-// trimite pe toate la final, o singură dată per item verificat (nu direct
+// Construiesc doar {title, body, url} — pinned-watcher le pune într-o listă și
+// le trimite pe toate la final, o singură dată per item verificat (nu direct
 // din aceste funcții), ca să nu spargem gruparea existentă.
 
 export function buildEpisodeAiredNotification(
   showTitle: string,
   epLabel: string,
 ): PushNotification {
-  return { title: `📅 ${showTitle} — Episod nou`, body: epLabel };
+  return { title: `📅 ${showTitle} — Episod nou`, body: epLabel, url: "/lansari" };
 }
 
 export function buildNewTorrentsNotification(showTitle: string, label: string): PushNotification {
-  return { title: `🎞 ${showTitle} — Torrente noi`, body: label };
+  return { title: `🎞 ${showTitle} — Torrente noi`, body: label, url: "/lansari" };
 }
 
 export function buildAutoDownloadNotification(
@@ -65,7 +79,11 @@ export function buildAutoDownloadNotification(
   quality: string,
   bodyName: string,
 ): PushNotification {
-  return { title: `⬇️ ${showTitle} — Descărcare automată`, body: `${quality}: ${bodyName}` };
+  return {
+    title: `⬇️ ${showTitle} — Descărcare automată`,
+    body: `${quality}: ${bodyName}`,
+    url: "/lansari",
+  };
 }
 
 // --- Commit-uri GitHub (3 locuri: webhook, plugin de polling, funcție server) —
@@ -73,5 +91,5 @@ export function buildAutoDownloadNotification(
 // deci funcția trimite direct, nu doar construiește.
 
 export async function notifyGithubCommit(author: string, message: string): Promise<void> {
-  await sendPushToAll(`📦 Commit nou — ${author}`, message);
+  await sendPushToAll(`📦 Commit nou — ${author}`, message, { url: "/tehnic" });
 }

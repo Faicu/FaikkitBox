@@ -54,6 +54,7 @@ interface TmdbFindItem {
   name?: string;
   release_date?: string;
   first_air_date?: string;
+  poster_path?: string | null;
 }
 interface TmdbFindResponseFull {
   movie_results?: TmdbFindItem[];
@@ -65,6 +66,7 @@ interface TmdbBasicInfo {
   mediaType: "movie" | "tv";
   title: string;
   year: string | null;
+  posterPath: string | null;
 }
 
 const infoCache = new Map<string, { expiresAt: number; value: TmdbBasicInfo | null }>();
@@ -95,6 +97,7 @@ async function lookupTmdbInfoByImdbId(imdbId: string): Promise<TmdbBasicInfo | n
         mediaType: "movie",
         title: movie.title?.trim() || enMovie?.title?.trim() || "",
         year: (movie.release_date || enMovie?.release_date || "").slice(0, 4) || null,
+        posterPath: movie.poster_path || enMovie?.poster_path || null,
       };
     } else if (show) {
       const enShow = en?.tv_results?.[0];
@@ -103,6 +106,7 @@ async function lookupTmdbInfoByImdbId(imdbId: string): Promise<TmdbBasicInfo | n
         mediaType: "tv",
         title: show.name?.trim() || enShow?.name?.trim() || "",
         year: (show.first_air_date || enShow?.first_air_date || "").slice(0, 4) || null,
+        posterPath: show.poster_path || enShow?.poster_path || null,
       };
     }
   } catch {
@@ -111,6 +115,14 @@ async function lookupTmdbInfoByImdbId(imdbId: string): Promise<TmdbBasicInfo | n
 
   infoCache.set(key, { expiresAt: Date.now() + TITLE_CACHE_TTL, value: info });
   return info;
+}
+
+// Poster (URL complet, gata de folosit) pentru un IMDb id — folosit ca imagine
+// mare în notificările push de torrent. Reutilizează cache-ul de mai sus
+// (aceeași cerere TMDB ca la rezolvarea titlului), fără cerere suplimentară.
+export async function lookupPosterUrlByImdbId(imdbId: string): Promise<string | null> {
+  const info = await lookupTmdbInfoByImdbId(imdbId);
+  return info?.posterPath ? `https://image.tmdb.org/t/p/w500${info.posterPath}` : null;
 }
 
 export async function buildTorrentDisplayName(
