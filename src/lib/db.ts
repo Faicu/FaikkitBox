@@ -133,10 +133,17 @@ export function getDb(): DatabaseSync {
     );
     CREATE INDEX IF NOT EXISTS idx_error_log_timestamp ON error_log(timestamp DESC);
 
-    CREATE TABLE IF NOT EXISTS admin_users (
+    CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       username TEXT NOT NULL UNIQUE,
       password_hash TEXT NOT NULL,
+      email TEXT,
+      phone TEXT,
+      role TEXT NOT NULL DEFAULT 'user',
+      status TEXT NOT NULL DEFAULT 'pending',
+      plex_account_id INTEGER,
+      plex_username TEXT,
+      plex_email TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
   `);
@@ -280,6 +287,14 @@ function runCleanups(database: DatabaseSync): void {
       // contul existent e migrat automat — ca să nu rămână nimeni blocat
       // afară. După asta, gestionarea se face din UI (Tehnic).
       try {
+        database.exec(`
+          CREATE TABLE IF NOT EXISTS admin_users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL UNIQUE,
+            password_hash TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+          );
+        `);
         const count = database.prepare("SELECT COUNT(*) as c FROM admin_users").get() as {
           c: number;
         };
@@ -295,6 +310,26 @@ function runCleanups(database: DatabaseSync): void {
         console.warn("[db] Migrare v7 eșuată:", e);
       }
       database.exec("PRAGMA user_version = 7");
+    }
+
+    if (version < 8) {
+      // v8: admin_users e înlocuit de tabela unificată users (role +
+      // status), care va găzdui și utilizatorii obișnuiți înregistrați
+      // public, cu aprobare manuală și legătură de cont Plex. Conturile
+      // admin existente devin role='admin', status='approved' (deja
+      // validate — nu au nevoie de aprobare).
+      try {
+        database.exec(
+          `INSERT INTO users (username, password_hash, role, status, created_at)
+           SELECT username, password_hash, 'admin', 'approved', created_at FROM admin_users
+           WHERE username NOT IN (SELECT username FROM users)`,
+        );
+        database.exec("DROP TABLE IF EXISTS admin_users");
+        console.log("[db] Migrare v8: admin_users → users (role=admin, status=approved)");
+      } catch (e) {
+        console.warn("[db] Migrare v8 eșuată:", e);
+      }
+      database.exec("PRAGMA user_version = 8");
     }
   } catch (e) {
     console.warn("[db] Curățare eșuată:", e);

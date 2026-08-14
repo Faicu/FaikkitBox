@@ -15,7 +15,7 @@ export const adminLogin = createServerFn({ method: "POST" })
 
     const db = getDb();
     const row = db
-      .prepare("SELECT username, password_hash FROM admin_users WHERE username = ?")
+      .prepare("SELECT username, password_hash FROM users WHERE username = ? AND role = 'admin'")
       .get(data.user) as { username: string; password_hash: string } | undefined;
 
     if (!row || !verifyPassword(data.pass, row.password_hash)) {
@@ -41,7 +41,7 @@ export const getAdminStatus = createServerFn({ method: "GET" }).handler(async ()
 });
 
 // ---------------------------------------------------------------------------
-// Gestionare conturi admin (necesită login admin) — vezi secțiunea din Tehnic
+// Gestionare conturi admin (necesită login admin) — vezi pagina Utilizatori
 // ---------------------------------------------------------------------------
 
 export const listAdminUsers = createServerFn({ method: "GET" }).handler(
@@ -51,7 +51,9 @@ export const listAdminUsers = createServerFn({ method: "GET" }).handler(
     const { getDb } = await import("./db");
     const db = getDb();
     const rows = db
-      .prepare("SELECT id, username, created_at FROM admin_users ORDER BY created_at ASC")
+      .prepare(
+        "SELECT id, username, created_at FROM users WHERE role = 'admin' ORDER BY created_at ASC",
+      )
       .all() as Array<{ id: number; username: string; created_at: string }>;
     return rows.map((r) => ({ id: r.id, username: r.username, createdAt: r.created_at }));
   },
@@ -72,15 +74,14 @@ export const addAdminUser = createServerFn({ method: "POST" })
     const { hashPassword } = await import("./password");
     const db = getDb();
 
-    const exists = db.prepare("SELECT 1 FROM admin_users WHERE username = ?").get(username);
+    const exists = db.prepare("SELECT 1 FROM users WHERE username = ?").get(username);
     if (exists) {
       return { ok: false, error: "Există deja un cont cu acest nume." };
     }
 
-    db.prepare("INSERT INTO admin_users (username, password_hash) VALUES (?, ?)").run(
-      username,
-      hashPassword(data.password),
-    );
+    db.prepare(
+      "INSERT INTO users (username, password_hash, role, status) VALUES (?, ?, 'admin', 'approved')",
+    ).run(username, hashPassword(data.password));
     return { ok: true };
   });
 
@@ -93,11 +94,13 @@ export const deleteAdminUser = createServerFn({ method: "POST" })
     const { getDb } = await import("./db");
     const db = getDb();
 
-    const count = db.prepare("SELECT COUNT(*) as c FROM admin_users").get() as { c: number };
+    const count = db.prepare("SELECT COUNT(*) as c FROM users WHERE role = 'admin'").get() as {
+      c: number;
+    };
     if (count.c <= 1) {
       return { ok: false, error: "Nu poți șterge singurul cont admin rămas." };
     }
 
-    db.prepare("DELETE FROM admin_users WHERE id = ?").run(data.id);
+    db.prepare("DELETE FROM users WHERE id = ? AND role = 'admin'").run(data.id);
     return { ok: true };
   });
