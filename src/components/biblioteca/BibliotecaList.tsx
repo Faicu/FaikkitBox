@@ -801,67 +801,69 @@ export function BibliotecaList() {
                     );
                   })()}
 
-                <div className="flex flex-col gap-2 pt-1 border-t border-border">
-                  {d.torrentHash ? (
-                    d.canManage ? (
-                      <>
-                        <div className="flex gap-2 pt-2">
+                {d.status !== "pinned" && (
+                  <div className="flex flex-col gap-2 pt-1 border-t border-border">
+                    {d.torrentHash ? (
+                      d.canManage ? (
+                        <>
+                          <div className="flex gap-2 pt-2">
+                            <button
+                              type="button"
+                              onClick={correctSubtitle}
+                              disabled={correcting}
+                              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-border bg-muted/40 py-2 text-xs font-medium text-foreground hover:bg-muted/60 transition-colors disabled:opacity-40"
+                            >
+                              {correcting ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Captions className="h-3.5 w-3.5" />
+                              )}
+                              Corectează subtitrare
+                            </button>
+                            <button
+                              type="button"
+                              onClick={deleteSubtitle}
+                              disabled={deletingSubtitle}
+                              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-border bg-muted/40 py-2 text-xs font-medium text-foreground hover:bg-muted/60 transition-colors disabled:opacity-40"
+                            >
+                              {deletingSubtitle ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <CaptionsOff className="h-3.5 w-3.5" />
+                              )}
+                              Șterge subtitrare
+                            </button>
+                          </div>
                           <button
                             type="button"
-                            onClick={correctSubtitle}
-                            disabled={correcting}
-                            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-border bg-muted/40 py-2 text-xs font-medium text-foreground hover:bg-muted/60 transition-colors disabled:opacity-40"
+                            onClick={() =>
+                              setConfirmDeleteTitle({
+                                mediaId: d.mediaId,
+                                title: d.type === "movie" ? d.title : (d.show ?? d.title),
+                                isSeasonPack: d.isSeasonPack,
+                              })
+                            }
+                            className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-border bg-muted/40 py-2 text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors"
                           >
-                            {correcting ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                              <Captions className="h-3.5 w-3.5" />
-                            )}
-                            Corectează subtitrare
+                            <Trash2 className="h-3.5 w-3.5" />
+                            Șterge titlul complet
                           </button>
-                          <button
-                            type="button"
-                            onClick={deleteSubtitle}
-                            disabled={deletingSubtitle}
-                            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-border bg-muted/40 py-2 text-xs font-medium text-foreground hover:bg-muted/60 transition-colors disabled:opacity-40"
-                          >
-                            {deletingSubtitle ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                              <CaptionsOff className="h-3.5 w-3.5" />
-                            )}
-                            Șterge subtitrare
-                          </button>
+                        </>
+                      ) : (
+                        <div className="pt-2 text-[11px] text-muted-foreground">
+                          Doar {d.addedByUsername ?? "cel care a adăugat titlul"} sau un admin poate
+                          corecta/șterge subtitrarea sau șterge titlul.
                         </div>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setConfirmDeleteTitle({
-                              mediaId: d.mediaId,
-                              title: d.type === "movie" ? d.title : (d.show ?? d.title),
-                              isSeasonPack: d.isSeasonPack,
-                            })
-                          }
-                          className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-border bg-muted/40 py-2 text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                          Șterge titlul complet
-                        </button>
-                      </>
+                      )
                     ) : (
                       <div className="pt-2 text-[11px] text-muted-foreground">
-                        Doar {d.addedByUsername ?? "cel care a adăugat titlul"} sau un admin poate
-                        corecta/șterge subtitrarea sau șterge titlul.
+                        Nu știm ce torrent corespunde acestui titlu (a fost adăugat manual în Plex,
+                        sau torrentul nu mai există în qBittorrent) — corectarea/ștergerea
+                        subtitrării și ștergerea completă nu sunt disponibile.
                       </div>
-                    )
-                  ) : (
-                    <div className="pt-2 text-[11px] text-muted-foreground">
-                      Nu știm ce torrent corespunde acestui titlu (a fost adăugat manual în Plex,
-                      sau torrentul nu mai există în qBittorrent) — corectarea/ștergerea subtitrării
-                      și ștergerea completă nu sunt disponibile.
-                    </div>
-                  )}
-                </div>
+                    )}
+                  </div>
+                )}
               </>
             )}
           </div>
