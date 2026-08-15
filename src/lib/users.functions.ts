@@ -107,10 +107,13 @@ export interface UserPlexActivityEntry {
 
 export interface UserDownloadEntry {
   id: number;
-  name: string;
-  size: number;
-  categoryName: string;
-  downloadedAt: string;
+  mediaType: "movie" | "episode";
+  title: string;
+  season: number | null;
+  episode: number | null;
+  posterUrl: string | null;
+  quality: string | null;
+  addedAt: string;
   completedAt: string | null;
 }
 
@@ -178,17 +181,24 @@ export const getUserDetail = createServerFn({ method: "GET" })
       user_agent: string | null;
     }>;
 
+    // Titlurile efectiv descărcate prin cont — sursate din `media` (nu din
+    // `downloads`, jurnalul tehnic vechi), ca să arate titlul real (nu numele
+    // tehnic al torrentului) + poster + calitate, consistent cu Bibliotecă.
     const downloadRows = db
       .prepare(
-        `SELECT id, name, size, category_name, downloaded_at, completed_at
-         FROM downloads WHERE requested_by_user_id = ? ORDER BY downloaded_at DESC LIMIT 50`,
+        `SELECT id, media_type, title, season, episode, poster_path, quality, added_at, completed_at
+         FROM media WHERE requested_by_user_id = ? AND media_type IN ('movie', 'episode')
+         ORDER BY added_at DESC LIMIT 50`,
       )
       .all(user.id) as Array<{
       id: number;
-      name: string;
-      size: number | null;
-      category_name: string | null;
-      downloaded_at: string;
+      media_type: string;
+      title: string;
+      season: number | null;
+      episode: number | null;
+      poster_path: string | null;
+      quality: string | null;
+      added_at: string;
       completed_at: string | null;
     }>;
 
@@ -224,10 +234,13 @@ export const getUserDetail = createServerFn({ method: "GET" })
       })),
       downloads: downloadRows.map((r) => ({
         id: r.id,
-        name: r.name,
-        size: r.size ?? 0,
-        categoryName: r.category_name ?? "",
-        downloadedAt: r.downloaded_at,
+        mediaType: r.media_type as "movie" | "episode",
+        title: r.title,
+        season: r.season,
+        episode: r.episode,
+        posterUrl: r.poster_path,
+        quality: r.quality,
+        addedAt: r.added_at,
         completedAt: r.completed_at,
       })),
       plexActivity: plexActivity.slice(0, 30).map((e) => ({

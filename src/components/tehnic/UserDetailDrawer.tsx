@@ -25,8 +25,13 @@ import {
   DrawerDescription,
 } from "@/components/ui/drawer";
 import { getUserDetail } from "@/lib/users.functions";
-import { formatBytes } from "@/lib/format";
 import { formatDateTime as fmtDate } from "./utils";
+
+function episodeCode(season: number | null, episode: number | null): string | null {
+  return season != null && episode != null
+    ? `S${String(season).padStart(2, "0")}E${String(episode).padStart(2, "0")}`
+    : null;
+}
 
 export function UserDetailDrawer({ userId, onClose }: { userId: number; onClose: () => void }) {
   const detailFn = useServerFn(getUserDetail);
@@ -157,10 +162,10 @@ export function UserDetailDrawer({ userId, onClose }: { userId: number; onClose:
                 )}
               </div>
 
-              {/* Descărcări */}
+              {/* Titluri descărcate */}
               <div>
                 <h3 className="mb-1.5 px-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
-                  <Download className="h-3 w-3" /> Descărcări inițiate ({user.downloads.length})
+                  <Download className="h-3 w-3" /> Titluri descărcate ({user.downloads.length})
                 </h3>
                 {user.downloads.length === 0 ? (
                   <div className="rounded-2xl border border-border bg-card p-3 text-xs text-muted-foreground">
@@ -170,22 +175,45 @@ export function UserDetailDrawer({ userId, onClose }: { userId: number; onClose:
                 ) : (
                   <div className="rounded-2xl border border-border bg-card divide-y divide-border/50">
                     {user.downloads.map((d) => (
-                      <div key={d.id} className="px-3 py-2 text-xs">
-                        <div className="truncate font-medium">{d.name}</div>
-                        <div className="mt-0.5 flex items-center gap-2 text-[10px] text-muted-foreground">
-                          <span>{formatBytes(d.size)}</span>
-                          <span>·</span>
-                          <span>{d.categoryName}</span>
-                          <span>·</span>
-                          {d.completedAt ? (
-                            <span className="flex items-center gap-0.5 text-emerald-400">
-                              <CheckCircle2 className="h-2.5 w-2.5" /> {fmtDate(d.completedAt)}
-                            </span>
-                          ) : (
-                            <span className="flex items-center gap-0.5 text-amber-400">
-                              <Loader2 className="h-2.5 w-2.5 animate-spin" /> în curs
-                            </span>
-                          )}
+                      <div key={d.id} className="flex items-center gap-2.5 px-3 py-2">
+                        {d.posterUrl ? (
+                          <img
+                            src={d.posterUrl}
+                            alt=""
+                            className="h-12 w-8 rounded object-cover shrink-0"
+                          />
+                        ) : (
+                          <div className="flex h-12 w-8 shrink-0 items-center justify-center rounded bg-muted">
+                            {d.mediaType === "movie" ? (
+                              <Film className="h-3.5 w-3.5 text-muted-foreground" />
+                            ) : (
+                              <Tv className="h-3.5 w-3.5 text-muted-foreground" />
+                            )}
+                          </div>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm font-medium">
+                            {d.title}
+                            {episodeCode(d.season, d.episode) && (
+                              <span className="text-muted-foreground">
+                                {" "}
+                                — {episodeCode(d.season, d.episode)}
+                              </span>
+                            )}
+                          </div>
+                          <div className="mt-0.5 flex items-center gap-2 text-[10px] text-muted-foreground">
+                            {d.quality && <span>{d.quality}</span>}
+                            {d.quality && <span>·</span>}
+                            {d.completedAt ? (
+                              <span className="flex items-center gap-0.5 text-emerald-400">
+                                <CheckCircle2 className="h-2.5 w-2.5" /> {fmtDate(d.completedAt)}
+                              </span>
+                            ) : (
+                              <span className="flex items-center gap-0.5 text-amber-400">
+                                <Loader2 className="h-2.5 w-2.5 animate-spin" /> în curs
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
                     ))}
