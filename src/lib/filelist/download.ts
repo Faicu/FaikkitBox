@@ -523,13 +523,15 @@ interface DownloadFilelistParams {
   skipLog?: boolean;
   imdb?: string | null;
   requestedByUserId?: number | null;
-  // Metadate TMDB, trimise doar de wizard-ul de adăugare (are deja tot ce
-  // trebuie la momentul descărcării) — populează tabela `media`. Absentă
-  // pentru descărcările pornite din căutarea manuală Filelist sau din
-  // auto-download-ul pinned-watcher (rămase pe doar `downloads`, deocamdată).
-  // Proveniența torrent-ului (nume/hash/categorie/mărime/cale) e completată
-  // aici, în downloadFilelistCore, care oricum le are deja calculate — nu e
-  // nevoie ca apelantul să le retrimită.
+  // Metadate TMDB — trimise deja gata calculate de wizard/Lansări/pinned-
+  // watcher (au TMDB details la îndemână la momentul descărcării). Când
+  // lipsesc (căutarea manuală brută din FilelistSection, fără nicio
+  // legătură TMDB în UI), downloadFilelistCore încearcă singur o rezolvare
+  // best-effort (autoResolveManualMedia) — dacă eșuează, titlul pur și
+  // simplu nu ajunge în `media`, exact ca acum. Proveniența torrent-ului
+  // (nume/hash/categorie/mărime/cale) e completată aici, în
+  // downloadFilelistCore, care oricum le are deja calculate — nu e nevoie
+  // ca apelantul să le retrimită.
   media?: Omit<
     import("../media").UpsertMediaEntryInput,
     | "torrentName"
@@ -542,6 +544,55 @@ interface DownloadFilelistParams {
     | "savePath"
     | "requestedByUserId"
   >;
+}
+
+// Rezolvare best-effort a metadatelor TMDB pentru un torrent descărcat din
+// căutarea manuală Filelist (FilelistSection), care n-are nicio legătură
+// TMDB în UI — spre deosebire de wizard/Lansări/pinned-watcher, care trimit
+// deja `media` gata calculat. Dacă torrentul are IMDb id (Filelist l-a
+// confirmat) îl folosim direct; altfel încercăm aceeași căutare pe nume ca
+// la potrivirea subtitrărilor. Fără IMDb id găsit, întoarce null — titlul nu
+// ajunge în `media`, exact comportamentul de dinainte (nimic nu se strică).
+async function autoResolveManualMedia(
+  torrentImdb: string | null | undefined,
+  torrentName: string,
+  isMovie: boolean,
+): Promise<DownloadFilelistParams["media"] | null> {
+  const mediaType: "movie" | "tv" = isMovie ? "movie" : "tv";
+  let imdbId = torrentImdb ?? null;
+  if (!imdbId) {
+    const { searchImdbIdByReleaseName } = await import("../tmdb-title-lookup");
+    const found = await searchImdbIdByReleaseName(torrentName, mediaType).catch(() => null);
+    imdbId = found?.imdbId ?? null;
+  }
+  if (!imdbId) return null;
+
+  const { lookupTmdbInfoByImdbId } = await import("../tmdb-title-lookup");
+  const info = await lookupTmdbInfoByImdbId(imdbId).catch(() => null);
+  if (!info) return null;
+
+  const { getTmdbDetailsInternal } = await import("../tmdb.functions");
+  const details = await getTmdbDetailsInternal(info.id, info.mediaType).catch(() => null);
+  const { parseSeasonEpisodeFromName } = await import("../torrent-name-parse");
+  const parsed = !isMovie ? parseSeasonEpisodeFromName(torrentName) : null;
+
+  return {
+    mediaType: isMovie ? "movie" : "episode",
+    imdbId,
+    tmdbId: info.id,
+    title: info.title,
+    originalTitle: details?.originalTitle ?? null,
+    literalTitle: details?.literalTitle ?? null,
+    year: info.year ? Number(info.year) : null,
+    season: parsed?.season ?? null,
+    episode: parsed?.episode ?? null,
+    overviewRo: details?.overview ?? null,
+    genres: details?.genres ?? [],
+    posterPath: info.posterPath ? `https://image.tmdb.org/t/p/w342${info.posterPath}` : null,
+    tvStatus: !isMovie ? (details?.tvStatus ?? null) : null,
+    isSeasonPack: !!parsed && parsed.episode === null,
+    addedVia: "manual",
+  };
 }
 
 // Implementare comună pentru descărcare + upload la qBittorrent, folosită atât
@@ -700,11 +751,17 @@ async function downloadFilelistCore(
       requestedByUserId: params.requestedByUserId ?? null,
     });
 
-    if (params.media) {
+    const mediaPayload =
+      params.media ??
+      (await autoResolveManualMedia(params.imdb, params.torrentName, isMovie).catch((e) => {
+        console.warn("[filelist] Rezolvare automată media eșuată:", e);
+        return null;
+      }));
+    if (mediaPayload) {
       const { upsertMediaEntry } = await import("../media");
       try {
         upsertMediaEntry({
-          ...params.media,
+          ...mediaPayload,
           torrentName: params.torrentName,
           torrentHash: torrentHash ?? null,
           category: catId,

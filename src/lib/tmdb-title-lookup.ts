@@ -61,7 +61,7 @@ interface TmdbFindResponseFull {
   tv_results?: TmdbFindItem[];
 }
 
-interface TmdbBasicInfo {
+export interface TmdbBasicInfo {
   id: number;
   mediaType: "movie" | "tv";
   title: string;
@@ -71,7 +71,10 @@ interface TmdbBasicInfo {
 
 const infoCache = new Map<string, { expiresAt: number; value: TmdbBasicInfo | null }>();
 
-async function lookupTmdbInfoByImdbId(imdbId: string): Promise<TmdbBasicInfo | null> {
+// Exportată (era privată) — folosită și de download.ts, ca să rezolve
+// metadatele TMDB ale unui torrent descărcat manual din Filelist (fără
+// context TMDB trimis din UI), pornind doar de la IMDb id-ul torrentului.
+export async function lookupTmdbInfoByImdbId(imdbId: string): Promise<TmdbBasicInfo | null> {
   const key = imdbId.trim();
   if (!key) return null;
 
