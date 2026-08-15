@@ -181,6 +181,7 @@ export function getDb(): DatabaseSync {
       poster_path TEXT,
       tv_status TEXT,
       plex_rating_key TEXT,
+      plex_added_at INTEGER,
       torrent_name TEXT,
       torrent_hash TEXT,
       category INTEGER,
@@ -468,6 +469,21 @@ function runCleanups(database: DatabaseSync): void {
         // coloana există deja dintr-o rulare anterioară
       }
       database.exec("PRAGMA user_version = 11");
+    }
+
+    if (version < 12) {
+      // v12: media capătă plex_added_at — data reală la care Plex a indexat
+      // fișierul (nu momentul la care a pornit descărcarea sau la care a
+      // rulat backfill-ul), necesară ca lista din Bibliotecă (sortată
+      // descrescător după ea) să reflecte ordinea reală de apariție, nu
+      // ordinea în care a rulat ultimul backfill.
+      try {
+        database.exec("ALTER TABLE media ADD COLUMN plex_added_at INTEGER");
+        console.log("[db] Migrare v12: adăugat media.plex_added_at");
+      } catch {
+        // coloana există deja dintr-o rulare anterioară
+      }
+      database.exec("PRAGMA user_version = 12");
     }
   } catch (e) {
     console.warn("[db] Curățare eșuată:", e);

@@ -197,6 +197,7 @@ async function runMediaBackfillWork(): Promise<void> {
         const quality = plexQualityFromMedia(media);
         const hasRomanianSubtitle = hasEmbeddedRomanianSubtitle(media);
         const durationMs = Number((detail ?? item).duration ?? 0);
+        const plexAddedAt = Number((detail ?? item).addedAt ?? 0) || null;
 
         if (isEpisode) {
           const showTitle = item.grandparentTitle ?? item.title ?? "—";
@@ -225,6 +226,7 @@ async function runMediaBackfillWork(): Promise<void> {
             tvStatus: showInfo?.tvStatus ?? null,
             posterPath: showInfo?.posterUrl ?? null,
             plexRatingKey: String(item.ratingKey),
+            plexAddedAt,
             quality,
             durationMs,
             hasRomanianSubtitle,
@@ -256,6 +258,7 @@ async function runMediaBackfillWork(): Promise<void> {
             genres: details?.genres ?? [],
             posterPath: details?.posterUrl ?? null,
             plexRatingKey: String(item.ratingKey),
+            plexAddedAt,
             quality,
             durationMs,
             hasRomanianSubtitle,

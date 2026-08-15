@@ -199,6 +199,7 @@ export interface UpsertMediaFromPlexInput {
   posterPath?: string | null;
   tvStatus?: string | null;
   plexRatingKey: string;
+  plexAddedAt?: number | null;
   quality?: string | null;
   durationMs?: number | null;
   hasRomanianSubtitle?: boolean;
@@ -215,8 +216,8 @@ export function upsertMediaEntryFromPlex(input: UpsertMediaFromPlexInput): numbe
       `INSERT INTO media (
         media_type, parent_id, imdb_id, tmdb_id, title, original_title, literal_title,
         year, season, episode, overview_ro, genres, poster_path, tv_status,
-        plex_rating_key, quality, duration_ms, has_romanian_subtitle, added_via
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'backfill')`,
+        plex_rating_key, plex_added_at, quality, duration_ms, has_romanian_subtitle, added_via
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'backfill')`,
     )
     .run(
       input.mediaType,
@@ -234,6 +235,7 @@ export function upsertMediaEntryFromPlex(input: UpsertMediaFromPlexInput): numbe
       input.posterPath ?? null,
       input.tvStatus ?? null,
       input.plexRatingKey,
+      input.plexAddedAt ?? null,
       input.quality ?? null,
       input.durationMs ?? null,
       input.hasRomanianSubtitle ? 1 : 0,
@@ -363,8 +365,8 @@ export async function resolveMediaPlexLinkByTorrentHash(torrentHash: string): Pr
   if (!link) return false;
 
   db.prepare(
-    `UPDATE media SET plex_rating_key = ?, quality = ?, duration_ms = ?, updated_at = datetime('now')
-     WHERE id = ?`,
-  ).run(link.ratingKey, link.quality, link.durationMs, row.id);
+    `UPDATE media SET plex_rating_key = ?, quality = ?, duration_ms = ?, plex_added_at = ?,
+     updated_at = datetime('now') WHERE id = ?`,
+  ).run(link.ratingKey, link.quality, link.durationMs, link.addedAt, row.id);
   return true;
 }

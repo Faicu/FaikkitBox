@@ -306,9 +306,9 @@ export function BibliotecaList() {
         }}
         className={`flex w-full items-center gap-2 rounded-lg bg-muted/40 px-2 py-1.5 text-left transition-colors hover:bg-muted/60 active:bg-muted ${indent ? "ml-4" : ""}`}
       >
-        {item.thumb ? (
+        {item.thumbUrl ? (
           <img
-            src={`/api/plex-thumb?path=${encodeURIComponent(item.thumb)}`}
+            src={item.thumbUrl}
             className="h-8 w-8 shrink-0 rounded object-cover bg-muted"
             loading="lazy"
             alt=""
@@ -396,9 +396,9 @@ export function BibliotecaList() {
                     onClick={() => toggleGroup(row.key)}
                     className="flex w-full items-center gap-2 rounded-lg bg-muted/40 px-2 py-1.5 text-left transition-colors hover:bg-muted/60 active:bg-muted"
                   >
-                    {row.items[0].thumb ? (
+                    {row.items[0].thumbUrl ? (
                       <img
-                        src={`/api/plex-thumb?path=${encodeURIComponent(row.items[0].thumb)}`}
+                        src={row.items[0].thumbUrl}
                         className="h-8 w-8 shrink-0 rounded object-cover bg-muted"
                         loading="lazy"
                         alt=""

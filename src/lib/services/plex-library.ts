@@ -184,6 +184,7 @@ export interface PlexItemLink {
   ratingKey: string;
   quality: string | null;
   durationMs: number;
+  addedAt: number;
 }
 
 // Găsește ratingKey-ul + calitatea/durata unui film deja apărut în Plex —
@@ -211,6 +212,7 @@ export async function findPlexMovieLink(
           ratingKey: String(item.ratingKey),
           quality: plexQualityFromMedia(item.Media?.[0]),
           durationMs: Number(item.duration ?? 0),
+          addedAt: Number(item.addedAt ?? 0),
         };
       }
     }
@@ -240,6 +242,7 @@ export async function findPlexEpisodeLink(
         ratingKey: String(item.ratingKey),
         quality: plexQualityFromMedia(item.Media?.[0]),
         durationMs: Number(item.duration ?? 0),
+        addedAt: Number(item.addedAt ?? 0),
       };
     }
     return null;

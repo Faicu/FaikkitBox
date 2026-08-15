@@ -1,9 +1,15 @@
 // ---------------------------------------------------------------------------
-// Bibliotecă Plex completă, răsfoibilă — pentru secțiunea de pe Acasă care
-// înlocuiește fostul "Recent adăugate": listă (ordonată după data adăugării)
-// + detalii per titlu (calitate, subtitrare RO, cine a văzut, durată).
-// Necesită autentificare (orice cont aprobat) — spre deosebire de restul
-// paginii Acasă, care rămâne publică.
+// Bibliotecă — pentru secțiunea de pe Acasă care înlocuiește fostul "Recent
+// adăugate": listă (ordonată după data adăugării) + detalii per titlu
+// (calitate, subtitrare RO, cine a văzut, durată). Necesită autentificare
+// (orice cont aprobat) — spre deosebire de restul paginii Acasă, care rămâne
+// publică.
+//
+// Lista e citită direct din `media` (populată de wizard/Lansări/auto-download/
+// backfill — vezi media.ts, media-backfill.ts), nu mai interoghează Plex live:
+// zero cereri Plex la fiecare încărcare a paginii, indiferent câți utilizatori
+// o deschid simultan. Un titlu adăugat direct în Plex, pe orice cale din afara
+// acestui sistem, apare abia după următorul backfill.
 // ---------------------------------------------------------------------------
 
 import { createServerFn } from "@tanstack/react-start";
@@ -23,72 +29,22 @@ export interface PlexBrowseItem {
   show: string | null;
   season: number | null;
   episode: number | null;
-  thumb: string | null;
+  // Gata de folosit direct ca src de <img> — link TMDB, salvat în `media`.
+  thumbUrl: string | null;
   addedAt: number;
   watchedByMe: boolean;
 }
 
-interface PlexDirectoryLike {
-  key?: string;
-  type?: string;
-}
-
 const BROWSE_LIMIT = 300;
-const BROWSE_TTL_MS = 3 * 60_000;
-let browseCache: { url: string; items: PlexBrowseItem[]; expiresAt: number } | null = null;
 
-async function fetchBrowseItems(): Promise<PlexBrowseItem[]> {
-  const token = process.env.PLEX_TOKEN;
-  if (!token) return [];
-  const { url } = await discoverPlexUrl(token, process.env.PLEX_URL);
-  if (browseCache && browseCache.url === url && browseCache.expiresAt > Date.now()) {
-    return browseCache.items;
-  }
-  const headers = { Accept: "application/json", "X-Plex-Token": token };
-
-  const libsJson = await fetchJson<PlexApiResponse>(`${url}/library/sections`, { headers });
-  const libsMd = libsJson?.MediaContainer?.Directory ?? [];
-  const movieLibKeys = libsMd
-    .filter((l: PlexDirectoryLike) => l.type === "movie")
-    .map((l) => l.key);
-  const showLibKeys = libsMd.filter((l: PlexDirectoryLike) => l.type === "show").map((l) => l.key);
-
-  const [moviesJson, episodesJson] = await Promise.all([
-    movieLibKeys.length > 0
-      ? fetchJson<PlexApiResponse>(
-          `${url}/library/sections/${movieLibKeys[0]}/recentlyAdded?X-Plex-Container-Start=0&X-Plex-Container-Size=${BROWSE_LIMIT}&type=1`,
-          { headers },
-        ).catch(() => ({ MediaContainer: { Metadata: [] } }))
-      : Promise.resolve({ MediaContainer: { Metadata: [] } }),
-    showLibKeys.length > 0
-      ? fetchJson<PlexApiResponse>(
-          `${url}/library/sections/${showLibKeys[0]}/recentlyAdded?X-Plex-Container-Start=0&X-Plex-Container-Size=${BROWSE_LIMIT}&type=4`,
-          { headers },
-        ).catch(() => ({ MediaContainer: { Metadata: [] } }))
-      : Promise.resolve({ MediaContainer: { Metadata: [] } }),
-  ]);
-
-  const merged: PlexMetadataItem[] = [
-    ...(moviesJson?.MediaContainer?.Metadata ?? []),
-    ...(episodesJson?.MediaContainer?.Metadata ?? []),
-  ]
-    .sort((a, b) => Number(b.addedAt ?? 0) - Number(a.addedAt ?? 0))
-    .slice(0, BROWSE_LIMIT);
-
-  const items: PlexBrowseItem[] = merged.map((m) => ({
-    ratingKey: String(m.ratingKey ?? ""),
-    title: String(m.title ?? "—"),
-    type: m.type === "episode" ? "episode" : "movie",
-    show: m.grandparentTitle ?? null,
-    season: m.parentIndex ?? null,
-    episode: m.index ?? null,
-    thumb: m.thumb ?? null,
-    addedAt: Number(m.addedAt ?? 0),
-    watchedByMe: false,
-  }));
-
-  browseCache = { url, items, expiresAt: Date.now() + BROWSE_TTL_MS };
-  return items;
+interface MediaBrowseRow {
+  plex_rating_key: string;
+  media_type: string;
+  title: string;
+  season: number | null;
+  episode: number | null;
+  poster_path: string | null;
+  plex_added_at: number | null;
 }
 
 export const getPlexLibraryBrowse = createServerFn({ method: "GET" }).handler(
@@ -98,12 +54,37 @@ export const getPlexLibraryBrowse = createServerFn({ method: "GET" }).handler(
     const { requireAuth } = await import("../admin.server");
     const session = await requireAuth();
     try {
-      const items = await fetchBrowseItems();
+      const { getDb } = await import("../db");
+      const db = getDb();
+
+      const rows = db
+        .prepare(
+          `SELECT plex_rating_key, media_type, title, season, episode, poster_path, plex_added_at
+           FROM media
+           WHERE plex_rating_key IS NOT NULL AND media_type IN ('movie', 'episode')
+           ORDER BY plex_added_at DESC
+           LIMIT ?`,
+        )
+        .all(BROWSE_LIMIT) as unknown as MediaBrowseRow[];
+
+      const items: PlexBrowseItem[] = rows.map((r) => ({
+        ratingKey: r.plex_rating_key,
+        // Pentru episoade, `title` pe rândul din `media` e deja titlul
+        // serialului (nu se ține un titlu separat per episod) — vezi
+        // media.ts/media-backfill.ts.
+        title: r.media_type === "episode" ? "" : r.title,
+        type: r.media_type === "episode" ? "episode" : "movie",
+        show: r.media_type === "episode" ? r.title : null,
+        season: r.season,
+        episode: r.episode,
+        thumbUrl: r.poster_path,
+        addedAt: r.plex_added_at ?? 0,
+        watchedByMe: false,
+      }));
 
       // "Am văzut" — badge afișat direct în listă, fără cost suplimentar (nicio
       // cerere nouă către Plex): potrivim doar cu istoricul deja cachuit.
-      const { getDb } = await import("../db");
-      const me = getDb()
+      const me = db
         .prepare("SELECT plex_username FROM users WHERE id = ?")
         .get(session.data.userId!) as { plex_username: string | null } | undefined;
       const myPlexUsername = me?.plex_username ?? null;
