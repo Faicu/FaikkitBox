@@ -4,12 +4,55 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { downloadFilelist } from "@/lib/filelist.functions";
 import type { FilelistTorrent } from "@/lib/filelist.functions";
+import { parseSeasonEpisodeFromName } from "@/lib/torrent-name-parse";
 
 // ---------------------------------------------------------------------------
 // Hook reutilizabil pentru descărcare torrent
 // ---------------------------------------------------------------------------
 
-export function useDownload() {
+// Metadatele TMDB deja cunoscute de card (MovieCard/ShowCard au deja `item` +
+// `details` încărcate pentru orice titlu fixat) — trimise o dată cu
+// descărcarea, ca torrentul să apară direct în tabela `media`, la fel ca la
+// wizard, fără nicio căutare TMDB suplimentară. Opțional: fără context (ex.
+// căutarea manuală brută din FilelistSection, fără legătură TMDB), rămâne pe
+// vechiul comportament — doar `downloads`, fără `media`.
+export interface DownloadMediaContext {
+  mediaType: "movie" | "tv";
+  imdbId: string | null;
+  tmdbId: number;
+  title: string;
+  originalTitle?: string | null;
+  literalTitle?: string | null;
+  year?: number | null;
+  overviewRo?: string | null;
+  genres?: string[];
+  posterUrl?: string | null;
+  tvStatus?: string | null;
+}
+
+function buildMediaPayload(context: DownloadMediaContext, torrent: FilelistTorrent) {
+  const isTv = context.mediaType === "tv";
+  const parsed = isTv ? parseSeasonEpisodeFromName(torrent.name) : null;
+  return {
+    mediaType: (isTv ? "episode" : "movie") as "episode" | "movie",
+    imdbId: context.imdbId,
+    tmdbId: context.tmdbId,
+    title: context.title,
+    originalTitle: context.originalTitle ?? null,
+    literalTitle: context.literalTitle ?? null,
+    year: context.year ?? null,
+    season: isTv ? (parsed?.season ?? null) : null,
+    episode: isTv ? (parsed?.episode ?? null) : null,
+    overviewRo: context.overviewRo ?? null,
+    genres: context.genres ?? [],
+    posterPath: context.posterUrl ?? null,
+    tvStatus: isTv ? (context.tvStatus ?? null) : null,
+    isSeasonPack: isTv && !!parsed && parsed.episode === null,
+    addedVia: "manual" as const,
+  };
+}
+
+export function useDownload(mediaContext?: DownloadMediaContext) {
   const qc = useQueryClient();
   const downloadFn = useServerFn(downloadFilelist);
   const [downloading, setDownloading] = useState<number | null>(null);
@@ -28,6 +71,7 @@ export function useDownload() {
           freeleech: torrent.freeleech,
           internal: torrent.internal,
           imdb: torrent.imdb,
+          media: mediaContext ? buildMediaPayload(mediaContext, torrent) : undefined,
         },
       });
       if (res.status === "ok") {

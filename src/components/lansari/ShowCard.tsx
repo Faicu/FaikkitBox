@@ -54,11 +54,23 @@ export function ShowCard({
   onWatchChange: (patch: Partial<WatchSettings>) => void;
   onUnpin: () => void;
 }) {
-  const { downloading, handleDownload } = useDownload();
   const qc = useQueryClient();
 
   const imdbId = details?.imdbId ?? countdown?.imdbId ?? null;
   const showTitle = countdown?.showName || item.title;
+
+  const { downloading, handleDownload } = useDownload({
+    mediaType: "tv",
+    imdbId,
+    tmdbId: item.id,
+    title: showTitle,
+    originalTitle: item.originalTitle,
+    literalTitle: details?.literalTitle ?? null,
+    overviewRo: details?.overview ?? null,
+    genres: details?.genres ?? [],
+    posterUrl: item.posterUrl,
+    tvStatus: details?.tvStatus ?? null,
+  });
 
   const seasonGroups = groupTorrentsBySeasonEpisode(torrents);
 

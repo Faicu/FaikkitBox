@@ -49,7 +49,17 @@ export function MovieCard({
   onWatchChange: (patch: Partial<WatchSettings>) => void;
   onUnpin: () => void;
 }) {
-  const { downloading, handleDownload } = useDownload();
+  const { downloading, handleDownload } = useDownload({
+    mediaType: "movie",
+    imdbId: details?.imdbId ?? null,
+    tmdbId: item.id,
+    title: item.title,
+    originalTitle: item.originalTitle,
+    literalTitle: details?.literalTitle ?? null,
+    overviewRo: details?.overview ?? null,
+    genres: details?.genres ?? [],
+    posterUrl: item.posterUrl,
+  });
   const qc = useQueryClient();
   const [confirm, setConfirm] = useState<{ torrent: FilelistTorrent; label: string } | null>(null);
 
