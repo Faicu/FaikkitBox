@@ -77,6 +77,24 @@ export interface PlexApiResponse {
   };
 }
 
+// Coduri de limbă română — folosit atât la potrivirea subtitrărilor
+// (filelist/subtitles.ts) cât și la citirea stream-urilor Plex de mai jos.
+const ROMANIAN_LANG_CODES = ["ro", "rum", "ron"];
+
+function isRomanianStream(s: PlexStream): boolean {
+  const code = (s.languageCode ?? "").toLowerCase();
+  const lang = (s.language ?? "").toLowerCase();
+  return ROMANIAN_LANG_CODES.includes(code) || lang.includes("roman");
+}
+
+// Are titlul un stream de subtitrare română încorporat/urmărit de Plex? —
+// folosit de detaliile de titlu (plex-browse.ts) și de backfill-ul din
+// media-backfill.ts, ca să nu se dubleze verificarea.
+export function hasEmbeddedRomanianSubtitle(media: PlexMedia | undefined): boolean {
+  const streams = media?.Part?.[0]?.Stream ?? [];
+  return streams.some((s) => s.streamType === 3 && isRomanianStream(s));
+}
+
 export function normalizeShowTitle(value: string): string {
   return value
     .normalize("NFD")

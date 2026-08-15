@@ -1,15 +1,16 @@
 // ---------------------------------------------------------------------------
 // Sursă unică pentru datele unui titlu media — vezi schema `media` din db.ts.
-// Populată deocamdată doar din wizard-ul de adăugare (AddMediaWizard), care
-// are deja toate metadatele TMDB la momentul descărcării; căutarea manuală
-// din Lansări și auto-download-ul din pinned-watcher rămân neatinse (folosesc
-// în continuare doar `downloads`), urmează într-o rundă viitoare.
+// Populată de toate cele 4 căi de descărcare (wizard, Lansări manual,
+// auto-download pinned-watcher, căutare manuală Filelist cu rezolvare TMDB
+// best-effort) — vezi upsertMediaEntry — plus, pentru restul bibliotecii
+// deja existente în Plex înainte de acest sistem, de backfill-ul din
+// media-backfill.ts — vezi upsertMediaEntryFromPlex.
 // ---------------------------------------------------------------------------
 
 import { getDb } from "./db";
 
 export type MediaType = "movie" | "tv_show" | "episode";
-export type AddedVia = "wizard" | "manual" | "auto";
+export type AddedVia = "wizard" | "manual" | "auto" | "backfill";
 
 export interface UpsertMediaEntryInput {
   mediaType: "movie" | "episode";
@@ -52,6 +53,7 @@ function ensureShowRow(input: {
   genres?: string[];
   posterPath?: string | null;
   tvStatus?: string | null;
+  addedVia: AddedVia;
 }): number | null {
   const db = getDb();
   if (input.imdbId) {
@@ -83,7 +85,7 @@ function ensureShowRow(input: {
       `INSERT INTO media (
         media_type, imdb_id, tmdb_id, title, original_title, literal_title, year,
         overview_ro, genres, poster_path, tv_status, added_via
-      ) VALUES ('tv_show', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'wizard')`,
+      ) VALUES ('tv_show', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       input.imdbId,
@@ -96,6 +98,7 @@ function ensureShowRow(input: {
       JSON.stringify(input.genres ?? []),
       input.posterPath ?? null,
       input.tvStatus ?? null,
+      input.addedVia,
     );
   return Number(res.lastInsertRowid);
 }
@@ -140,6 +143,70 @@ export function upsertMediaEntry(input: UpsertMediaEntryInput): number {
       input.isSeasonPack ? 1 : 0,
       input.addedVia,
       input.requestedByUserId ?? null,
+    );
+  return Number(res.lastInsertRowid);
+}
+
+// ---------------------------------------------------------------------------
+// Backfill — titluri deja existente în Plex înainte de acest sistem, fără
+// nicio descărcare/torrent asociat(ă) în aplicație. Rândul se leagă direct
+// de ratingKey-ul Plex (deja cunoscut, spre deosebire de upsertMediaEntry,
+// unde legătura se rezolvă abia ulterior, prin resolveMediaPlexLinkByTorrentHash).
+// ---------------------------------------------------------------------------
+
+export interface UpsertMediaFromPlexInput {
+  mediaType: "movie" | "episode";
+  imdbId: string | null;
+  tmdbId: number | null;
+  title: string;
+  originalTitle?: string | null;
+  literalTitle?: string | null;
+  year?: number | null;
+  season?: number | null;
+  episode?: number | null;
+  overviewRo?: string | null;
+  genres?: string[];
+  posterPath?: string | null;
+  tvStatus?: string | null;
+  plexRatingKey: string;
+  quality?: string | null;
+  durationMs?: number | null;
+  hasRomanianSubtitle?: boolean;
+}
+
+export function upsertMediaEntryFromPlex(input: UpsertMediaFromPlexInput): number {
+  const db = getDb();
+
+  const parentId =
+    input.mediaType === "episode" ? ensureShowRow({ ...input, addedVia: "backfill" }) : null;
+
+  const res = db
+    .prepare(
+      `INSERT INTO media (
+        media_type, parent_id, imdb_id, tmdb_id, title, original_title, literal_title,
+        year, season, episode, overview_ro, genres, poster_path, tv_status,
+        plex_rating_key, quality, duration_ms, has_romanian_subtitle, added_via
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'backfill')`,
+    )
+    .run(
+      input.mediaType,
+      parentId,
+      input.imdbId,
+      input.tmdbId,
+      input.title,
+      input.originalTitle ?? null,
+      input.literalTitle ?? null,
+      input.year ?? null,
+      input.season ?? null,
+      input.episode ?? null,
+      input.overviewRo ?? null,
+      JSON.stringify(input.genres ?? []),
+      input.posterPath ?? null,
+      input.tvStatus ?? null,
+      input.plexRatingKey,
+      input.quality ?? null,
+      input.durationMs ?? null,
+      input.hasRomanianSubtitle ? 1 : 0,
     );
   return Number(res.lastInsertRowid);
 }

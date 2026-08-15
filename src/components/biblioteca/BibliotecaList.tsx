@@ -19,6 +19,7 @@ import {
   Loader2,
   Trash2,
   Layers,
+  DatabaseZap,
 } from "lucide-react";
 
 import {
@@ -38,13 +39,15 @@ import {
   AlertDialogCancel,
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
-import { plexLibraryBrowseQuery } from "@/lib/queries";
+import { Progress } from "@/components/ui/progress";
+import { plexLibraryBrowseQuery, adminStatusQuery } from "@/lib/queries";
 import { getPlexTitleDetail } from "@/lib/services.functions";
 import {
   correctSubtitleForItem,
   deleteSubtitleForItem,
   deleteFilelistLogEntry,
 } from "@/lib/filelist.functions";
+import { startMediaBackfill, getMediaBackfillState } from "@/lib/media-backfill";
 import { formatMs } from "@/lib/format";
 import { formatDateTime } from "@/components/tehnic/utils";
 import type { PlexBrowseItem } from "@/lib/services/plex-browse";
@@ -119,6 +122,8 @@ function matchesQuery(item: PlexBrowseItem, q: string): boolean {
 export function BibliotecaList() {
   const queryClient = useQueryClient();
   const browse = useQuery(plexLibraryBrowseQuery);
+  const { data: adminData } = useQuery(adminStatusQuery);
+  const isAdmin = !!adminData?.isAdmin;
   const [query, setQuery] = useState("");
   const [visible, setVisible] = useState(PAGE_SIZE);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
@@ -130,9 +135,15 @@ export function BibliotecaList() {
     title: string;
     isSeasonPack: boolean;
   } | null>(null);
+  const [backfilling, setBackfilling] = useState(false);
+  const [backfillProgress, setBackfillProgress] = useState<{ total: number; done: number } | null>(
+    null,
+  );
 
   const correctFn = useServerFn(correctSubtitleForItem);
   const deleteSubtitleFn = useServerFn(deleteSubtitleForItem);
+  const startBackfillFn = useServerFn(startMediaBackfill);
+  const backfillStateFn = useServerFn(getMediaBackfillState);
   const deleteEntryFn = useServerFn(deleteFilelistLogEntry);
 
   const detail = useQuery({
@@ -238,6 +249,51 @@ export function BibliotecaList() {
     else toast.warning("Șters din jurnal, dar nu am putut confirma ștergerea din qBittorrent");
   }
 
+  // Backfill-ul poate dura minute bune pe o bibliotecă mare — pornit în
+  // fundal, urmărit exclusiv prin polling, ca la "Corectează subtitrări"
+  // din Lansări (un singur request ținut deschis atât ar fi tăiat de
+  // proxy/browser înainte de final).
+  async function runMediaBackfill() {
+    setBackfilling(true);
+    setBackfillProgress(null);
+    const toastId = toast.loading("Completez Biblioteca din TMDB pentru titlurile vechi…");
+
+    const startRes = await startBackfillFn({}).catch((e) => ({
+      status: "error" as const,
+      error: e instanceof Error ? e.message : String(e),
+    }));
+    if (startRes.status !== "ok") {
+      toast.error("Eroare la pornirea completării", { id: toastId, description: startRes.error });
+      setBackfilling(false);
+      return;
+    }
+
+    const pollInterval = setInterval(async () => {
+      const state = await backfillStateFn().catch(() => null);
+      if (!state) return;
+      setBackfillProgress(state.progress);
+      if (!state.running) {
+        clearInterval(pollInterval);
+        setBackfilling(false);
+        setBackfillProgress(null);
+        queryClient.invalidateQueries({ queryKey: ["plexLibraryBrowse"] });
+        if (state.lastResult?.status === "ok") {
+          const r = state.lastResult;
+          toast.success("Bibliotecă completată", {
+            id: toastId,
+            description: `${r.processed} procesate, ${r.added} adăugate, ${r.skipped} sărite`,
+            duration: 6000,
+          });
+        } else {
+          toast.error("Eroare la completarea bibliotecii", {
+            id: toastId,
+            description: state.lastResult?.error,
+          });
+        }
+      }
+    }, 1500);
+  }
+
   function renderRow(item: PlexBrowseItem, indent = false) {
     return (
       <button
@@ -277,6 +333,41 @@ export function BibliotecaList() {
 
   return (
     <div className="space-y-3">
+      {isAdmin && (
+        <div className="flex items-center justify-end">
+          <button
+            type="button"
+            onClick={runMediaBackfill}
+            disabled={backfilling}
+            className="flex items-center gap-1 rounded-lg px-1.5 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors disabled:opacity-50"
+            title="Completează din TMDB titlurile vechi din Plex, adăugate înainte de acest sistem"
+          >
+            {backfilling ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <DatabaseZap className="h-3.5 w-3.5" />
+            )}
+            Completează din TMDB
+          </button>
+        </div>
+      )}
+      {backfilling && (
+        <div className="px-1">
+          <Progress
+            value={
+              backfillProgress
+                ? (backfillProgress.done / Math.max(backfillProgress.total, 1)) * 100
+                : 0
+            }
+          />
+          <div className="mt-1 text-[11px] text-muted-foreground">
+            {backfillProgress
+              ? `${backfillProgress.done}/${backfillProgress.total} verificate`
+              : "Pornesc completarea…"}
+          </div>
+        </div>
+      )}
+
       <div className="relative">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <input

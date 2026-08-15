@@ -11,10 +11,10 @@ import { fetchJson } from "./shared";
 import {
   discoverPlexUrl,
   plexQualityFromMedia,
+  hasEmbeddedRomanianSubtitle,
   type PlexApiResponse,
   type PlexMetadataItem,
 } from "./plex-shared";
-import { ROMANIAN_LANG_CODES } from "../filelist/subtitles";
 
 export interface PlexBrowseItem {
   ratingKey: string;
@@ -166,12 +166,6 @@ export interface PlexTitleDetail {
   canManage: boolean;
 }
 
-function isRomanianStream(s: { language?: string; languageCode?: string }): boolean {
-  const code = (s.languageCode ?? "").toLowerCase();
-  const lang = (s.language ?? "").toLowerCase();
-  return ROMANIAN_LANG_CODES.includes(code) || lang.includes("roman");
-}
-
 // Tot ce nu depinde de userul curent — partajat între toți, cache 1 min. Doar
 // watchedByMe/watchedByOthers/canManage se calculează per-request (ieftin,
 // fără nicio cerere nouă), din watchedByAll + requestedByUserId cache-uite.
@@ -211,8 +205,7 @@ async function computeTitleDetailBase(
 
     const media = item.Media?.[0];
     const quality = plexQualityFromMedia(media);
-    const streams = media?.Part?.[0]?.Stream ?? [];
-    const hasRomanianSubtitle = streams.some((s) => s.streamType === 3 && isRomanianStream(s));
+    const hasRomanianSubtitle = hasEmbeddedRomanianSubtitle(media);
 
     // "Cine a văzut" — din istoricul cachuit (aceeași sursă ca restul Acasă),
     // potrivit după titlu (filme) sau serial+sezon+episod (episoade), nu
