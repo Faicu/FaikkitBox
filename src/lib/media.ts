@@ -308,11 +308,12 @@ export function upsertMediaEntryFromPlex(input: UpsertMediaFromPlexInput): numbe
 }
 
 // ---------------------------------------------------------------------------
-// Sincronizare ulterioară — actualizează un rând deja existent (creat de
-// wizard), potrivit după torrent_hash (unic). Dacă niciun rând `media` nu
-// corespunde (torrent pornit din afara wizard-ului), UPDATE/DELETE-ul nu
-// afectează nimic — nu creăm rânduri noi din aceste căi, doar sincronizăm
-// unde există deja unul.
+// Sincronizare ulterioară — actualizează rândul/rândurile deja existente
+// (create de wizard), potrivite după torrent_hash (mai multe rânduri pot
+// partaja un hash pentru pachetele de sezon — vezi migrarea v13 din db.ts).
+// Dacă niciun rând `media` nu corespunde (torrent pornit din afara
+// wizard-ului), UPDATE/DELETE-ul nu afectează nimic — nu creăm rânduri noi
+// din aceste căi, doar sincronizăm unde există deja unul.
 // ---------------------------------------------------------------------------
 
 // Sursa subtitrării, derivată din outcome-ul ensureRomanianSubtitle
