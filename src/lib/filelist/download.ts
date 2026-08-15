@@ -1044,3 +1044,47 @@ export const correctSubtitleForItem = createServerFn({ method: "POST" })
 
     return { status: "ok", ...result };
   });
+
+// Șterge subtitrarea .srt curentă (de pe disk) pentru un item din jurnal, ca
+// utilizatorul să poată forța o re-căutare curată cu "Corectează subtitrare".
+export type DeleteSubtitleForItemResult =
+  | { status: "ok"; deleted: string[] }
+  | { status: "error"; error: string };
+
+export const deleteSubtitleForItem = createServerFn({ method: "POST" })
+  .validator((data: { id: number }) => data)
+  .handler(async ({ data }): Promise<DeleteSubtitleForItemResult> => {
+    const { requireAdmin } = await import("../admin.server");
+    await requireAdmin();
+
+    const { getDb } = await import("../db");
+    const row = getDb().prepare("SELECT torrent_hash FROM downloads WHERE id = ?").get(data.id) as
+      | { torrent_hash: string | null }
+      | undefined;
+
+    if (!row) {
+      return { status: "error", error: "Intrarea nu a fost găsită în jurnal" };
+    }
+    if (!row.torrent_hash) {
+      return {
+        status: "error",
+        error: "Hash-ul torrentului lipsește — torrentul poate fi șters din qBittorrent",
+      };
+    }
+
+    const qbitBase = process.env.QBIT_URL ?? "http://192.168.1.192:25556";
+    const qbitUser = process.env.QBIT_USERNAME;
+    const qbitPass = process.env.QBIT_PASSWORD;
+    if (!qbitUser || !qbitPass) {
+      return { status: "error", error: "QBIT_USERNAME / QBIT_PASSWORD nu sunt configurate" };
+    }
+    const url = qbitBase.replace(/\/$/, "");
+
+    const { deleteRomanianSubtitle } = await import("./subtitles");
+    return deleteRomanianSubtitle({
+      qbitUrl: url,
+      qbitUser,
+      qbitPass,
+      torrentHash: row.torrent_hash,
+    });
+  });

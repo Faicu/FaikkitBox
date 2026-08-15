@@ -10,6 +10,7 @@ import {
   backfillSubtitles,
   getBackfillState,
   correctSubtitleForItem,
+  deleteSubtitleForItem,
   resolveTorrentDisplayName,
 } from "@/lib/filelist.functions";
 import type { FilelistLogEntry } from "@/lib/filelist.functions";
@@ -90,10 +91,12 @@ export function DownloadLogSection() {
   const backfillFn = useServerFn(backfillSubtitles);
   const stateFn = useServerFn(getBackfillState);
   const correctFn = useServerFn(correctSubtitleForItem);
+  const deleteSubtitleFn = useServerFn(deleteSubtitleForItem);
   const [visibleCount, setVisibleCount] = useState(3);
   const [backfilling, setBackfilling] = useState(false);
   const [progress, setProgress] = useState<{ total: number; done: number } | null>(null);
   const [correctingId, setCorrectingId] = useState<number | null>(null);
+  const [deletingSubtitleId, setDeletingSubtitleId] = useState<number | null>(null);
   const [selectedEntry, setSelectedEntry] = useState<FilelistLogEntry | null>(null);
   const [pendingDelete, setPendingDelete] = useState<{
     id: number;
@@ -161,6 +164,25 @@ export function DownloadLogSection() {
     toast.success("Subtitrare verificată", {
       id: toastId,
       description: res.detail,
+      duration: 6000,
+    });
+  }
+
+  async function deleteSubtitleOne(id: number, name: string) {
+    setDeletingSubtitleId(id);
+    const toastId = toast.loading(`Șterg subtitrarea pentru „${name}”…`);
+    const res = await deleteSubtitleFn({ data: { id } }).catch((e) => ({
+      status: "error" as const,
+      error: e instanceof Error ? e.message : String(e),
+    }));
+    setDeletingSubtitleId(null);
+    if (res.status !== "ok") {
+      toast.error("Eroare la ștergerea subtitrării", { id: toastId, description: res.error });
+      return;
+    }
+    toast.success("Subtitrare ștearsă", {
+      id: toastId,
+      description: res.deleted.join(", "),
       duration: 6000,
     });
   }
@@ -242,8 +264,10 @@ export function DownloadLogSection() {
           entry={selectedEntry}
           onClose={() => setSelectedEntry(null)}
           correcting={correctingId === selectedEntry.id}
+          deletingSubtitle={deletingSubtitleId === selectedEntry.id}
           isAdmin={isAdmin}
           onCorrectSubtitle={() => correctOne(selectedEntry.id, selectedEntry.name)}
+          onDeleteSubtitle={() => deleteSubtitleOne(selectedEntry.id, selectedEntry.name)}
           onDelete={() =>
             setPendingDelete({
               id: selectedEntry.id,

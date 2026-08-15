@@ -28,7 +28,7 @@
 
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { access, readFile, writeFile } from "node:fs/promises";
+import { access, readdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { join, dirname, basename, extname } from "node:path";
 import iconv from "iconv-lite";
 import {
@@ -640,6 +640,73 @@ export async function ensureRomanianSubtitle(
     release: resolved.winner.release,
     path: destPath,
   });
+}
+
+// ---------------------------------------------------------------------------
+// Șterge de pe disk subtitrarea(ile) .srt sidecar asociate fișierelor media
+// dintr-un torrent (nume-de-fișier-media + ".srt", indiferent de limbă —
+// ".ro.srt", ".en.srt" etc.), ca utilizatorul să poată forța o re-căutare
+// curată printr-un „Corectează subtitrare" ulterior. Nu atinge subtitrările
+// încorporate în fișierul media (embedded) — doar fișiere .srt separate.
+// ---------------------------------------------------------------------------
+
+export interface DeleteSubtitleResult {
+  status: "ok" | "error";
+  deleted: string[];
+  error?: string;
+}
+
+export async function deleteRomanianSubtitle(params: {
+  qbitUrl: string;
+  qbitUser: string;
+  qbitPass: string;
+  torrentHash: string;
+}): Promise<DeleteSubtitleResult> {
+  const { qbitUrl, qbitUser, qbitPass, torrentHash } = params;
+  const [files, savePath] = await Promise.all([
+    qbitListFiles(qbitUrl, torrentHash, qbitUser, qbitPass),
+    getTorrentSavePath(qbitUrl, torrentHash, qbitUser, qbitPass),
+  ]);
+  if (!files.length || !savePath) {
+    return { status: "error", deleted: [], error: "nu am putut lista fișierele torrentului" };
+  }
+
+  const downloadedFiles = files.filter((f) => Number(f.progress ?? 0) >= 1);
+  const mediaFiles = downloadedFiles.filter((f) =>
+    MEDIA_EXTENSIONS.includes(extname(f.name).toLowerCase()),
+  );
+  if (!mediaFiles.length) {
+    return { status: "error", deleted: [], error: "niciun fișier media recunoscut în torrent" };
+  }
+
+  const deleted: string[] = [];
+  for (const mediaFile of mediaFiles) {
+    const mediaBaseName = basename(mediaFile.name, extname(mediaFile.name)).toLowerCase();
+    const mediaDir = dirname(mediaFile.name);
+    const dirAbsPath = mediaDir === "." ? savePath : join(savePath, mediaDir);
+    let entries: string[];
+    try {
+      entries = await readdir(dirAbsPath);
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      const lower = entry.toLowerCase();
+      if (!lower.endsWith(".srt") || !lower.startsWith(mediaBaseName)) continue;
+      const absPath = join(dirAbsPath, entry);
+      try {
+        await unlink(absPath);
+        deleted.push(mediaDir === "." ? entry : `${mediaDir}/${entry}`);
+      } catch (e) {
+        console.warn(`[subtitles] ștergere .srt eșuată (${absPath}):`, e);
+      }
+    }
+  }
+
+  if (!deleted.length) {
+    return { status: "error", deleted: [], error: "nu am găsit niciun fișier .srt de șters" };
+  }
+  return { status: "ok", deleted };
 }
 
 // ---------------------------------------------------------------------------

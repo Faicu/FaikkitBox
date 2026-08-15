@@ -11,6 +11,7 @@ import {
   OctagonX,
   Trash2,
   Captions,
+  CaptionsOff,
   FolderOpen,
 } from "lucide-react";
 
@@ -32,6 +33,8 @@ export function DownloadLogEntryDrawer({
   onClose,
   onCorrectSubtitle,
   correcting,
+  onDeleteSubtitle,
+  deletingSubtitle,
   onDelete,
   isAdmin,
 }: {
@@ -39,6 +42,8 @@ export function DownloadLogEntryDrawer({
   onClose: () => void;
   onCorrectSubtitle: () => void;
   correcting: boolean;
+  onDeleteSubtitle: () => void;
+  deletingSubtitle: boolean;
   onDelete: () => void;
   isAdmin: boolean;
 }) {
@@ -121,12 +126,12 @@ export function DownloadLogEntryDrawer({
           </div>
 
           {isAdmin && (
-            <div className="flex gap-2 pt-1">
+            <div className="flex flex-wrap gap-2 pt-1">
               <button
                 type="button"
                 onClick={onCorrectSubtitle}
                 disabled={!entry.torrentHash || correcting}
-                className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-border bg-muted/40 py-2 text-xs font-medium text-foreground hover:bg-muted/60 transition-colors disabled:opacity-40"
+                className="flex flex-1 basis-full items-center justify-center gap-1.5 rounded-xl border border-border bg-muted/40 py-2 text-xs font-medium text-foreground hover:bg-muted/60 transition-colors disabled:opacity-40"
                 title={
                   entry.torrentHash
                     ? "Verifică/corectează subtitrarea română pentru acest item"
@@ -139,6 +144,24 @@ export function DownloadLogEntryDrawer({
                   <Captions className="h-3.5 w-3.5" />
                 )}
                 Corectează subtitrare
+              </button>
+              <button
+                type="button"
+                onClick={onDeleteSubtitle}
+                disabled={!entry.torrentHash || deletingSubtitle}
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-border bg-muted/40 py-2 text-xs font-medium text-foreground hover:bg-muted/60 transition-colors disabled:opacity-40"
+                title={
+                  entry.torrentHash
+                    ? "Șterge subtitrarea .srt curentă de pe disk"
+                    : "Hash indisponibil — nu pot șterge subtitrarea"
+                }
+              >
+                {deletingSubtitle ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <CaptionsOff className="h-3.5 w-3.5" />
+                )}
+                Șterge subtitrare
               </button>
               <button
                 type="button"
