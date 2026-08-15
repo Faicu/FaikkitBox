@@ -650,11 +650,8 @@ export async function ensureRomanianSubtitle(
 // încorporate în fișierul media (embedded) — doar fișiere .srt separate.
 // ---------------------------------------------------------------------------
 
-export interface DeleteSubtitleResult {
-  status: "ok" | "error";
-  deleted: string[];
-  error?: string;
-}
+export type DeleteSubtitleResult =
+  { status: "ok"; deleted: string[] } | { status: "error"; deleted: []; error: string };
 
 export async function deleteRomanianSubtitle(params: {
   qbitUrl: string;

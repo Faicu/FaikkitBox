@@ -1,18 +1,20 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { LayoutDashboard, Flame, Wrench, Compass } from "lucide-react";
+import { LayoutDashboard, Flame, Wrench, Compass, Library } from "lucide-react";
 import { adminStatusQuery } from "@/lib/queries";
 
 const publicItems = [{ to: "/", label: "Acasă", icon: LayoutDashboard }] as const;
 
 const authItems = [
   { to: "/", label: "Acasă", icon: LayoutDashboard },
+  { to: "/biblioteca", label: "Bibliotecă", icon: Library },
   { to: "/descopera", label: "Descoperă", icon: Compass },
   { to: "/lansari", label: "Lansări", icon: Flame },
 ] as const;
 
 const adminItems = [
   { to: "/", label: "Acasă", icon: LayoutDashboard },
+  { to: "/biblioteca", label: "Bibliotecă", icon: Library },
   { to: "/descopera", label: "Descoperă", icon: Compass },
   { to: "/lansari", label: "Lansări", icon: Flame },
   { to: "/tehnic", label: "Tehnic", icon: Wrench },

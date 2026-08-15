@@ -25,7 +25,6 @@ import {
   DrawerDescription,
 } from "@/components/ui/drawer";
 import { AddMediaWizard } from "@/components/principala/AddMediaWizard";
-import { PlexLibraryBrowse } from "@/components/principala/PlexLibraryBrowse";
 import { plexQuery, plexSessionsQuery, adminStatusQuery } from "@/lib/queries";
 import { formatSpeed } from "@/lib/format";
 
@@ -259,12 +258,6 @@ function Overview() {
           )}
         </ServiceRow>
       </div>
-
-      {isAuthenticated && (
-        <div className="mt-4">
-          <PlexLibraryBrowse />
-        </div>
-      )}
 
       <Drawer open={plexDrawer === "views"} onOpenChange={(o) => !o && setPlexDrawer(null)}>
         <DrawerContent className="max-h-[85vh]">

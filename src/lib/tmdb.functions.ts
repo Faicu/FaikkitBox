@@ -24,6 +24,11 @@ interface TmdbApiAlternativeTitle {
   type?: string;
 }
 
+interface TmdbApiGenre {
+  id: number;
+  name?: string;
+}
+
 interface TmdbApiMovie {
   title?: string;
   original_title?: string;
@@ -31,6 +36,7 @@ interface TmdbApiMovie {
   external_ids?: { imdb_id?: string | null };
   imdb_id?: string | null;
   alternative_titles?: { titles?: TmdbApiAlternativeTitle[] };
+  genres?: TmdbApiGenre[];
 }
 
 interface TmdbApiSeasonSummary {
@@ -47,6 +53,7 @@ interface TmdbApiTvShow {
   status?: string | null;
   seasons?: TmdbApiSeasonSummary[];
   alternative_titles?: { results?: TmdbApiAlternativeTitle[] };
+  genres?: TmdbApiGenre[];
 }
 
 // TMDB marchează cu type "literal title" romanizarea/transliterarea folosită
@@ -151,6 +158,83 @@ export interface TmdbDetails {
   // Rezumat scurt — în română când TMDB are traducerea disponibilă, altfel
   // cade pe engleză (multe producții mai puțin populare n-au overview RO).
   overview: string | null;
+  // Genurile (RO) — lista TMDB e globală/predefinită, deci numele sunt deja
+  // traduse chiar și pentru producții obscure fără overview RO propriu.
+  genres: string[];
+}
+
+// Versiune internă (fără createServerFn) — folosită și din plex-browse.ts,
+// care are nevoie de detaliile TMDB (overview RO, genuri, imdbId) pentru
+// pagina Bibliotecă, fără să treacă prin granița de server function.
+export async function getTmdbDetailsInternal(
+  id: number,
+  mediaType: "movie" | "tv",
+): Promise<TmdbDetails> {
+  try {
+    if (mediaType === "movie") {
+      const movie = await tmdbFetch<TmdbApiMovie>(
+        `/movie/${id}?language=ro-RO&append_to_response=external_ids,alternative_titles`,
+      );
+      let overview = movie.overview?.trim() || null;
+      if (!overview) {
+        const enMovie = await tmdbFetch<TmdbApiMovie>(`/movie/${id}`).catch(() => null);
+        overview = enMovie?.overview?.trim() || null;
+      }
+      return {
+        id,
+        mediaType: "movie",
+        title: movie.title ?? movie.original_title ?? "",
+        originalTitle: movie.original_title ?? movie.title ?? "",
+        literalTitle: findLiteralTitle(movie.alternative_titles?.titles),
+        imdbId: movie.external_ids?.imdb_id ?? movie.imdb_id ?? null,
+        tvStatus: null,
+        seasons: [],
+        overview,
+        genres: (movie.genres ?? []).map((g) => g.name ?? "").filter(Boolean),
+      };
+    } else {
+      const show = await tmdbFetch<TmdbApiTvShow>(
+        `/tv/${id}?language=ro-RO&append_to_response=external_ids,alternative_titles`,
+      );
+      let overview = show.overview?.trim() || null;
+      if (!overview) {
+        const enShow = await tmdbFetch<TmdbApiTvShow>(`/tv/${id}`).catch(() => null);
+        overview = enShow?.overview?.trim() || null;
+      }
+      const seasons = (show.seasons ?? [])
+        .filter((s) => s.season_number > 0)
+        .map((s) => ({
+          seasonNumber: s.season_number,
+          episodeCount: s.episode_count,
+          airDate: s.air_date ?? null,
+        }));
+      return {
+        id,
+        mediaType: "tv",
+        title: show.name ?? show.original_name ?? "",
+        originalTitle: show.original_name ?? show.name ?? "",
+        literalTitle: findLiteralTitle(show.alternative_titles?.results),
+        imdbId: show.external_ids?.imdb_id ?? null,
+        tvStatus: show.status ?? null,
+        seasons,
+        overview,
+        genres: (show.genres ?? []).map((g) => g.name ?? "").filter(Boolean),
+      };
+    }
+  } catch {
+    return {
+      id,
+      mediaType,
+      title: "",
+      originalTitle: "",
+      literalTitle: null,
+      imdbId: null,
+      tvStatus: null,
+      seasons: [],
+      overview: null,
+      genres: [],
+    };
+  }
 }
 
 export const getTmdbDetails = createServerFn({ method: "GET" })
@@ -158,68 +242,7 @@ export const getTmdbDetails = createServerFn({ method: "GET" })
   .handler(async ({ data }): Promise<TmdbDetails> => {
     const { requireAuth } = await import("./admin.server");
     await requireAuth();
-    try {
-      if (data.mediaType === "movie") {
-        const movie = await tmdbFetch<TmdbApiMovie>(
-          `/movie/${data.id}?language=ro-RO&append_to_response=external_ids,alternative_titles`,
-        );
-        let overview = movie.overview?.trim() || null;
-        if (!overview) {
-          const enMovie = await tmdbFetch<TmdbApiMovie>(`/movie/${data.id}`).catch(() => null);
-          overview = enMovie?.overview?.trim() || null;
-        }
-        return {
-          id: data.id,
-          mediaType: "movie",
-          title: movie.title ?? movie.original_title ?? "",
-          originalTitle: movie.original_title ?? movie.title ?? "",
-          literalTitle: findLiteralTitle(movie.alternative_titles?.titles),
-          imdbId: movie.external_ids?.imdb_id ?? movie.imdb_id ?? null,
-          tvStatus: null,
-          seasons: [],
-          overview,
-        };
-      } else {
-        const show = await tmdbFetch<TmdbApiTvShow>(
-          `/tv/${data.id}?language=ro-RO&append_to_response=external_ids,alternative_titles`,
-        );
-        let overview = show.overview?.trim() || null;
-        if (!overview) {
-          const enShow = await tmdbFetch<TmdbApiTvShow>(`/tv/${data.id}`).catch(() => null);
-          overview = enShow?.overview?.trim() || null;
-        }
-        const seasons = (show.seasons ?? [])
-          .filter((s) => s.season_number > 0)
-          .map((s) => ({
-            seasonNumber: s.season_number,
-            episodeCount: s.episode_count,
-            airDate: s.air_date ?? null,
-          }));
-        return {
-          id: data.id,
-          mediaType: "tv",
-          title: show.name ?? show.original_name ?? "",
-          originalTitle: show.original_name ?? show.name ?? "",
-          literalTitle: findLiteralTitle(show.alternative_titles?.results),
-          imdbId: show.external_ids?.imdb_id ?? null,
-          tvStatus: show.status ?? null,
-          seasons,
-          overview,
-        };
-      }
-    } catch {
-      return {
-        id: data.id,
-        mediaType: data.mediaType,
-        title: "",
-        originalTitle: "",
-        literalTitle: null,
-        imdbId: null,
-        tvStatus: null,
-        seasons: [],
-        overview: null,
-      };
-    }
+    return getTmdbDetailsInternal(data.id, data.mediaType);
   });
 
 export interface TmdbEpisode {
@@ -310,6 +333,56 @@ export const getTmdbSeasonEpisodes = createServerFn({ method: "GET" })
     await requireAuth();
     return getTmdbSeasonEpisodesInternal(data.tmdbId, data.seasonNum);
   });
+
+// ---------------------------------------------------------------------------
+// Rezolvare titlu Plex → id TMDB, prin căutare directă (nu prin IMDb id, pe
+// care Plex nu-l expune fiabil în răspunsul de metadate) — folosit de pagina
+// Bibliotecă (plex-browse.ts) ca să ajungă la genuri/rezumat RO/imdbId
+// pornind doar de la titlul + anul din Plex.
+// ---------------------------------------------------------------------------
+
+export async function searchTmdbTopResultInternal(
+  query: string,
+  mediaType: "movie" | "tv",
+  year?: number | null,
+): Promise<number | null> {
+  const q = query.trim();
+  if (!q) return null;
+  try {
+    const params = new URLSearchParams({ query: q });
+    if (year) params.set(mediaType === "movie" ? "year" : "first_air_date_year", String(year));
+    const res = await tmdbFetch<TmdbApiSearchResponse>(`/search/${mediaType}?${params.toString()}`);
+    return res.results?.[0]?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+interface TmdbApiEpisodeDetail {
+  overview?: string | null;
+}
+
+// Rezumat RO (cu fallback EN) al unui episod anume — separat de
+// getTmdbSeasonEpisodesInternal, care întoarce doar titluri, nu rezumate.
+export async function getTmdbEpisodeOverviewInternal(
+  tmdbShowId: number,
+  season: number,
+  episode: number,
+): Promise<string | null> {
+  try {
+    const ro = await tmdbFetch<TmdbApiEpisodeDetail>(
+      `/tv/${tmdbShowId}/season/${season}/episode/${episode}?language=ro-RO`,
+    );
+    const roOverview = ro.overview?.trim();
+    if (roOverview) return roOverview;
+    const en = await tmdbFetch<TmdbApiEpisodeDetail>(
+      `/tv/${tmdbShowId}/season/${season}/episode/${episode}`,
+    ).catch(() => null);
+    return en?.overview?.trim() || null;
+  } catch {
+    return null;
+  }
+}
 
 export interface TvShowCountdown {
   status: "ok" | "error" | "not_found";

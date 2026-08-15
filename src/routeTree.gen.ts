@@ -19,6 +19,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as LansariRouteImport } from './routes/lansari'
 import { Route as ImmichRouteImport } from './routes/immich'
 import { Route as DescoperaRouteImport } from './routes/descopera'
+import { Route as BibliotecaRouteImport } from './routes/biblioteca'
 import { Route as IndexRouteImport } from './routes/index'
 
 const UsersRoute = UsersRouteImport.update({
@@ -71,6 +72,11 @@ const DescoperaRoute = DescoperaRouteImport.update({
   path: '/descopera',
   getParentRoute: () => rootRouteImport,
 } as any)
+const BibliotecaRoute = BibliotecaRouteImport.update({
+  id: '/biblioteca',
+  path: '/biblioteca',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -79,6 +85,7 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/biblioteca': typeof BibliotecaRoute
   '/descopera': typeof DescoperaRoute
   '/immich': typeof ImmichRoute
   '/lansari': typeof LansariRoute
@@ -92,6 +99,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/biblioteca': typeof BibliotecaRoute
   '/descopera': typeof DescoperaRoute
   '/immich': typeof ImmichRoute
   '/lansari': typeof LansariRoute
@@ -106,6 +114,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/biblioteca': typeof BibliotecaRoute
   '/descopera': typeof DescoperaRoute
   '/immich': typeof ImmichRoute
   '/lansari': typeof LansariRoute
@@ -121,6 +130,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/biblioteca'
     | '/descopera'
     | '/immich'
     | '/lansari'
@@ -134,6 +144,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/biblioteca'
     | '/descopera'
     | '/immich'
     | '/lansari'
@@ -147,6 +158,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/biblioteca'
     | '/descopera'
     | '/immich'
     | '/lansari'
@@ -161,6 +173,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  BibliotecaRoute: typeof BibliotecaRoute
   DescoperaRoute: typeof DescoperaRoute
   ImmichRoute: typeof ImmichRoute
   LansariRoute: typeof LansariRoute
@@ -245,6 +258,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DescoperaRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/biblioteca': {
+      id: '/biblioteca'
+      path: '/biblioteca'
+      fullPath: '/biblioteca'
+      preLoaderRoute: typeof BibliotecaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -257,6 +277,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  BibliotecaRoute: BibliotecaRoute,
   DescoperaRoute: DescoperaRoute,
   ImmichRoute: ImmichRoute,
   LansariRoute: LansariRoute,

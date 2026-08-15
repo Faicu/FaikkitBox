@@ -3,12 +3,89 @@ import type { FilelistLogEntry, DownloadLogRow } from "./types";
 import { qbitLogin } from "../qbit-client";
 import { findTorrentHashNow } from "./download";
 import { refreshPlexLibraryForCategory } from "../plex-refresh";
+import { parseSeasonEpisodeFromName } from "../torrent-name-parse";
 
 // ---------------------------------------------------------------------------
 // Log persistent al descărcărilor
 // ---------------------------------------------------------------------------
 
 // Persistență SQLite (node:sqlite nativ) — vezi src/lib/db.ts
+
+// Potrivește un titlu din biblioteca Plex (pagina Bibliotecă) cu intrarea lui
+// din jurnalul propriu de descărcări — pornind de la IMDb id-ul rezolvat prin
+// TMDB (Plex nu expune fiabil IMDb id-ul în răspunsul de metadate). Pentru
+// episoade, un IMDb id (cel al serialului) poate avea mai multe intrări în
+// jurnal (episod cu episod sau pachet de sezon) — preferăm potrivirea exactă
+// pe episod; dacă nu găsim, cădem pe un pachet de sezon care-l conține.
+export interface DownloadsMatch {
+  id: number;
+  torrentHash: string | null;
+  category: number | null;
+  requestedByUserId: number | null;
+  isSeasonPack: boolean;
+}
+
+export async function findDownloadsRowForImdb(
+  imdbId: string,
+  seasonEpisode?: { season: number; episode: number },
+): Promise<DownloadsMatch | null> {
+  try {
+    const { getDb } = await import("../db");
+    const rows = getDb()
+      .prepare(
+        `SELECT id, name, torrent_hash, category, requested_by_user_id
+         FROM downloads WHERE imdb = ? ORDER BY downloaded_at DESC`,
+      )
+      .all(imdbId) as Array<{
+      id: number;
+      name: string;
+      torrent_hash: string | null;
+      category: number | null;
+      requested_by_user_id: number | null;
+    }>;
+
+    if (!rows.length) return null;
+
+    if (!seasonEpisode) {
+      const r = rows[0];
+      return {
+        id: r.id,
+        torrentHash: r.torrent_hash,
+        category: r.category,
+        requestedByUserId: r.requested_by_user_id,
+        isSeasonPack: false,
+      };
+    }
+
+    let seasonPackMatch: (typeof rows)[number] | null = null;
+    for (const r of rows) {
+      const parsed = parseSeasonEpisodeFromName(r.name);
+      if (!parsed || parsed.season !== seasonEpisode.season) continue;
+      if (parsed.episode === seasonEpisode.episode) {
+        return {
+          id: r.id,
+          torrentHash: r.torrent_hash,
+          category: r.category,
+          requestedByUserId: r.requested_by_user_id,
+          isSeasonPack: false,
+        };
+      }
+      if (parsed.episode === null && !seasonPackMatch) seasonPackMatch = r;
+    }
+    if (seasonPackMatch) {
+      return {
+        id: seasonPackMatch.id,
+        torrentHash: seasonPackMatch.torrent_hash,
+        category: seasonPackMatch.category,
+        requestedByUserId: seasonPackMatch.requested_by_user_id,
+        isSeasonPack: true,
+      };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 function rowToEntry(r: DownloadLogRow): FilelistLogEntry {
   return {

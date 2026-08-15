@@ -25,6 +25,7 @@ export interface PlexBrowseItem {
   episode: number | null;
   thumb: string | null;
   addedAt: number;
+  watchedByMe: boolean;
 }
 
 interface PlexDirectoryLike {
@@ -83,6 +84,7 @@ async function fetchBrowseItems(): Promise<PlexBrowseItem[]> {
     episode: m.index ?? null,
     thumb: m.thumb ?? null,
     addedAt: Number(m.addedAt ?? 0),
+    watchedByMe: false,
   }));
 
   browseCache = { url, items, expiresAt: Date.now() + BROWSE_TTL_MS };
@@ -94,9 +96,31 @@ export const getPlexLibraryBrowse = createServerFn({ method: "GET" }).handler(
     { status: "ok"; items: PlexBrowseItem[] } | { status: "error"; error: string }
   > => {
     const { requireAuth } = await import("../admin.server");
-    await requireAuth();
+    const session = await requireAuth();
     try {
-      return { status: "ok", items: await fetchBrowseItems() };
+      const items = await fetchBrowseItems();
+
+      // "Am văzut" — badge afișat direct în listă, fără cost suplimentar (nicio
+      // cerere nouă către Plex): potrivim doar cu istoricul deja cachuit.
+      const { getDb } = await import("../db");
+      const me = getDb()
+        .prepare("SELECT plex_username FROM users WHERE id = ?")
+        .get(session.data.userId!) as { plex_username: string | null } | undefined;
+      const myPlexUsername = me?.plex_username ?? null;
+      if (!myPlexUsername) return { status: "ok", items };
+
+      const { getPlexUserHistory } = await import("./plex");
+      const myHistory = await getPlexUserHistory(myPlexUsername);
+      const watchedKeys = new Set(
+        myHistory.map((e) => (e.show ? `${e.show}|${e.season}|${e.episode}` : `movie|${e.title}`)),
+      );
+      const withWatched = items.map((it) => ({
+        ...it,
+        watchedByMe: watchedKeys.has(
+          it.type === "episode" ? `${it.show}|${it.season}|${it.episode}` : `movie|${it.title}`,
+        ),
+      }));
+      return { status: "ok", items: withWatched };
     } catch (e) {
       return { status: "error", error: e instanceof Error ? e.message : String(e) };
     }
@@ -120,8 +144,20 @@ export interface PlexTitleDetail {
   quality: string | null;
   hasRomanianSubtitle: boolean;
   summary: string | null;
+  genres: string[];
   watchedByMe: boolean;
-  watchedByOthers: string[];
+  watchedByOthers: Array<{ username: string; viewedAt: number }>;
+  addedByUsername: string | null;
+  // Intrarea corespunzătoare din jurnalul propriu de descărcări (dacă am
+  // găsit una, potrivită prin IMDb id rezolvat via TMDB) — necesară pentru
+  // butoanele de corectare/ștergere subtitrare și ștergere completă a
+  // titlului, care operează pe jurnal + qBittorrent, nu direct pe Plex.
+  // Absentă pentru titluri adăugate manual în Plex sau dinainte de jurnal.
+  downloadsLogId: number | null;
+  torrentHash: string | null;
+  // true dacă intrarea găsită e un pachet de sezon întreg, nu doar acest
+  // episod — ștergerea/corectarea ar afecta atunci tot pachetul.
+  isSeasonPack: boolean;
 }
 
 function isRomanianStream(s: { language?: string; languageCode?: string }): boolean {
@@ -178,9 +214,12 @@ export const getPlexTitleDetail = createServerFn({ method: "GET" })
             : !e.show && e.title === item.title;
 
         const allHistory = await getAllPlexUserHistory();
-        const watchedBy = new Set<string>();
+        const watchedBy = new Map<string, number>();
         for (const [username, entries] of Object.entries(allHistory)) {
-          if (entries.some(matchesItem)) watchedBy.add(username);
+          // Fiecare listă e deja sortată descrescător după viewedAt — primul
+          // rezultat potrivit e cea mai recentă vizionare a userului respectiv.
+          const match = entries.find(matchesItem);
+          if (match) watchedBy.set(username, match.viewedAt);
         }
 
         const me = db
@@ -189,7 +228,78 @@ export const getPlexTitleDetail = createServerFn({ method: "GET" })
         const myPlexUsername = me?.plex_username ?? null;
 
         const watchedByMe = myPlexUsername ? watchedBy.has(myPlexUsername) : false;
-        const watchedByOthers = [...watchedBy].filter((u) => u !== myPlexUsername);
+        const watchedByOthers = [...watchedBy.entries()]
+          .filter(([u]) => u !== myPlexUsername)
+          .map(([username, viewedAt]) => ({ username, viewedAt }));
+
+        // Genuri + rezumat RO + IMDb id — via TMDB, pornind de la titlul din
+        // Plex (nu de la Guid-ul Plex, care nu conține fiabil un IMDb id).
+        const {
+          searchTmdbTopResultInternal,
+          getTmdbDetailsInternal,
+          getTmdbEpisodeOverviewInternal,
+        } = await import("../tmdb.functions");
+        const searchType: "movie" | "tv" = isEpisode ? "tv" : "movie";
+        const searchTitle = isEpisode ? (item.grandparentTitle ?? item.title) : item.title;
+        const searchYear =
+          !isEpisode && (item.year || item.originallyAvailableAt)
+            ? (item.year ?? Number(item.originallyAvailableAt!.slice(0, 4)))
+            : null;
+
+        let genres: string[] = [];
+        let overviewRo: string | null = null;
+        let imdbId: string | null = null;
+        const tmdbId = await searchTmdbTopResultInternal(
+          String(searchTitle ?? ""),
+          searchType,
+          searchYear,
+        );
+        if (tmdbId) {
+          const tmdbDetails = await getTmdbDetailsInternal(tmdbId, searchType);
+          genres = tmdbDetails.genres;
+          imdbId = tmdbDetails.imdbId;
+          overviewRo = tmdbDetails.overview;
+          if (isEpisode && item.parentIndex != null && item.index != null) {
+            const epOverview = await getTmdbEpisodeOverviewInternal(
+              tmdbId,
+              item.parentIndex,
+              item.index,
+            );
+            if (epOverview) overviewRo = epOverview;
+          }
+        }
+
+        // Intrarea din jurnalul propriu — necesară pentru butoanele de
+        // subtitrare/ștergere titlu (operează pe torrent_hash, nu pe Plex).
+        let downloadsLogId: number | null = null;
+        let torrentHash: string | null = null;
+        let isSeasonPack = false;
+        if (imdbId) {
+          const { findDownloadsRowForImdb } = await import("../filelist/log");
+          const match = await findDownloadsRowForImdb(
+            imdbId,
+            isEpisode && item.parentIndex != null && item.index != null
+              ? { season: item.parentIndex, episode: item.index }
+              : undefined,
+          );
+          if (match) {
+            downloadsLogId = match.id;
+            torrentHash = match.torrentHash;
+            isSeasonPack = match.isSeasonPack;
+          }
+        }
+
+        let addedByUsername: string | null = null;
+        if (downloadsLogId != null) {
+          const row = db
+            .prepare(
+              `SELECT u.username FROM downloads d
+               JOIN users u ON u.id = d.requested_by_user_id
+               WHERE d.id = ?`,
+            )
+            .get(downloadsLogId) as { username: string } | undefined;
+          addedByUsername = row?.username ?? null;
+        }
 
         return {
           status: "ok",
@@ -205,9 +315,14 @@ export const getPlexTitleDetail = createServerFn({ method: "GET" })
             durationMs: Number(item.duration ?? 0),
             quality,
             hasRomanianSubtitle,
-            summary: item.summary ?? null,
+            summary: overviewRo || item.summary || null,
+            genres,
             watchedByMe,
             watchedByOthers,
+            addedByUsername,
+            downloadsLogId,
+            torrentHash,
+            isSeasonPack,
           },
         };
       } catch (e) {

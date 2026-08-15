@@ -38,6 +38,8 @@ export interface PlexMetadataItem {
   index?: number;
   parentIndex?: number;
   grandparentTitle?: string;
+  year?: number;
+  originallyAvailableAt?: string;
   addedAt?: number;
   viewCount?: number;
   duration?: number;

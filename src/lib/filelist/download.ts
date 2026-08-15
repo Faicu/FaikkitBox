@@ -26,7 +26,7 @@ import {
   markLogEntryComplete,
 } from "./log";
 import { CORRECTED_OUTCOMES } from "./subtitle-outcomes";
-import type { SubtitleRunItem } from "./subtitles";
+import type { SubtitleRunItem, DeleteSubtitleResult } from "./subtitles";
 import { refreshPlexLibrary } from "../plex-refresh";
 // Import dinamic (nu static) — subtitles.ts foloseşte node:child_process/node:util
 // pentru ffprobe, care nu trebuie să ajungă în bundle-ul de client. download.ts
@@ -994,29 +994,24 @@ export const correctSubtitleForItem = createServerFn({ method: "POST" })
 
 // Șterge subtitrarea .srt curentă (de pe disk) pentru un item din jurnal, ca
 // utilizatorul să poată forța o re-căutare curată cu "Corectează subtitrare".
-export type DeleteSubtitleForItemResult =
-  | { status: "ok"; deleted: string[] }
-  | { status: "error"; error: string };
-
 export const deleteSubtitleForItem = createServerFn({ method: "POST" })
   .validator((data: { id: number }) => data)
-  .handler(async ({ data }): Promise<DeleteSubtitleForItemResult> => {
+  .handler(async ({ data }): Promise<DeleteSubtitleResult> => {
     const { requireAdmin } = await import("../admin.server");
     await requireAdmin();
 
     const { getDb } = await import("../db");
     const row = getDb()
       .prepare("SELECT torrent_hash, category FROM downloads WHERE id = ?")
-      .get(data.id) as
-      | { torrent_hash: string | null; category: number | null }
-      | undefined;
+      .get(data.id) as { torrent_hash: string | null; category: number | null } | undefined;
 
     if (!row) {
-      return { status: "error", error: "Intrarea nu a fost găsită în jurnal" };
+      return { status: "error", deleted: [], error: "Intrarea nu a fost găsită în jurnal" };
     }
     if (!row.torrent_hash) {
       return {
         status: "error",
+        deleted: [],
         error: "Hash-ul torrentului lipsește — torrentul poate fi șters din qBittorrent",
       };
     }
@@ -1025,7 +1020,11 @@ export const deleteSubtitleForItem = createServerFn({ method: "POST" })
     const qbitUser = process.env.QBIT_USERNAME;
     const qbitPass = process.env.QBIT_PASSWORD;
     if (!qbitUser || !qbitPass) {
-      return { status: "error", error: "QBIT_USERNAME / QBIT_PASSWORD nu sunt configurate" };
+      return {
+        status: "error",
+        deleted: [],
+        error: "QBIT_USERNAME / QBIT_PASSWORD nu sunt configurate",
+      };
     }
     const url = qbitBase.replace(/\/$/, "");
 
