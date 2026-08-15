@@ -115,6 +115,7 @@ export async function checkAll(force = false): Promise<void> {
     const items = db
       .prepare(
         `SELECT pi.id, pi.media_type, MIN(pi.title) as title, MIN(pi.original_title) as original_title,
+                MIN(pi.poster_url) as poster_url,
                 pw.watch_filelist, pw.watch_filelist_season, pw.watch_tmdb,
                 pw.auto_download, pw.auto_download_quality
          FROM pinned_items pi
@@ -127,6 +128,7 @@ export async function checkAll(force = false): Promise<void> {
       media_type: string;
       title: string;
       original_title: string;
+      poster_url: string | null;
       watch_filelist: number;
       watch_filelist_season: number;
       watch_tmdb: number;
@@ -252,6 +254,14 @@ export async function checkAll(force = false): Promise<void> {
                 const best = candidates.sort((a, b) => b.seeders - a.seeders)[0];
                 if (best) {
                   try {
+                    // Gen + rezumat RO — un singur apel TMDB suplimentar,
+                    // făcut doar acum (chiar înainte de o descărcare reală),
+                    // nu la fiecare verificare periodică a itemului.
+                    const { getTmdbDetailsInternal } = await import("../../src/lib/tmdb.functions");
+                    const tmdbDetails = await getTmdbDetailsInternal(item.id, mediaType).catch(
+                      () => null,
+                    );
+                    const parsedEp = parseSeasonEpisodeFromName(best.name);
                     const dlResult = await downloadFilelistInternal({
                       torrentId: best.id,
                       torrentName: best.name,
@@ -262,6 +272,22 @@ export async function checkAll(force = false): Promise<void> {
                       internal: best.internal,
                       skipLog: true,
                       imdb: best.imdb ?? imdbId,
+                      media: {
+                        mediaType: mediaType === "movie" ? "movie" : "episode",
+                        imdbId: best.imdb ?? imdbId,
+                        tmdbId: item.id,
+                        title: item.title,
+                        originalTitle: item.original_title,
+                        literalTitle: literalTitle || tmdbDetails?.literalTitle || null,
+                        overviewRo: tmdbDetails?.overview ?? null,
+                        genres: tmdbDetails?.genres ?? [],
+                        posterPath: item.poster_url,
+                        tvStatus: mediaType === "tv" ? (tmdbDetails?.tvStatus ?? null) : null,
+                        season: mediaType === "tv" ? (parsedEp?.season ?? null) : null,
+                        episode: mediaType === "tv" ? (parsedEp?.episode ?? null) : null,
+                        isSeasonPack: mediaType === "tv" && !!parsedEp && parsedEp.episode === null,
+                        addedVia: "auto",
+                      },
                     });
                     if (dlResult.status === "ok") {
                       const { buildTorrentDisplayName } =
