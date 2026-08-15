@@ -179,7 +179,9 @@ export function BibliotecaList() {
     if (!d?.downloadsLogId) return;
     setCorrecting(true);
     const toastId = toast.loading(`Verific subtitrarea pentru „${d.title}”…`);
-    const res = await correctFn({ data: { id: d.downloadsLogId } }).catch((e) => ({
+    const res = await correctFn({
+      data: { id: d.downloadsLogId, plexRatingKey: selectedKey ?? undefined },
+    }).catch((e) => ({
       status: "error" as const,
       error: e instanceof Error ? e.message : String(e),
     }));
@@ -200,7 +202,9 @@ export function BibliotecaList() {
     if (!d?.downloadsLogId) return;
     setDeletingSubtitle(true);
     const toastId = toast.loading(`Șterg subtitrarea pentru „${d.title}”…`);
-    const res = await deleteSubtitleFn({ data: { id: d.downloadsLogId } }).catch((e) => ({
+    const res = await deleteSubtitleFn({
+      data: { id: d.downloadsLogId, plexRatingKey: selectedKey ?? undefined },
+    }).catch((e) => ({
       status: "error" as const,
       error: e instanceof Error ? e.message : String(e),
     }));
@@ -220,7 +224,9 @@ export function BibliotecaList() {
   async function confirmDeleteTitleAction() {
     if (!confirmDeleteTitle) return;
     const { logId } = confirmDeleteTitle;
-    const res = await deleteEntryFn({ data: { id: logId } });
+    const res = await deleteEntryFn({
+      data: { id: logId, plexRatingKey: selectedKey ?? undefined },
+    });
     setConfirmDeleteTitle(null);
     if (!res.ok) {
       toast.error("Nu am putut șterge titlul", { description: res.error });
