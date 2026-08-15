@@ -89,6 +89,7 @@ interface ShowTmdbInfo {
   overviewRo: string | null;
   genres: string[];
   tvStatus: string | null;
+  posterUrl: string | null;
 }
 
 export interface MediaBackfillProgress {
@@ -180,6 +181,7 @@ async function runMediaBackfillWork(): Promise<void> {
             overviewRo: d.overview,
             genres: d.genres,
             tvStatus: d.tvStatus,
+            posterUrl: d.posterUrl,
           }))
         : null;
       showInfoCache.set(showTitle, info);
@@ -220,6 +222,7 @@ async function runMediaBackfillWork(): Promise<void> {
             overviewRo,
             genres: showInfo?.genres ?? [],
             tvStatus: showInfo?.tvStatus ?? null,
+            posterPath: showInfo?.posterUrl ?? null,
             plexRatingKey: String(item.ratingKey),
             quality,
             durationMs,
@@ -243,6 +246,7 @@ async function runMediaBackfillWork(): Promise<void> {
             year,
             overviewRo: details?.overview ?? null,
             genres: details?.genres ?? [],
+            posterPath: details?.posterUrl ?? null,
             plexRatingKey: String(item.ratingKey),
             quality,
             durationMs,

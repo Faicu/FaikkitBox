@@ -39,8 +39,42 @@ export interface UpsertMediaEntryInput {
   requestedByUserId?: number | null;
 }
 
+// Găsește rândul-părinte deja existent al unui serial — prioritar după
+// tmdb_id (mereu prezent odată rezolvat prin TMDB, spre deosebire de
+// imdb_id, absent pentru multe seriale — reality show-uri, producții locale
+// etc). SQL `imdb_id = NULL` nu se potrivește niciodată cu sine (semantica
+// NULL), deci un lookup doar pe imdb_id ar crea un rând nou de fiecare dată
+// pentru un serial fără imdb_id — exact bug-ul reprodus la primul backfill
+// (opt rânduri "Elita" în loc de unul). Cade pe imdb_id, apoi pe titlu exact
+// (fără niciun id cunoscut), ca ultimă plasă de siguranță.
+function findExistingShowId(input: {
+  imdbId: string | null;
+  tmdbId: number | null;
+  title: string;
+}): number | null {
+  const db = getDb();
+  if (input.tmdbId != null) {
+    const row = db
+      .prepare("SELECT id FROM media WHERE media_type = 'tv_show' AND tmdb_id = ?")
+      .get(input.tmdbId) as { id: number } | undefined;
+    if (row) return row.id;
+  }
+  if (input.imdbId) {
+    const row = db
+      .prepare("SELECT id FROM media WHERE media_type = 'tv_show' AND imdb_id = ?")
+      .get(input.imdbId) as { id: number } | undefined;
+    if (row) return row.id;
+  }
+  const row = db
+    .prepare(
+      "SELECT id FROM media WHERE media_type = 'tv_show' AND tmdb_id IS NULL AND imdb_id IS NULL AND title = ?",
+    )
+    .get(input.title) as { id: number } | undefined;
+  return row?.id ?? null;
+}
+
 // Creează (sau actualizează, dacă există deja) rândul-părinte al serialului —
-// un singur rând per imdb_id, doar cu metadate TMDB, fără proveniență de
+// un singur rând per serial, doar cu metadate TMDB, fără proveniență de
 // torrent (aia aparține fiecărui episod în parte).
 function ensureShowRow(input: {
   imdbId: string | null;
@@ -56,29 +90,25 @@ function ensureShowRow(input: {
   addedVia: AddedVia;
 }): number | null {
   const db = getDb();
-  if (input.imdbId) {
-    const existing = db
-      .prepare("SELECT id FROM media WHERE media_type = 'tv_show' AND imdb_id = ?")
-      .get(input.imdbId) as { id: number } | undefined;
-    if (existing) {
-      db.prepare(
-        `UPDATE media SET title = ?, original_title = ?, literal_title = ?, year = ?,
-         overview_ro = ?, genres = ?, poster_path = ?, tv_status = ?, tmdb_id = ?,
-         updated_at = datetime('now') WHERE id = ?`,
-      ).run(
-        input.title,
-        input.originalTitle ?? null,
-        input.literalTitle ?? null,
-        input.year ?? null,
-        input.overviewRo ?? null,
-        JSON.stringify(input.genres ?? []),
-        input.posterPath ?? null,
-        input.tvStatus ?? null,
-        input.tmdbId,
-        existing.id,
-      );
-      return existing.id;
-    }
+  const existingId = findExistingShowId(input);
+  if (existingId != null) {
+    db.prepare(
+      `UPDATE media SET title = ?, original_title = ?, literal_title = ?, year = ?,
+       overview_ro = ?, genres = ?, poster_path = ?, tv_status = ?, tmdb_id = ?,
+       updated_at = datetime('now') WHERE id = ?`,
+    ).run(
+      input.title,
+      input.originalTitle ?? null,
+      input.literalTitle ?? null,
+      input.year ?? null,
+      input.overviewRo ?? null,
+      JSON.stringify(input.genres ?? []),
+      input.posterPath ?? null,
+      input.tvStatus ?? null,
+      input.tmdbId,
+      existingId,
+    );
+    return existingId;
   }
   const res = db
     .prepare(

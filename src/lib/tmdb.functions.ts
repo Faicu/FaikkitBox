@@ -37,6 +37,7 @@ interface TmdbApiMovie {
   imdb_id?: string | null;
   alternative_titles?: { titles?: TmdbApiAlternativeTitle[] };
   genres?: TmdbApiGenre[];
+  poster_path?: string | null;
 }
 
 interface TmdbApiSeasonSummary {
@@ -54,6 +55,7 @@ interface TmdbApiTvShow {
   seasons?: TmdbApiSeasonSummary[];
   alternative_titles?: { results?: TmdbApiAlternativeTitle[] };
   genres?: TmdbApiGenre[];
+  poster_path?: string | null;
 }
 
 // TMDB marchează cu type "literal title" romanizarea/transliterarea folosită
@@ -161,6 +163,7 @@ export interface TmdbDetails {
   // Genurile (RO) — lista TMDB e globală/predefinită, deci numele sunt deja
   // traduse chiar și pentru producții obscure fără overview RO propriu.
   genres: string[];
+  posterUrl: string | null;
 }
 
 // Versiune internă (fără createServerFn) — folosită și din plex-browse.ts,
@@ -191,6 +194,7 @@ export async function getTmdbDetailsInternal(
         seasons: [],
         overview,
         genres: (movie.genres ?? []).map((g) => g.name ?? "").filter(Boolean),
+        posterUrl: movie.poster_path ? `https://image.tmdb.org/t/p/w342${movie.poster_path}` : null,
       };
     } else {
       const show = await tmdbFetch<TmdbApiTvShow>(
@@ -219,6 +223,7 @@ export async function getTmdbDetailsInternal(
         seasons,
         overview,
         genres: (show.genres ?? []).map((g) => g.name ?? "").filter(Boolean),
+        posterUrl: show.poster_path ? `https://image.tmdb.org/t/p/w342${show.poster_path}` : null,
       };
     }
   } catch {
@@ -233,6 +238,7 @@ export async function getTmdbDetailsInternal(
       seasons: [],
       overview: null,
       genres: [],
+      posterUrl: null,
     };
   }
 }
@@ -351,6 +357,19 @@ export async function searchTmdbTopResultInternal(
   try {
     const params = new URLSearchParams({ query: q });
     if (year) params.set(mediaType === "movie" ? "year" : "first_air_date_year", String(year));
+
+    // Plex (agent RO) dă adesea titlul deja tradus în română — căutarea
+    // implicită a TMDB (en-US) poate rata astfel de titluri complet diferite
+    // de cel original (ex. "Iadul pe pământ" vs "Hell on Earth"). Încercăm
+    // întâi cu language=ro-RO (TMDB potrivește și pe titlul RO), apoi cădem
+    // pe căutarea implicită dacă nu găsește nimic.
+    params.set("language", "ro-RO");
+    const roRes = await tmdbFetch<TmdbApiSearchResponse>(
+      `/search/${mediaType}?${params.toString()}`,
+    );
+    if (roRes.results?.[0]?.id) return roRes.results[0].id;
+
+    params.delete("language");
     const res = await tmdbFetch<TmdbApiSearchResponse>(`/search/${mediaType}?${params.toString()}`);
     return res.results?.[0]?.id ?? null;
   } catch {
