@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -42,7 +42,7 @@ import {
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
 import { Progress } from "@/components/ui/progress";
-import { plexLibraryBrowseQuery, adminStatusQuery } from "@/lib/queries";
+import { plexLibraryBrowseQuery, adminStatusQuery, pinnedItemsQuery } from "@/lib/queries";
 import { getPlexTitleDetail } from "@/lib/services.functions";
 import {
   correctSubtitleForMedia,
@@ -51,6 +51,9 @@ import {
 } from "@/lib/filelist.functions";
 import { startMediaBackfill, getMediaBackfillState } from "@/lib/media-backfill";
 import { backfillSubtitles, getBackfillState } from "@/lib/filelist.functions";
+import { setPinnedItems, getWatchSettings, setWatchSettings } from "@/lib/pinned.functions";
+import type { WatchSettings } from "@/lib/pinned.functions";
+import { PinnedItemCard } from "@/components/pinned/PinnedItemCard";
 import { formatMs } from "@/lib/format";
 import { formatDateTime } from "@/components/tehnic/utils";
 import type { PlexBrowseItem } from "@/lib/services/plex-browse";
@@ -166,9 +169,14 @@ export function BibliotecaList() {
     total: number;
     done: number;
   } | null>(null);
+  const [watchMap, setWatchMap] = useState<Map<string, WatchSettings>>(new Map());
 
   const correctFn = useServerFn(correctSubtitleForMedia);
   const deleteSubtitleFn = useServerFn(deleteSubtitleForMedia);
+  const { data: pinnedList = [] } = useQuery(pinnedItemsQuery);
+  const setPinnedFn = useServerFn(setPinnedItems);
+  const getWatchFn = useServerFn(getWatchSettings);
+  const setWatchFn = useServerFn(setWatchSettings);
   const startBackfillFn = useServerFn(startMediaBackfill);
   const backfillStateFn = useServerFn(getMediaBackfillState);
   const deleteEntryFn = useServerFn(deleteMediaEntry);
@@ -180,6 +188,48 @@ export function BibliotecaList() {
     queryFn: () => getPlexTitleDetail({ data: { mediaId: selectedMediaId! } }),
     enabled: !!selectedMediaId,
   });
+
+  // Setările de urmărire (auto-download/notify) pentru titlurile fixate —
+  // încărcate o singură dată, folosite doar când drawer-ul arată un titlu cu
+  // status "pinned" (management portat din fostele carduri Lansări).
+  useEffect(() => {
+    getWatchFn({})
+      .then((settings) => {
+        const map = new Map<string, WatchSettings>();
+        for (const s of settings) map.set(`${s.mediaType}-${s.id}`, s);
+        setWatchMap(map);
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function updateWatch(id: number, mediaType: "movie" | "tv", patch: Partial<WatchSettings>) {
+    const key = `${mediaType}-${id}`;
+    const current = watchMap.get(key) ?? {
+      id,
+      mediaType,
+      watchFilelist: false,
+      watchFilelistSeason: false,
+      watchTmdb: false,
+      autoDownload: false,
+      autoDownloadQuality: "1080p" as const,
+    };
+    const next = { ...current, ...patch };
+    if (!next.watchFilelist) {
+      next.watchFilelistSeason = false;
+      next.autoDownload = false;
+    }
+    setWatchMap((m) => new Map(m).set(key, next));
+    await setWatchFn({ data: next }).catch(() => {});
+  }
+
+  async function unpinTitle(id: number, mediaType: "movie" | "tv") {
+    const next = pinnedList.filter((p) => !(p.id === id && p.mediaType === mediaType));
+    await setPinnedFn({ data: { items: next } }).catch(() => {});
+    await queryClient.invalidateQueries({ queryKey: ["pinnedItems"] });
+    await queryClient.invalidateQueries({ queryKey: ["plexLibraryBrowse"] });
+    setSelectedMediaId(null);
+  }
 
   const browseItems = browse.data?.status === "ok" ? browse.data.items : null;
   const allItems = useMemo(() => browseItems ?? [], [browseItems]);
@@ -667,7 +717,22 @@ export function BibliotecaList() {
                 </div>
 
                 <div className="flex flex-col gap-2 pt-1 border-t border-border">
-                  {d.torrentHash ? (
+                  {d.status === "pinned" && d.tmdbId ? (
+                    <PinnedTitleManager
+                      tmdbId={d.tmdbId}
+                      mediaType={d.type === "movie" ? "movie" : "tv"}
+                      title={d.type === "movie" ? d.title : (d.show ?? d.title)}
+                      originalTitle={d.originalTitle}
+                      posterUrl={d.thumbUrl}
+                      watchSettings={
+                        watchMap.get(`${d.type === "movie" ? "movie" : "tv"}-${d.tmdbId}`) ?? null
+                      }
+                      onWatchChange={(patch) =>
+                        updateWatch(d.tmdbId!, d.type === "movie" ? "movie" : "tv", patch)
+                      }
+                      onUnpin={() => unpinTitle(d.tmdbId!, d.type === "movie" ? "movie" : "tv")}
+                    />
+                  ) : d.torrentHash ? (
                     d.canManage ? (
                       <>
                         <div className="flex gap-2 pt-2">
@@ -721,9 +786,9 @@ export function BibliotecaList() {
                     )
                   ) : (
                     <div className="pt-2 text-[11px] text-muted-foreground">
-                      {d.status === "pinned"
-                        ? "Titlu fixat pentru urmărire — nu a fost încă descărcat nimic, deci nu sunt încă butoane de gestionat."
-                        : "Nu știm ce torrent corespunde acestui titlu (a fost adăugat manual în Plex, sau torrentul nu mai există în qBittorrent) — corectarea/ștergerea subtitrării și ștergerea completă nu sunt disponibile."}
+                      Nu știm ce torrent corespunde acestui titlu (a fost adăugat manual în Plex,
+                      sau torrentul nu mai există în qBittorrent) — corectarea/ștergerea subtitrării
+                      și ștergerea completă nu sunt disponibile.
                     </div>
                   )}
                 </div>
@@ -753,5 +818,54 @@ export function BibliotecaList() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  );
+}
+
+const DEFAULT_WATCH_SETTINGS = (id: number, mediaType: "movie" | "tv"): WatchSettings => ({
+  id,
+  mediaType,
+  watchFilelist: false,
+  watchFilelistSeason: false,
+  watchTmdb: false,
+  autoDownload: false,
+  autoDownloadQuality: "1080p",
+});
+
+// Panoul complet de gestionare a unui titlu fixat (sezoane/episoade, status
+// Plex, countdown, toggle-uri watch/auto-download) — portat din fostele
+// carduri Lansări (PinnedItemCard/MovieCard/ShowCard), afișat acum direct în
+// drawer-ul de detalii al Bibliotecii, unicul loc unde apar titlurile fixate.
+function PinnedTitleManager({
+  tmdbId,
+  mediaType,
+  title,
+  originalTitle,
+  posterUrl,
+  watchSettings,
+  onWatchChange,
+  onUnpin,
+}: {
+  tmdbId: number;
+  mediaType: "movie" | "tv";
+  title: string;
+  originalTitle: string | null;
+  posterUrl: string | null;
+  watchSettings: WatchSettings | null;
+  onWatchChange: (patch: Partial<WatchSettings>) => void;
+  onUnpin: () => void;
+}) {
+  return (
+    <PinnedItemCard
+      item={{
+        id: tmdbId,
+        mediaType,
+        title,
+        originalTitle: originalTitle || title,
+        posterUrl,
+      }}
+      watchSettings={watchSettings ?? DEFAULT_WATCH_SETTINGS(tmdbId, mediaType)}
+      onWatchChange={onWatchChange}
+      onUnpin={onUnpin}
+    />
   );
 }

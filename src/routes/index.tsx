@@ -25,7 +25,6 @@ import {
   DrawerDescription,
 } from "@/components/ui/drawer";
 import { AddMediaWizard } from "@/components/principala/AddMediaWizard";
-import { PinnedListSection } from "@/components/pinned/sections/PinnedListSection";
 import { FilelistSection } from "@/components/pinned/sections/FilelistSection";
 import { plexQuery, plexSessionsQuery, adminStatusQuery } from "@/lib/queries";
 import { formatSpeed } from "@/lib/format";
@@ -93,12 +92,6 @@ function Overview() {
               <LogIn className="h-4 w-4" /> Autentificare
             </Link>
           </div>
-        </div>
-      )}
-
-      {isAuthenticated && (
-        <div className="mb-4">
-          <PinnedListSection />
         </div>
       )}
 

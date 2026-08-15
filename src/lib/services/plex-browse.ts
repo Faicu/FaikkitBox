@@ -185,12 +185,20 @@ export interface PlexTitleDetail {
   // true doar pentru cel care a adăugat titlul sau pentru un admin — UI-ul
   // ascunde butoanele de subtitrare/ștergere pentru oricine altcineva.
   canManage: boolean;
+  // Doar pentru titluri fixate (status "pinned") — id-ul TMDB + titlul
+  // original, necesare ca drawer-ul să poată reda panoul complet de
+  // management al fixării (SeasonPanel/WatchTogglePanel etc., portate din
+  // fostele carduri Lansări) direct în Bibliotecă.
+  tmdbId: number | null;
+  originalTitle: string | null;
 }
 
 interface MediaRow {
   id: number;
   media_type: string;
   title: string;
+  original_title: string | null;
+  tmdb_id: number | null;
   season: number | null;
   episode: number | null;
   poster_path: string | null;
@@ -273,6 +281,8 @@ async function buildDetailFromMediaRow(
     torrentHash: row.torrent_hash,
     isSeasonPack: !!row.is_season_pack,
     canManage: isAdminOrOwner(session, row.requested_by_user_id),
+    tmdbId: row.tmdb_id,
+    originalTitle: row.original_title,
   };
 }
 
@@ -288,9 +298,9 @@ export const getPlexTitleDetail = createServerFn({ method: "GET" })
       const { getDb } = await import("../db");
       const mediaRow = getDb()
         .prepare(
-          `SELECT id, media_type, title, season, episode, poster_path, overview_ro, genres,
-           quality, has_romanian_subtitle, duration_ms, torrent_hash, plex_rating_key,
-           is_season_pack, requested_by_user_id, added_at
+          `SELECT id, media_type, title, original_title, tmdb_id, season, episode, poster_path,
+           overview_ro, genres, quality, has_romanian_subtitle, duration_ms, torrent_hash,
+           plex_rating_key, is_season_pack, requested_by_user_id, added_at
            FROM media WHERE id = ?`,
         )
         .get(data.mediaId) as MediaRow | undefined;
