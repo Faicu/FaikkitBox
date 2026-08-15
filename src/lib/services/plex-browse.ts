@@ -138,7 +138,10 @@ export interface PlexTitleDetail {
   show: string | null;
   season: number | null;
   episode: number | null;
-  thumb: string | null;
+  // Gata de folosit direct ca src de <img> — fie link TMDB (titluri servite
+  // din `media`), fie deja înfășurat în proxy-ul /api/plex-thumb (fallback
+  // live pe Plex) — clientul nu mai trebuie să știe diferența.
+  thumbUrl: string | null;
   addedAt: number;
   durationMs: number;
   quality: string | null;
@@ -312,7 +315,7 @@ async function computeTitleDetailBase(
         show: item.grandparentTitle ?? null,
         season: item.parentIndex ?? null,
         episode: item.index ?? null,
-        thumb: item.thumb ?? null,
+        thumbUrl: item.thumb ? `/api/plex-thumb?path=${encodeURIComponent(item.thumb)}` : null,
         addedAt: Number(item.addedAt ?? 0),
         durationMs: Number(item.duration ?? 0),
         quality,
@@ -332,6 +335,105 @@ async function computeTitleDetailBase(
   }
 }
 
+interface MediaRow {
+  id: number;
+  media_type: string;
+  title: string;
+  season: number | null;
+  episode: number | null;
+  poster_path: string | null;
+  overview_ro: string | null;
+  genres: string;
+  quality: string | null;
+  has_romanian_subtitle: number;
+  duration_ms: number | null;
+  torrent_hash: string | null;
+  is_season_pack: number;
+  requested_by_user_id: number | null;
+  added_at: string;
+}
+
+// Cale rapidă — titlul are deja rând în `media` (adăugat prin wizard), deci
+// răspunsul e doar SELECT-uri, fără nicio cerere Plex/TMDB: nici la Plex
+// (item deja cunoscut, cu ratingKey/calitate/durată salvate), nici la TMDB
+// (gen/rezumat RO deja salvate). Singurul lucru încă live e "cine a văzut"
+// (istoricul Plex, cache-uit separat 60s) — n-are sens duplicat în `media`,
+// s-ar dezactualiza la fiecare vizionare nouă.
+async function buildDetailFromMediaRow(
+  row: MediaRow,
+  ratingKey: string,
+  session: { data: { userId?: number; admin?: boolean } },
+): Promise<PlexTitleDetail> {
+  const { getDb } = await import("../db");
+  const { isAdminOrOwner } = await import("../admin.server");
+  const db = getDb();
+
+  const isEpisode = row.media_type === "episode";
+
+  const { getAllPlexUserHistory } = await import("./plex");
+  const matchesItem = (e: { title: string; show?: string; season?: number; episode?: number }) =>
+    isEpisode
+      ? e.show === row.title && e.season === row.season && e.episode === row.episode
+      : !e.show && e.title === row.title;
+  const allHistory = await getAllPlexUserHistory();
+  const watchedByAll: Array<{ username: string; viewedAt: number }> = [];
+  for (const [username, entries] of Object.entries(allHistory)) {
+    const match = entries.find(matchesItem);
+    if (match) watchedByAll.push({ username, viewedAt: match.viewedAt });
+  }
+  const me = session.data.userId
+    ? (db.prepare("SELECT plex_username FROM users WHERE id = ?").get(session.data.userId) as
+        { plex_username: string | null } | undefined)
+    : undefined;
+  const myPlexUsername = me?.plex_username ?? null;
+  const watchedByMe = myPlexUsername
+    ? watchedByAll.some((w) => w.username === myPlexUsername)
+    : false;
+  const watchedByOthers = watchedByAll.filter((w) => w.username !== myPlexUsername);
+
+  let addedByUsername: string | null = null;
+  if (row.requested_by_user_id != null) {
+    const u = db
+      .prepare("SELECT username FROM users WHERE id = ?")
+      .get(row.requested_by_user_id) as { username: string } | undefined;
+    addedByUsername = u?.username ?? null;
+  }
+
+  // torrent_hash e cunoscut direct — nu mai e nevoie de potrivirea prin
+  // IMDb id + regex pe numele lansării (findDownloadsRowForImdb), doar un
+  // lookup exact.
+  let downloadsLogId: number | null = null;
+  if (row.torrent_hash) {
+    const d = db
+      .prepare("SELECT id FROM downloads WHERE torrent_hash = ?")
+      .get(row.torrent_hash) as { id: number } | undefined;
+    downloadsLogId = d?.id ?? null;
+  }
+
+  return {
+    ratingKey,
+    title: isEpisode ? "" : row.title,
+    type: isEpisode ? "episode" : "movie",
+    show: isEpisode ? row.title : null,
+    season: row.season,
+    episode: row.episode,
+    thumbUrl: row.poster_path,
+    addedAt: Math.floor(new Date(`${row.added_at.replace(" ", "T")}Z`).getTime() / 1000),
+    durationMs: row.duration_ms ?? 0,
+    quality: row.quality,
+    hasRomanianSubtitle: !!row.has_romanian_subtitle,
+    summary: row.overview_ro,
+    genres: JSON.parse(row.genres || "[]"),
+    watchedByMe,
+    watchedByOthers,
+    addedByUsername,
+    downloadsLogId,
+    torrentHash: row.torrent_hash,
+    isSeasonPack: !!row.is_season_pack,
+    canManage: isAdminOrOwner(session, row.requested_by_user_id),
+  };
+}
+
 export const getPlexTitleDetail = createServerFn({ method: "GET" })
   .validator((data: { ratingKey: string }) => data)
   .handler(
@@ -340,6 +442,22 @@ export const getPlexTitleDetail = createServerFn({ method: "GET" })
     }): Promise<{ status: "ok"; detail: PlexTitleDetail } | { status: "error"; error: string }> => {
       const { requireAuth, isAdminOrOwner } = await import("../admin.server");
       const session = await requireAuth();
+
+      const { getDb } = await import("../db");
+      const mediaRow = getDb()
+        .prepare(
+          `SELECT id, media_type, title, season, episode, poster_path, overview_ro, genres,
+           quality, has_romanian_subtitle, duration_ms, torrent_hash, is_season_pack,
+           requested_by_user_id, added_at
+           FROM media WHERE plex_rating_key = ?`,
+        )
+        .get(data.ratingKey) as MediaRow | undefined;
+      if (mediaRow) {
+        return {
+          status: "ok",
+          detail: await buildDetailFromMediaRow(mediaRow, data.ratingKey, session),
+        };
+      }
 
       const cached = detailCache.get(data.ratingKey);
       let base: PlexTitleDetailBase;
@@ -352,7 +470,6 @@ export const getPlexTitleDetail = createServerFn({ method: "GET" })
         detailCache.set(data.ratingKey, { expiresAt: Date.now() + DETAIL_TTL_MS, base });
       }
 
-      const { getDb } = await import("../db");
       const me = getDb()
         .prepare("SELECT plex_username FROM users WHERE id = ?")
         .get(session.data.userId!) as { plex_username: string | null } | undefined;

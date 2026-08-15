@@ -350,9 +350,9 @@ export function BibliotecaList() {
         <DrawerContent className="max-h-[85vh]">
           <DrawerHeader className="pb-2 text-left">
             <div className="flex items-start gap-3">
-              {d?.thumb && (
+              {d?.thumbUrl && (
                 <img
-                  src={`/api/plex-thumb?path=${encodeURIComponent(d.thumb)}`}
+                  src={d.thumbUrl}
                   className="h-20 w-14 shrink-0 rounded-lg object-cover bg-muted"
                   loading="lazy"
                   alt=""
