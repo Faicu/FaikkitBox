@@ -57,16 +57,38 @@ export const qbitAction = createServerFn({ method: "POST" })
     const hashesStr = data.hashes === "all" ? "all" : data.hashes.join("|");
     try {
       if (data.action === "delete") {
+        // Categoria qBittorrent a fiecărui torrent ("filme"/"seriale", setată
+        // la descărcare — vezi download.ts) ne spune ce bibliotecă Plex să
+        // rescanăm; o citim ÎNAINTE de ștergere, cât încă există torrentul.
+        const categoriesBeforeDelete = await qbitGet(
+          url,
+          `/api/v2/torrents/info?hashes=${hashesStr}`,
+          user,
+          pass,
+        )
+          .then((r) => (r.ok ? r.json() : []))
+          .catch(() => [] as Array<{ category?: string }>);
+        const categories = new Set(
+          (categoriesBeforeDelete as Array<{ category?: string }>).map((t) => t.category ?? ""),
+        );
+
         const res = await qbitPostForm(url, "/api/v2/torrents/delete", user, pass, {
           hashes: hashesStr,
           deleteFiles: "true",
         });
         if (res.ok) {
-          // Ștergere directă din pagina qBittorrent, fără categorie Filelist
-          // asociată — nu știm sigur dacă era film sau serial, așa că
-          // rescanăm ambele biblioteci Plex.
-          const { refreshPlexLibraries } = await import("../plex-refresh");
-          refreshPlexLibraries().catch(() => {});
+          const { refreshPlexLibrary, refreshPlexLibraries } = await import("../plex-refresh");
+          const hasMovies = categories.has("filme");
+          const hasShows = categories.has("seriale");
+          if (hasMovies && !hasShows) {
+            refreshPlexLibrary("movie").catch(() => {});
+          } else if (hasShows && !hasMovies) {
+            refreshPlexLibrary("show").catch(() => {});
+          } else {
+            // Fie ambele categorii amestecate (ștergere multiplă), fie
+            // categoria n-a putut fi determinată — rescanăm ambele biblioteci.
+            refreshPlexLibraries().catch(() => {});
+          }
         }
         return { ok: res.ok };
       }
