@@ -141,7 +141,7 @@ export function PinnedItemCard({
   const isLoading = detailsLoading || (item.mediaType === "movie" ? plexMovieLoading : false);
 
   if (isLoading) {
-    return <div className="h-32 animate-pulse rounded-2xl border border-border bg-card" />;
+    return <div className="h-24 animate-pulse rounded-xl bg-muted/40" />;
   }
 
   if (item.mediaType === "movie") {

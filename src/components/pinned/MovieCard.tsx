@@ -3,7 +3,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   PinOff,
   ExternalLink,
-  Film,
   CheckCircle2,
   Download,
   Loader2,
@@ -85,136 +84,103 @@ export function MovieCard({
           onCancel={() => setConfirm(null)}
         />
       )}
-      <section>
-        <div className="rounded-2xl border border-border bg-card overflow-hidden">
-          {/* Header cu poster */}
-          <div className="flex gap-3 p-3 pb-0">
-            {item.posterUrl ? (
-              <img
-                src={item.posterUrl}
-                alt=""
-                className="h-24 w-16 rounded-xl object-cover shrink-0 shadow-md"
-              />
-            ) : (
-              <div className="h-24 w-16 rounded-xl bg-muted shrink-0 flex items-center justify-center">
-                <Film className="h-6 w-6 text-muted-foreground/40" />
-              </div>
-            )}
-            <div className="flex flex-col justify-between min-w-0 py-0.5 flex-1">
-              <div>
-                <div className="flex items-start gap-1">
-                  <span className="font-semibold text-sm leading-tight line-clamp-2 flex-1">
-                    {item.title}
-                  </span>
-                  <button
-                    onClick={() => {
-                      onUnpin();
-                      qc.removeQueries({ queryKey: ["tmdbDetails", "movie", item.id] });
-                    }}
-                    className="shrink-0 text-muted-foreground hover:text-foreground mt-0.5"
-                    title="Scoate din listă"
-                  >
-                    <PinOff className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-                <div className="flex items-center gap-1.5 mt-1">
-                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400">
-                    Film
-                  </span>
-                </div>
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                {imdbId ? (
-                  <a
-                    href={`https://www.imdb.com/title/${imdbId}/`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground"
-                  >
-                    IMDb <ExternalLink className="h-2.5 w-2.5" />
-                  </a>
-                ) : (
-                  <span />
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          {imdbId ? (
+            <a
+              href={`https://www.imdb.com/title/${imdbId}/`}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+            >
+              IMDb <ExternalLink className="h-3 w-3" />
+            </a>
+          ) : (
+            <span />
+          )}
+          <div className="flex items-center gap-2">
+            {plexStatus === "complet" ? (
+              <>
+                {plexQuality && (
+                  <span className="text-[11px] text-muted-foreground">{plexQuality}</span>
                 )}
-                <div className="flex items-center gap-2">
-                  {plexStatus === "complet" ? (
-                    <>
-                      {plexQuality && (
-                        <span className="text-[11px] text-muted-foreground">{plexQuality}</span>
-                      )}
-                      <span className="flex items-center gap-1 rounded-lg bg-emerald-500/15 px-2.5 py-1 text-xs font-semibold text-emerald-400">
-                        <CheckCircle2 className="h-3.5 w-3.5" /> În bibliotecă
-                      </span>
-                    </>
-                  ) : plexStatus === "lipsa" ? (
-                    <PlexStatusBadge status="lipsa" />
-                  ) : (
-                    <span className="h-7 w-28 animate-pulse rounded-lg bg-muted/40" />
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="p-3 pt-3 space-y-3">
+                <span className="flex items-center gap-1 rounded-lg bg-emerald-500/15 px-2.5 py-1 text-[11px] font-semibold text-emerald-400">
+                  <CheckCircle2 className="h-3.5 w-3.5" /> În bibliotecă
+                </span>
+              </>
+            ) : plexStatus === "lipsa" ? (
+              <PlexStatusBadge status="lipsa" />
+            ) : (
+              <span className="h-6 w-24 animate-pulse rounded-lg bg-muted/40" />
+            )}
             <button
               type="button"
-              onClick={onToggleOpen}
-              className="w-full flex items-center justify-center gap-1 border-t border-border pt-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              onClick={() => {
+                onUnpin();
+                qc.removeQueries({ queryKey: ["tmdbDetails", "movie", item.id] });
+              }}
+              className="shrink-0 text-muted-foreground hover:text-foreground"
+              title="Scoate din fixări"
             >
-              {isOpen ? "Mai puține detalii" : "Mai multe detalii"}
-              {isOpen ? (
-                <ChevronDown className="h-3.5 w-3.5" />
-              ) : (
-                <ChevronRight className="h-3.5 w-3.5" />
-              )}
+              <PinOff className="h-3.5 w-3.5" />
             </button>
-            {isOpen && (
-              <>
-                <div className="border-t border-border pt-3">
-                  <div className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground flex items-center gap-1">
-                    <Download className="h-3 w-3" /> Descarcă de pe Filelist
-                    {filelistLoading && <Loader2 className="h-3 w-3 animate-spin ml-1" />}
-                  </div>
-                  {!filelistLoading && torrents.length === 0 ? (
-                    <div className="text-xs text-muted-foreground">
-                      Niciun torrent găsit pe Filelist.
-                    </div>
-                  ) : (
-                    <div className="flex gap-2">
-                      <QualityDownloadButton
-                        label="1080p"
-                        torrents={t1080}
-                        plexQuality={plexQuality}
-                        downloading={downloading}
-                        onDownload={(t, l) => setConfirm({ torrent: t, label: l })}
-                      />
-                      <QualityDownloadButton
-                        label="4K"
-                        torrents={t4k}
-                        plexQuality={plexQuality}
-                        downloading={downloading}
-                        onDownload={(t, l) => setConfirm({ torrent: t, label: l })}
-                      />
-                      <QualityDownloadButton
-                        label="4K HDR"
-                        torrents={t4kHdr}
-                        plexQuality={plexQuality}
-                        downloading={downloading}
-                        onDownload={(t, l) => setConfirm({ torrent: t, label: l })}
-                      />
-                    </div>
-                  )}
-                </div>
-                <WatchTogglePanel
-                  mediaType="movie"
-                  settings={watchSettings}
-                  onChange={onWatchChange}
-                />
-              </>
-            )}
           </div>
         </div>
-      </section>
+
+        <button
+          type="button"
+          onClick={onToggleOpen}
+          className="flex w-full items-center justify-center gap-1 rounded-xl border border-border bg-muted/40 py-2 text-xs font-medium text-foreground hover:bg-muted/60 transition-colors"
+        >
+          {isOpen ? "Mai puține detalii" : "Mai multe detalii"}
+          {isOpen ? (
+            <ChevronDown className="h-3.5 w-3.5" />
+          ) : (
+            <ChevronRight className="h-3.5 w-3.5" />
+          )}
+        </button>
+
+        {isOpen && (
+          <>
+            <div>
+              <div className="mb-2 flex items-center gap-1 text-[11px] uppercase tracking-wide text-muted-foreground">
+                <Download className="h-3 w-3" /> Descarcă de pe Filelist
+                {filelistLoading && <Loader2 className="h-3 w-3 animate-spin ml-1" />}
+              </div>
+              {!filelistLoading && torrents.length === 0 ? (
+                <div className="text-xs text-muted-foreground">
+                  Niciun torrent găsit pe Filelist.
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <QualityDownloadButton
+                    label="1080p"
+                    torrents={t1080}
+                    plexQuality={plexQuality}
+                    downloading={downloading}
+                    onDownload={(t, l) => setConfirm({ torrent: t, label: l })}
+                  />
+                  <QualityDownloadButton
+                    label="4K"
+                    torrents={t4k}
+                    plexQuality={plexQuality}
+                    downloading={downloading}
+                    onDownload={(t, l) => setConfirm({ torrent: t, label: l })}
+                  />
+                  <QualityDownloadButton
+                    label="4K HDR"
+                    torrents={t4kHdr}
+                    plexQuality={plexQuality}
+                    downloading={downloading}
+                    onDownload={(t, l) => setConfirm({ torrent: t, label: l })}
+                  />
+                </div>
+              )}
+            </div>
+            <WatchTogglePanel mediaType="movie" settings={watchSettings} onChange={onWatchChange} />
+          </>
+        )}
+      </div>
     </>
   );
 }
