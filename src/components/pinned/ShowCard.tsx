@@ -17,16 +17,12 @@ import type { PinnedItem } from "./types";
 import { groupTorrentsBySeasonEpisode } from "./utils";
 import { useDownload } from "./hooks";
 import { CountdownDisplay, LibraryBadge } from "./badges";
-import { PlexStatusBadge } from "./PlexStatusBadge";
-import type { TvPlexStatus } from "./plex-status";
 import { WatchTogglePanel } from "./WatchTogglePanel";
 import { SeasonPanel } from "./SeasonPanel";
 
 export function ShowCard({
   item,
   details,
-  tvPlexStatus,
-  tvPlexLoading,
   plexSeasonEps,
   torrents,
   filelistLoading,
@@ -40,8 +36,6 @@ export function ShowCard({
 }: {
   item: PinnedItem;
   details: TmdbDetails | null;
-  tvPlexStatus: TvPlexStatus | null;
-  tvPlexLoading: boolean;
   plexSeasonEps: { num: number; quality: string | null; watched: boolean }[];
   torrents: FilelistTorrent[];
   filelistLoading: boolean;
@@ -89,11 +83,6 @@ export function ShowCard({
           <span />
         )}
         <div className="flex items-center gap-2">
-          {tvPlexLoading ? (
-            <div className="h-6 w-24 animate-pulse rounded-lg bg-muted/40" />
-          ) : (
-            <PlexStatusBadge status={tvPlexStatus ?? "lipsa"} />
-          )}
           <button
             type="button"
             onClick={() => {

@@ -59,6 +59,8 @@ import {
 } from "@/lib/pinned.functions";
 import type { WatchSettings } from "@/lib/pinned.functions";
 import { PinnedItemCard } from "@/components/pinned/PinnedItemCard";
+import { PlexStatusBadge } from "@/components/pinned/PlexStatusBadge";
+import type { TvPlexStatus } from "@/components/pinned/plex-status";
 import { formatMs } from "@/lib/format";
 import { formatDateTime } from "@/components/tehnic/utils";
 import type { PlexBrowseItem } from "@/lib/services/plex-browse";
@@ -175,6 +177,8 @@ export function BibliotecaList() {
     done: number;
   } | null>(null);
   const [watchMap, setWatchMap] = useState<Map<string, WatchSettings>>(new Map());
+  const [pinnedPlexStatus, setPinnedPlexStatus] = useState<TvPlexStatus | null>(null);
+  const [pinnedPlexLoading, setPinnedPlexLoading] = useState(false);
 
   const correctFn = useServerFn(correctSubtitleForMedia);
   const deleteSubtitleFn = useServerFn(deleteSubtitleForMedia);
@@ -194,6 +198,14 @@ export function BibliotecaList() {
     queryFn: () => getPlexTitleDetail({ data: { mediaId: selectedMediaId! } }),
     enabled: !!selectedMediaId,
   });
+
+  // Resetat la fiecare titlu deschis, ca badge-ul de status Plex (ridicat din
+  // PinnedTitleManager, afișat sus lângă "Fixat") să nu arate o valoare veche
+  // rămasă de la titlul anterior cât timp se încarcă cel nou.
+  useEffect(() => {
+    setPinnedPlexStatus(null);
+    setPinnedPlexLoading(false);
+  }, [selectedMediaId]);
 
   // Setările de urmărire (auto-download/notify) pentru titlurile fixate —
   // încărcate o singură dată, folosite când drawer-ul unui titlu (oricare,
@@ -672,6 +684,12 @@ export function BibliotecaList() {
               <>
                 <div className="flex flex-wrap items-center gap-2 text-xs">
                   {d.status !== "in_library" && <StatusBadge status={d.status} />}
+                  {d.status === "pinned" &&
+                    (pinnedPlexLoading ? (
+                      <span className="h-5 w-20 animate-pulse rounded-full bg-muted/40" />
+                    ) : (
+                      <PlexStatusBadge status={pinnedPlexStatus ?? "lipsa"} />
+                    ))}
                   {d.quality && (
                     <span className="rounded-full bg-amber-500/15 text-amber-400 px-2 py-0.5 font-medium">
                       {d.quality}
@@ -795,6 +813,10 @@ export function BibliotecaList() {
                             onUnpin={() =>
                               unpinTitle(d.tmdbId!, pinnedMediaType, d.status === "pinned")
                             }
+                            onPlexStatus={(status, loading) => {
+                              setPinnedPlexStatus(status);
+                              setPinnedPlexLoading(loading);
+                            }}
                           />
                         )}
                       </div>
@@ -916,6 +938,7 @@ function PinnedTitleManager({
   watchSettings,
   onWatchChange,
   onUnpin,
+  onPlexStatus,
 }: {
   tmdbId: number;
   mediaType: "movie" | "tv";
@@ -925,6 +948,7 @@ function PinnedTitleManager({
   watchSettings: WatchSettings | null;
   onWatchChange: (patch: Partial<WatchSettings>) => void;
   onUnpin: () => void;
+  onPlexStatus?: (status: TvPlexStatus | null, loading: boolean) => void;
 }) {
   return (
     <PinnedItemCard
@@ -938,6 +962,7 @@ function PinnedTitleManager({
       watchSettings={watchSettings ?? DEFAULT_WATCH_SETTINGS(tmdbId, mediaType)}
       onWatchChange={onWatchChange}
       onUnpin={onUnpin}
+      onPlexStatus={onPlexStatus}
     />
   );
 }

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useQueries } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 
@@ -8,6 +8,7 @@ import { getTmdbDetails, getTvShowCountdown, getTmdbSeasonEpisodes } from "@/lib
 import type { WatchSettings } from "@/lib/pinned.functions";
 import type { PinnedItem } from "./types";
 import { computeTvPlexStatus } from "./plex-status";
+import type { TvPlexStatus } from "./plex-status";
 import { MovieCard } from "./MovieCard";
 import { ShowCard } from "./ShowCard";
 
@@ -20,11 +21,16 @@ export function PinnedItemCard({
   watchSettings,
   onWatchChange,
   onUnpin,
+  onPlexStatus,
 }: {
   item: PinnedItem;
   watchSettings: WatchSettings;
   onWatchChange: (patch: Partial<WatchSettings>) => void;
   onUnpin: () => void;
+  // Statusul Plex (badge "Complet"/"Lipsă din Plex") — ridicat către apelant
+  // ca să poată fi afișat sus, lângă badge-ul "Fixat" din drawer-ul
+  // Bibliotecii, nu doar în corpul cardului.
+  onPlexStatus?: (status: TvPlexStatus | null, loading: boolean) => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -140,6 +146,27 @@ export function PinnedItemCard({
 
   const isLoading = detailsLoading || (item.mediaType === "movie" ? plexMovieLoading : false);
 
+  useEffect(() => {
+    if (!onPlexStatus) return;
+    if (item.mediaType === "movie") {
+      onPlexStatus(
+        plexMovieLoading ? null : inPlexMovie?.found ? "complet" : "lipsa",
+        plexMovieLoading,
+      );
+    } else {
+      onPlexStatus(tvPlexStatus, plexSeasonLoading || tmdbSeasonLoading || countdownLoading);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    item.mediaType,
+    plexMovieLoading,
+    inPlexMovie?.found,
+    tvPlexStatus,
+    plexSeasonLoading,
+    tmdbSeasonLoading,
+    countdownLoading,
+  ]);
+
   if (isLoading) {
     return <div className="h-24 animate-pulse rounded-xl bg-muted/40" />;
   }
@@ -165,8 +192,6 @@ export function PinnedItemCard({
     <ShowCard
       item={item}
       details={details ?? null}
-      tvPlexStatus={tvPlexStatus}
-      tvPlexLoading={plexSeasonLoading || tmdbSeasonLoading || countdownLoading}
       plexSeasonEps={plexSeasonEps ?? []}
       torrents={torrents}
       filelistLoading={isOpen && filelistLoading}

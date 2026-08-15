@@ -1,14 +1,6 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import {
-  PinOff,
-  ExternalLink,
-  CheckCircle2,
-  Download,
-  Loader2,
-  ChevronDown,
-  ChevronRight,
-} from "lucide-react";
+import { PinOff, ExternalLink, Download, Loader2, ChevronDown, ChevronRight } from "lucide-react";
 
 import type { TmdbDetails } from "@/lib/tmdb.functions";
 import type { WatchSettings } from "@/lib/pinned.functions";
@@ -17,7 +9,6 @@ import type { PinnedItem } from "./types";
 import { detectQuality } from "./utils";
 import { useDownload } from "./hooks";
 import { QualityDownloadButton } from "./badges";
-import { PlexStatusBadge } from "./PlexStatusBadge";
 import { DownloadConfirmDialog } from "./DownloadConfirmDialog";
 import { WatchTogglePanel } from "./WatchTogglePanel";
 
@@ -63,8 +54,6 @@ export function MovieCard({
   const [confirm, setConfirm] = useState<{ torrent: FilelistTorrent; label: string } | null>(null);
 
   const imdbId = details?.imdbId ?? null;
-  const plexStatus =
-    plexInfo?.found === true ? "complet" : plexInfo?.found === false ? "lipsa" : null;
   const plexQuality = plexInfo?.quality ?? null;
 
   const t720 = torrents.filter((t) => detectQuality(t.name).is720p);
@@ -100,20 +89,6 @@ export function MovieCard({
             <span />
           )}
           <div className="flex items-center gap-2">
-            {plexStatus === "complet" ? (
-              <>
-                {plexQuality && (
-                  <span className="text-[11px] text-muted-foreground">{plexQuality}</span>
-                )}
-                <span className="flex items-center gap-1 rounded-lg bg-emerald-500/15 px-2.5 py-1 text-[11px] font-semibold text-emerald-400">
-                  <CheckCircle2 className="h-3.5 w-3.5" /> În bibliotecă
-                </span>
-              </>
-            ) : plexStatus === "lipsa" ? (
-              <PlexStatusBadge status="lipsa" />
-            ) : (
-              <span className="h-6 w-24 animate-pulse rounded-lg bg-muted/40" />
-            )}
             <button
               type="button"
               onClick={() => {
