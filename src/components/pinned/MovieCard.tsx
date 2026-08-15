@@ -67,6 +67,7 @@ export function MovieCard({
     plexInfo?.found === true ? "complet" : plexInfo?.found === false ? "lipsa" : null;
   const plexQuality = plexInfo?.quality ?? null;
 
+  const t720 = torrents.filter((t) => detectQuality(t.name).is720p);
   const t1080 = torrents.filter((t) => detectQuality(t.name).is1080p);
   const t4k = torrents.filter((t) => detectQuality(t.name).is4k);
   const t4kHdr = torrents.filter((t) => detectQuality(t.name).is4kHdr);
@@ -153,6 +154,13 @@ export function MovieCard({
                 </div>
               ) : (
                 <div className="flex gap-2">
+                  <QualityDownloadButton
+                    label="720p"
+                    torrents={t720}
+                    plexQuality={plexQuality}
+                    downloading={downloading}
+                    onDownload={(t, l) => setConfirm({ torrent: t, label: l })}
+                  />
                   <QualityDownloadButton
                     label="1080p"
                     torrents={t1080}

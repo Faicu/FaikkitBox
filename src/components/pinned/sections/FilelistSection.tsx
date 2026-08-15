@@ -107,6 +107,7 @@ export function FilelistSection() {
         <div className="flex gap-2">
           {(
             [
+              { label: "720p", color: "neutral" },
               { label: "1080p", color: "blue" },
               { label: "4K", color: "purple" },
               { label: "4K HDR", color: "amber" },
@@ -114,6 +115,9 @@ export function FilelistSection() {
           ).map(({ label, color }) => {
             const active = qualityFilters.has(label);
             const styles = {
+              neutral: active
+                ? "border-neutral-400/70 bg-neutral-500/30 text-neutral-200 shadow-sm shadow-neutral-500/30"
+                : "border-neutral-500/40 bg-neutral-500/10 text-neutral-400 hover:bg-neutral-500/20 hover:text-neutral-300",
               blue: active
                 ? "border-blue-400/70 bg-blue-500/30 text-blue-200 shadow-sm shadow-blue-500/30"
                 : "border-blue-500/40 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 hover:text-blue-300",
@@ -177,6 +181,7 @@ export function FilelistSection() {
                     return [...qualityFilters].some((f) => {
                       if (f === "4K HDR") return q.is4kHdr;
                       if (f === "4K") return q.is4k;
+                      if (f === "720p") return q.is720p;
                       return q.is1080p;
                     });
                   });

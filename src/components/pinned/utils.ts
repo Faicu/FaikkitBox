@@ -10,11 +10,12 @@ export function detectQuality(name: string) {
   const is4k = /2160p|4k/.test(n);
   const is4kHdr = is4k && /hdr/.test(n);
   const is1080p = /1080p/.test(n);
-  return { is1080p, is4k: is4k && !is4kHdr, is4kHdr };
+  const is720p = /720p/.test(n);
+  return { is720p, is1080p, is4k: is4k && !is4kHdr, is4kHdr };
 }
 
 export function emptyQualitySet(): QualitySet {
-  return { t1080: [], t4k: [], t4kHdr: [] };
+  return { t720: [], t1080: [], t4k: [], t4kHdr: [] };
 }
 
 export function groupTorrentsBySeasonEpisode(torrents: FilelistTorrent[]): SeasonGroup[] {
@@ -44,11 +45,13 @@ export function groupTorrentsBySeasonEpisode(torrents: FilelistTorrent[]): Seaso
         group.episodes.set(epNum, emptyQualitySet());
       }
       const ep = group.episodes.get(epNum)!;
+      if (q.is720p) ep.t720.push(t);
       if (q.is1080p) ep.t1080.push(t);
       if (q.is4k) ep.t4k.push(t);
       if (q.is4kHdr) ep.t4kHdr.push(t);
     } else {
       const bq = group.byQuality;
+      if (q.is720p) bq.t720.push(t);
       if (q.is1080p) bq.t1080.push(t);
       if (q.is4k) bq.t4k.push(t);
       if (q.is4kHdr) bq.t4kHdr.push(t);

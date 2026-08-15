@@ -1,6 +1,6 @@
 import { Bell, BellOff, Download } from "lucide-react";
 
-import type { WatchSettings } from "@/lib/pinned.functions";
+import type { WatchSettings, WatchQuality } from "@/lib/pinned.functions";
 
 // ---------------------------------------------------------------------------
 // Panoul de notificări watch (toggle-uri per tip)
@@ -16,7 +16,7 @@ export function WatchTogglePanel({
   onChange: (patch: Partial<WatchSettings>) => void;
 }) {
   const anyEnabled = settings.watchFilelist || settings.watchTmdb;
-  const qualities: Array<"1080p" | "4K" | "4K HDR"> = ["1080p", "4K", "4K HDR"];
+  const qualities: WatchQuality[] = ["720p", "1080p", "4K", "4K HDR"];
 
   function Toggle({
     toggleKey,

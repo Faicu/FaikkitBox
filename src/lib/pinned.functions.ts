@@ -1,6 +1,10 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getDb } from "./db";
 
+// Sursă unică pentru treptele de calitate — folosită la descărcare (wizard,
+// carduri fixate) și la auto-download (watch settings, pinned-watcher).
+export type WatchQuality = "720p" | "1080p" | "4K" | "4K HDR";
+
 export interface PinnedItemDb {
   id: number;
   mediaType: "movie" | "tv";
@@ -42,7 +46,7 @@ export interface WatchSettings {
   watchFilelistSeason: boolean;
   watchTmdb: boolean;
   autoDownload: boolean;
-  autoDownloadQuality: "1080p" | "4K" | "4K HDR";
+  autoDownloadQuality: WatchQuality;
 }
 
 export const getWatchSettings = createServerFn({ method: "GET" }).handler(
@@ -70,7 +74,7 @@ export const getWatchSettings = createServerFn({ method: "GET" }).handler(
       watchFilelistSeason: !!r.watch_filelist_season,
       watchTmdb: !!r.watch_tmdb,
       autoDownload: !!r.auto_download,
-      autoDownloadQuality: (r.auto_download_quality || "1080p") as "1080p" | "4K" | "4K HDR",
+      autoDownloadQuality: (r.auto_download_quality || "1080p") as WatchQuality,
     }));
   },
 );

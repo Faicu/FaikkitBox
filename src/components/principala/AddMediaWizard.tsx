@@ -48,11 +48,16 @@ import { checkPlexHasTitle, getPlexEpisodesInSeason } from "@/lib/services.funct
 import { checkFilelistForItem, downloadFilelist } from "@/lib/filelist.functions";
 import type { FilelistTorrent } from "@/lib/filelist.functions";
 import { setPinnedItems, setWatchSettings } from "@/lib/pinned.functions";
+import type { WatchQuality } from "@/lib/pinned.functions";
 import { ensureMediaEntryForSearch } from "@/lib/media";
-import { detectQuality, groupTorrentsBySeasonEpisode } from "@/components/pinned/utils";
+import {
+  detectQuality,
+  groupTorrentsBySeasonEpisode,
+  emptyQualitySet,
+} from "@/components/pinned/utils";
 import type { QualitySet } from "@/components/pinned/types";
 
-type Quality = "1080p" | "4K" | "4K HDR";
+type Quality = WatchQuality;
 type Step = "search" | "checking" | "tv-scope" | "result" | "done";
 type TvScope = "series" | "season" | "episode";
 
@@ -66,6 +71,7 @@ interface CheckResult {
 }
 
 function pickFromSet(set: QualitySet, quality: Quality): FilelistTorrent[] {
+  if (quality === "720p") return set.t720;
   if (quality === "1080p") return set.t1080;
   if (quality === "4K") return set.t4k;
   return set.t4kHdr;
@@ -101,6 +107,7 @@ function matchesForQuality(torrents: FilelistTorrent[], quality: Quality): Filel
   return torrents
     .filter((t) => {
       const q = detectQuality(t.name);
+      if (quality === "720p") return q.is720p;
       if (quality === "1080p") return q.is1080p;
       if (quality === "4K") return q.is4k;
       return q.is4kHdr;
@@ -526,10 +533,7 @@ export function AddMediaWizard({
   const episodeMatches =
     isTv && tvScope === "episode" && selectedSeasonGroup && tvEpisode
       ? sortBySeeders(
-          pickFromSet(
-            selectedSeasonGroup.episodes.get(tvEpisode) ?? { t1080: [], t4k: [], t4kHdr: [] },
-            quality,
-          ),
+          pickFromSet(selectedSeasonGroup.episodes.get(tvEpisode) ?? emptyQualitySet(), quality),
         )
       : [];
   const episodeMatch =
@@ -988,6 +992,7 @@ export function AddMediaWizard({
                         <div className="flex gap-2">
                           {(
                             [
+                              { q: "720p", color: "neutral" },
                               { q: "1080p", color: "blue" },
                               { q: "4K", color: "purple" },
                               { q: "4K HDR", color: "amber" },
@@ -995,6 +1000,9 @@ export function AddMediaWizard({
                           ).map(({ q, color }) => {
                             const active = quality === q;
                             const styles = {
+                              neutral: active
+                                ? "border-neutral-400/70 bg-neutral-500/30 text-neutral-200 shadow-sm shadow-neutral-500/30"
+                                : "border-neutral-500/40 bg-neutral-500/10 text-neutral-400 hover:bg-neutral-500/20 hover:text-neutral-300",
                               blue: active
                                 ? "border-blue-400/70 bg-blue-500/30 text-blue-200 shadow-sm shadow-blue-500/30"
                                 : "border-blue-500/40 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 hover:text-blue-300",

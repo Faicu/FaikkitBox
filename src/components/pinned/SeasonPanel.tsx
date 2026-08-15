@@ -67,6 +67,7 @@ export function SeasonPanel({
   const missingCount = episodeList.filter((n) => !plexMap.has(n)).length;
 
   const hasPackTorrents =
+    group.byQuality.t720.length > 0 ||
     group.byQuality.t1080.length > 0 ||
     group.byQuality.t4k.length > 0 ||
     group.byQuality.t4kHdr.length > 0;
@@ -153,6 +154,12 @@ export function SeasonPanel({
                     </div>
                     <div className="flex gap-2">
                       <QualityDownloadButton
+                        label="720p"
+                        torrents={group.byQuality.t720}
+                        downloading={downloading}
+                        onDownload={requestDownload}
+                      />
+                      <QualityDownloadButton
                         label="1080p"
                         torrents={group.byQuality.t1080}
                         downloading={downloading}
@@ -212,6 +219,13 @@ export function SeasonPanel({
                           </div>
                           {q && (
                             <div className="pl-10 flex gap-1.5">
+                              <QualityDownloadButton
+                                label="720p"
+                                torrents={q.t720}
+                                plexQuality={epData?.quality ?? null}
+                                downloading={downloading}
+                                onDownload={requestDownload}
+                              />
                               <QualityDownloadButton
                                 label="1080p"
                                 torrents={q.t1080}

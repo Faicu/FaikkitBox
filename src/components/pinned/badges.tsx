@@ -120,7 +120,9 @@ export function QualityDownloadButton({
       ? "bg-purple-500/15 text-purple-400 hover:bg-purple-500/25 border-purple-500/30"
       : label === "4K"
         ? "bg-blue-500/15 text-blue-400 hover:bg-blue-500/25 border-blue-500/30"
-        : "bg-slate-500/15 text-slate-300 hover:bg-slate-500/25 border-slate-500/30";
+        : label === "720p"
+          ? "bg-neutral-500/15 text-neutral-400 hover:bg-neutral-500/25 border-neutral-500/30"
+          : "bg-slate-500/15 text-slate-300 hover:bg-slate-500/25 border-slate-500/30";
 
   function handleClick() {
     if (inPlex || !available || isLoading) return;

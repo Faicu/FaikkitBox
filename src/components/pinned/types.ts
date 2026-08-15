@@ -10,6 +10,7 @@ export interface PinnedItem {
 
 // Grupare torrente pe sezoane — ambele moduri pot coexista pe același sezon
 export interface QualitySet {
+  t720: FilelistTorrent[];
   t1080: FilelistTorrent[];
   t4k: FilelistTorrent[];
   t4kHdr: FilelistTorrent[];
