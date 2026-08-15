@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -7,30 +7,14 @@ import {
   Film,
   Tv,
   Eye,
-  EyeOff,
   Captions,
-  CaptionsOff,
-  Clock3,
-  Users,
-  User,
-  Tag,
   ChevronDown,
   ChevronRight,
   Loader2,
-  Trash2,
   Layers,
   DatabaseZap,
-  Download,
-  Pin,
 } from "lucide-react";
 
-import {
-  Drawer,
-  DrawerContent,
-  DrawerHeader,
-  DrawerTitle,
-  DrawerDescription,
-} from "@/components/ui/drawer";
 import {
   AlertDialog,
   AlertDialogContent,
@@ -42,114 +26,16 @@ import {
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
 import { Progress } from "@/components/ui/progress";
-import { plexLibraryBrowseQuery, adminStatusQuery, pinnedItemsQuery } from "@/lib/queries";
-import { getPlexTitleDetail } from "@/lib/services.functions";
-import {
-  correctSubtitleForMedia,
-  deleteSubtitleForMedia,
-  deleteMediaEntry,
-} from "@/lib/filelist.functions";
+import { plexLibraryBrowseQuery, adminStatusQuery } from "@/lib/queries";
+import { deleteMediaEntry } from "@/lib/filelist.functions";
 import { startMediaBackfill, getMediaBackfillState } from "@/lib/media-backfill";
 import { backfillSubtitles, getBackfillState } from "@/lib/filelist.functions";
-import {
-  setPinnedItems,
-  unpinTitleEverywhere,
-  getWatchSettings,
-  setWatchSettings,
-} from "@/lib/pinned.functions";
-import type { WatchSettings } from "@/lib/pinned.functions";
-import { PinnedItemCard } from "@/components/pinned/PinnedItemCard";
-import { PlexStatusBadge } from "@/components/pinned/PlexStatusBadge";
-import type { TvPlexStatus } from "@/components/pinned/plex-status";
-import { formatMs } from "@/lib/format";
-import { formatDateTime } from "@/components/tehnic/utils";
 import type { PlexBrowseItem } from "@/lib/services/plex-browse";
+import { StatusBadge } from "./StatusBadge";
+import { TitleDetailDrawer } from "./TitleDetailDrawer";
+import { episodeCode, addedDate, itemLabel, groupConsecutiveEpisodes, matchesQuery } from "./utils";
 
 const PAGE_SIZE = 20;
-
-function norm(s: string): string {
-  return s
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .toLowerCase();
-}
-
-function episodeCode(season: number | null, episode: number | null): string | null {
-  return season != null && episode != null
-    ? `S${String(season).padStart(2, "0")}E${String(episode).padStart(2, "0")}`
-    : null;
-}
-
-function itemLabel(item: PlexBrowseItem): string {
-  if (item.type === "movie") return item.title;
-  if (item.type === "tv_show") return item.show ?? "—";
-  const code = episodeCode(item.season, item.episode);
-  return `${item.show ?? "—"}${code ? ` — ${code}` : ""}${item.title ? ` · ${item.title}` : ""}`;
-}
-
-function StatusBadge({ status }: { status: PlexBrowseItem["status"] }) {
-  if (status === "downloading") {
-    return (
-      <span className="flex shrink-0 items-center gap-0.5 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-400">
-        <Download className="h-2.5 w-2.5" /> Se descarcă
-      </span>
-    );
-  }
-  if (status === "pinned") {
-    return (
-      <span className="flex shrink-0 items-center gap-0.5 rounded-full bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-medium text-sky-400">
-        <Pin className="h-2.5 w-2.5" /> Fixat
-      </span>
-    );
-  }
-  return null;
-}
-
-// addedAt e unix timestamp în secunde (convenția Plex) — formatDateTime
-// lucrează cu ISO, de-aia conversia
-function addedDate(unixSec: number): string {
-  if (!unixSec) return "—";
-  return formatDateTime(new Date(unixSec * 1000).toISOString());
-}
-
-type Row =
-  | { kind: "single"; item: PlexBrowseItem }
-  | { kind: "group"; key: string; show: string; items: PlexBrowseItem[] };
-
-// Grupează episoadele consecutive (adiacente în lista sortată după addedAt)
-// ale aceluiași serial într-un singur rând expandabil — un serial cu
-// episoade lansate în zile diferite (deci neadiacente în listă) rămâne cu
-// grupuri separate, nu unul singur, ca ordinea cronologică să rămână corectă.
-function groupConsecutiveEpisodes(items: PlexBrowseItem[]): Row[] {
-  const rows: Row[] = [];
-  let i = 0;
-  while (i < items.length) {
-    const cur = items[i];
-    if (cur.type === "episode" && cur.show) {
-      let j = i + 1;
-      while (j < items.length && items[j].type === "episode" && items[j].show === cur.show) j++;
-      if (j - i > 1) {
-        rows.push({
-          kind: "group",
-          key: `${cur.show}-${cur.mediaId}`,
-          show: cur.show,
-          items: items.slice(i, j),
-        });
-        i = j;
-        continue;
-      }
-    }
-    rows.push({ kind: "single", item: cur });
-    i++;
-  }
-  return rows;
-}
-
-function matchesQuery(item: PlexBrowseItem, q: string): boolean {
-  if (!q) return true;
-  const n = norm(q);
-  return norm(item.title).includes(n) || (!!item.show && norm(item.show).includes(n));
-}
 
 export function BibliotecaList() {
   const queryClient = useQueryClient();
@@ -160,8 +46,6 @@ export function BibliotecaList() {
   const [visible, setVisible] = useState(PAGE_SIZE);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [selectedMediaId, setSelectedMediaId] = useState<number | null>(null);
-  const [correcting, setCorrecting] = useState(false);
-  const [deletingSubtitle, setDeletingSubtitle] = useState(false);
   const [confirmDeleteTitle, setConfirmDeleteTitle] = useState<{
     mediaId: number;
     title: string;
@@ -176,113 +60,12 @@ export function BibliotecaList() {
     total: number;
     done: number;
   } | null>(null);
-  const [watchMap, setWatchMap] = useState<Map<string, WatchSettings>>(new Map());
-  const [pinnedPlexStatus, setPinnedPlexStatus] = useState<TvPlexStatus | null>(null);
-  const [pinnedPlexLoading, setPinnedPlexLoading] = useState(false);
 
-  const correctFn = useServerFn(correctSubtitleForMedia);
-  const deleteSubtitleFn = useServerFn(deleteSubtitleForMedia);
-  const { data: pinnedList = [] } = useQuery(pinnedItemsQuery);
-  const setPinnedFn = useServerFn(setPinnedItems);
-  const unpinFn = useServerFn(unpinTitleEverywhere);
-  const getWatchFn = useServerFn(getWatchSettings);
-  const setWatchFn = useServerFn(setWatchSettings);
   const startBackfillFn = useServerFn(startMediaBackfill);
   const backfillStateFn = useServerFn(getMediaBackfillState);
   const deleteEntryFn = useServerFn(deleteMediaEntry);
   const subBackfillFn = useServerFn(backfillSubtitles);
   const subBackfillStateFn = useServerFn(getBackfillState);
-
-  const detail = useQuery({
-    queryKey: ["plexTitleDetail", selectedMediaId],
-    queryFn: () => getPlexTitleDetail({ data: { mediaId: selectedMediaId! } }),
-    enabled: !!selectedMediaId,
-  });
-
-  // Resetat la fiecare titlu deschis, ca badge-ul de status Plex (ridicat din
-  // PinnedTitleManager, afișat sus lângă "Fixat") să nu arate o valoare veche
-  // rămasă de la titlul anterior cât timp se încarcă cel nou.
-  useEffect(() => {
-    setPinnedPlexStatus(null);
-    setPinnedPlexLoading(false);
-  }, [selectedMediaId]);
-
-  // Setările de urmărire (auto-download/notify) pentru titlurile fixate —
-  // încărcate o singură dată, folosite când drawer-ul unui titlu (oricare,
-  // nu doar cele fără nimic descărcat) e fixat (management portat din
-  // fostele carduri Lansări, disponibil acum printr-un toggle în drawer).
-  useEffect(() => {
-    getWatchFn({})
-      .then((settings) => {
-        const map = new Map<string, WatchSettings>();
-        for (const s of settings) map.set(`${s.mediaType}-${s.id}`, s);
-        setWatchMap(map);
-      })
-      .catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  async function updateWatch(id: number, mediaType: "movie" | "tv", patch: Partial<WatchSettings>) {
-    const key = `${mediaType}-${id}`;
-    const current = watchMap.get(key) ?? {
-      id,
-      mediaType,
-      watchFilelist: false,
-      watchFilelistSeason: false,
-      watchTmdb: false,
-      autoDownload: false,
-      autoDownloadQuality: "1080p" as const,
-    };
-    const next = { ...current, ...patch };
-    if (!next.watchFilelist) {
-      next.watchFilelistSeason = false;
-      next.autoDownload = false;
-    }
-    setWatchMap((m) => new Map(m).set(key, next));
-    await setWatchFn({ data: next }).catch(() => {});
-  }
-
-  // Fixarea nu mai e legată de existența unui card separat — orice titlu din
-  // Bibliotecă (descărcat, în curs, sau doar identificat) poate fi fixat
-  // pentru urmărire automată direct din drawer-ul lui. Dacă titlul e ȘI
-  // descărcat/în bibliotecă, rândul rămâne vizibil în listă chiar și după
-  // scoaterea din fixări (mai are alt motiv să apară); dacă exista în listă
-  // EXCLUSIV pentru că era fixat (status "pinned"), scoaterea îl face să
-  // dispară din listă, deci închidem drawer-ul.
-  //
-  // Fixarea propriu-zisă (adăugarea) rămâne pe lista personală a userului
-  // curent (setPinnedItems, cu atribuire cine a fixat). Dar scoaterea NU
-  // poate fi doar personală: vizibilitatea unui titlu fixat în Bibliotecă
-  // e o stare comună (EXISTS pe pinned_items, indiferent de user — vezi
-  // isPinnedByAnyone/getPlexLibraryBrowse), deci scoaterea trebuie să fie la
-  // fel de comună (unpinTitleEverywhere) — altfel titlul rămâne în listă
-  // fiindcă mai e fixat de alt cont, deși userul curent tocmai l-a scos din
-  // fixările lui (bug real, raportat direct: "The Odyssey").
-  async function pinTitle(
-    tmdbId: number,
-    mediaType: "movie" | "tv",
-    title: string,
-    originalTitle: string | null,
-    posterUrl: string | null,
-  ) {
-    const already = pinnedList.some((p) => p.id === tmdbId && p.mediaType === mediaType);
-    if (!already) {
-      const next = [
-        ...pinnedList,
-        { id: tmdbId, mediaType, title, originalTitle: originalTitle || title, posterUrl },
-      ];
-      await setPinnedFn({ data: { items: next } }).catch(() => {});
-    }
-    await queryClient.invalidateQueries({ queryKey: ["pinnedItems"] });
-    await queryClient.invalidateQueries({ queryKey: ["plexLibraryBrowse"] });
-  }
-
-  async function unpinTitle(tmdbId: number, mediaType: "movie" | "tv", closeIfRemoved: boolean) {
-    await unpinFn({ data: { id: tmdbId, mediaType } }).catch(() => {});
-    await queryClient.invalidateQueries({ queryKey: ["pinnedItems"] });
-    await queryClient.invalidateQueries({ queryKey: ["plexLibraryBrowse"] });
-    if (closeIfRemoved) setSelectedMediaId(null);
-  }
 
   const browseItems = browse.data?.status === "ok" ? browse.data.items : null;
   const allItems = useMemo(() => browseItems ?? [], [browseItems]);
@@ -291,79 +74,6 @@ export function BibliotecaList() {
     [allItems, query],
   );
   const rows = useMemo(() => groupConsecutiveEpisodes(filtered), [filtered]);
-
-  if (browse.isLoading) {
-    return <div className="text-sm text-muted-foreground px-1">Se încarcă biblioteca…</div>;
-  }
-  if (browse.data?.status === "error") {
-    return <div className="text-sm text-red-400 px-1">{browse.data.error}</div>;
-  }
-  if (allItems.length === 0) {
-    return <div className="text-sm text-muted-foreground px-1">Biblioteca Plex e goală.</div>;
-  }
-
-  const d = detail.data?.status === "ok" ? detail.data.detail : null;
-
-  function toggleGroup(key: string) {
-    setExpandedGroups((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  }
-
-  function invalidateAfterMutation() {
-    queryClient.invalidateQueries({ queryKey: ["plexLibraryBrowse"] });
-    if (selectedMediaId)
-      queryClient.invalidateQueries({ queryKey: ["plexTitleDetail", selectedMediaId] });
-  }
-
-  async function correctSubtitle() {
-    if (!d) return;
-    setCorrecting(true);
-    const toastId = toast.loading(`Verific subtitrarea pentru „${d.title}”…`);
-    const res = await correctFn({
-      data: { mediaId: d.mediaId },
-    }).catch((e) => ({
-      status: "error" as const,
-      error: e instanceof Error ? e.message : String(e),
-    }));
-    setCorrecting(false);
-    if (res.status !== "ok") {
-      toast.error("Eroare la corectarea subtitrării", { id: toastId, description: res.error });
-      return;
-    }
-    toast.success("Subtitrare verificată", {
-      id: toastId,
-      description: res.detail,
-      duration: 6000,
-    });
-    invalidateAfterMutation();
-  }
-
-  async function deleteSubtitle() {
-    if (!d) return;
-    setDeletingSubtitle(true);
-    const toastId = toast.loading(`Șterg subtitrarea pentru „${d.title}”…`);
-    const res = await deleteSubtitleFn({
-      data: { mediaId: d.mediaId },
-    }).catch((e) => ({
-      status: "error" as const,
-      error: e instanceof Error ? e.message : String(e),
-    }));
-    setDeletingSubtitle(false);
-    if (res.status !== "ok") {
-      toast.error("Eroare la ștergerea subtitrării", { id: toastId, description: res.error });
-      return;
-    }
-    toast.success("Subtitrare ștearsă", {
-      id: toastId,
-      description: res.deleted.join(", "),
-      duration: 6000,
-    });
-    invalidateAfterMutation();
-  }
 
   async function confirmDeleteTitleAction() {
     if (!confirmDeleteTitle) return;
@@ -466,6 +176,25 @@ export function BibliotecaList() {
         }
       }
     }, 1500);
+  }
+
+  if (browse.isLoading) {
+    return <div className="text-sm text-muted-foreground px-1">Se încarcă biblioteca…</div>;
+  }
+  if (browse.data?.status === "error") {
+    return <div className="text-sm text-red-400 px-1">{browse.data.error}</div>;
+  }
+  if (allItems.length === 0) {
+    return <div className="text-sm text-muted-foreground px-1">Biblioteca Plex e goală.</div>;
+  }
+
+  function toggleGroup(key: string) {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
   }
 
   function renderRow(item: PlexBrowseItem, indent = false) {
@@ -642,255 +371,11 @@ export function BibliotecaList() {
         </div>
       )}
 
-      <Drawer open={!!selectedMediaId} onOpenChange={(o) => !o && setSelectedMediaId(null)}>
-        <DrawerContent className="max-h-[85vh]">
-          <DrawerHeader className="pb-2 text-left">
-            <div className="flex items-start gap-3">
-              {d?.thumbUrl && (
-                <img
-                  src={d.thumbUrl}
-                  className="h-20 w-14 shrink-0 rounded-lg object-cover bg-muted"
-                  loading="lazy"
-                  alt=""
-                />
-              )}
-              <div className="min-w-0">
-                <DrawerTitle className="flex items-center gap-2 text-base">
-                  {d?.type === "movie" ? (
-                    <Film className="h-4 w-4 text-amber-400 shrink-0" />
-                  ) : (
-                    <Tv className="h-4 w-4 text-blue-400 shrink-0" />
-                  )}
-                  {d ? (d.type === "movie" ? d.title : (d.show ?? d.title)) : "Se încarcă…"}
-                </DrawerTitle>
-                {d?.type === "episode" && (
-                  <DrawerDescription className="text-left text-sm font-medium text-foreground leading-snug mt-1">
-                    {episodeCode(d.season, d.episode) ?? ""}
-                    {d.title ? ` · ${d.title}` : ""}
-                  </DrawerDescription>
-                )}
-              </div>
-            </div>
-          </DrawerHeader>
-
-          <div className="px-4 pb-6 space-y-3 overflow-y-auto max-h-[65vh]">
-            {detail.isLoading && (
-              <div className="text-xs text-muted-foreground">Se încarcă detaliile…</div>
-            )}
-            {detail.data?.status === "error" && (
-              <div className="text-xs text-red-400">{detail.data.error}</div>
-            )}
-            {d && (
-              <>
-                <div className="flex flex-wrap items-center gap-2 text-xs">
-                  {d.status !== "in_library" && <StatusBadge status={d.status} />}
-                  {d.status === "pinned" &&
-                    (pinnedPlexLoading ? (
-                      <span className="h-5 w-20 animate-pulse rounded-full bg-muted/40" />
-                    ) : (
-                      <PlexStatusBadge status={pinnedPlexStatus ?? "lipsa"} />
-                    ))}
-                  {d.quality && (
-                    <span className="rounded-full bg-amber-500/15 text-amber-400 px-2 py-0.5 font-medium">
-                      {d.quality}
-                    </span>
-                  )}
-                  {d.status !== "pinned" && (
-                    <span
-                      className={`flex items-center gap-1 rounded-full px-2 py-0.5 font-medium ${
-                        d.hasRomanianSubtitle
-                          ? "bg-emerald-500/15 text-emerald-400"
-                          : "bg-muted text-muted-foreground"
-                      }`}
-                    >
-                      <Captions className="h-3 w-3" />
-                      {d.hasRomanianSubtitle
-                        ? "Subtitrare RO"
-                        : "Fără subtitrare RO (doar engleză)"}
-                    </span>
-                  )}
-                  {d.durationMs > 0 && (
-                    <span className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 font-medium text-muted-foreground">
-                      <Clock3 className="h-3 w-3" /> {formatMs(d.durationMs)}
-                    </span>
-                  )}
-                </div>
-
-                {d.genres.length > 0 && (
-                  <div className="flex flex-wrap items-center gap-1.5 text-xs">
-                    <Tag className="h-3 w-3 text-muted-foreground shrink-0" />
-                    {d.genres.map((g) => (
-                      <span
-                        key={g}
-                        className="rounded-full bg-muted/60 px-2 py-0.5 text-[11px] text-foreground"
-                      >
-                        {g}
-                      </span>
-                    ))}
-                  </div>
-                )}
-
-                {d.summary && (
-                  <div className="text-xs text-muted-foreground leading-relaxed">{d.summary}</div>
-                )}
-
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                  <span>Adăugat: {addedDate(d.addedAt)}</span>
-                  <span className="flex items-center gap-1">
-                    <User className="h-3 w-3" /> {d.addedByUsername ?? "necunoscut"}
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-1.5 text-xs">
-                  {d.watchedByMe ? (
-                    <Eye className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
-                  ) : (
-                    <EyeOff className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                  )}
-                  <span>{d.watchedByMe ? "Ai văzut acest titlu" : "Nu ai văzut acest titlu"}</span>
-                </div>
-
-                <div className="text-xs">
-                  <div className="mb-1 flex items-center gap-1 text-muted-foreground">
-                    <Users className="h-3.5 w-3.5" /> Alți utilizatori care au văzut
-                  </div>
-                  {d.watchedByOthers.length > 0 ? (
-                    <div className="flex flex-col gap-1">
-                      {d.watchedByOthers.map((u) => (
-                        <div
-                          key={u.username}
-                          className="flex items-center justify-between gap-2 rounded-lg bg-muted/60 px-2 py-1"
-                        >
-                          <span className="text-[11px] font-medium text-foreground">
-                            {u.username}
-                          </span>
-                          <span className="text-[10px] text-muted-foreground">
-                            {addedDate(u.viewedAt)}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-muted-foreground">Nimeni altcineva încă</div>
-                  )}
-                </div>
-
-                {d.tmdbId &&
-                  (() => {
-                    const pinnedMediaType = d.type === "movie" ? "movie" : "tv";
-                    const titleForPin = d.type === "movie" ? d.title : (d.show ?? d.title);
-                    return (
-                      <div className="flex flex-col gap-2 pt-1 border-t border-border">
-                        {!d.isPinnedByAnyone && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              pinTitle(
-                                d.tmdbId!,
-                                pinnedMediaType,
-                                titleForPin,
-                                d.originalTitle,
-                                d.thumbUrl,
-                              )
-                            }
-                            className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-border bg-muted/40 py-2 text-xs font-medium text-foreground hover:bg-muted/60 transition-colors"
-                          >
-                            <Pin className="h-3.5 w-3.5" />
-                            Fixează pentru urmărire automată
-                          </button>
-                        )}
-                        {d.isPinnedByAnyone && (
-                          <PinnedTitleManager
-                            tmdbId={d.tmdbId}
-                            mediaType={pinnedMediaType}
-                            title={titleForPin}
-                            originalTitle={d.originalTitle}
-                            posterUrl={d.thumbUrl}
-                            watchSettings={watchMap.get(`${pinnedMediaType}-${d.tmdbId}`) ?? null}
-                            onWatchChange={(patch) =>
-                              updateWatch(d.tmdbId!, pinnedMediaType, patch)
-                            }
-                            onUnpin={() =>
-                              unpinTitle(d.tmdbId!, pinnedMediaType, d.status === "pinned")
-                            }
-                            onPlexStatus={(status, loading) => {
-                              setPinnedPlexStatus(status);
-                              setPinnedPlexLoading(loading);
-                            }}
-                          />
-                        )}
-                      </div>
-                    );
-                  })()}
-
-                {d.status !== "pinned" && (
-                  <div className="flex flex-col gap-2 pt-1 border-t border-border">
-                    {d.torrentHash ? (
-                      d.canManage ? (
-                        <>
-                          <div className="flex gap-2 pt-2">
-                            <button
-                              type="button"
-                              onClick={correctSubtitle}
-                              disabled={correcting}
-                              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-border bg-muted/40 py-2 text-xs font-medium text-foreground hover:bg-muted/60 transition-colors disabled:opacity-40"
-                            >
-                              {correcting ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              ) : (
-                                <Captions className="h-3.5 w-3.5" />
-                              )}
-                              Corectează subtitrare
-                            </button>
-                            <button
-                              type="button"
-                              onClick={deleteSubtitle}
-                              disabled={deletingSubtitle}
-                              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-border bg-muted/40 py-2 text-xs font-medium text-foreground hover:bg-muted/60 transition-colors disabled:opacity-40"
-                            >
-                              {deletingSubtitle ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              ) : (
-                                <CaptionsOff className="h-3.5 w-3.5" />
-                              )}
-                              Șterge subtitrare
-                            </button>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setConfirmDeleteTitle({
-                                mediaId: d.mediaId,
-                                title: d.type === "movie" ? d.title : (d.show ?? d.title),
-                                isSeasonPack: d.isSeasonPack,
-                              })
-                            }
-                            className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-border bg-muted/40 py-2 text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                            Șterge titlul complet
-                          </button>
-                        </>
-                      ) : (
-                        <div className="pt-2 text-[11px] text-muted-foreground">
-                          Doar {d.addedByUsername ?? "cel care a adăugat titlul"} sau un admin poate
-                          corecta/șterge subtitrarea sau șterge titlul.
-                        </div>
-                      )
-                    ) : (
-                      <div className="pt-2 text-[11px] text-muted-foreground">
-                        Nu știm ce torrent corespunde acestui titlu (a fost adăugat manual în Plex,
-                        sau torrentul nu mai există în qBittorrent) — corectarea/ștergerea
-                        subtitrării și ștergerea completă nu sunt disponibile.
-                      </div>
-                    )}
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        </DrawerContent>
-      </Drawer>
+      <TitleDetailDrawer
+        mediaId={selectedMediaId}
+        onClose={() => setSelectedMediaId(null)}
+        onRequestDelete={(info) => setConfirmDeleteTitle(info)}
+      />
 
       <AlertDialog
         open={!!confirmDeleteTitle}
@@ -912,57 +397,5 @@ export function BibliotecaList() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
-  );
-}
-
-const DEFAULT_WATCH_SETTINGS = (id: number, mediaType: "movie" | "tv"): WatchSettings => ({
-  id,
-  mediaType,
-  watchFilelist: false,
-  watchFilelistSeason: false,
-  watchTmdb: false,
-  autoDownload: false,
-  autoDownloadQuality: "1080p",
-});
-
-// Panoul complet de gestionare a unui titlu fixat (sezoane/episoade, status
-// Plex, countdown, toggle-uri watch/auto-download) — portat din fostele
-// carduri Lansări (PinnedItemCard/MovieCard/ShowCard), afișat acum direct în
-// drawer-ul de detalii al Bibliotecii, unicul loc unde apar titlurile fixate.
-function PinnedTitleManager({
-  tmdbId,
-  mediaType,
-  title,
-  originalTitle,
-  posterUrl,
-  watchSettings,
-  onWatchChange,
-  onUnpin,
-  onPlexStatus,
-}: {
-  tmdbId: number;
-  mediaType: "movie" | "tv";
-  title: string;
-  originalTitle: string | null;
-  posterUrl: string | null;
-  watchSettings: WatchSettings | null;
-  onWatchChange: (patch: Partial<WatchSettings>) => void;
-  onUnpin: () => void;
-  onPlexStatus?: (status: TvPlexStatus | null, loading: boolean) => void;
-}) {
-  return (
-    <PinnedItemCard
-      item={{
-        id: tmdbId,
-        mediaType,
-        title,
-        originalTitle: originalTitle || title,
-        posterUrl,
-      }}
-      watchSettings={watchSettings ?? DEFAULT_WATCH_SETTINGS(tmdbId, mediaType)}
-      onWatchChange={onWatchChange}
-      onUnpin={onUnpin}
-      onPlexStatus={onPlexStatus}
-    />
   );
 }
