@@ -11,7 +11,10 @@
 //   3. Verifică/corectează subtitrarea RO pentru toate torrentele active din
 //      qBittorrent (echivalent butonului „Verifică subtitrări” din
 //      Bibliotecă) — ca un torrent nou legat la pasul 2 să capete automat și
-//      verificarea subtitrării, nu doar statusul actualizat.
+//      verificarea subtitrării, nu doar statusul actualizat. Declanșat DOAR
+//      dacă pașii 1-2 chiar au adăugat/legat ceva nou — altfel ar rescana
+//      inutil toate torrentele din qBittorrent la fiecare ciclu, chiar și
+//      când nimic nu s-a schimbat (rate-limit OpenSubtitles, timp irosit).
 // Cele trei rulează secvențial (nu paralel), ca să nu suprapunem cereri grele
 // către Plex/qBittorrent/TMDB.
 // ---------------------------------------------------------------------------
@@ -20,19 +23,26 @@ const FIRST_RUN_DELAY_MS = 2 * 60 * 1000; // 2 min după pornirea serviciului
 const CYCLE_INTERVAL_MS = 2 * 60 * 60 * 1000; // la fiecare 2 ore
 
 async function runCycle(): Promise<void> {
+  let foundSomethingNew = false;
+
   try {
     const { runMediaBackfillIfIdle, linkUnmatchedTorrents } =
       await import("../../src/lib/media-backfill");
-    await runMediaBackfillIfIdle();
+    const mediaResult = await runMediaBackfillIfIdle();
+    if (mediaResult?.status === "ok" && mediaResult.added > 0) foundSomethingNew = true;
+
     const { checked, linked } = await linkUnmatchedTorrents();
     if (checked > 0) {
       console.log(
         `[media-torrent-sync] Legătură retroactivă: ${linked}/${checked} titluri legate de torrente active`,
       );
     }
+    if (linked > 0) foundSomethingNew = true;
   } catch (e) {
     console.warn("[media-torrent-sync] Completare/legătură media eșuată:", e);
   }
+
+  if (!foundSomethingNew) return;
 
   try {
     const { runSubtitleBackfillIfIdle } = await import("../../src/lib/filelist/download");

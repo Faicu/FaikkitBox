@@ -401,16 +401,18 @@ export const startMediaBackfill = createServerFn({ method: "POST" }).handler(
 // Echivalentul de mai sus, apelabil direct (fără graniță de server function/
 // requireAdmin) — folosit de plugin-ul periodic de sincronizare
 // (server/plugins/media-torrent-sync.ts), care rulează în fundal, fără
-// sesiune de admin. Așteaptă finalizarea completă (spre deosebire de
-// startMediaBackfill, care pornește rularea și răspunde imediat, urmărită
-// separat prin polling din UI) — plugin-ul are nevoie de finalul ei înainte
-// de a trece la legătura retroactivă/verificarea subtitrărilor.
-export async function runMediaBackfillIfIdle(): Promise<void> {
-  if (backfillRunning || !process.env.PLEX_TOKEN) return;
+// sesiune de admin. Așteaptă finalizarea completă și întoarce rezultatul
+// (spre deosebire de startMediaBackfill, care pornește rularea și răspunde
+// imediat, urmărită separat prin polling din UI) — plugin-ul are nevoie de
+// rezultat ca să decidă dacă merită să declanșeze și verificarea
+// subtitrărilor (doar dacă chiar s-a adăugat ceva nou, nu la fiecare ciclu).
+export async function runMediaBackfillIfIdle(): Promise<MediaBackfillResult | null> {
+  if (backfillRunning || !process.env.PLEX_TOKEN) return null;
   backfillRunning = true;
   backfillProgress = null;
   lastResult = null;
   await runMediaBackfillWork();
+  return lastResult;
 }
 
 // Leagă retroactiv torrent_hash pentru rândurile `media` deja indexate în
