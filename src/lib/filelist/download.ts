@@ -1053,7 +1053,7 @@ export type CorrectSubtitleResult =
   ({ status: "ok" } & SubtitleRunItem) | { status: "error"; error: string };
 
 export const correctSubtitleForItem = createServerFn({ method: "POST" })
-  .validator((data: { id: number; plexRatingKey?: string }) => data)
+  .validator((data: { id: number }) => data)
   .handler(async ({ data }): Promise<CorrectSubtitleResult> => {
     const { requireAuth, isAdminOrOwner } = await import("../admin.server");
     const session = await requireAuth();
@@ -1116,10 +1116,6 @@ export const correctSubtitleForItem = createServerFn({ method: "POST" })
     if (CORRECTED_OUTCOMES.includes(result.outcome)) {
       await refreshPlexLibrary(plexType).catch(() => {});
     }
-    if (data.plexRatingKey) {
-      const { invalidatePlexTitleDetailCache } = await import("../services/plex-browse");
-      invalidatePlexTitleDetailCache(data.plexRatingKey);
-    }
 
     return { status: "ok", ...result };
   });
@@ -1127,7 +1123,7 @@ export const correctSubtitleForItem = createServerFn({ method: "POST" })
 // Șterge subtitrarea .srt curentă (de pe disk) pentru un item din jurnal, ca
 // utilizatorul să poată forța o re-căutare curată cu "Corectează subtitrare".
 export const deleteSubtitleForItem = createServerFn({ method: "POST" })
-  .validator((data: { id: number; plexRatingKey?: string }) => data)
+  .validator((data: { id: number }) => data)
   .handler(async ({ data }): Promise<DeleteSubtitleResult> => {
     const { requireAuth, isAdminOrOwner } = await import("../admin.server");
     const session = await requireAuth();
@@ -1187,10 +1183,6 @@ export const deleteSubtitleForItem = createServerFn({ method: "POST" })
       if (row.category !== null) {
         const { refreshPlexLibraryForCategory } = await import("../plex-refresh");
         await refreshPlexLibraryForCategory(row.category).catch(() => {});
-      }
-      if (data.plexRatingKey) {
-        const { invalidatePlexTitleDetailCache } = await import("../services/plex-browse");
-        invalidatePlexTitleDetailCache(data.plexRatingKey);
       }
     }
 

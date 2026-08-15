@@ -203,7 +203,7 @@ export const resolveTorrentDisplayName = createServerFn({ method: "GET" })
   });
 
 export const deleteFilelistLogEntry = createServerFn({ method: "POST" })
-  .validator((data: { id: number; plexRatingKey?: string }) => data)
+  .validator((data: { id: number }) => data)
   .handler(async ({ data }): Promise<{ ok: boolean; qbitDeleted?: boolean; error?: string }> => {
     const { requireAuth, isAdminOrOwner } = await import("../admin.server");
     const session = await requireAuth();
@@ -276,10 +276,6 @@ export const deleteFilelistLogEntry = createServerFn({ method: "POST" })
       // fișierul șters să dispară din Plex fără să aștepți scanarea automată.
       if (category !== null) {
         refreshPlexLibraryForCategory(category).catch(() => {});
-      }
-      if (data.plexRatingKey) {
-        const { invalidatePlexTitleDetailCache } = await import("../services/plex-browse");
-        invalidatePlexTitleDetailCache(data.plexRatingKey);
       }
 
       return { ok: true, qbitDeleted };

@@ -5,27 +5,25 @@
 // (orice cont aprobat) — spre deosebire de restul paginii Acasă, care rămâne
 // publică.
 //
-// Lista e citită direct din `media` (populată de wizard/Lansări/auto-download/
-// backfill — vezi media.ts, media-backfill.ts), nu mai interoghează Plex live:
-// zero cereri Plex la fiecare încărcare a paginii, indiferent câți utilizatori
-// o deschid simultan. Un titlu adăugat direct în Plex, pe orice cale din afara
-// acestui sistem, apare abia după următorul backfill.
+// Atât lista cât și detaliile sunt citite exclusiv din `media` (populată de
+// wizard/Lansări/auto-download/backfill — vezi media.ts, media-backfill.ts):
+// zero cereri Plex/TMDB live la navigare, indiferent câți utilizatori o
+// deschid simultan. Un titlu care nu e nici fixat, nici descărcat prin
+// aplicație nu apare — vezi media-backfill.ts pentru restul bibliotecii deja
+// existente în Plex înainte de acest sistem.
 // ---------------------------------------------------------------------------
 
 import { createServerFn } from "@tanstack/react-start";
-import { fetchJson } from "./shared";
-import {
-  discoverPlexUrl,
-  plexQualityFromMedia,
-  hasEmbeddedRomanianSubtitle,
-  type PlexApiResponse,
-  type PlexMetadataItem,
-} from "./plex-shared";
 
 export interface PlexBrowseItem {
-  ratingKey: string;
+  // Identificator stabil, mereu prezent (id-ul rândului din `media`) —
+  // folosit pentru selecție/detalii; ratingKey lipsește pentru titluri încă
+  // nedescărcate complet (fixate) sau neindexate încă de Plex (în curs de
+  // descărcare).
+  mediaId: number;
+  ratingKey: string | null;
   title: string;
-  type: "movie" | "episode";
+  type: "movie" | "episode" | "tv_show";
   show: string | null;
   season: number | null;
   episode: number | null;
@@ -33,18 +31,25 @@ export interface PlexBrowseItem {
   thumbUrl: string | null;
   addedAt: number;
   watchedByMe: boolean;
+  // "downloading" — are torrent, dar Plex nu l-a indexat încă; "pinned" —
+  // doar fixat pentru urmărire, nimic descărcat; "in_library" — normal,
+  // deja în Plex.
+  status: "in_library" | "downloading" | "pinned";
 }
 
 const BROWSE_LIMIT = 300;
 
 interface MediaBrowseRow {
-  plex_rating_key: string;
+  id: number;
+  plex_rating_key: string | null;
   media_type: string;
   title: string;
   season: number | null;
   episode: number | null;
   poster_path: string | null;
   plex_added_at: number | null;
+  added_at: string;
+  torrent_hash: string | null;
 }
 
 export const getPlexLibraryBrowse = createServerFn({ method: "GET" }).handler(
@@ -57,30 +62,68 @@ export const getPlexLibraryBrowse = createServerFn({ method: "GET" }).handler(
       const { getDb } = await import("../db");
       const db = getDb();
 
+      // Bibliotecă arată doar ce e "al meu" — deja confirmat în Plex
+      // (plex_rating_key cunoscut, indiferent de sursă: descărcat prin
+      // aplicație SAU backfill din restul bibliotecii), în curs de
+      // descărcare (torrent_hash cunoscut, încă neindexat de Plex), sau
+      // fixat pentru urmărire (potrivire cu pinned_items) — nu orice titlu
+      // doar căutat prin wizard, altfel lista s-ar umple de căutări
+      // întâmplătoare. Un serial fixat cu episoade deja descărcate arată
+      // doar prin episoadele lui (rândul-părinte gol e exclus explicit), ca
+      // să nu apară dublu.
       const rows = db
         .prepare(
-          `SELECT plex_rating_key, media_type, title, season, episode, poster_path, plex_added_at
-           FROM media
-           WHERE plex_rating_key IS NOT NULL AND media_type IN ('movie', 'episode')
-           ORDER BY plex_added_at DESC
+          `SELECT m.id, m.plex_rating_key, m.media_type, m.title, m.season, m.episode,
+                  m.poster_path, m.plex_added_at, m.added_at, m.torrent_hash
+           FROM media m
+           WHERE
+             (
+               m.media_type IN ('movie', 'episode')
+               AND (m.torrent_hash IS NOT NULL OR m.plex_rating_key IS NOT NULL)
+             )
+             OR (
+               m.media_type IN ('movie', 'tv_show')
+               AND EXISTS (
+                 SELECT 1 FROM pinned_items p
+                 WHERE p.id = m.tmdb_id
+                   AND p.media_type = CASE m.media_type WHEN 'movie' THEN 'movie' ELSE 'tv' END
+               )
+               AND (
+                 m.media_type != 'tv_show'
+                 OR NOT EXISTS (SELECT 1 FROM media c WHERE c.parent_id = m.id)
+               )
+             )
+           ORDER BY COALESCE(m.plex_added_at, CAST(strftime('%s', m.added_at) AS INTEGER)) DESC
            LIMIT ?`,
         )
         .all(BROWSE_LIMIT) as unknown as MediaBrowseRow[];
 
-      const items: PlexBrowseItem[] = rows.map((r) => ({
-        ratingKey: r.plex_rating_key,
-        // Pentru episoade, `title` pe rândul din `media` e deja titlul
-        // serialului (nu se ține un titlu separat per episod) — vezi
-        // media.ts/media-backfill.ts.
-        title: r.media_type === "episode" ? "" : r.title,
-        type: r.media_type === "episode" ? "episode" : "movie",
-        show: r.media_type === "episode" ? r.title : null,
-        season: r.season,
-        episode: r.episode,
-        thumbUrl: r.poster_path,
-        addedAt: r.plex_added_at ?? 0,
-        watchedByMe: false,
-      }));
+      const items: PlexBrowseItem[] = rows.map((r) => {
+        const isEpisodeLike = r.media_type === "episode";
+        return {
+          mediaId: r.id,
+          ratingKey: r.plex_rating_key,
+          // Pentru episoade/seriale, `title` pe rândul din `media` e deja
+          // titlul serialului (nu se ține un titlu separat per episod) —
+          // vezi media.ts/media-backfill.ts.
+          title: isEpisodeLike || r.media_type === "tv_show" ? "" : r.title,
+          type:
+            r.media_type === "episode"
+              ? "episode"
+              : r.media_type === "tv_show"
+                ? "tv_show"
+                : "movie",
+          show: isEpisodeLike || r.media_type === "tv_show" ? r.title : null,
+          season: r.season,
+          episode: r.episode,
+          thumbUrl: r.poster_path,
+          addedAt:
+            r.plex_added_at ??
+            Math.floor(new Date(`${r.added_at.replace(" ", "T")}Z`).getTime() / 1000),
+          watchedByMe: false,
+          status: r.plex_rating_key ? "in_library" : r.torrent_hash ? "downloading" : "pinned",
+        };
+      });
 
       // "Am văzut" — badge afișat direct în listă, fără cost suplimentar (nicio
       // cerere nouă către Plex): potrivim doar cu istoricul deja cachuit.
@@ -113,15 +156,14 @@ export const getPlexLibraryBrowse = createServerFn({ method: "GET" }).handler(
 // ---------------------------------------------------------------------------
 
 export interface PlexTitleDetail {
-  ratingKey: string;
+  mediaId: number;
+  ratingKey: string | null;
   title: string;
-  type: "movie" | "episode";
+  type: "movie" | "episode" | "tv_show";
   show: string | null;
   season: number | null;
   episode: number | null;
-  // Gata de folosit direct ca src de <img> — fie link TMDB (titluri servite
-  // din `media`), fie deja înfășurat în proxy-ul /api/plex-thumb (fallback
-  // live pe Plex) — clientul nu mai trebuie să știe diferența.
+  // Gata de folosit direct ca src de <img> — link TMDB, salvat în `media`.
   thumbUrl: string | null;
   addedAt: number;
   durationMs: number;
@@ -132,11 +174,11 @@ export interface PlexTitleDetail {
   watchedByMe: boolean;
   watchedByOthers: Array<{ username: string; viewedAt: number }>;
   addedByUsername: string | null;
-  // Intrarea corespunzătoare din jurnalul propriu de descărcări (dacă am
-  // găsit una, potrivită prin IMDb id rezolvat via TMDB) — necesară pentru
-  // butoanele de corectare/ștergere subtitrare și ștergere completă a
+  status: "in_library" | "downloading" | "pinned";
+  // Intrarea corespunzătoare din jurnalul propriu de descărcări — necesară
+  // pentru butoanele de corectare/ștergere subtitrare și ștergere completă a
   // titlului, care operează pe jurnal + qBittorrent, nu direct pe Plex.
-  // Absentă pentru titluri adăugate manual în Plex sau dinainte de jurnal.
+  // Absentă pentru titluri doar fixate, fără nimic descărcat încă.
   downloadsLogId: number | null;
   torrentHash: string | null;
   // true dacă intrarea găsită e un pachet de sezon întreg, nu doar acest
@@ -145,168 +187,6 @@ export interface PlexTitleDetail {
   // true doar pentru cel care a adăugat titlul sau pentru un admin — UI-ul
   // ascunde butoanele de subtitrare/ștergere pentru oricine altcineva.
   canManage: boolean;
-}
-
-// Tot ce nu depinde de userul curent — partajat între toți, cache 1 min. Doar
-// watchedByMe/watchedByOthers/canManage se calculează per-request (ieftin,
-// fără nicio cerere nouă), din watchedByAll + requestedByUserId cache-uite.
-type PlexTitleDetailBase = Omit<
-  PlexTitleDetail,
-  "watchedByMe" | "watchedByOthers" | "canManage"
-> & {
-  watchedByAll: Array<{ username: string; viewedAt: number }>;
-  requestedByUserId: number | null;
-};
-
-const DETAIL_TTL_MS = 60_000;
-const detailCache = new Map<string, { expiresAt: number; base: PlexTitleDetailBase }>();
-
-// Apelat după corectare/ștergere subtitrare sau ștergere titlu (Bibliotecă),
-// ca schimbarea să fie vizibilă imediat, nu abia după expirarea cache-ului
-// de 1 minut de mai sus.
-export function invalidatePlexTitleDetailCache(ratingKey: string): void {
-  detailCache.delete(ratingKey);
-}
-
-async function computeTitleDetailBase(
-  ratingKey: string,
-): Promise<{ status: "ok"; base: PlexTitleDetailBase } | { status: "error"; error: string }> {
-  const token = process.env.PLEX_TOKEN;
-  if (!token) return { status: "error", error: "PLEX_TOKEN nu este configurat" };
-
-  try {
-    const { url } = await discoverPlexUrl(token, process.env.PLEX_URL);
-    const headers = { Accept: "application/json", "X-Plex-Token": token };
-    const json = await fetchJson<PlexApiResponse>(
-      `${url}/library/metadata/${encodeURIComponent(ratingKey)}`,
-      { headers },
-    );
-    const item = json?.MediaContainer?.Metadata?.[0];
-    if (!item) return { status: "error", error: "Titlul nu a fost găsit în Plex" };
-
-    const media = item.Media?.[0];
-    const quality = plexQualityFromMedia(media);
-    const hasRomanianSubtitle = hasEmbeddedRomanianSubtitle(media);
-
-    // "Cine a văzut" — din istoricul cachuit (aceeași sursă ca restul Acasă),
-    // potrivit după titlu (filme) sau serial+sezon+episod (episoade), nu
-    // ratingKey — istoricul Plex nu-l reține per intrare.
-    const { getAllPlexUserHistory } = await import("./plex");
-    const { getDb } = await import("../db");
-    const db = getDb();
-
-    const isEpisode = item.type === "episode";
-    const matchesItem = (e: { title: string; show?: string; season?: number; episode?: number }) =>
-      isEpisode
-        ? e.show === item.grandparentTitle &&
-          e.season === item.parentIndex &&
-          e.episode === item.index
-        : !e.show && e.title === item.title;
-
-    const allHistory = await getAllPlexUserHistory();
-    const watchedByAll: Array<{ username: string; viewedAt: number }> = [];
-    for (const [username, entries] of Object.entries(allHistory)) {
-      // Fiecare listă e deja sortată descrescător după viewedAt — primul
-      // rezultat potrivit e cea mai recentă vizionare a userului respectiv.
-      const match = entries.find(matchesItem);
-      if (match) watchedByAll.push({ username, viewedAt: match.viewedAt });
-    }
-
-    // Genuri + rezumat RO + IMDb id — via TMDB, pornind de la titlul din
-    // Plex (nu de la Guid-ul Plex, care nu conține fiabil un IMDb id).
-    const { searchTmdbTopResultInternal, getTmdbDetailsInternal, getTmdbEpisodeOverviewInternal } =
-      await import("../tmdb.functions");
-    const searchType: "movie" | "tv" = isEpisode ? "tv" : "movie";
-    const searchTitle = isEpisode ? (item.grandparentTitle ?? item.title) : item.title;
-    const searchYear =
-      !isEpisode && (item.year || item.originallyAvailableAt)
-        ? (item.year ?? Number(item.originallyAvailableAt!.slice(0, 4)))
-        : null;
-
-    let genres: string[] = [];
-    let overviewRo: string | null = null;
-    let imdbId: string | null = null;
-    const tmdbId = await searchTmdbTopResultInternal(
-      String(searchTitle ?? ""),
-      searchType,
-      searchYear,
-    );
-    if (tmdbId) {
-      const tmdbDetails = await getTmdbDetailsInternal(tmdbId, searchType);
-      genres = tmdbDetails.genres;
-      imdbId = tmdbDetails.imdbId;
-      overviewRo = tmdbDetails.overview;
-      if (isEpisode && item.parentIndex != null && item.index != null) {
-        const epOverview = await getTmdbEpisodeOverviewInternal(
-          tmdbId,
-          item.parentIndex,
-          item.index,
-        );
-        if (epOverview) overviewRo = epOverview;
-      }
-    }
-
-    // Intrarea din jurnalul propriu — necesară pentru butoanele de
-    // subtitrare/ștergere titlu (operează pe torrent_hash, nu pe Plex).
-    let downloadsLogId: number | null = null;
-    let torrentHash: string | null = null;
-    let isSeasonPack = false;
-    let requestedByUserId: number | null = null;
-    if (imdbId) {
-      const { findDownloadsRowForImdb } = await import("../filelist/log");
-      const match = await findDownloadsRowForImdb(
-        imdbId,
-        isEpisode && item.parentIndex != null && item.index != null
-          ? { season: item.parentIndex, episode: item.index }
-          : undefined,
-      );
-      if (match) {
-        downloadsLogId = match.id;
-        torrentHash = match.torrentHash;
-        isSeasonPack = match.isSeasonPack;
-        requestedByUserId = match.requestedByUserId;
-      }
-    }
-
-    let addedByUsername: string | null = null;
-    if (downloadsLogId != null) {
-      const row = db
-        .prepare(
-          `SELECT u.username FROM downloads d
-           JOIN users u ON u.id = d.requested_by_user_id
-           WHERE d.id = ?`,
-        )
-        .get(downloadsLogId) as { username: string } | undefined;
-      addedByUsername = row?.username ?? null;
-    }
-
-    return {
-      status: "ok",
-      base: {
-        ratingKey,
-        title: String(item.title ?? "—"),
-        type: isEpisode ? "episode" : "movie",
-        show: item.grandparentTitle ?? null,
-        season: item.parentIndex ?? null,
-        episode: item.index ?? null,
-        thumbUrl: item.thumb ? `/api/plex-thumb?path=${encodeURIComponent(item.thumb)}` : null,
-        addedAt: Number(item.addedAt ?? 0),
-        durationMs: Number(item.duration ?? 0),
-        quality,
-        hasRomanianSubtitle,
-        summary: overviewRo || item.summary || null,
-        genres,
-        watchedByAll,
-        addedByUsername,
-        downloadsLogId,
-        torrentHash,
-        isSeasonPack,
-        requestedByUserId,
-      },
-    };
-  } catch (e) {
-    return { status: "error", error: e instanceof Error ? e.message : String(e) };
-  }
 }
 
 interface MediaRow {
@@ -322,20 +202,19 @@ interface MediaRow {
   has_romanian_subtitle: number;
   duration_ms: number | null;
   torrent_hash: string | null;
+  plex_rating_key: string | null;
   is_season_pack: number;
   requested_by_user_id: number | null;
   added_at: string;
 }
 
-// Cale rapidă — titlul are deja rând în `media` (adăugat prin wizard), deci
-// răspunsul e doar SELECT-uri, fără nicio cerere Plex/TMDB: nici la Plex
-// (item deja cunoscut, cu ratingKey/calitate/durată salvate), nici la TMDB
-// (gen/rezumat RO deja salvate). Singurul lucru încă live e "cine a văzut"
-// (istoricul Plex, cache-uit separat 60s) — n-are sens duplicat în `media`,
-// s-ar dezactualiza la fiecare vizionare nouă.
+// Orice titlu clicabil din Bibliotecă are un rând `media` (lista provine
+// exclusiv de-acolo) — răspunsul e mereu doar SELECT-uri, fără nicio cerere
+// Plex/TMDB live. Singurul lucru încă live e "cine a văzut" (istoricul Plex,
+// cache-uit separat 60s) — n-are sens duplicat static, s-ar dezactualiza la
+// fiecare vizionare nouă.
 async function buildDetailFromMediaRow(
   row: MediaRow,
-  ratingKey: string,
   session: { data: { userId?: number; admin?: boolean } },
 ): Promise<PlexTitleDetail> {
   const { getDb } = await import("../db");
@@ -343,13 +222,14 @@ async function buildDetailFromMediaRow(
   const db = getDb();
 
   const isEpisode = row.media_type === "episode";
+  const isShow = row.media_type === "tv_show";
 
   const { getAllPlexUserHistory } = await import("./plex");
   const matchesItem = (e: { title: string; show?: string; season?: number; episode?: number }) =>
     isEpisode
       ? e.show === row.title && e.season === row.season && e.episode === row.episode
-      : !e.show && e.title === row.title;
-  const allHistory = await getAllPlexUserHistory();
+      : !isShow && !e.show && e.title === row.title;
+  const allHistory = isShow ? {} : await getAllPlexUserHistory();
   const watchedByAll: Array<{ username: string; viewedAt: number }> = [];
   for (const [username, entries] of Object.entries(allHistory)) {
     const match = entries.find(matchesItem);
@@ -385,10 +265,11 @@ async function buildDetailFromMediaRow(
   }
 
   return {
-    ratingKey,
-    title: isEpisode ? "" : row.title,
-    type: isEpisode ? "episode" : "movie",
-    show: isEpisode ? row.title : null,
+    mediaId: row.id,
+    ratingKey: row.plex_rating_key,
+    title: isEpisode || isShow ? "" : row.title,
+    type: isEpisode ? "episode" : isShow ? "tv_show" : "movie",
+    show: isEpisode || isShow ? row.title : null,
     season: row.season,
     episode: row.episode,
     thumbUrl: row.poster_path,
@@ -401,6 +282,7 @@ async function buildDetailFromMediaRow(
     watchedByMe,
     watchedByOthers,
     addedByUsername,
+    status: row.plex_rating_key ? "in_library" : row.torrent_hash ? "downloading" : "pinned",
     downloadsLogId,
     torrentHash: row.torrent_hash,
     isSeasonPack: !!row.is_season_pack,
@@ -409,61 +291,26 @@ async function buildDetailFromMediaRow(
 }
 
 export const getPlexTitleDetail = createServerFn({ method: "GET" })
-  .validator((data: { ratingKey: string }) => data)
+  .validator((data: { mediaId: number }) => data)
   .handler(
     async ({
       data,
     }): Promise<{ status: "ok"; detail: PlexTitleDetail } | { status: "error"; error: string }> => {
-      const { requireAuth, isAdminOrOwner } = await import("../admin.server");
+      const { requireAuth } = await import("../admin.server");
       const session = await requireAuth();
 
       const { getDb } = await import("../db");
       const mediaRow = getDb()
         .prepare(
           `SELECT id, media_type, title, season, episode, poster_path, overview_ro, genres,
-           quality, has_romanian_subtitle, duration_ms, torrent_hash, is_season_pack,
-           requested_by_user_id, added_at
-           FROM media WHERE plex_rating_key = ?`,
+           quality, has_romanian_subtitle, duration_ms, torrent_hash, plex_rating_key,
+           is_season_pack, requested_by_user_id, added_at
+           FROM media WHERE id = ?`,
         )
-        .get(data.ratingKey) as MediaRow | undefined;
-      if (mediaRow) {
-        return {
-          status: "ok",
-          detail: await buildDetailFromMediaRow(mediaRow, data.ratingKey, session),
-        };
+        .get(data.mediaId) as MediaRow | undefined;
+      if (!mediaRow) {
+        return { status: "error", error: "Titlul nu a fost găsit" };
       }
-
-      const cached = detailCache.get(data.ratingKey);
-      let base: PlexTitleDetailBase;
-      if (cached && cached.expiresAt > Date.now()) {
-        base = cached.base;
-      } else {
-        const result = await computeTitleDetailBase(data.ratingKey);
-        if (result.status === "error") return result;
-        base = result.base;
-        detailCache.set(data.ratingKey, { expiresAt: Date.now() + DETAIL_TTL_MS, base });
-      }
-
-      const me = getDb()
-        .prepare("SELECT plex_username FROM users WHERE id = ?")
-        .get(session.data.userId!) as { plex_username: string | null } | undefined;
-      const myPlexUsername = me?.plex_username ?? null;
-
-      const watchedByMe = myPlexUsername
-        ? base.watchedByAll.some((w) => w.username === myPlexUsername)
-        : false;
-      const watchedByOthers = base.watchedByAll.filter((w) => w.username !== myPlexUsername);
-      const canManage = isAdminOrOwner(session, base.requestedByUserId);
-
-      const { watchedByAll: _watchedByAll, requestedByUserId: _requestedByUserId, ...rest } = base;
-      return {
-        status: "ok",
-        detail: {
-          ...rest,
-          watchedByMe,
-          watchedByOthers,
-          canManage,
-        },
-      };
+      return { status: "ok", detail: await buildDetailFromMediaRow(mediaRow, session) };
     },
   );

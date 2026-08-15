@@ -20,6 +20,8 @@ import {
   Trash2,
   Layers,
   DatabaseZap,
+  Download,
+  Pin,
 } from "lucide-react";
 
 import {
@@ -69,8 +71,27 @@ function episodeCode(season: number | null, episode: number | null): string | nu
 
 function itemLabel(item: PlexBrowseItem): string {
   if (item.type === "movie") return item.title;
+  if (item.type === "tv_show") return item.show ?? "—";
   const code = episodeCode(item.season, item.episode);
   return `${item.show ?? "—"}${code ? ` — ${code}` : ""}${item.title ? ` · ${item.title}` : ""}`;
+}
+
+function StatusBadge({ status }: { status: PlexBrowseItem["status"] }) {
+  if (status === "downloading") {
+    return (
+      <span className="flex shrink-0 items-center gap-0.5 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-400">
+        <Download className="h-2.5 w-2.5" /> Se descarcă
+      </span>
+    );
+  }
+  if (status === "pinned") {
+    return (
+      <span className="flex shrink-0 items-center gap-0.5 rounded-full bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-medium text-sky-400">
+        <Pin className="h-2.5 w-2.5" /> Fixat
+      </span>
+    );
+  }
+  return null;
 }
 
 // addedAt e unix timestamp în secunde (convenția Plex) — formatDateTime
@@ -99,7 +120,7 @@ function groupConsecutiveEpisodes(items: PlexBrowseItem[]): Row[] {
       if (j - i > 1) {
         rows.push({
           kind: "group",
-          key: `${cur.show}-${cur.ratingKey}`,
+          key: `${cur.show}-${cur.mediaId}`,
           show: cur.show,
           items: items.slice(i, j),
         });
@@ -127,7 +148,7 @@ export function BibliotecaList() {
   const [query, setQuery] = useState("");
   const [visible, setVisible] = useState(PAGE_SIZE);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
-  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [selectedMediaId, setSelectedMediaId] = useState<number | null>(null);
   const [correcting, setCorrecting] = useState(false);
   const [deletingSubtitle, setDeletingSubtitle] = useState(false);
   const [confirmDeleteTitle, setConfirmDeleteTitle] = useState<{
@@ -147,9 +168,9 @@ export function BibliotecaList() {
   const deleteEntryFn = useServerFn(deleteFilelistLogEntry);
 
   const detail = useQuery({
-    queryKey: ["plexTitleDetail", selectedKey],
-    queryFn: () => getPlexTitleDetail({ data: { ratingKey: selectedKey! } }),
-    enabled: !!selectedKey,
+    queryKey: ["plexTitleDetail", selectedMediaId],
+    queryFn: () => getPlexTitleDetail({ data: { mediaId: selectedMediaId! } }),
+    enabled: !!selectedMediaId,
   });
 
   const browseItems = browse.data?.status === "ok" ? browse.data.items : null;
@@ -183,7 +204,8 @@ export function BibliotecaList() {
 
   function invalidateAfterMutation() {
     queryClient.invalidateQueries({ queryKey: ["plexLibraryBrowse"] });
-    if (selectedKey) queryClient.invalidateQueries({ queryKey: ["plexTitleDetail", selectedKey] });
+    if (selectedMediaId)
+      queryClient.invalidateQueries({ queryKey: ["plexTitleDetail", selectedMediaId] });
   }
 
   async function correctSubtitle() {
@@ -191,7 +213,7 @@ export function BibliotecaList() {
     setCorrecting(true);
     const toastId = toast.loading(`Verific subtitrarea pentru „${d.title}”…`);
     const res = await correctFn({
-      data: { id: d.downloadsLogId, plexRatingKey: selectedKey ?? undefined },
+      data: { id: d.downloadsLogId },
     }).catch((e) => ({
       status: "error" as const,
       error: e instanceof Error ? e.message : String(e),
@@ -214,7 +236,7 @@ export function BibliotecaList() {
     setDeletingSubtitle(true);
     const toastId = toast.loading(`Șterg subtitrarea pentru „${d.title}”…`);
     const res = await deleteSubtitleFn({
-      data: { id: d.downloadsLogId, plexRatingKey: selectedKey ?? undefined },
+      data: { id: d.downloadsLogId },
     }).catch((e) => ({
       status: "error" as const,
       error: e instanceof Error ? e.message : String(e),
@@ -235,15 +257,13 @@ export function BibliotecaList() {
   async function confirmDeleteTitleAction() {
     if (!confirmDeleteTitle) return;
     const { logId } = confirmDeleteTitle;
-    const res = await deleteEntryFn({
-      data: { id: logId, plexRatingKey: selectedKey ?? undefined },
-    });
+    const res = await deleteEntryFn({ data: { id: logId } });
     setConfirmDeleteTitle(null);
     if (!res.ok) {
       toast.error("Nu am putut șterge titlul", { description: res.error });
       return;
     }
-    setSelectedKey(null);
+    setSelectedMediaId(null);
     queryClient.invalidateQueries({ queryKey: ["plexLibraryBrowse"] });
     if (res.qbitDeleted) toast.success("Titlu șters complet — fișiere + qBittorrent + Plex");
     else toast.warning("Șters din jurnal, dar nu am putut confirma ștergerea din qBittorrent");
@@ -297,12 +317,12 @@ export function BibliotecaList() {
   function renderRow(item: PlexBrowseItem, indent = false) {
     return (
       <button
-        key={item.ratingKey}
+        key={item.mediaId}
         type="button"
         onClick={(e) => {
           e.preventDefault();
           e.stopPropagation();
-          setSelectedKey(item.ratingKey);
+          setSelectedMediaId(item.mediaId);
         }}
         className={`flex w-full items-center gap-2 rounded-lg bg-muted/40 px-2 py-1.5 text-left transition-colors hover:bg-muted/60 active:bg-muted ${indent ? "ml-4" : ""}`}
       >
@@ -321,6 +341,7 @@ export function BibliotecaList() {
         <span className="min-w-0 flex-1 truncate text-xs">
           {indent ? (episodeCode(item.season, item.episode) ?? item.title) : itemLabel(item)}
         </span>
+        <StatusBadge status={item.status} />
         {item.watchedByMe && <Eye className="h-3 w-3 shrink-0 text-emerald-400" />}
         <span className="shrink-0 text-[10px] text-muted-foreground">
           {addedDate(item.addedAt)}
@@ -437,7 +458,7 @@ export function BibliotecaList() {
         </div>
       )}
 
-      <Drawer open={!!selectedKey} onOpenChange={(o) => !o && setSelectedKey(null)}>
+      <Drawer open={!!selectedMediaId} onOpenChange={(o) => !o && setSelectedMediaId(null)}>
         <DrawerContent className="max-h-[85vh]">
           <DrawerHeader className="pb-2 text-left">
             <div className="flex items-start gap-3">
@@ -478,21 +499,26 @@ export function BibliotecaList() {
             {d && (
               <>
                 <div className="flex flex-wrap items-center gap-2 text-xs">
+                  {d.status !== "in_library" && <StatusBadge status={d.status} />}
                   {d.quality && (
                     <span className="rounded-full bg-amber-500/15 text-amber-400 px-2 py-0.5 font-medium">
                       {d.quality}
                     </span>
                   )}
-                  <span
-                    className={`flex items-center gap-1 rounded-full px-2 py-0.5 font-medium ${
-                      d.hasRomanianSubtitle
-                        ? "bg-emerald-500/15 text-emerald-400"
-                        : "bg-muted text-muted-foreground"
-                    }`}
-                  >
-                    <Captions className="h-3 w-3" />
-                    {d.hasRomanianSubtitle ? "Subtitrare RO" : "Fără subtitrare RO (doar engleză)"}
-                  </span>
+                  {d.status !== "pinned" && (
+                    <span
+                      className={`flex items-center gap-1 rounded-full px-2 py-0.5 font-medium ${
+                        d.hasRomanianSubtitle
+                          ? "bg-emerald-500/15 text-emerald-400"
+                          : "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      <Captions className="h-3 w-3" />
+                      {d.hasRomanianSubtitle
+                        ? "Subtitrare RO"
+                        : "Fără subtitrare RO (doar engleză)"}
+                    </span>
+                  )}
                   {d.durationMs > 0 && (
                     <span className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 font-medium text-muted-foreground">
                       <Clock3 className="h-3 w-3" /> {formatMs(d.durationMs)}
@@ -614,9 +640,9 @@ export function BibliotecaList() {
                     )
                   ) : (
                     <div className="pt-2 text-[11px] text-muted-foreground">
-                      Titlul nu e urmărit în jurnalul de descărcări (adăugat manual sau dinainte de
-                      jurnal) — corectarea/ștergerea subtitrării și ștergerea completă nu sunt
-                      disponibile.
+                      {d.status === "pinned"
+                        ? "Titlu fixat pentru urmărire — nu a fost încă descărcat nimic, deci nu sunt încă butoane de gestionat."
+                        : "Titlul nu e urmărit în jurnalul de descărcări (adăugat manual sau dinainte de jurnal) — corectarea/ștergerea subtitrării și ștergerea completă nu sunt disponibile."}
                     </div>
                   )}
                 </div>
