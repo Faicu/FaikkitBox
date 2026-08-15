@@ -10,7 +10,8 @@ import { setPinnedItems } from "@/lib/pinned.functions";
 import type { PinnedItem } from "../types";
 
 // ---------------------------------------------------------------------------
-// Secțiune de căutare unificată (TMDB) — admin-only
+// Secțiune de căutare unificată (TMDB) — disponibilă tuturor utilizatorilor
+// autentificați (fixarea unui rezultat necesită doar autentificare, nu admin)
 // ---------------------------------------------------------------------------
 
 export function UnifiedSearchSection() {

@@ -21,7 +21,7 @@ function LansariPage() {
 
   return (
     <PageShell title="Lansări" subtitle="Căutare, Monitorizare și Descărcare Filme/Seriale">
-      {isAdmin && <UnifiedSearchSection />}
+      <UnifiedSearchSection />
       <PinnedListSection />
       {isAdmin && <FilelistSection />}
       <DownloadLogSection />

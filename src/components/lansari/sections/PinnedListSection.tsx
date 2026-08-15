@@ -10,7 +10,6 @@ import { PinnedItemCard } from "../PinnedItemCard";
 
 // ---------------------------------------------------------------------------
 // Lista de fixări proprie — per utilizator, vizibilă oricui e autentificat
-// (spre deosebire de bara de căutare din UnifiedSearchSection, admin-only)
 // ---------------------------------------------------------------------------
 
 export function PinnedListSection() {
