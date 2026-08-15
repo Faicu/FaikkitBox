@@ -143,3 +143,90 @@ export function upsertMediaEntry(input: UpsertMediaEntryInput): number {
     );
   return Number(res.lastInsertRowid);
 }
+
+// ---------------------------------------------------------------------------
+// Sincronizare ulterioară — actualizează un rând deja existent (creat de
+// wizard), potrivit după torrent_hash (unic). Dacă niciun rând `media` nu
+// corespunde (torrent pornit din afara wizard-ului), UPDATE/DELETE-ul nu
+// afectează nimic — nu creăm rânduri noi din aceste căi, doar sincronizăm
+// unde există deja unul.
+// ---------------------------------------------------------------------------
+
+export type SubtitleOutcomeKind = "romanian_ok" | "no_romanian" | "unknown";
+
+// Sursa subtitrării, derivată din outcome-ul ensureRomanianSubtitle
+// (subtitles.ts) — vezi SubtitleOutcome acolo pentru lista completă.
+const SUBTITLE_SOURCE_BY_OUTCOME: Record<string, string | null> = {
+  already_embedded: "embedded",
+  audio_already_romanian: "audio_ro",
+  srt_already_ok: "tracked_srt",
+  renamed_srt: "tracked_srt",
+  reencoded_srt: "tracked_srt",
+  downloaded_opensubtitles: "opensubtitles",
+  downloaded_opensubtitles_approximate: "opensubtitles",
+  season_corrected: "season_aggregate",
+  season_already_ok: "season_aggregate",
+};
+
+const HAS_ROMANIAN_OUTCOMES = new Set([
+  "already_embedded",
+  "audio_already_romanian",
+  "srt_already_ok",
+  "renamed_srt",
+  "reencoded_srt",
+  "downloaded_opensubtitles",
+  "downloaded_opensubtitles_approximate",
+  "season_corrected",
+  "season_already_ok",
+]);
+
+// Apelat după fiecare verificare/corectare de subtitrare (finalul unei
+// descărcări, "Corectează subtitrare" din Lansări/Bibliotecă, backfill).
+export function updateMediaSubtitleStatus(
+  torrentHash: string,
+  outcome: string,
+  detail: string,
+): void {
+  getDb()
+    .prepare(
+      `UPDATE media SET has_romanian_subtitle = ?, subtitle_source = ?, subtitle_detail = ?,
+       subtitle_checked_at = datetime('now'), updated_at = datetime('now')
+       WHERE torrent_hash = ?`,
+    )
+    .run(
+      HAS_ROMANIAN_OUTCOMES.has(outcome) ? 1 : 0,
+      SUBTITLE_SOURCE_BY_OUTCOME[outcome] ?? null,
+      detail,
+      torrentHash,
+    );
+}
+
+// Apelat după "Șterge subtitrare" (Lansări/Bibliotecă) — subtitrarea .srt
+// sidecar a fost ștearsă de pe disk, deci starea redevine "fără RO".
+export function clearMediaSubtitleStatus(torrentHash: string): void {
+  getDb()
+    .prepare(
+      `UPDATE media SET has_romanian_subtitle = 0, subtitle_source = NULL, subtitle_detail = NULL,
+       subtitle_checked_at = datetime('now'), updated_at = datetime('now')
+       WHERE torrent_hash = ?`,
+    )
+    .run(torrentHash);
+}
+
+// Apelat când torrentul a ajuns la 100% (pollUntilComplete) — marchează
+// finalizarea, exact ca downloads.completed_at.
+export function markMediaCompleted(torrentHash: string): void {
+  getDb()
+    .prepare(
+      `UPDATE media SET completed_at = datetime('now'), updated_at = datetime('now')
+       WHERE torrent_hash = ? AND completed_at IS NULL`,
+    )
+    .run(torrentHash);
+}
+
+// Apelat la "Șterge titlul complet" (Lansări/Bibliotecă) — elimină rândul
+// din `media`, ca torrentul șters din downloads/qBittorrent/disk să dispară
+// și de-aici.
+export function deleteMediaByTorrentHash(torrentHash: string): void {
+  getDb().prepare("DELETE FROM media WHERE torrent_hash = ?").run(torrentHash);
+}

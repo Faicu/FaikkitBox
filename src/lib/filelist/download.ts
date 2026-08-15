@@ -193,9 +193,13 @@ async function pollUntilComplete(
               mediaType: plexType === "movie" ? "movie" : "tv",
             });
             await logSubtitleRun([subtitleItem], "download");
+            const { updateMediaSubtitleStatus } = await import("../media");
+            updateMediaSubtitleStatus(torrentHash, subtitleItem.outcome, subtitleItem.detail);
           } catch (e) {
             console.warn(`[filelist] Eroare subtitrare pentru "${torrentName}":`, e);
           }
+          const { markMediaCompleted } = await import("../media");
+          markMediaCompleted(torrentHash);
           await refreshPlexLibrary(plexType);
           console.log(`[filelist] Plex refresh trimis pentru "${plexType}"`);
         } else {
@@ -1039,6 +1043,8 @@ export const correctSubtitleForItem = createServerFn({ method: "POST" })
     });
 
     await logSubtitleRun([result], "download");
+    const { updateMediaSubtitleStatus } = await import("../media");
+    updateMediaSubtitleStatus(row.torrent_hash, result.outcome, result.detail);
     if (CORRECTED_OUTCOMES.includes(result.outcome)) {
       await refreshPlexLibrary(plexType).catch(() => {});
     }
@@ -1108,6 +1114,8 @@ export const deleteSubtitleForItem = createServerFn({ method: "POST" })
     });
 
     if (result.status === "ok") {
+      const { clearMediaSubtitleStatus } = await import("../media");
+      clearMediaSubtitleStatus(row.torrent_hash);
       if (row.category !== null) {
         const { refreshPlexLibraryForCategory } = await import("../plex-refresh");
         await refreshPlexLibraryForCategory(row.category).catch(() => {});

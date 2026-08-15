@@ -267,6 +267,10 @@ export const deleteFilelistLogEntry = createServerFn({ method: "POST" })
           console.warn("[filelist] Nu am putut șterge din qBit:", e);
         }
       }
+      if (torrentHash) {
+        const { deleteMediaByTorrentHash } = await import("../media");
+        deleteMediaByTorrentHash(torrentHash);
+      }
 
       // Rescanează biblioteca Plex (filme sau seriale, după categorie) — ca
       // fișierul șters să dispară din Plex fără să aștepți scanarea automată.
