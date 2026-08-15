@@ -21,15 +21,14 @@ function DescoperaPage() {
   const [mode, setMode] = useState<"grid" | "feed">("grid");
   const [sort, setSort] = useState<DiscoverSort>("trending");
   const [media, setMedia] = useState<DiscoverMediaType | "all">("all");
-  const [searchQuery, setSearchQuery] = useState("");
 
   return (
     <PageShell title="Descoperă" subtitle="Filme · Seriale · Trailere">
-      <div className="flex gap-1.5">
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 -mx-1 px-1">
         <button
           type="button"
           onClick={() => setMode("grid")}
-          className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+          className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
             mode === "grid"
               ? "bg-primary text-primary-foreground"
               : "bg-muted/60 text-muted-foreground hover:text-foreground"
@@ -40,7 +39,7 @@ function DescoperaPage() {
         <button
           type="button"
           onClick={() => setMode("feed")}
-          className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+          className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
             mode === "feed"
               ? "bg-primary text-primary-foreground"
               : "bg-muted/60 text-muted-foreground hover:text-foreground"
@@ -48,19 +47,12 @@ function DescoperaPage() {
         >
           <Zap className="h-3.5 w-3.5" /> Feed
         </button>
+        <div className="mx-0.5 h-5 w-px shrink-0 self-center bg-border" />
+        <FilterTabs sort={sort} media={media} onSortChange={setSort} onMediaChange={setMedia} />
       </div>
 
-      <FilterTabs
-        sort={sort}
-        media={media}
-        query={searchQuery}
-        onSortChange={setSort}
-        onMediaChange={setMedia}
-        onQueryChange={setSearchQuery}
-      />
-
       {mode === "grid" ? (
-        <DiscoverGrid sort={sort} media={media} searchQuery={searchQuery} />
+        <DiscoverGrid sort={sort} media={media} />
       ) : (
         <FeedView sort={sort} media={media} />
       )}

@@ -1,44 +1,22 @@
-import { useEffect, useState } from "react";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Star, Film, Tv } from "lucide-react";
 
 import { getDiscoverTitles } from "@/lib/tmdb.discover.functions";
 import type { DiscoverMediaType, DiscoverSort, DiscoverTitle } from "@/lib/tmdb.discover.functions";
-import { searchTmdb } from "@/lib/tmdb.functions";
 import { SceneViewer } from "./SceneViewer";
-
-function useDebouncedValue(value: string, delay: number) {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const id = setTimeout(() => setDebounced(value), delay);
-    return () => clearTimeout(id);
-  }, [value, delay]);
-  return debounced;
-}
 
 export function DiscoverGrid({
   sort,
   media,
-  searchQuery,
 }: {
   sort: DiscoverSort;
   media: DiscoverMediaType | "all";
-  searchQuery: string;
 }) {
   const [selected, setSelected] = useState<DiscoverTitle | null>(null);
 
   const discoverFn = useServerFn(getDiscoverTitles);
-  const searchFn = useServerFn(searchTmdb);
-
-  const debouncedQuery = useDebouncedValue(searchQuery, 400);
-  const isSearching = debouncedQuery.trim().length >= 2;
-
-  const searchResultsQuery = useQuery({
-    queryKey: ["tmdbSearch", debouncedQuery],
-    queryFn: () => searchFn({ data: { query: debouncedQuery.trim() } }),
-    enabled: isSearching,
-  });
 
   const movieQuery = useInfiniteQuery({
     queryKey: ["discover", "movie", sort],
@@ -46,7 +24,7 @@ export function DiscoverGrid({
     initialPageParam: 1,
     getNextPageParam: (lastPage, allPages) =>
       lastPage.items.length > 0 ? allPages.length + 1 : undefined,
-    enabled: !isSearching && (media === "all" || media === "movie"),
+    enabled: media === "all" || media === "movie",
   });
   const tvQuery = useInfiniteQuery({
     queryKey: ["discover", "tv", sort],
@@ -54,36 +32,22 @@ export function DiscoverGrid({
     initialPageParam: 1,
     getNextPageParam: (lastPage, allPages) =>
       lastPage.items.length > 0 ? allPages.length + 1 : undefined,
-    enabled: !isSearching && (media === "all" || media === "tv"),
+    enabled: media === "all" || media === "tv",
   });
 
-  const isLoading = isSearching
-    ? searchResultsQuery.isLoading
-    : (media === "all" || media === "movie" ? movieQuery.isLoading : false) ||
-      (media === "all" || media === "tv" ? tvQuery.isLoading : false);
+  const isLoading =
+    (media === "all" || media === "movie" ? movieQuery.isLoading : false) ||
+    (media === "all" || media === "tv" ? tvQuery.isLoading : false);
 
   const degraded =
-    !isSearching &&
-    ((media === "all" || media === "movie"
+    (media === "all" || media === "movie"
       ? (movieQuery.data?.pages.some((p) => p.degraded) ?? false)
       : false) ||
-      (media === "all" || media === "tv"
-        ? (tvQuery.data?.pages.some((p) => p.degraded) ?? false)
-        : false));
+    (media === "all" || media === "tv"
+      ? (tvQuery.data?.pages.some((p) => p.degraded) ?? false)
+      : false);
 
   const items: DiscoverTitle[] = (() => {
-    if (isSearching) {
-      return (searchResultsQuery.data ?? [])
-        .filter((r) => media === "all" || r.mediaType === media)
-        .map((r) => ({
-          id: r.id,
-          mediaType: r.mediaType,
-          title: r.title,
-          year: r.year,
-          posterUrl: r.posterUrl,
-          voteAverage: null,
-        }));
-    }
     const movies = media === "tv" ? [] : (movieQuery.data?.pages.flatMap((p) => p.items) ?? []);
     const shows = media === "movie" ? [] : (tvQuery.data?.pages.flatMap((p) => p.items) ?? []);
     if (media === "all") {
@@ -100,9 +64,8 @@ export function DiscoverGrid({
   })();
 
   const hasNextPage =
-    !isSearching &&
-    (((media === "all" || media === "movie") && movieQuery.hasNextPage) ||
-      ((media === "all" || media === "tv") && tvQuery.hasNextPage));
+    ((media === "all" || media === "movie") && movieQuery.hasNextPage) ||
+    ((media === "all" || media === "tv") && tvQuery.hasNextPage);
   const isFetchingNextPage = movieQuery.isFetchingNextPage || tvQuery.isFetchingNextPage;
 
   function fetchMore() {
@@ -173,7 +136,7 @@ export function DiscoverGrid({
             ))}
           </div>
 
-          {!isSearching && hasNextPage && (
+          {hasNextPage && (
             <button
               type="button"
               onClick={fetchMore}

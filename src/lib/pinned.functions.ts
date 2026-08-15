@@ -121,35 +121,6 @@ export const setWatchSettings = createServerFn({ method: "POST" })
     }
   });
 
-export const addPinnedItem = createServerFn({ method: "POST" })
-  .validator((data: PinnedItemDb) => data)
-  .handler(async ({ data }): Promise<{ added: boolean }> => {
-    const { requireAuth } = await import("./admin.server");
-    const session = await requireAuth();
-    const userId = session.data.userId!;
-    const db = getDb();
-    const exists = db
-      .prepare("SELECT 1 FROM pinned_items WHERE user_id = ? AND id = ? AND media_type = ?")
-      .get(userId, data.id, data.mediaType);
-    if (exists) return { added: false };
-    const maxOrder = db
-      .prepare("SELECT COALESCE(MAX(sort_order), -1) as m FROM pinned_items WHERE user_id = ?")
-      .get(userId) as { m: number };
-    db.prepare(
-      `INSERT INTO pinned_items (user_id, id, media_type, title, original_title, poster_url, sort_order)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    ).run(
-      userId,
-      data.id,
-      data.mediaType,
-      data.title,
-      data.originalTitle,
-      data.posterUrl ?? null,
-      maxOrder.m + 1,
-    );
-    return { added: true };
-  });
-
 export const setPinnedItems = createServerFn({ method: "POST" })
   .validator((data: { items: PinnedItemDb[] }) => data)
   .handler(async ({ data }): Promise<void> => {

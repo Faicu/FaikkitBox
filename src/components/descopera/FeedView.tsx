@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { ExternalLink, Loader2 } from "lucide-react";
+import { ExternalLink, Loader2, Plus } from "lucide-react";
 
 import { getFeedClips } from "@/lib/tmdb.discover.functions";
 import type { DiscoverMediaType, DiscoverSort, FeedClip } from "@/lib/tmdb.discover.functions";
 import { getTmdbDetails } from "@/lib/tmdb.functions";
-import { FilelistCheckButton } from "./FilelistCheckButton";
-import { PinButton } from "./PinButton";
+import { AddMediaWizard } from "@/components/principala/AddMediaWizard";
 
 function FeedCard({ clip, isActive }: { clip: FeedClip; isActive: boolean }) {
   const detailsFn = useServerFn(getTmdbDetails);
@@ -17,6 +16,7 @@ function FeedCard({ clip, isActive }: { clip: FeedClip; isActive: boolean }) {
     enabled: isActive,
   });
   const imdbId = detailsQuery.data?.imdbId ?? null;
+  const [wizardOpen, setWizardOpen] = useState(false);
 
   return (
     <div className="relative flex h-full w-full snap-start items-center justify-center bg-black">
@@ -46,21 +46,13 @@ function FeedCard({ clip, isActive }: { clip: FeedClip; isActive: boolean }) {
               {clip.year && ` · ${clip.year}`}
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-2">
-              <FilelistCheckButton
-                title={clip.title}
-                originalTitle={
-                  detailsQuery.data?.literalTitle ?? detailsQuery.data?.originalTitle ?? clip.title
-                }
-                imdbId={imdbId}
-                mediaType={clip.mediaType}
-              />
-              <PinButton
-                id={clip.id}
-                title={clip.title}
-                originalTitle={detailsQuery.data?.originalTitle ?? clip.title}
-                posterUrl={clip.posterUrl}
-                mediaType={clip.mediaType}
-              />
+              <button
+                type="button"
+                onClick={() => setWizardOpen(true)}
+                className="flex shrink-0 items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground hover:bg-primary/90"
+              >
+                <Plus className="h-3.5 w-3.5" /> Adaugă
+              </button>
             </div>
           </div>
           {imdbId && (
@@ -75,6 +67,19 @@ function FeedCard({ clip, isActive }: { clip: FeedClip; isActive: boolean }) {
           )}
         </div>
       </div>
+
+      <AddMediaWizard
+        open={wizardOpen}
+        onClose={() => setWizardOpen(false)}
+        initialItem={{
+          id: clip.id,
+          mediaType: clip.mediaType,
+          title: clip.title,
+          originalTitle: detailsQuery.data?.originalTitle ?? clip.title,
+          year: clip.year,
+          posterUrl: clip.posterUrl,
+        }}
+      />
     </div>
   );
 }

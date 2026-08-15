@@ -1,4 +1,3 @@
-import { Search } from "lucide-react";
 import type { DiscoverMediaType, DiscoverSort } from "@/lib/tmdb.discover.functions";
 
 const sortTabs: { value: DiscoverSort; label: string }[] = [
@@ -13,66 +12,52 @@ const mediaTabs: { value: DiscoverMediaType | "all"; label: string }[] = [
   { value: "tv", label: "Seriale" },
 ];
 
+function Tab({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+        active
+          ? "bg-primary text-primary-foreground"
+          : "bg-muted/60 text-muted-foreground hover:text-foreground"
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
 export function FilterTabs({
   sort,
   media,
-  query,
   onSortChange,
   onMediaChange,
-  onQueryChange,
 }: {
   sort: DiscoverSort;
   media: DiscoverMediaType | "all";
-  query: string;
   onSortChange: (v: DiscoverSort) => void;
   onMediaChange: (v: DiscoverMediaType | "all") => void;
-  onQueryChange: (v: string) => void;
 }) {
   return (
-    <div className="space-y-2">
-      <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <input
-          value={query}
-          onChange={(e) => onQueryChange(e.target.value)}
-          placeholder="Caută un titlu..."
-          className="w-full rounded-xl border border-border bg-background py-2 pl-9 pr-3 text-sm outline-none focus:ring-1 focus:ring-primary"
+    <>
+      {sortTabs.map((tab) => (
+        <Tab
+          key={tab.value}
+          label={tab.label}
+          active={sort === tab.value}
+          onClick={() => onSortChange(tab.value)}
         />
-      </div>
-
-      <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1">
-        {sortTabs.map((tab) => (
-          <button
-            key={tab.value}
-            type="button"
-            onClick={() => onSortChange(tab.value)}
-            className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-              sort === tab.value
-                ? "bg-primary text-primary-foreground"
-                : "bg-muted/60 text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="flex gap-1.5">
-        {mediaTabs.map((tab) => (
-          <button
-            key={tab.value}
-            type="button"
-            onClick={() => onMediaChange(tab.value)}
-            className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-              media === tab.value
-                ? "bg-primary text-primary-foreground"
-                : "bg-muted/60 text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-    </div>
+      ))}
+      <div className="mx-0.5 h-5 w-px shrink-0 self-center bg-border" />
+      {mediaTabs.map((tab) => (
+        <Tab
+          key={tab.value}
+          label={tab.label}
+          active={media === tab.value}
+          onClick={() => onMediaChange(tab.value)}
+        />
+      ))}
+    </>
   );
 }

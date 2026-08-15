@@ -8,9 +8,6 @@ import { getTmdbVideos } from "@/lib/tmdb.discover.functions";
 import type { DiscoverTitle } from "@/lib/tmdb.discover.functions";
 import { getTmdbDetails } from "@/lib/tmdb.functions";
 import { AddMediaWizard } from "@/components/principala/AddMediaWizard";
-import { FilelistCheckButton } from "./FilelistCheckButton";
-import { PinButton } from "./PinButton";
-import { PlexLibraryStatus } from "./PlexLibraryStatus";
 
 export function SceneViewer({ item, onClose }: { item: DiscoverTitle; onClose: () => void }) {
   const videosFn = useServerFn(getTmdbVideos);
@@ -106,29 +103,6 @@ export function SceneViewer({ item, onClose }: { item: DiscoverTitle; onClose: (
                 <Plus className="h-4 w-4" /> Adaugă film/serial
               </button>
             )}
-
-            <div className="flex flex-wrap items-center gap-2">
-              <PlexLibraryStatus
-                title={item.title}
-                originalTitle={detailsQuery.data?.originalTitle ?? item.title}
-                mediaType={item.mediaType}
-              />
-              <FilelistCheckButton
-                title={item.title}
-                originalTitle={
-                  detailsQuery.data?.literalTitle ?? detailsQuery.data?.originalTitle ?? item.title
-                }
-                imdbId={imdbId}
-                mediaType={item.mediaType}
-              />
-              <PinButton
-                id={item.id}
-                title={item.title}
-                originalTitle={detailsQuery.data?.originalTitle ?? item.title}
-                posterUrl={item.posterUrl}
-                mediaType={item.mediaType}
-              />
-            </div>
           </div>
         </DrawerContent>
       </Drawer>
