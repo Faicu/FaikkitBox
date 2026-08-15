@@ -27,6 +27,7 @@ import {
 } from "./log";
 import { CORRECTED_OUTCOMES } from "./subtitle-outcomes";
 import type { SubtitleRunItem } from "./subtitles";
+import { refreshPlexLibrary } from "../plex-refresh";
 // Import dinamic (nu static) — subtitles.ts foloseşte node:child_process/node:util
 // pentru ffprobe, care nu trebuie să ajungă în bundle-ul de client. download.ts
 // e statically importat de filelist.functions.ts, folosit și din componente
@@ -208,60 +209,6 @@ async function pollUntilComplete(
   }
 
   console.warn(`[filelist] Timeout polling pentru "${torrentName}" după 48h`);
-}
-
-async function plexRefreshLibraryBySection(sectionKey: string): Promise<void> {
-  const base = process.env.PLEX_URL ?? "http://127.0.0.1:32400";
-  const token = process.env.PLEX_TOKEN;
-  if (!token) return;
-  try {
-    const res = await fetch(`${base}/library/sections/${sectionKey}/refresh`, {
-      method: "GET",
-      headers: { "X-Plex-Token": token, Accept: "application/json" },
-    });
-    if (!res.ok) {
-      console.warn(`[filelist] Plex refresh HTTP ${res.status} pentru secțiunea ${sectionKey}`);
-    }
-  } catch (e) {
-    console.warn(`[filelist] Eroare Plex refresh:`, e);
-  }
-}
-
-// Rescanează secțiunea Plex (filme sau seriale) — SINGURUL loc care declanșează
-// refresh Plex din tot modulul Filelist. Folosit atât la finalizarea unei
-// descărcări (pollUntilComplete), cât și la ștergerea unei intrări din jurnal
-// (deleteFilelistLogEntry, log.ts, via refreshPlexLibraryForCategory).
-export async function refreshPlexLibrary(plexType: "movie" | "show"): Promise<void> {
-  const sectionKey = await plexFindLibraryKey(plexType);
-  if (sectionKey) await plexRefreshLibraryBySection(sectionKey);
-}
-
-export async function refreshPlexLibraryForCategory(category: number): Promise<void> {
-  return refreshPlexLibrary(isMovieCategory(category) ? "movie" : "show");
-}
-
-async function plexFindLibraryKey(type: "movie" | "show"): Promise<string | null> {
-  const base = process.env.PLEX_URL ?? "http://127.0.0.1:32400";
-  const token = process.env.PLEX_TOKEN;
-  if (!token) return null;
-  try {
-    const res = await fetch(`${base}/library/sections`, {
-      headers: { "X-Plex-Token": token, Accept: "application/json" },
-    });
-    if (!res.ok) {
-      console.warn(`[filelist] Plex library sections HTTP ${res.status}`);
-      return null;
-    }
-    const data = (await res.json()) as {
-      MediaContainer?: { Directory?: Array<{ type?: string; key?: string }> };
-    };
-    const dirs = data?.MediaContainer?.Directory ?? [];
-    const match = dirs.find((d) => d.type === type);
-    return match ? String(match.key) : null;
-  } catch (e) {
-    console.warn(`[filelist] Eroare la găsirea secțiunii Plex:`, e);
-    return null;
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1058,8 +1005,10 @@ export const deleteSubtitleForItem = createServerFn({ method: "POST" })
     await requireAdmin();
 
     const { getDb } = await import("../db");
-    const row = getDb().prepare("SELECT torrent_hash FROM downloads WHERE id = ?").get(data.id) as
-      | { torrent_hash: string | null }
+    const row = getDb()
+      .prepare("SELECT torrent_hash, category FROM downloads WHERE id = ?")
+      .get(data.id) as
+      | { torrent_hash: string | null; category: number | null }
       | undefined;
 
     if (!row) {
@@ -1081,10 +1030,17 @@ export const deleteSubtitleForItem = createServerFn({ method: "POST" })
     const url = qbitBase.replace(/\/$/, "");
 
     const { deleteRomanianSubtitle } = await import("./subtitles");
-    return deleteRomanianSubtitle({
+    const result = await deleteRomanianSubtitle({
       qbitUrl: url,
       qbitUser,
       qbitPass,
       torrentHash: row.torrent_hash,
     });
+
+    if (result.status === "ok" && row.category !== null) {
+      const { refreshPlexLibraryForCategory } = await import("../plex-refresh");
+      await refreshPlexLibraryForCategory(row.category).catch(() => {});
+    }
+
+    return result;
   });

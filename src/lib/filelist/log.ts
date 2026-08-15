@@ -1,7 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import type { FilelistLogEntry, DownloadLogRow } from "./types";
 import { qbitLogin } from "../qbit-client";
-import { refreshPlexLibraryForCategory, findTorrentHashNow } from "./download";
+import { findTorrentHashNow } from "./download";
+import { refreshPlexLibraryForCategory } from "../plex-refresh";
 
 // ---------------------------------------------------------------------------
 // Log persistent al descărcărilor

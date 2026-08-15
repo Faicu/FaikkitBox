@@ -61,6 +61,13 @@ export const qbitAction = createServerFn({ method: "POST" })
           hashes: hashesStr,
           deleteFiles: "true",
         });
+        if (res.ok) {
+          // Ștergere directă din pagina qBittorrent, fără categorie Filelist
+          // asociată — nu știm sigur dacă era film sau serial, așa că
+          // rescanăm ambele biblioteci Plex.
+          const { refreshPlexLibraries } = await import("../plex-refresh");
+          refreshPlexLibraries().catch(() => {});
+        }
         return { ok: res.ok };
       }
       const primary =
