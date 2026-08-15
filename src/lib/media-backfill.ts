@@ -91,11 +91,12 @@ async function fetchItemDetail(
 //     potrivire directă.
 //  2. `content_path` e un folder (torrent cu fișiere multiple — ex. un
 //     videoclip + .nfo/.srt/sample, sau un pachet de sezon) — listăm
-//     conținutul torrentului și, DOAR dacă are exact un fișier video, îl
-//     legăm (calea reconstruită folder+fișier). Cu mai mult de un fișier
-//     video (pachet de sezon), sărim — torrent_hash e UNIQUE în `media`, o
-//     potrivire ambiguă ar încerca să lege mai multe episoade de același
-//     torrent și ar eșua la a doua inserare.
+//     conținutul torrentului și legăm FIECARE fișier video găsit (calea
+//     reconstruită folder+fișier) de același hash. Pentru pachete de sezon,
+//     mai multe episoade ajung să partajeze același torrent_hash — intenționat
+//     (torrent_hash NU mai e UNIQUE în `media` de la migrarea v13); acțiunile
+//     de ștergere/corectare subtitrare se aplică atunci la nivelul întregului
+//     pachet, nu doar unui episod.
 const MEDIA_EXTENSIONS = [".mkv", ".mp4", ".avi", ".m2ts", ".ts", ".wmv", ".mov"];
 
 interface QbitTorrentMatch {
@@ -130,18 +131,18 @@ async function fetchQbitTorrentsByPath(): Promise<Map<string, QbitTorrentMatch>>
         byPath.set(t.content_path, match);
         continue;
       }
-      // Torrent cu folder — listăm fișierele, legăm doar dacă are exact un
-      // fișier video (fără ambiguitate posibilă). qBit întoarce `name`
-      // relativ la save_path, deja incluzând folderul rădăcină al
-      // torrentului (verificat direct pe un exemplu real) — NU la
+      // Torrent cu folder — listăm fișierele și legăm fiecare fișier video
+      // găsit (fie unul singur, fie un pachet de sezon cu mai multe). qBit
+      // întoarce `name` relativ la save_path, deja incluzând folderul
+      // rădăcină al torrentului (verificat direct pe un exemplu real) — NU la
       // content_path, care e chiar acel folder; concatenarea cu content_path
       // ar dubla folderul în calea reconstruită.
       if (!t.save_path) continue;
       try {
         const files = await qbitListFiles(qbitUrl, t.hash, qbitUser, qbitPass);
         const videoFiles = files.filter((f) => hasMediaExtension(f.name));
-        if (videoFiles.length === 1) {
-          byPath.set(`${t.save_path}/${videoFiles[0].name}`, match);
+        for (const f of videoFiles) {
+          byPath.set(`${t.save_path}/${f.name}`, match);
         }
       } catch {
         // torrent inaccesibil/fișiere indisponibile — sărim, nu blocăm restul

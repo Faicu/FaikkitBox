@@ -205,7 +205,7 @@ export function getDb(): DatabaseSync {
     );
     CREATE INDEX IF NOT EXISTS idx_media_imdb ON media(imdb_id);
     CREATE INDEX IF NOT EXISTS idx_media_parent ON media(parent_id);
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_media_torrent_hash ON media(torrent_hash) WHERE torrent_hash IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS idx_media_torrent_hash ON media(torrent_hash) WHERE torrent_hash IS NOT NULL;
     CREATE UNIQUE INDEX IF NOT EXISTS idx_media_plex_key ON media(plex_rating_key) WHERE plex_rating_key IS NOT NULL;
   `);
 
@@ -484,6 +484,24 @@ function runCleanups(database: DatabaseSync): void {
         // coloana există deja dintr-o rulare anterioară
       }
       database.exec("PRAGMA user_version = 12");
+    }
+
+    if (version < 13) {
+      // v13: torrent_hash nu mai e UNIQUE — un pachet de sezon e un singur
+      // torrent cu mai multe episoade, deci mai multe rânduri `media` chiar
+      // trebuie să partajeze același hash. Acțiunile (ștergere, corectare
+      // subtitrare) rămân cheiate pe torrent_hash și se aplică acum la
+      // nivelul întregului pachet, intenționat.
+      try {
+        database.exec("DROP INDEX IF EXISTS idx_media_torrent_hash");
+        database.exec(
+          "CREATE INDEX IF NOT EXISTS idx_media_torrent_hash ON media(torrent_hash) WHERE torrent_hash IS NOT NULL",
+        );
+        console.log("[db] Migrare v13: torrent_hash nu mai e UNIQUE în media");
+      } catch {
+        // deja migrat
+      }
+      database.exec("PRAGMA user_version = 13");
     }
   } catch (e) {
     console.warn("[db] Curățare eșuată:", e);
