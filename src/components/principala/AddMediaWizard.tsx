@@ -1135,7 +1135,9 @@ export function AddMediaWizard({
                               onClick={() => setConfirmSeries(seriesPacks)}
                             />
                           )}
-                          {seriesMissingSeasons.length > 0 && (
+                          {(seriesMissingSeasons.length > 0 ||
+                            (tmdbDetails?.tvStatus &&
+                              ONGOING_TV_STATUSES.has(tmdbDetails.tvStatus))) && (
                             <button
                               type="button"
                               disabled={busy}
