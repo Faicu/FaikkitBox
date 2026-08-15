@@ -175,11 +175,9 @@ export interface PlexTitleDetail {
   watchedByOthers: Array<{ username: string; viewedAt: number }>;
   addedByUsername: string | null;
   status: "in_library" | "downloading" | "pinned";
-  // Intrarea corespunzătoare din jurnalul propriu de descărcări — necesară
-  // pentru butoanele de corectare/ștergere subtitrare și ștergere completă a
-  // titlului, care operează pe jurnal + qBittorrent, nu direct pe Plex.
-  // Absentă pentru titluri doar fixate, fără nimic descărcat încă.
-  downloadsLogId: number | null;
+  // Butoanele de corectare/ștergere subtitrare și ștergere completă operează
+  // direct pe media.id + torrentHash — absent pentru titluri doar fixate,
+  // fără nimic descărcat încă.
   torrentHash: string | null;
   // true dacă intrarea găsită e un pachet de sezon întreg, nu doar acest
   // episod — ștergerea/corectarea ar afecta atunci tot pachetul.
@@ -253,17 +251,6 @@ async function buildDetailFromMediaRow(
     addedByUsername = u?.username ?? null;
   }
 
-  // torrent_hash e cunoscut direct — nu mai e nevoie de potrivirea prin
-  // IMDb id + regex pe numele lansării (findDownloadsRowForImdb), doar un
-  // lookup exact.
-  let downloadsLogId: number | null = null;
-  if (row.torrent_hash) {
-    const d = db
-      .prepare("SELECT id FROM downloads WHERE torrent_hash = ?")
-      .get(row.torrent_hash) as { id: number } | undefined;
-    downloadsLogId = d?.id ?? null;
-  }
-
   return {
     mediaId: row.id,
     ratingKey: row.plex_rating_key,
@@ -283,7 +270,6 @@ async function buildDetailFromMediaRow(
     watchedByOthers,
     addedByUsername,
     status: row.plex_rating_key ? "in_library" : row.torrent_hash ? "downloading" : "pinned",
-    downloadsLogId,
     torrentHash: row.torrent_hash,
     isSeasonPack: !!row.is_season_pack,
     canManage: isAdminOrOwner(session, row.requested_by_user_id),

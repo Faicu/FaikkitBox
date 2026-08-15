@@ -45,9 +45,9 @@ import { Progress } from "@/components/ui/progress";
 import { plexLibraryBrowseQuery, adminStatusQuery } from "@/lib/queries";
 import { getPlexTitleDetail } from "@/lib/services.functions";
 import {
-  correctSubtitleForItem,
-  deleteSubtitleForItem,
-  deleteFilelistLogEntry,
+  correctSubtitleForMedia,
+  deleteSubtitleForMedia,
+  deleteMediaEntry,
 } from "@/lib/filelist.functions";
 import { startMediaBackfill, getMediaBackfillState } from "@/lib/media-backfill";
 import { formatMs } from "@/lib/format";
@@ -152,7 +152,7 @@ export function BibliotecaList() {
   const [correcting, setCorrecting] = useState(false);
   const [deletingSubtitle, setDeletingSubtitle] = useState(false);
   const [confirmDeleteTitle, setConfirmDeleteTitle] = useState<{
-    logId: number;
+    mediaId: number;
     title: string;
     isSeasonPack: boolean;
   } | null>(null);
@@ -161,11 +161,11 @@ export function BibliotecaList() {
     null,
   );
 
-  const correctFn = useServerFn(correctSubtitleForItem);
-  const deleteSubtitleFn = useServerFn(deleteSubtitleForItem);
+  const correctFn = useServerFn(correctSubtitleForMedia);
+  const deleteSubtitleFn = useServerFn(deleteSubtitleForMedia);
   const startBackfillFn = useServerFn(startMediaBackfill);
   const backfillStateFn = useServerFn(getMediaBackfillState);
-  const deleteEntryFn = useServerFn(deleteFilelistLogEntry);
+  const deleteEntryFn = useServerFn(deleteMediaEntry);
 
   const detail = useQuery({
     queryKey: ["plexTitleDetail", selectedMediaId],
@@ -209,11 +209,11 @@ export function BibliotecaList() {
   }
 
   async function correctSubtitle() {
-    if (!d?.downloadsLogId) return;
+    if (!d) return;
     setCorrecting(true);
     const toastId = toast.loading(`Verific subtitrarea pentru „${d.title}”…`);
     const res = await correctFn({
-      data: { id: d.downloadsLogId },
+      data: { mediaId: d.mediaId },
     }).catch((e) => ({
       status: "error" as const,
       error: e instanceof Error ? e.message : String(e),
@@ -232,11 +232,11 @@ export function BibliotecaList() {
   }
 
   async function deleteSubtitle() {
-    if (!d?.downloadsLogId) return;
+    if (!d) return;
     setDeletingSubtitle(true);
     const toastId = toast.loading(`Șterg subtitrarea pentru „${d.title}”…`);
     const res = await deleteSubtitleFn({
-      data: { id: d.downloadsLogId },
+      data: { mediaId: d.mediaId },
     }).catch((e) => ({
       status: "error" as const,
       error: e instanceof Error ? e.message : String(e),
@@ -256,8 +256,8 @@ export function BibliotecaList() {
 
   async function confirmDeleteTitleAction() {
     if (!confirmDeleteTitle) return;
-    const { logId } = confirmDeleteTitle;
-    const res = await deleteEntryFn({ data: { id: logId } });
+    const { mediaId } = confirmDeleteTitle;
+    const res = await deleteEntryFn({ data: { mediaId } });
     setConfirmDeleteTitle(null);
     if (!res.ok) {
       toast.error("Nu am putut șterge titlul", { description: res.error });
@@ -586,7 +586,7 @@ export function BibliotecaList() {
                 </div>
 
                 <div className="flex flex-col gap-2 pt-1 border-t border-border">
-                  {d.downloadsLogId && d.torrentHash ? (
+                  {d.torrentHash ? (
                     d.canManage ? (
                       <>
                         <div className="flex gap-2 pt-2">
@@ -621,7 +621,7 @@ export function BibliotecaList() {
                           type="button"
                           onClick={() =>
                             setConfirmDeleteTitle({
-                              logId: d.downloadsLogId!,
+                              mediaId: d.mediaId,
                               title: d.type === "movie" ? d.title : (d.show ?? d.title),
                               isSeasonPack: d.isSeasonPack,
                             })
@@ -642,7 +642,7 @@ export function BibliotecaList() {
                     <div className="pt-2 text-[11px] text-muted-foreground">
                       {d.status === "pinned"
                         ? "Titlu fixat pentru urmărire — nu a fost încă descărcat nimic, deci nu sunt încă butoane de gestionat."
-                        : "Titlul nu e urmărit în jurnalul de descărcări (adăugat manual sau dinainte de jurnal) — corectarea/ștergerea subtitrării și ștergerea completă nu sunt disponibile."}
+                        : "Nu știm ce torrent corespunde acestui titlu (a fost adăugat manual în Plex, sau torrentul nu mai există în qBittorrent) — corectarea/ștergerea subtitrării și ștergerea completă nu sunt disponibile."}
                     </div>
                   )}
                 </div>

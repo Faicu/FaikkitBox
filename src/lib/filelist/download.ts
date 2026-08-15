@@ -1188,3 +1188,142 @@ export const deleteSubtitleForItem = createServerFn({ method: "POST" })
 
     return result;
   });
+
+// ---------------------------------------------------------------------------
+// Echivalentele de mai sus, dar sursate direct din `media` (media.id), nu din
+// `downloads` — folosite de Bibliotecă. Orice rând `media` cu torrent_hash
+// cunoscut e gestionabil, indiferent dacă provine dintr-o descărcare pornită
+// prin aplicație sau a fost rezolvat retroactiv la backfill (vezi
+// media-backfill.ts) — nu mai depinde de existența unui rând `downloads`.
+// ---------------------------------------------------------------------------
+
+interface MediaActionRow {
+  torrent_name: string | null;
+  torrent_hash: string | null;
+  imdb_id: string | null;
+  category: number | null;
+  requested_by_user_id: number | null;
+}
+
+export const correctSubtitleForMedia = createServerFn({ method: "POST" })
+  .validator((data: { mediaId: number }) => data)
+  .handler(async ({ data }): Promise<CorrectSubtitleResult> => {
+    const { requireAuth, isAdminOrOwner } = await import("../admin.server");
+    const session = await requireAuth();
+
+    const { getDb } = await import("../db");
+    const row = getDb()
+      .prepare(
+        "SELECT torrent_name, torrent_hash, imdb_id, category, requested_by_user_id FROM media WHERE id = ?",
+      )
+      .get(data.mediaId) as MediaActionRow | undefined;
+
+    if (!row) {
+      return { status: "error", error: "Titlul nu a fost găsit" };
+    }
+    if (!isAdminOrOwner(session, row.requested_by_user_id)) {
+      return {
+        status: "error",
+        error: "Doar cel care a adăugat titlul sau un admin poate corecta subtitrarea",
+      };
+    }
+    if (!row.torrent_hash) {
+      return {
+        status: "error",
+        error: "Hash-ul torrentului e necunoscut — nu poate fi gestionat automat",
+      };
+    }
+
+    const qbitBase = process.env.QBIT_URL ?? "http://192.168.1.192:25556";
+    const qbitUser = process.env.QBIT_USERNAME;
+    const qbitPass = process.env.QBIT_PASSWORD;
+    if (!qbitUser || !qbitPass) {
+      return { status: "error", error: "QBIT_USERNAME / QBIT_PASSWORD nu sunt configurate" };
+    }
+    const url = qbitBase.replace(/\/$/, "");
+
+    const { ensureRomanianSubtitle, logSubtitleRun } = await import("./subtitles");
+    const plexType = row.category !== null && isMovieCategory(row.category) ? "movie" : "show";
+
+    const result = await ensureRomanianSubtitle({
+      qbitUrl: url,
+      qbitUser,
+      qbitPass,
+      torrentHash: row.torrent_hash,
+      torrentName: row.torrent_name ?? "",
+      imdbId: row.imdb_id ?? undefined,
+      mediaType: plexType === "movie" ? "movie" : "tv",
+    });
+
+    await logSubtitleRun([result], "download");
+    const { updateMediaSubtitleStatus } = await import("../media");
+    updateMediaSubtitleStatus(row.torrent_hash, result.outcome, result.detail);
+    if (CORRECTED_OUTCOMES.includes(result.outcome)) {
+      await refreshPlexLibrary(plexType).catch(() => {});
+    }
+
+    return { status: "ok", ...result };
+  });
+
+export const deleteSubtitleForMedia = createServerFn({ method: "POST" })
+  .validator((data: { mediaId: number }) => data)
+  .handler(async ({ data }): Promise<DeleteSubtitleResult> => {
+    const { requireAuth, isAdminOrOwner } = await import("../admin.server");
+    const session = await requireAuth();
+
+    const { getDb } = await import("../db");
+    const row = getDb()
+      .prepare(
+        "SELECT torrent_name, torrent_hash, imdb_id, category, requested_by_user_id FROM media WHERE id = ?",
+      )
+      .get(data.mediaId) as MediaActionRow | undefined;
+
+    if (!row) {
+      return { status: "error", deleted: [], error: "Titlul nu a fost găsit" };
+    }
+    if (!isAdminOrOwner(session, row.requested_by_user_id)) {
+      return {
+        status: "error",
+        deleted: [],
+        error: "Doar cel care a adăugat titlul sau un admin poate șterge subtitrarea",
+      };
+    }
+    if (!row.torrent_hash) {
+      return {
+        status: "error",
+        deleted: [],
+        error: "Hash-ul torrentului e necunoscut — nu poate fi gestionat automat",
+      };
+    }
+
+    const qbitBase = process.env.QBIT_URL ?? "http://192.168.1.192:25556";
+    const qbitUser = process.env.QBIT_USERNAME;
+    const qbitPass = process.env.QBIT_PASSWORD;
+    if (!qbitUser || !qbitPass) {
+      return {
+        status: "error",
+        deleted: [],
+        error: "QBIT_USERNAME / QBIT_PASSWORD nu sunt configurate",
+      };
+    }
+    const url = qbitBase.replace(/\/$/, "");
+
+    const { deleteRomanianSubtitle } = await import("./subtitles");
+    const result = await deleteRomanianSubtitle({
+      qbitUrl: url,
+      qbitUser,
+      qbitPass,
+      torrentHash: row.torrent_hash,
+    });
+
+    if (result.status === "ok") {
+      const { clearMediaSubtitleStatus } = await import("../media");
+      clearMediaSubtitleStatus(row.torrent_hash);
+      if (row.category !== null) {
+        const { refreshPlexLibraryForCategory } = await import("../plex-refresh");
+        await refreshPlexLibraryForCategory(row.category).catch(() => {});
+      }
+    }
+
+    return result;
+  });

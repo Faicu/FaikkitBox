@@ -83,6 +83,46 @@ async function fetchItemDetail(
   }
 }
 
+// Leagă retroactiv un titlu backfill-uit de torrentul lui din qBittorrent
+// (dacă încă seed-uiește), potrivind calea exactă a fișierului din Plex cu
+// `content_path` — devine gestionabil complet (corectare/ștergere
+// subtitrare, ștergere titlu), nu doar afișat. Strict potrivire EXACTĂ, nu
+// "începe cu" — un pachet de sezon are content_path folderul, nu fișierul
+// individual, și torrent_hash e UNIQUE în `media`; o potrivire pe prefix ar
+// încerca să lege mai multe episoade de același torrent și ar eșua la a
+// doua inserare. Pachetele de sezon rămân deci nelegate la backfill (exact
+// ca înainte — nicio regresie, doar filme/episoade single-file câștigă
+// capacitate nouă).
+interface QbitTorrentMatch {
+  hash: string;
+  name: string;
+}
+
+async function fetchQbitTorrentsByPath(): Promise<Map<string, QbitTorrentMatch>> {
+  const byPath = new Map<string, QbitTorrentMatch>();
+  const qbitUrl = (process.env.QBIT_URL ?? "http://192.168.1.192:25556").replace(/\/$/, "");
+  const qbitUser = process.env.QBIT_USERNAME;
+  const qbitPass = process.env.QBIT_PASSWORD;
+  if (!qbitUser || !qbitPass) return byPath;
+  try {
+    const { qbitGet } = await import("./qbit-client");
+    const res = await qbitGet(qbitUrl, "/api/v2/torrents/info", qbitUser, qbitPass);
+    if (!res.ok) return byPath;
+    const list = (await res.json()) as Array<{
+      hash?: string;
+      name?: string;
+      content_path?: string;
+    }>;
+    for (const t of list) {
+      if (t.hash && t.content_path)
+        byPath.set(t.content_path, { hash: t.hash, name: t.name ?? "" });
+    }
+  } catch (e) {
+    console.warn("[media-backfill] Nu am putut lista torrentele din qBittorrent:", e);
+  }
+  return byPath;
+}
+
 interface ShowTmdbInfo {
   tmdbId: number | null;
   imdbId: string | null;
@@ -166,6 +206,8 @@ async function runMediaBackfillWork(): Promise<void> {
     const { searchTmdbTopResultInternal, getTmdbDetailsInternal, getTmdbEpisodeOverviewInternal } =
       await import("./tmdb.functions");
     const { upsertMediaEntryFromPlex } = await import("./media");
+    const qbitTorrentsByPath: Map<string, QbitTorrentMatch> =
+      pending.length > 0 ? await fetchQbitTorrentsByPath() : new Map();
 
     // Rezolvarea TMDB a unui serial (căutare + detalii) e cache-uită per
     // rulare — toate episoadele aceluiași serial o refolosesc, ca N episoade
@@ -197,6 +239,8 @@ async function runMediaBackfillWork(): Promise<void> {
         const quality = plexQualityFromMedia(media);
         const hasRomanianSubtitle = hasEmbeddedRomanianSubtitle(media);
         const durationMs = Number((detail ?? item).duration ?? 0);
+        const filePath = media?.Part?.[0]?.file ?? null;
+        const matchedTorrent = filePath ? (qbitTorrentsByPath.get(filePath) ?? null) : null;
         const plexAddedAt = Number((detail ?? item).addedAt ?? 0) || null;
 
         if (isEpisode) {
@@ -230,6 +274,8 @@ async function runMediaBackfillWork(): Promise<void> {
             quality,
             durationMs,
             hasRomanianSubtitle,
+            torrentHash: matchedTorrent?.hash ?? null,
+            torrentName: matchedTorrent?.name ?? null,
           });
           added++;
         } else {
@@ -262,6 +308,8 @@ async function runMediaBackfillWork(): Promise<void> {
             quality,
             durationMs,
             hasRomanianSubtitle,
+            torrentHash: matchedTorrent?.hash ?? null,
+            torrentName: matchedTorrent?.name ?? null,
           });
           added++;
         }

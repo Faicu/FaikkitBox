@@ -256,6 +256,12 @@ export interface UpsertMediaFromPlexInput {
   quality?: string | null;
   durationMs?: number | null;
   hasRomanianSubtitle?: boolean;
+  // Rezolvat retroactiv, potrivind calea fișierului din Plex cu lista de
+  // torrente din qBittorrent (vezi media-backfill.ts) — dacă torrentul încă
+  // seed-uiește, titlul backfill-uit devine gestionabil complet (corectare/
+  // ștergere subtitrare, ștergere titlu), nu doar afișat.
+  torrentHash?: string | null;
+  torrentName?: string | null;
 }
 
 export function upsertMediaEntryFromPlex(input: UpsertMediaFromPlexInput): number {
@@ -271,8 +277,9 @@ export function upsertMediaEntryFromPlex(input: UpsertMediaFromPlexInput): numbe
       `INSERT INTO media (
         media_type, parent_id, imdb_id, tmdb_id, title, original_title, literal_title,
         year, season, episode, overview_ro, genres, poster_path, tv_status,
-        plex_rating_key, plex_added_at, quality, duration_ms, has_romanian_subtitle, added_via
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'backfill')`,
+        plex_rating_key, plex_added_at, quality, duration_ms, has_romanian_subtitle,
+        torrent_hash, torrent_name, added_via
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'backfill')`,
     )
     .run(
       input.mediaType,
@@ -294,6 +301,8 @@ export function upsertMediaEntryFromPlex(input: UpsertMediaFromPlexInput): numbe
       input.quality ?? null,
       input.durationMs ?? null,
       input.hasRomanianSubtitle ? 1 : 0,
+      input.torrentHash ?? null,
+      input.torrentName ?? null,
     );
   return Number(res.lastInsertRowid);
 }

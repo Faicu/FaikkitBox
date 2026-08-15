@@ -284,3 +284,70 @@ export const deleteFilelistLogEntry = createServerFn({ method: "POST" })
       return { ok: false };
     }
   });
+
+// Echivalentul de mai sus, dar sursat direct din `media` (media.id), nu din
+// `downloads` — folosit de Bibliotecă. Orice rând `media` cu torrent_hash
+// cunoscut e ștergibil, indiferent dacă provine dintr-o descărcare pornită
+// prin aplicație sau a fost rezolvat retroactiv la backfill (vezi
+// media-backfill.ts) — nu mai depinde de existența unui rând `downloads`
+// (care, dacă totuși există pentru același torrent, e curățat și el, prin
+// torrent_hash — nu mai are sens să rămână orfan).
+export const deleteMediaEntry = createServerFn({ method: "POST" })
+  .validator((data: { mediaId: number }) => data)
+  .handler(async ({ data }): Promise<{ ok: boolean; qbitDeleted?: boolean; error?: string }> => {
+    const { requireAuth, isAdminOrOwner } = await import("../admin.server");
+    const session = await requireAuth();
+    try {
+      const { getDb } = await import("../db");
+      const db = getDb();
+
+      const row = db
+        .prepare("SELECT torrent_hash, category, requested_by_user_id FROM media WHERE id = ?")
+        .get(data.mediaId) as
+        | {
+            torrent_hash: string | null;
+            category: number | null;
+            requested_by_user_id: number | null;
+          }
+        | undefined;
+
+      if (!row) {
+        return { ok: false, error: "Titlul nu a fost găsit" };
+      }
+      if (!isAdminOrOwner(session, row.requested_by_user_id)) {
+        return { ok: false, error: "Doar cel care a adăugat titlul sau un admin poate șterge" };
+      }
+      if (!row.torrent_hash) {
+        return { ok: false, error: "Hash-ul torrentului e necunoscut — nu poate fi șters automat" };
+      }
+
+      let qbitDeleted = false;
+      try {
+        const qbitUrl = (process.env.QBIT_URL ?? "http://192.168.1.192:25556").replace(/\/$/, "");
+        const user = process.env.QBIT_USERNAME ?? "";
+        const pass = process.env.QBIT_PASSWORD ?? "";
+        const cookie = await qbitLogin(qbitUrl, user, pass);
+        const form = new URLSearchParams({ hashes: row.torrent_hash, deleteFiles: "true" });
+        const res = await fetch(`${qbitUrl}/api/v2/torrents/delete`, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded", Cookie: cookie },
+          body: form.toString(),
+        });
+        qbitDeleted = res.ok;
+      } catch (e) {
+        console.warn("[filelist] Nu am putut șterge din qBit:", e);
+      }
+
+      db.prepare("DELETE FROM media WHERE id = ?").run(data.mediaId);
+      db.prepare("DELETE FROM downloads WHERE torrent_hash = ?").run(row.torrent_hash);
+
+      if (row.category !== null) {
+        refreshPlexLibraryForCategory(row.category).catch(() => {});
+      }
+
+      return { ok: true, qbitDeleted };
+    } catch (e) {
+      console.error("[filelist] Nu am putut șterge titlul:", e);
+      return { ok: false };
+    }
+  });
