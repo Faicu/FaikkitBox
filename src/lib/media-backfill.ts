@@ -84,18 +84,27 @@ async function fetchItemDetail(
 }
 
 // Leagă retroactiv un titlu backfill-uit de torrentul lui din qBittorrent
-// (dacă încă seed-uiește), potrivind calea exactă a fișierului din Plex cu
-// `content_path` — devine gestionabil complet (corectare/ștergere
-// subtitrare, ștergere titlu), nu doar afișat. Strict potrivire EXACTĂ, nu
-// "începe cu" — un pachet de sezon are content_path folderul, nu fișierul
-// individual, și torrent_hash e UNIQUE în `media`; o potrivire pe prefix ar
-// încerca să lege mai multe episoade de același torrent și ar eșua la a
-// doua inserare. Pachetele de sezon rămân deci nelegate la backfill (exact
-// ca înainte — nicio regresie, doar filme/episoade single-file câștigă
-// capacitate nouă).
+// (dacă încă seed-uiește), potrivind calea exactă a fișierului din Plex —
+// devine gestionabil complet (corectare/ștergere subtitrare, ștergere
+// titlu), nu doar afișat. Doi pași:
+//  1. `content_path` chiar e fișierul video (torrent cu un singur fișier) —
+//     potrivire directă.
+//  2. `content_path` e un folder (torrent cu fișiere multiple — ex. un
+//     videoclip + .nfo/.srt/sample, sau un pachet de sezon) — listăm
+//     conținutul torrentului și, DOAR dacă are exact un fișier video, îl
+//     legăm (calea reconstruită folder+fișier). Cu mai mult de un fișier
+//     video (pachet de sezon), sărim — torrent_hash e UNIQUE în `media`, o
+//     potrivire ambiguă ar încerca să lege mai multe episoade de același
+//     torrent și ar eșua la a doua inserare.
+const MEDIA_EXTENSIONS = [".mkv", ".mp4", ".avi", ".m2ts", ".ts", ".wmv", ".mov"];
+
 interface QbitTorrentMatch {
   hash: string;
   name: string;
+}
+
+function hasMediaExtension(path: string): boolean {
+  return MEDIA_EXTENSIONS.some((ext) => path.toLowerCase().endsWith(ext));
 }
 
 async function fetchQbitTorrentsByPath(): Promise<Map<string, QbitTorrentMatch>> {
@@ -105,17 +114,38 @@ async function fetchQbitTorrentsByPath(): Promise<Map<string, QbitTorrentMatch>>
   const qbitPass = process.env.QBIT_PASSWORD;
   if (!qbitUser || !qbitPass) return byPath;
   try {
-    const { qbitGet } = await import("./qbit-client");
+    const { qbitGet, qbitListFiles } = await import("./qbit-client");
     const res = await qbitGet(qbitUrl, "/api/v2/torrents/info", qbitUser, qbitPass);
     if (!res.ok) return byPath;
     const list = (await res.json()) as Array<{
       hash?: string;
       name?: string;
       content_path?: string;
+      save_path?: string;
     }>;
     for (const t of list) {
-      if (t.hash && t.content_path)
-        byPath.set(t.content_path, { hash: t.hash, name: t.name ?? "" });
+      if (!t.hash || !t.content_path) continue;
+      const match = { hash: t.hash, name: t.name ?? "" };
+      if (hasMediaExtension(t.content_path)) {
+        byPath.set(t.content_path, match);
+        continue;
+      }
+      // Torrent cu folder — listăm fișierele, legăm doar dacă are exact un
+      // fișier video (fără ambiguitate posibilă). qBit întoarce `name`
+      // relativ la save_path, deja incluzând folderul rădăcină al
+      // torrentului (verificat direct pe un exemplu real) — NU la
+      // content_path, care e chiar acel folder; concatenarea cu content_path
+      // ar dubla folderul în calea reconstruită.
+      if (!t.save_path) continue;
+      try {
+        const files = await qbitListFiles(qbitUrl, t.hash, qbitUser, qbitPass);
+        const videoFiles = files.filter((f) => hasMediaExtension(f.name));
+        if (videoFiles.length === 1) {
+          byPath.set(`${t.save_path}/${videoFiles[0].name}`, match);
+        }
+      } catch {
+        // torrent inaccesibil/fișiere indisponibile — sărim, nu blocăm restul
+      }
     }
   } catch (e) {
     console.warn("[media-backfill] Nu am putut lista torrentele din qBittorrent:", e);
