@@ -81,7 +81,7 @@ export function TitleDetailDrawer({
   const d = detail.data?.status === "ok" ? detail.data.detail : null;
 
   // Resetat la fiecare titlu deschis, ca badge-ul de status Plex (ridicat din
-  // PinnedTitleManager, afișat sus lângă "Fixat") să nu arate o valoare veche
+  // PinnedTitleManager, afișat sus lângă "Urmărești") să nu arate o valoare veche
   // rămasă de la titlul anterior cât timp se încarcă cel nou.
   useEffect(() => {
     setPinnedPlexStatus(null);
