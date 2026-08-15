@@ -230,3 +230,44 @@ export function markMediaCompleted(torrentHash: string): void {
 export function deleteMediaByTorrentHash(torrentHash: string): void {
   getDb().prepare("DELETE FROM media WHERE torrent_hash = ?").run(torrentHash);
 }
+
+// Leagă un rând `media` de item-ul lui real din Plex — ratingKey, calitate,
+// durată. Apelat cu reîncercări (pollUntilComplete), pentru că scanarea Plex
+// e asincronă: la refreshPlexLibrary, fișierul poate să nu fie încă indexat.
+// Sare peste pachetele de sezon (episode NULL) — un singur rând `media` nu
+// poate reprezenta N ratingKey-uri diferite, câte unul per episod din pachet.
+// Întoarce true dacă a găsit și a scris legătura, ca apelantul să știe când
+// să oprească reîncercările.
+export async function resolveMediaPlexLinkByTorrentHash(torrentHash: string): Promise<boolean> {
+  const db = getDb();
+  const row = db
+    .prepare(
+      "SELECT id, media_type, title, original_title, season, episode FROM media WHERE torrent_hash = ?",
+    )
+    .get(torrentHash) as
+    | {
+        id: number;
+        media_type: string;
+        title: string;
+        original_title: string | null;
+        season: number | null;
+        episode: number | null;
+      }
+    | undefined;
+  if (!row) return false;
+
+  const { findPlexMovieLink, findPlexEpisodeLink } = await import("./services/plex-library");
+  const link =
+    row.media_type === "movie"
+      ? await findPlexMovieLink(row.title, row.original_title ?? row.title)
+      : row.media_type === "episode" && row.season != null && row.episode != null
+        ? await findPlexEpisodeLink(row.title, row.season, row.episode)
+        : null;
+  if (!link) return false;
+
+  db.prepare(
+    `UPDATE media SET plex_rating_key = ?, quality = ?, duration_ms = ?, updated_at = datetime('now')
+     WHERE id = ?`,
+  ).run(link.ratingKey, link.quality, link.durationMs, row.id);
+  return true;
+}

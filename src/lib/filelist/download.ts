@@ -198,10 +198,21 @@ async function pollUntilComplete(
           } catch (e) {
             console.warn(`[filelist] Eroare subtitrare pentru "${torrentName}":`, e);
           }
-          const { markMediaCompleted } = await import("../media");
+          const { markMediaCompleted, resolveMediaPlexLinkByTorrentHash } =
+            await import("../media");
           markMediaCompleted(torrentHash);
           await refreshPlexLibrary(plexType);
           console.log(`[filelist] Plex refresh trimis pentru "${plexType}"`);
+
+          // Scanarea Plex e asincronă — fișierul poate să nu fie încă indexat
+          // chiar după refresh. Reîncercăm cu pauze, ca ratingKey/calitatea/
+          // durata din `media` să se completeze fără intervenție manuală.
+          for (let attempt = 0; attempt < 5; attempt++) {
+            await new Promise((r) => setTimeout(r, 20_000));
+
+            const linked = await resolveMediaPlexLinkByTorrentHash(torrentHash).catch(() => false);
+            if (linked) break;
+          }
         } else {
           console.log(`[filelist] "${torrentName}" deja marcat complet de alt loop — skip`);
         }

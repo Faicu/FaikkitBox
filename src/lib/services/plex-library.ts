@@ -180,6 +180,74 @@ async function findByTitle(
   return { found: false, quality: null };
 }
 
+export interface PlexItemLink {
+  ratingKey: string;
+  quality: string | null;
+  durationMs: number;
+}
+
+// Găsește ratingKey-ul + calitatea/durata unui film deja apărut în Plex —
+// folosit ca să legăm un rând din tabela `media` de item-ul lui real din
+// Plex, o singură dată, cache-uit permanent acolo (vezi media.ts).
+export async function findPlexMovieLink(
+  title: string,
+  originalTitle: string,
+): Promise<PlexItemLink | null> {
+  const token = process.env.PLEX_TOKEN;
+  const base = process.env.PLEX_URL;
+  if (!token) return null;
+  try {
+    const headers = { Accept: "application/json", "X-Plex-Token": token };
+    const { url } = await discoverPlexUrl(token, base);
+    for (const q of [title, originalTitle].filter(Boolean)) {
+      const search = await fetchJson<PlexApiResponse>(
+        `${url}/search?query=${encodeURIComponent(q)}&type=1`,
+        { headers },
+        8000,
+      );
+      const item = (search?.MediaContainer?.Metadata ?? []).find((r) => r.type === "movie");
+      if (item?.ratingKey) {
+        return {
+          ratingKey: String(item.ratingKey),
+          quality: plexQualityFromMedia(item.Media?.[0]),
+          durationMs: Number(item.duration ?? 0),
+        };
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+// Echivalentul de mai sus, pentru un episod anume — reutilizează
+// findSeasonEpisodes (aceeași sursă ca getPlexEpisodesInSeason).
+export async function findPlexEpisodeLink(
+  showTitle: string,
+  season: number,
+  episode: number,
+): Promise<PlexItemLink | null> {
+  const token = process.env.PLEX_TOKEN;
+  const base = process.env.PLEX_URL;
+  if (!token) return null;
+  try {
+    const headers = { Accept: "application/json", "X-Plex-Token": token };
+    const { url } = await discoverPlexUrl(token, base);
+    const episodesMd = await findSeasonEpisodes(url, headers, showTitle, season);
+    const item = episodesMd?.find((e) => Number(e.index) === episode);
+    if (item?.ratingKey) {
+      return {
+        ratingKey: String(item.ratingKey),
+        quality: plexQualityFromMedia(item.Media?.[0]),
+        durationMs: Number(item.duration ?? 0),
+      };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export async function checkPlexHasEpisode(
   showTitle: string,
   season: number,
