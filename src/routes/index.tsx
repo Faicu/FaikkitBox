@@ -25,6 +25,8 @@ import {
   DrawerDescription,
 } from "@/components/ui/drawer";
 import { AddMediaWizard } from "@/components/principala/AddMediaWizard";
+import { PinnedListSection } from "@/components/pinned/sections/PinnedListSection";
+import { FilelistSection } from "@/components/pinned/sections/FilelistSection";
 import { plexQuery, plexSessionsQuery, adminStatusQuery } from "@/lib/queries";
 import { formatSpeed } from "@/lib/format";
 
@@ -46,6 +48,7 @@ function Overview() {
   const plexSessions = useQuery(plexSessionsQuery);
   const { data: adminData } = useQuery(adminStatusQuery);
   const isAuthenticated = !!adminData?.isAuthenticated;
+  const isAdmin = !!adminData?.isAdmin;
   const sessions =
     plexSessions.data?.status === "ok" ? plexSessions.data.sessions : plex.data?.sessions;
   const [plexDrawer, setPlexDrawer] = useState<"views" | "users" | null>(null);
@@ -92,6 +95,19 @@ function Overview() {
           </div>
         </div>
       )}
+
+      {isAuthenticated && (
+        <div className="mb-4">
+          <PinnedListSection />
+        </div>
+      )}
+
+      {isAdmin && (
+        <div className="mb-4">
+          <FilelistSection />
+        </div>
+      )}
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <ServiceRow
           className="sm:col-span-2"

@@ -7,7 +7,7 @@ import { addPinnedItem } from "@/lib/pinned.functions";
 import { pinnedItemsQuery } from "@/lib/queries";
 import type { DiscoverMediaType } from "@/lib/tmdb.discover.functions";
 
-export function PinToLansariButton({
+export function PinButton({
   id,
   title,
   originalTitle,
@@ -41,7 +41,7 @@ export function PinToLansariButton({
   if (isPinned) {
     return (
       <div className="flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-400">
-        <Check className="h-3.5 w-3.5" /> Fixat în Lansări
+        <Check className="h-3.5 w-3.5" /> Fixat pentru urmărire
       </div>
     );
   }
@@ -54,7 +54,7 @@ export function PinToLansariButton({
       className="flex items-center gap-1.5 rounded-lg border border-border bg-muted/40 px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted/60 disabled:opacity-50"
     >
       {pinning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Pin className="h-3.5 w-3.5" />}
-      Fixează în Lansări
+      Fixează pentru urmărire
     </button>
   );
 }

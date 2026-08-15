@@ -4,7 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { Search, Loader2 } from "lucide-react";
 
 import { checkFilelistForItem } from "@/lib/filelist.functions";
-import { detectQuality } from "@/components/lansari/utils";
+import { detectQuality } from "@/components/pinned/utils";
 import type { DiscoverMediaType } from "@/lib/tmdb.discover.functions";
 
 export function FilelistCheckButton({

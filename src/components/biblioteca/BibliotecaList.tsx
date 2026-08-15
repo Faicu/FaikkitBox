@@ -50,6 +50,7 @@ import {
   deleteMediaEntry,
 } from "@/lib/filelist.functions";
 import { startMediaBackfill, getMediaBackfillState } from "@/lib/media-backfill";
+import { backfillSubtitles, getBackfillState } from "@/lib/filelist.functions";
 import { formatMs } from "@/lib/format";
 import { formatDateTime } from "@/components/tehnic/utils";
 import type { PlexBrowseItem } from "@/lib/services/plex-browse";
@@ -160,12 +161,19 @@ export function BibliotecaList() {
   const [backfillProgress, setBackfillProgress] = useState<{ total: number; done: number } | null>(
     null,
   );
+  const [subBackfilling, setSubBackfilling] = useState(false);
+  const [subBackfillProgress, setSubBackfillProgress] = useState<{
+    total: number;
+    done: number;
+  } | null>(null);
 
   const correctFn = useServerFn(correctSubtitleForMedia);
   const deleteSubtitleFn = useServerFn(deleteSubtitleForMedia);
   const startBackfillFn = useServerFn(startMediaBackfill);
   const backfillStateFn = useServerFn(getMediaBackfillState);
   const deleteEntryFn = useServerFn(deleteMediaEntry);
+  const subBackfillFn = useServerFn(backfillSubtitles);
+  const subBackfillStateFn = useServerFn(getBackfillState);
 
   const detail = useQuery({
     queryKey: ["plexTitleDetail", selectedMediaId],
@@ -314,6 +322,49 @@ export function BibliotecaList() {
     }, 1500);
   }
 
+  // Verifică/corectează subtitrarea RO pentru TOATE torrentele active din
+  // qBittorrent (nu doar cele din `media`) — mutat aici din fosta pagină
+  // Lansări (jurnalul de descărcări a fost absorbit de Bibliotecă).
+  async function runSubtitleBackfill() {
+    setSubBackfilling(true);
+    setSubBackfillProgress(null);
+    const toastId = toast.loading("Verific subtitrările pentru descărcările vechi…");
+
+    const startRes = await subBackfillFn({}).catch((e) => ({
+      status: "error" as const,
+      error: e instanceof Error ? e.message : String(e),
+    }));
+    if (startRes.status !== "ok") {
+      toast.error("Eroare la pornirea verificării", { id: toastId, description: startRes.error });
+      setSubBackfilling(false);
+      return;
+    }
+
+    const pollInterval = setInterval(async () => {
+      const state = await subBackfillStateFn().catch(() => null);
+      if (!state) return;
+      setSubBackfillProgress(state.progress);
+      if (!state.running) {
+        clearInterval(pollInterval);
+        setSubBackfilling(false);
+        setSubBackfillProgress(null);
+        if (state.lastResult?.status === "ok") {
+          const r = state.lastResult;
+          toast.success("Subtitrări verificate", {
+            id: toastId,
+            description: `${r.processed} verificate, ${r.corrected} corectate, ${r.skipped} sărite`,
+            duration: 6000,
+          });
+        } else {
+          toast.error("Eroare la verificarea subtitrărilor", {
+            id: toastId,
+            description: state.lastResult?.error,
+          });
+        }
+      }
+    }, 1500);
+  }
+
   function renderRow(item: PlexBrowseItem, indent = false) {
     return (
       <button
@@ -355,7 +406,21 @@ export function BibliotecaList() {
   return (
     <div className="space-y-3">
       {isAdmin && (
-        <div className="flex items-center justify-end">
+        <div className="flex items-center justify-end gap-1">
+          <button
+            type="button"
+            onClick={runSubtitleBackfill}
+            disabled={subBackfilling}
+            className="flex items-center gap-1 rounded-lg px-1.5 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors disabled:opacity-50"
+            title="Verifică/corectează subtitrarea RO pentru toate torrentele active din qBittorrent"
+          >
+            {subBackfilling ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Captions className="h-3.5 w-3.5" />
+            )}
+            Verifică subtitrări
+          </button>
           <button
             type="button"
             onClick={runMediaBackfill}
@@ -370,6 +435,22 @@ export function BibliotecaList() {
             )}
             Completează din TMDB
           </button>
+        </div>
+      )}
+      {subBackfilling && (
+        <div className="px-1">
+          <Progress
+            value={
+              subBackfillProgress
+                ? (subBackfillProgress.done / Math.max(subBackfillProgress.total, 1)) * 100
+                : 0
+            }
+          />
+          <div className="mt-1 text-[11px] text-muted-foreground">
+            {subBackfillProgress
+              ? `${subBackfillProgress.done}/${subBackfillProgress.total} verificate`
+              : "Pornesc verificarea…"}
+          </div>
         </div>
       )}
       {backfilling && (

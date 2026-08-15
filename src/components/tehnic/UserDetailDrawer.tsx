@@ -116,7 +116,7 @@ export function UserDetailDrawer({ userId, onClose }: { userId: number; onClose:
               {/* Fixări */}
               <div>
                 <h3 className="mb-1.5 px-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
-                  <Pin className="h-3 w-3" /> Fixări în Lansări ({user.pinnedItems.length})
+                  <Pin className="h-3 w-3" /> Titluri urmărite ({user.pinnedItems.length})
                 </h3>
                 {user.pinnedItems.length === 0 ? (
                   <div className="rounded-2xl border border-border bg-card p-3 text-xs text-muted-foreground">

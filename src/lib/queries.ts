@@ -5,7 +5,6 @@ import { getVersions } from "./versions.functions";
 import { getLastSpeedtest, getSpeedtestHistory } from "./speedtest.functions";
 import { getActivityLog } from "./activity-log";
 import { getErrorLogs } from "./error-log";
-import { getFilelistDownloadLog } from "./filelist.functions";
 import {
   getRecentCommits,
   getCommitsFromDb,
@@ -79,15 +78,6 @@ export const errorLogQuery = queryOptions({
   queryFn: () => getErrorLogs(),
   refetchInterval: 15_000,
   staleTime: 5_000,
-  ...keepPrev,
-});
-
-export const filelistLogQuery = queryOptions({
-  queryKey: ["filelistLog"],
-  queryFn: () => getFilelistDownloadLog(),
-  refetchInterval: 10_000,
-  staleTime: 5_000,
-  refetchOnWindowFocus: true,
   ...keepPrev,
 });
 

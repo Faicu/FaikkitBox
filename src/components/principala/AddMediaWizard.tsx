@@ -34,7 +34,7 @@ import {
   AlertDialogCancel,
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
-import { DownloadConfirmDialog } from "@/components/lansari/DownloadConfirmDialog";
+import { DownloadConfirmDialog } from "@/components/pinned/DownloadConfirmDialog";
 import { pinnedItemsQuery, adminStatusQuery } from "@/lib/queries";
 import {
   searchTmdb,
@@ -49,8 +49,8 @@ import { checkFilelistForItem, downloadFilelist } from "@/lib/filelist.functions
 import type { FilelistTorrent } from "@/lib/filelist.functions";
 import { setPinnedItems, setWatchSettings } from "@/lib/pinned.functions";
 import { ensureMediaEntryForSearch } from "@/lib/media";
-import { detectQuality, groupTorrentsBySeasonEpisode } from "@/components/lansari/utils";
-import type { QualitySet } from "@/components/lansari/types";
+import { detectQuality, groupTorrentsBySeasonEpisode } from "@/components/pinned/utils";
+import type { QualitySet } from "@/components/pinned/types";
 
 type Quality = "1080p" | "4K" | "4K HDR";
 type Step = "search" | "checking" | "tv-scope" | "result" | "done";
@@ -1166,11 +1166,11 @@ export function AddMediaWizard({
                 <p className="text-sm text-muted-foreground">{doneMessage}</p>
                 <div className="flex w-full flex-col gap-2">
                   <Link
-                    to="/lansari"
+                    to="/biblioteca"
                     onClick={handleClose}
                     className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-2.5 text-sm font-semibold text-primary-foreground"
                   >
-                    <ListChecks className="h-4 w-4" /> Vezi în Lansări
+                    <ListChecks className="h-4 w-4" /> Vezi în Bibliotecă
                   </Link>
                   <button
                     type="button"

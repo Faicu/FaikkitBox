@@ -66,16 +66,16 @@ export const PUSH_URLS: Record<ActivityType, string> = {
   server_stop: "/sistem",
   plex_watch_start: "/plex",
   plex_watch_stop: "/plex",
-  torrent_added: "/lansari",
-  torrent_complete: "/lansari",
+  torrent_added: "/biblioteca",
+  torrent_complete: "/biblioteca",
   immich_upload: "/immich",
   service_restart: "/sistem",
   service_update: "/sistem",
   ubuntu_update: "/sistem",
   qbit_action: "/qbit",
-  pinned_update: "/lansari",
+  pinned_update: "/",
   app_error: "/tehnic",
-  subtitle_fix: "/lansari",
+  subtitle_fix: "/biblioteca",
   account_request: "/users",
 };
 
@@ -115,7 +115,7 @@ export async function buildTorrentAddedNotification(params: {
     title: params.auto ? "⬇️ Descărcare Automată" : "⬇️ Descărcare Inițiată",
     body: `${displayName} [${quality}]`,
     image,
-    url: "/lansari",
+    url: "/biblioteca",
   };
 }
 
@@ -132,7 +132,7 @@ export async function buildTorrentCompleteNotification(params: {
     title: "✅ Descărcare Completă",
     body: `${displayName} [${quality}]`,
     image,
-    url: "/lansari",
+    url: "/biblioteca",
   };
 }
 
@@ -146,11 +146,11 @@ export function buildEpisodeAiredNotification(
   epKey: string,
   epLabel: string,
 ): PushNotification {
-  return { title: `📅 ${showTitle} ${epKey} Lansat`, body: epLabel, url: "/lansari" };
+  return { title: `📅 ${showTitle} ${epKey} Lansat`, body: epLabel, url: "/biblioteca" };
 }
 
 export function buildNewTorrentsNotification(showTitle: string, label: string): PushNotification {
-  return { title: `🎞 ${showTitle} - Disponibil`, body: label, url: "/lansari" };
+  return { title: `🎞 ${showTitle} - Disponibil`, body: label, url: "/biblioteca" };
 }
 
 export function buildAutoDownloadNotification(
@@ -161,7 +161,7 @@ export function buildAutoDownloadNotification(
   return {
     title: `⬇️ ${showTitle}`,
     body: `Descărcare Automată: ${bodyName} [${quality}]`,
-    url: "/lansari",
+    url: "/biblioteca",
   };
 }
 

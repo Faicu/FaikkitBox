@@ -1,7 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import type { FilelistLogEntry, DownloadLogRow } from "./types";
 import { qbitLogin } from "../qbit-client";
-import { findTorrentHashNow } from "./download";
 import { refreshPlexLibraryForCategory } from "../plex-refresh";
 import { parseSeasonEpisodeFromName } from "../torrent-name-parse";
 
@@ -179,111 +178,6 @@ export async function markLogEntryComplete(torrentId: number): Promise<boolean> 
     return false;
   }
 }
-
-export const getFilelistDownloadLog = createServerFn({ method: "GET" }).handler(
-  async (): Promise<FilelistLogEntry[]> => {
-    const { requireAuth } = await import("../admin.server");
-    await requireAuth();
-    return readDownloadLog();
-  },
-);
-
-// Numele de afișat (titlu real RO + sezon/episod), aceeași logică folosită
-// și la notificări (buildTorrentDisplayName) — apelat doar per rând vizibil
-// din UI (nu pentru tot jurnalul deodată), cu cache intern de 1h pe IMDb id.
-export const resolveTorrentDisplayName = createServerFn({ method: "GET" })
-  .validator((data: { torrentName: string; imdb?: string | null }) => data)
-  .handler(async ({ data }): Promise<string> => {
-    const { requireAuth } = await import("../admin.server");
-    await requireAuth();
-    const { buildTorrentDisplayName } = await import("../tmdb-title-lookup");
-    return buildTorrentDisplayName(data.torrentName, data.imdb ?? null).catch(
-      () => data.torrentName,
-    );
-  });
-
-export const deleteFilelistLogEntry = createServerFn({ method: "POST" })
-  .validator((data: { id: number }) => data)
-  .handler(async ({ data }): Promise<{ ok: boolean; qbitDeleted?: boolean; error?: string }> => {
-    const { requireAuth, isAdminOrOwner } = await import("../admin.server");
-    const session = await requireAuth();
-    try {
-      const { getDb } = await import("../db");
-      const db = getDb();
-
-      // Obținem hash-ul + numele + categoria torrentului înainte de ștergere
-      // (categoria ne trebuie după ștergere, ca să știm ce secțiune Plex să
-      // rescanăm; numele e rezervă pentru cazul hash-ului lipsă mai jos)
-      const row = db
-        .prepare(
-          "SELECT name, torrent_hash, category, requested_by_user_id FROM downloads WHERE id = ?",
-        )
-        .get(data.id) as
-        | {
-            name: string;
-            torrent_hash: string | null;
-            category: number | null;
-            requested_by_user_id: number | null;
-          }
-        | undefined;
-
-      if (row && !isAdminOrOwner(session, row.requested_by_user_id)) {
-        return { ok: false, error: "Doar cel care a adăugat titlul sau un admin poate șterge" };
-      }
-
-      let torrentHash = row?.torrent_hash ?? null;
-      const category = row?.category ?? null;
-
-      db.prepare("DELETE FROM downloads WHERE id = ?").run(data.id);
-
-      // Ștergem și din qBittorrent (cu fișierele de pe disk) — înainte de
-      // rescanarea Plex de mai jos, ca fișierele să fie deja șterse de pe
-      // disk când Plex face scanarea, nu invers.
-      let qbitDeleted = false;
-      if (row) {
-        try {
-          const qbitUrl = (process.env.QBIT_URL ?? "http://192.168.1.192:25556").replace(/\/$/, "");
-          const user = process.env.QBIT_USERNAME ?? "";
-          const pass = process.env.QBIT_PASSWORD ?? "";
-          const cookie = await qbitLogin(qbitUrl, user, pass);
-          // Descărcare încă în curs, oprită înainte ca hash-ul să fi fost
-          // rezolvat (fereastra de reîncercări din downloadFilelistCore) —
-          // căutăm acum, direct în toată lista din qBittorrent, nu doar cele
-          // recente. Fără asta, ștergerea din jurnal nu oprea de fapt nimic
-          // în qBittorrent (torrentul continua să descarce pe disk).
-          if (!torrentHash) {
-            torrentHash = await findTorrentHashNow(qbitUrl, cookie, row.name);
-          }
-          if (torrentHash) {
-            const form = new URLSearchParams({ hashes: torrentHash, deleteFiles: "true" });
-            const res = await fetch(`${qbitUrl}/api/v2/torrents/delete`, {
-              method: "POST",
-              headers: { "Content-Type": "application/x-www-form-urlencoded", Cookie: cookie },
-              body: form.toString(),
-            });
-            qbitDeleted = res.ok;
-          }
-        } catch (e) {
-          console.warn("[filelist] Nu am putut șterge din qBit:", e);
-        }
-      }
-      if (torrentHash) {
-        const { deleteMediaByTorrentHash } = await import("../media");
-        deleteMediaByTorrentHash(torrentHash);
-      }
-
-      // Rescanează biblioteca Plex (filme sau seriale, după categorie) — ca
-      // fișierul șters să dispară din Plex fără să aștepți scanarea automată.
-      if (category !== null) {
-        refreshPlexLibraryForCategory(category).catch(() => {});
-      }
-
-      return { ok: true, qbitDeleted };
-    } catch (e) {
-      console.error("[filelist] Nu am putut șterge intrarea din log:", e);
-      return { ok: false };
-    }
-  });
 
 // Echivalentul de mai sus, dar sursat direct din `media` (media.id), nu din
 // `downloads` — folosit de Bibliotecă. Orice rând `media` cu torrent_hash

@@ -36,7 +36,7 @@ const FILTER_GROUPS: { key: string; label: string }[] = [
   { key: "immich", label: "Immich" },
   { key: "updates", label: "Updates" },
   { key: "commits", label: "Commits" },
-  { key: "lansari", label: "Lansări" },
+  { key: "lansari", label: "Fixări" },
   { key: "conturi", label: "Conturi" },
   { key: "erori", label: "Erori" },
 ];

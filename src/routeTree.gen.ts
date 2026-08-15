@@ -16,7 +16,6 @@ import { Route as RegisterRouteImport } from './routes/register'
 import { Route as QbitRouteImport } from './routes/qbit'
 import { Route as PlexRouteImport } from './routes/plex'
 import { Route as LoginRouteImport } from './routes/login'
-import { Route as LansariRouteImport } from './routes/lansari'
 import { Route as ImmichRouteImport } from './routes/immich'
 import { Route as DescoperaRouteImport } from './routes/descopera'
 import { Route as BibliotecaRouteImport } from './routes/biblioteca'
@@ -57,11 +56,6 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
-const LansariRoute = LansariRouteImport.update({
-  id: '/lansari',
-  path: '/lansari',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ImmichRoute = ImmichRouteImport.update({
   id: '/immich',
   path: '/immich',
@@ -88,7 +82,6 @@ export interface FileRoutesByFullPath {
   '/biblioteca': typeof BibliotecaRoute
   '/descopera': typeof DescoperaRoute
   '/immich': typeof ImmichRoute
-  '/lansari': typeof LansariRoute
   '/login': typeof LoginRoute
   '/plex': typeof PlexRoute
   '/qbit': typeof QbitRoute
@@ -102,7 +95,6 @@ export interface FileRoutesByTo {
   '/biblioteca': typeof BibliotecaRoute
   '/descopera': typeof DescoperaRoute
   '/immich': typeof ImmichRoute
-  '/lansari': typeof LansariRoute
   '/login': typeof LoginRoute
   '/plex': typeof PlexRoute
   '/qbit': typeof QbitRoute
@@ -117,7 +109,6 @@ export interface FileRoutesById {
   '/biblioteca': typeof BibliotecaRoute
   '/descopera': typeof DescoperaRoute
   '/immich': typeof ImmichRoute
-  '/lansari': typeof LansariRoute
   '/login': typeof LoginRoute
   '/plex': typeof PlexRoute
   '/qbit': typeof QbitRoute
@@ -133,7 +124,6 @@ export interface FileRouteTypes {
     | '/biblioteca'
     | '/descopera'
     | '/immich'
-    | '/lansari'
     | '/login'
     | '/plex'
     | '/qbit'
@@ -147,7 +137,6 @@ export interface FileRouteTypes {
     | '/biblioteca'
     | '/descopera'
     | '/immich'
-    | '/lansari'
     | '/login'
     | '/plex'
     | '/qbit'
@@ -161,7 +150,6 @@ export interface FileRouteTypes {
     | '/biblioteca'
     | '/descopera'
     | '/immich'
-    | '/lansari'
     | '/login'
     | '/plex'
     | '/qbit'
@@ -176,7 +164,6 @@ export interface RootRouteChildren {
   BibliotecaRoute: typeof BibliotecaRoute
   DescoperaRoute: typeof DescoperaRoute
   ImmichRoute: typeof ImmichRoute
-  LansariRoute: typeof LansariRoute
   LoginRoute: typeof LoginRoute
   PlexRoute: typeof PlexRoute
   QbitRoute: typeof QbitRoute
@@ -237,13 +224,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/lansari': {
-      id: '/lansari'
-      path: '/lansari'
-      fullPath: '/lansari'
-      preLoaderRoute: typeof LansariRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/immich': {
       id: '/immich'
       path: '/immich'
@@ -280,7 +260,6 @@ const rootRouteChildren: RootRouteChildren = {
   BibliotecaRoute: BibliotecaRoute,
   DescoperaRoute: DescoperaRoute,
   ImmichRoute: ImmichRoute,
-  LansariRoute: LansariRoute,
   LoginRoute: LoginRoute,
   PlexRoute: PlexRoute,
   QbitRoute: QbitRoute,

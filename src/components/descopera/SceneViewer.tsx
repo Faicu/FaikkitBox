@@ -9,16 +9,10 @@ import type { DiscoverTitle } from "@/lib/tmdb.discover.functions";
 import { getTmdbDetails } from "@/lib/tmdb.functions";
 import { AddMediaWizard } from "@/components/principala/AddMediaWizard";
 import { FilelistCheckButton } from "./FilelistCheckButton";
-import { PinToLansariButton } from "./PinToLansariButton";
+import { PinButton } from "./PinButton";
 import { PlexLibraryStatus } from "./PlexLibraryStatus";
 
-export function SceneViewer({
-  item,
-  onClose,
-}: {
-  item: DiscoverTitle;
-  onClose: () => void;
-}) {
+export function SceneViewer({ item, onClose }: { item: DiscoverTitle; onClose: () => void }) {
   const videosFn = useServerFn(getTmdbVideos);
   const detailsFn = useServerFn(getTmdbDetails);
   const [videoIndex, setVideoIndex] = useState(0);
@@ -127,7 +121,7 @@ export function SceneViewer({
                 imdbId={imdbId}
                 mediaType={item.mediaType}
               />
-              <PinToLansariButton
+              <PinButton
                 id={item.id}
                 title={item.title}
                 originalTitle={detailsQuery.data?.originalTitle ?? item.title}

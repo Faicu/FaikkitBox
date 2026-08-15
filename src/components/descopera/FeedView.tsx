@@ -7,7 +7,7 @@ import { getFeedClips } from "@/lib/tmdb.discover.functions";
 import type { DiscoverMediaType, DiscoverSort, FeedClip } from "@/lib/tmdb.discover.functions";
 import { getTmdbDetails } from "@/lib/tmdb.functions";
 import { FilelistCheckButton } from "./FilelistCheckButton";
-import { PinToLansariButton } from "./PinToLansariButton";
+import { PinButton } from "./PinButton";
 
 function FeedCard({ clip, isActive }: { clip: FeedClip; isActive: boolean }) {
   const detailsFn = useServerFn(getTmdbDetails);
@@ -54,7 +54,7 @@ function FeedCard({ clip, isActive }: { clip: FeedClip; isActive: boolean }) {
                 imdbId={imdbId}
                 mediaType={clip.mediaType}
               />
-              <PinToLansariButton
+              <PinButton
                 id={clip.id}
                 title={clip.title}
                 originalTitle={detailsQuery.data?.originalTitle ?? clip.title}
