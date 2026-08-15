@@ -512,6 +512,21 @@ export function AddMediaWizard({
     checkResult?.seasons.filter((s) => isSeasonCompleteInPlex(s.seasonNumber, s.episodeCount))
       .length ?? 0;
 
+  // Ce a găsit Filelist per sezon, la calitatea aleasă — fie pachet de sezon
+  // întreg, fie doar episoade individuale — folosit ca legătura TMDB↔Filelist
+  // să fie vizibilă direct în lista de sezoane, nu doar aflată abia după ce
+  // alegi un scop și descoperi lipsa la ecranul următor.
+  function filelistStatusForSeason(seasonNum: number): "pack" | "episodes" | "none" {
+    const g = seasonGroups.find((sg) => sg.seasonNum === seasonNum);
+    if (!g) return "none";
+    if (pickFromSet(g.byQuality, quality).length > 0) return "pack";
+    if ([...g.episodes.values()].some((q) => pickFromSet(q, quality).length > 0)) return "episodes";
+    return "none";
+  }
+  const filelistSeasonsFoundCount =
+    checkResult?.seasons.filter((s) => filelistStatusForSeason(s.seasonNumber) !== "none").length ??
+    0;
+
   // Rezultatul concret de arătat la pasul final, în funcție de tip și scop —
   // lista completă de candidați (nu doar cel mai bun), ca adminul să poată
   // alege manual între release-uri diferite; selecția efectivă cade pe
@@ -779,13 +794,30 @@ export function AddMediaWizard({
                   subtitle={checkResult.originalTitle}
                 />
                 {tmdbDetails?.tvStatus && ONGOING_TV_STATUSES.has(tmdbDetails.tvStatus) && (
-                  <div className="flex items-start gap-2 rounded-xl bg-amber-500/10 p-3 text-xs text-amber-300">
-                    <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                    <span>
-                      Serialul e încă în producție ({tvStatusLabel(tmdbDetails.tvStatus)}) — dacă nu
-                      găsești tot ce cauți mai jos, fixează-l pentru urmărire, ca sezoanele/
-                      episoadele noi să fie descărcate automat imediat ce apar.
-                    </span>
+                  <div className="space-y-2 rounded-xl bg-amber-500/10 p-3 text-xs text-amber-300">
+                    <div className="flex items-start gap-2">
+                      <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                      <span>
+                        {tmdbDetails.nextEpisode
+                          ? `Episodul S${String(tmdbDetails.nextEpisode.seasonNumber).padStart(2, "0")}E${String(tmdbDetails.nextEpisode.episodeNumber).padStart(2, "0")} apare pe ${new Date(tmdbDetails.nextEpisode.airDate).toLocaleDateString("ro-RO", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Bucharest" })}.`
+                          : `Serialul e reînnoit (${tvStatusLabel(tmdbDetails.tvStatus)}), dar fără dată anunțată încă pentru episoade noi.`}{" "}
+                        Fixează-l pentru urmărire, ca sezoanele/episoadele noi să fie descărcate
+                        automat imediat ce apar.
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={pinForMonitoring}
+                      className="flex w-full items-center justify-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/15 py-2 text-xs font-semibold text-amber-300 hover:bg-amber-500/25 disabled:opacity-50"
+                    >
+                      {busy ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Pin className="h-3.5 w-3.5" />
+                      )}
+                      Fixează pentru urmărire automată ({quality})
+                    </button>
                   </div>
                 )}
                 <div className="text-sm text-muted-foreground">
@@ -796,7 +828,7 @@ export function AddMediaWizard({
                   <ScopeOption
                     icon={<Layers className="h-4 w-4" />}
                     label="Serial complet"
-                    description={`${plexCompleteSeasonsCount}/${checkResult.seasons.length} sezoane sunt deja complete în Plex`}
+                    description={`${plexCompleteSeasonsCount}/${checkResult.seasons.length} sezoane complete în Plex · ${filelistSeasonsFoundCount}/${checkResult.seasons.length} găsite pe Filelist (${quality})`}
                     meta={`${checkResult.seasons.length} sezoane`}
                     active={tvScope === "series"}
                     onClick={() => setTvScope("series")}
@@ -816,6 +848,58 @@ export function AddMediaWizard({
                     active={tvScope === "episode"}
                     onClick={() => setTvScope("episode")}
                   />
+                </div>
+
+                {/* Legătura TMDB ↔ Filelist, vizibilă direct, sezon cu sezon —
+                    nu abia după ce alegi un scop. */}
+                <div>
+                  <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Ce am găsit, sezon cu sezon
+                  </div>
+                  <div className="space-y-1">
+                    {checkResult.seasons.map((s) => {
+                      const plexNums = plexBySeason.get(s.seasonNumber) ?? [];
+                      const plexFull = isSeasonCompleteInPlex(s.seasonNumber, s.episodeCount);
+                      const filelistStatus = filelistStatusForSeason(s.seasonNumber);
+                      return (
+                        <div
+                          key={s.seasonNumber}
+                          className="flex items-center justify-between gap-2 rounded-lg bg-muted/30 px-2.5 py-1.5 text-xs"
+                        >
+                          <span className="font-medium">
+                            S{String(s.seasonNumber).padStart(2, "0")}
+                            <span className="ml-1 font-normal text-muted-foreground">
+                              ({s.episodeCount} ep)
+                            </span>
+                          </span>
+                          <div className="flex items-center gap-1.5">
+                            {plexFull ? (
+                              <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-400">
+                                Plex complet
+                              </span>
+                            ) : plexNums.length > 0 ? (
+                              <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-amber-400">
+                                Plex {plexNums.length}/{s.episodeCount}
+                              </span>
+                            ) : null}
+                            {filelistStatus === "pack" ? (
+                              <span className="rounded-full bg-sky-500/15 px-2 py-0.5 text-[10px] font-medium text-sky-400">
+                                Pachet pe Filelist
+                              </span>
+                            ) : filelistStatus === "episodes" ? (
+                              <span className="rounded-full bg-sky-500/15 px-2 py-0.5 text-[10px] font-medium text-sky-400">
+                                Episoade pe Filelist
+                              </span>
+                            ) : (
+                              <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                Negăsit ({quality})
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 {(tvScope === "season" || tvScope === "episode") && (

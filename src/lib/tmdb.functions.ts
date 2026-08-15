@@ -52,6 +52,12 @@ interface TmdbApiTvShow {
   overview?: string | null;
   external_ids?: { imdb_id?: string | null };
   status?: string | null;
+  in_production?: boolean;
+  next_episode_to_air?: {
+    season_number?: number;
+    episode_number?: number;
+    air_date?: string | null;
+  } | null;
   seasons?: TmdbApiSeasonSummary[];
   alternative_titles?: { results?: TmdbApiAlternativeTitle[] };
   genres?: TmdbApiGenre[];
@@ -156,6 +162,12 @@ export interface TmdbDetails {
   imdbId: string | null;
   // doar pentru tv:
   tvStatus: string | null;
+  // Următorul episod anunțat de TMDB (dacă există dată de lansare) — separat
+  // de tvStatus, care doar spune dacă serialul e reînnoit/în producție, nu și
+  // dacă chiar există un episod concret programat. Folosit ca mesajul din
+  // wizard să nu mai spună generic "încă în producție" pentru un serial al
+  // cărui ultim sezon cunoscut e deja lansat complet, fără nimic anunțat.
+  nextEpisode: { seasonNumber: number; episodeNumber: number; airDate: string } | null;
   seasons: Array<{ seasonNumber: number; episodeCount: number; airDate: string | null }>;
   // Rezumat scurt — în română când TMDB are traducerea disponibilă, altfel
   // cade pe engleză (multe producții mai puțin populare n-au overview RO).
@@ -191,6 +203,7 @@ export async function getTmdbDetailsInternal(
         literalTitle: findLiteralTitle(movie.alternative_titles?.titles),
         imdbId: movie.external_ids?.imdb_id ?? movie.imdb_id ?? null,
         tvStatus: null,
+        nextEpisode: null,
         seasons: [],
         overview,
         genres: (movie.genres ?? []).map((g) => g.name ?? "").filter(Boolean),
@@ -220,6 +233,16 @@ export async function getTmdbDetailsInternal(
         literalTitle: findLiteralTitle(show.alternative_titles?.results),
         imdbId: show.external_ids?.imdb_id ?? null,
         tvStatus: show.status ?? null,
+        nextEpisode:
+          show.next_episode_to_air?.air_date &&
+          show.next_episode_to_air.season_number != null &&
+          show.next_episode_to_air.episode_number != null
+            ? {
+                seasonNumber: show.next_episode_to_air.season_number,
+                episodeNumber: show.next_episode_to_air.episode_number,
+                airDate: show.next_episode_to_air.air_date,
+              }
+            : null,
         seasons,
         overview,
         genres: (show.genres ?? []).map((g) => g.name ?? "").filter(Boolean),
@@ -235,6 +258,7 @@ export async function getTmdbDetailsInternal(
       literalTitle: null,
       imdbId: null,
       tvStatus: null,
+      nextEpisode: null,
       seasons: [],
       overview: null,
       genres: [],
