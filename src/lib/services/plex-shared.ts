@@ -49,6 +49,10 @@ export interface PlexMetadataItem {
   viewedAt?: number;
   summary?: string;
   Media?: PlexMedia[];
+  // Identificatori externi (imdb/tmdb/tvdb) — fiabili pentru filme
+  // ("imdb://tt..." mereu prezent la agentul nou), dar NU pentru
+  // seriale/episoade (de regulă doar tmdb/tvdb, fără imdb).
+  Guid?: Array<{ id?: string }>;
   User?: { title?: string };
   Player?: { title?: string; device?: string; product?: string; state?: string };
 }
@@ -93,6 +97,18 @@ function isRomanianStream(s: PlexStream): boolean {
 export function hasEmbeddedRomanianSubtitle(media: PlexMedia | undefined): boolean {
   const streams = media?.Part?.[0]?.Stream ?? [];
   return streams.some((s) => s.streamType === 3 && isRomanianStream(s));
+}
+
+// Extrage id-ul dintr-un Guid Plex de forma "imdb://tt1234567" sau
+// "tmdb://12345" — mai fiabil și mai ieftin (zero căutare TMDB) decât
+// potrivirea prin căutare pe titlu, când e disponibil (mereu la filme,
+// rareori la seriale/episoade — vezi comentariul de pe PlexMetadataItem.Guid).
+export function extractGuidId(
+  item: PlexMetadataItem | undefined,
+  prefix: "imdb" | "tmdb",
+): string | null {
+  const guid = item?.Guid?.find((g) => g.id?.startsWith(`${prefix}://`))?.id;
+  return guid ? guid.slice(prefix.length + 3) : null;
 }
 
 export function normalizeShowTitle(value: string): string {

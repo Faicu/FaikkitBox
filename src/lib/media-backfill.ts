@@ -14,6 +14,7 @@ import {
   discoverPlexUrl,
   plexQualityFromMedia,
   hasEmbeddedRomanianSubtitle,
+  extractGuidId,
   type PlexApiResponse,
   type PlexMetadataItem,
 } from "./services/plex-shared";
@@ -234,7 +235,14 @@ async function runMediaBackfillWork(): Promise<void> {
           const year =
             item.year ??
             (item.originallyAvailableAt ? Number(item.originallyAvailableAt.slice(0, 4)) : null);
-          const tmdbId = await searchTmdbTopResultInternal(title, "movie", year);
+          // Guid-ul Plex ("imdb://tt...", "tmdb://...") e mereu prezent la
+          // filme (agentul nou) — mult mai fiabil decât o căutare pe titlu,
+          // care poate rata titluri traduse de Plex (RO) fără corespondent
+          // exact pe TMDB (a fost cazul, ex. "Hellraiser 3: Iadul pe pământ").
+          const guidTmdbId = extractGuidId(detail ?? undefined, "tmdb");
+          const tmdbId = guidTmdbId
+            ? Number(guidTmdbId)
+            : await searchTmdbTopResultInternal(title, "movie", year);
           const details = tmdbId ? await getTmdbDetailsInternal(tmdbId, "movie") : null;
           upsertMediaEntryFromPlex({
             mediaType: "movie",
