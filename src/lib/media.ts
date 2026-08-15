@@ -7,6 +7,7 @@
 // media-backfill.ts — vezi upsertMediaEntryFromPlex.
 // ---------------------------------------------------------------------------
 
+import { createServerFn } from "@tanstack/react-start";
 import { getDb } from "./db";
 
 export type AddedVia = "wizard" | "manual" | "auto" | "backfill";
@@ -38,44 +39,42 @@ export interface UpsertMediaEntryInput {
   requestedByUserId?: number | null;
 }
 
-// Găsește rândul-părinte deja existent al unui serial — prioritar după
-// tmdb_id (mereu prezent odată rezolvat prin TMDB, spre deosebire de
-// imdb_id, absent pentru multe seriale — reality show-uri, producții locale
-// etc). SQL `imdb_id = NULL` nu se potrivește niciodată cu sine (semantica
-// NULL), deci un lookup doar pe imdb_id ar crea un rând nou de fiecare dată
-// pentru un serial fără imdb_id — exact bug-ul reprodus la primul backfill
-// (opt rânduri "Elita" în loc de unul). Cade pe imdb_id, apoi pe titlu exact
-// (fără niciun id cunoscut), ca ultimă plasă de siguranță.
-function findExistingShowId(input: {
-  imdbId: string | null;
-  tmdbId: number | null;
-  title: string;
-}): number | null {
+// Găsește un rând `media` fără proveniență de torrent deja existent (rândul-
+// părinte al unui serial, sau un placeholder de film creat la căutare) —
+// prioritar după tmdb_id (mereu prezent odată rezolvat prin TMDB, spre
+// deosebire de imdb_id, absent pentru multe titluri — reality show-uri,
+// producții locale etc). SQL `imdb_id = NULL` nu se potrivește niciodată cu
+// sine (semantica NULL), deci un lookup doar pe imdb_id ar crea un rând nou
+// de fiecare dată pentru un titlu fără imdb_id — exact bug-ul reprodus la
+// primul backfill (opt rânduri "Elita" în loc de unul). Cade pe imdb_id,
+// apoi pe titlu exact (fără niciun id cunoscut), ca ultimă plasă de
+// siguranță.
+function findExistingMediaRow(
+  mediaType: "movie" | "tv_show",
+  input: { imdbId: string | null; tmdbId: number | null; title: string },
+): number | null {
   const db = getDb();
   if (input.tmdbId != null) {
     const row = db
-      .prepare("SELECT id FROM media WHERE media_type = 'tv_show' AND tmdb_id = ?")
-      .get(input.tmdbId) as { id: number } | undefined;
+      .prepare("SELECT id FROM media WHERE media_type = ? AND tmdb_id = ?")
+      .get(mediaType, input.tmdbId) as { id: number } | undefined;
     if (row) return row.id;
   }
   if (input.imdbId) {
     const row = db
-      .prepare("SELECT id FROM media WHERE media_type = 'tv_show' AND imdb_id = ?")
-      .get(input.imdbId) as { id: number } | undefined;
+      .prepare("SELECT id FROM media WHERE media_type = ? AND imdb_id = ?")
+      .get(mediaType, input.imdbId) as { id: number } | undefined;
     if (row) return row.id;
   }
   const row = db
     .prepare(
-      "SELECT id FROM media WHERE media_type = 'tv_show' AND tmdb_id IS NULL AND imdb_id IS NULL AND title = ?",
+      "SELECT id FROM media WHERE media_type = ? AND tmdb_id IS NULL AND imdb_id IS NULL AND title = ?",
     )
-    .get(input.title) as { id: number } | undefined;
+    .get(mediaType, input.title) as { id: number } | undefined;
   return row?.id ?? null;
 }
 
-// Creează (sau actualizează, dacă există deja) rândul-părinte al serialului —
-// un singur rând per serial, doar cu metadate TMDB, fără proveniență de
-// torrent (aia aparține fiecărui episod în parte).
-function ensureShowRow(input: {
+export interface MediaPlaceholderInput {
   imdbId: string | null;
   tmdbId: number | null;
   title: string;
@@ -87,14 +86,28 @@ function ensureShowRow(input: {
   posterPath?: string | null;
   tvStatus?: string | null;
   addedVia: AddedVia;
-}): number | null {
+  requestedByUserId?: number | null;
+}
+
+// Creează (sau actualizează, dacă există deja) un rând `media` fără
+// proveniență de torrent — rândul-părinte al unui serial (folosit intern la
+// fiecare episod inserat) sau un rând de sine stătător pentru un film,
+// creat direct la căutare/fixare, înainte de orice descărcare (vezi
+// ensureMediaEntryForSearch mai jos). Actualizarea nu atinge niciodată
+// coloanele de proveniență torrent — cele aparțin doar rândurilor de episod/
+// film create la descărcare (upsertMediaEntry).
+function ensureMediaPlaceholder(
+  mediaType: "movie" | "tv_show",
+  input: MediaPlaceholderInput,
+): number {
   const db = getDb();
-  const existingId = findExistingShowId(input);
+  const existingId = findExistingMediaRow(mediaType, input);
   if (existingId != null) {
     db.prepare(
       `UPDATE media SET title = ?, original_title = ?, literal_title = ?, year = ?,
        overview_ro = ?, genres = ?, poster_path = ?, tv_status = ?, tmdb_id = ?,
-       updated_at = datetime('now') WHERE id = ?`,
+       requested_by_user_id = COALESCE(requested_by_user_id, ?), updated_at = datetime('now')
+       WHERE id = ?`,
     ).run(
       input.title,
       input.originalTitle ?? null,
@@ -105,6 +118,7 @@ function ensureShowRow(input: {
       input.posterPath ?? null,
       input.tvStatus ?? null,
       input.tmdbId,
+      input.requestedByUserId ?? null,
       existingId,
     );
     return existingId;
@@ -113,10 +127,11 @@ function ensureShowRow(input: {
     .prepare(
       `INSERT INTO media (
         media_type, imdb_id, tmdb_id, title, original_title, literal_title, year,
-        overview_ro, genres, poster_path, tv_status, added_via
-      ) VALUES ('tv_show', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        overview_ro, genres, poster_path, tv_status, added_via, requested_by_user_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
+      mediaType,
       input.imdbId,
       input.tmdbId,
       input.title,
@@ -128,14 +143,53 @@ function ensureShowRow(input: {
       input.posterPath ?? null,
       input.tvStatus ?? null,
       input.addedVia,
+      input.requestedByUserId ?? null,
     );
   return Number(res.lastInsertRowid);
 }
 
+// Apelat direct din wizard (Acasă), imediat ce un titlu e identificat prin
+// TMDB — indiferent dacă userul ajunge să-l descarce sau doar îl fixează
+// pentru urmărire. Pentru seriale, scrie doar rândul-părinte (episoadele se
+// adaugă separat, la descărcare); pentru filme, un rând de sine stătător,
+// pe care upsertMediaEntry îl va completa ulterior cu proveniența torrent-
+// ului dacă userul chiar descarcă.
+export const ensureMediaEntryForSearch = createServerFn({ method: "POST" })
+  .validator(
+    (data: {
+      mediaType: "movie" | "tv";
+      imdbId: string | null;
+      tmdbId: number;
+      title: string;
+      originalTitle?: string | null;
+      literalTitle?: string | null;
+      year?: number | null;
+      overviewRo?: string | null;
+      genres?: string[];
+      posterPath?: string | null;
+      tvStatus?: string | null;
+    }) => data,
+  )
+  .handler(async ({ data }): Promise<{ ok: boolean }> => {
+    const { requireAuth } = await import("./admin.server");
+    const session = await requireAuth();
+    try {
+      ensureMediaPlaceholder(data.mediaType === "movie" ? "movie" : "tv_show", {
+        ...data,
+        addedVia: "wizard",
+        requestedByUserId: session.data.userId ?? null,
+      });
+      return { ok: true };
+    } catch (e) {
+      console.warn("[media] ensureMediaEntryForSearch eșuat:", e);
+      return { ok: false };
+    }
+  });
+
 export function upsertMediaEntry(input: UpsertMediaEntryInput): number {
   const db = getDb();
 
-  const parentId = input.mediaType === "episode" ? ensureShowRow(input) : null;
+  const parentId = input.mediaType === "episode" ? ensureMediaPlaceholder("tv_show", input) : null;
 
   const res = db
     .prepare(
@@ -208,7 +262,9 @@ export function upsertMediaEntryFromPlex(input: UpsertMediaFromPlexInput): numbe
   const db = getDb();
 
   const parentId =
-    input.mediaType === "episode" ? ensureShowRow({ ...input, addedVia: "backfill" }) : null;
+    input.mediaType === "episode"
+      ? ensureMediaPlaceholder("tv_show", { ...input, addedVia: "backfill" })
+      : null;
 
   const res = db
     .prepare(

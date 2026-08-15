@@ -18,6 +18,7 @@ import {
   HardDrive,
   Users,
   Zap,
+  Info,
 } from "lucide-react";
 import { formatBytes } from "@/lib/format";
 import { toast } from "sonner";
@@ -47,6 +48,7 @@ import { checkPlexHasTitle, getPlexEpisodesInSeason } from "@/lib/services.funct
 import { checkFilelistForItem, downloadFilelist } from "@/lib/filelist.functions";
 import type { FilelistTorrent } from "@/lib/filelist.functions";
 import { setPinnedItems, setWatchSettings } from "@/lib/pinned.functions";
+import { ensureMediaEntryForSearch } from "@/lib/media";
 import { detectQuality, groupTorrentsBySeasonEpisode } from "@/components/lansari/utils";
 import type { QualitySet } from "@/components/lansari/types";
 
@@ -67,6 +69,25 @@ function pickFromSet(set: QualitySet, quality: Quality): FilelistTorrent[] {
   if (quality === "1080p") return set.t1080;
   if (quality === "4K") return set.t4k;
   return set.t4kHdr;
+}
+
+// Statusurile TMDB pentru un serial care încă poate primi sezoane/episoade
+// noi — restul ("Ended", "Canceled") înseamnă că seria s-a încheiat definitiv.
+const ONGOING_TV_STATUSES = new Set(["Returning Series", "In Production", "Planned", "Pilot"]);
+
+function tvStatusLabel(status: string): string {
+  switch (status) {
+    case "Returning Series":
+      return "va reveni cu sezoane noi";
+    case "In Production":
+      return "sezon nou în lucru";
+    case "Planned":
+      return "sezon nou anunțat, nefilmat încă";
+    case "Pilot":
+      return "doar episod pilot deocamdată";
+    default:
+      return status;
+  }
 }
 
 function bestOf(list: FilelistTorrent[]): FilelistTorrent | null {
@@ -112,6 +133,7 @@ export function AddMediaWizard({
   const downloadFn = useServerFn(downloadFilelist);
   const setPinnedFn = useServerFn(setPinnedItems);
   const setWatchFn = useServerFn(setWatchSettings);
+  const ensureMediaEntryFn = useServerFn(ensureMediaEntryForSearch);
 
   const [step, setStep] = useState<Step>("search");
   const [query, setQuery] = useState("");
@@ -258,6 +280,27 @@ export function AddMediaWizard({
       const seasons = details.seasons
         .filter((s) => s.seasonNumber > 0)
         .map((s) => ({ seasonNumber: s.seasonNumber, episodeCount: s.episodeCount }));
+
+      // Orice titlu identificat aici intră în `media` — indiferent dacă
+      // userul ajunge să-l descarce sau doar îl fixează pentru urmărire (vezi
+      // planul de unificare Lansări → Acasă+Bibliotecă). Best-effort, nu
+      // blochează fluxul dacă eșuează.
+      ensureMediaEntryFn({
+        data: {
+          mediaType: item.mediaType,
+          imdbId: details.imdbId,
+          tmdbId: item.id,
+          title: item.title,
+          originalTitle,
+          literalTitle: details.literalTitle,
+          year: item.year ? Number(item.year) : null,
+          overviewRo: details.overview,
+          genres: details.genres,
+          posterPath: item.posterUrl,
+          tvStatus: details.tvStatus,
+        },
+      }).catch(() => {});
+
       setCheckResult({
         imdbId: details.imdbId,
         originalTitle,
@@ -731,6 +774,16 @@ export function AddMediaWizard({
                   title={selected.title}
                   subtitle={checkResult.originalTitle}
                 />
+                {tmdbDetails?.tvStatus && ONGOING_TV_STATUSES.has(tmdbDetails.tvStatus) && (
+                  <div className="flex items-start gap-2 rounded-xl bg-amber-500/10 p-3 text-xs text-amber-300">
+                    <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                    <span>
+                      Serialul e încă în producție ({tvStatusLabel(tmdbDetails.tvStatus)}) — dacă nu
+                      găsești tot ce cauți mai jos, fixează-l pentru urmărire, ca sezoanele/
+                      episoadele noi să fie descărcate automat imediat ce apar.
+                    </span>
+                  </div>
+                )}
                 <div className="text-sm text-muted-foreground">
                   Ce vrei să descarci din{" "}
                   <span className="font-medium text-foreground">{selected.title}</span>?
