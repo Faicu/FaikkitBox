@@ -204,9 +204,9 @@ export const resolveTorrentDisplayName = createServerFn({ method: "GET" })
 
 export const deleteFilelistLogEntry = createServerFn({ method: "POST" })
   .validator((data: { id: number }) => data)
-  .handler(async ({ data }): Promise<{ ok: boolean; qbitDeleted?: boolean }> => {
-    const { requireAdmin } = await import("../admin.server");
-    await requireAdmin();
+  .handler(async ({ data }): Promise<{ ok: boolean; qbitDeleted?: boolean; error?: string }> => {
+    const { requireAuth, isAdminOrOwner } = await import("../admin.server");
+    const session = await requireAuth();
     try {
       const { getDb } = await import("../db");
       const db = getDb();
@@ -215,9 +215,22 @@ export const deleteFilelistLogEntry = createServerFn({ method: "POST" })
       // (categoria ne trebuie după ștergere, ca să știm ce secțiune Plex să
       // rescanăm; numele e rezervă pentru cazul hash-ului lipsă mai jos)
       const row = db
-        .prepare("SELECT name, torrent_hash, category FROM downloads WHERE id = ?")
+        .prepare(
+          "SELECT name, torrent_hash, category, requested_by_user_id FROM downloads WHERE id = ?",
+        )
         .get(data.id) as
-        { name: string; torrent_hash: string | null; category: number | null } | undefined;
+        | {
+            name: string;
+            torrent_hash: string | null;
+            category: number | null;
+            requested_by_user_id: number | null;
+          }
+        | undefined;
+
+      if (row && !isAdminOrOwner(session, row.requested_by_user_id)) {
+        return { ok: false, error: "Doar cel care a adăugat titlul sau un admin poate șterge" };
+      }
+
       let torrentHash = row?.torrent_hash ?? null;
       const category = row?.category ?? null;
 

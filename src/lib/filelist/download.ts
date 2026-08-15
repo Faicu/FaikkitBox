@@ -943,18 +943,32 @@ export type CorrectSubtitleResult =
 export const correctSubtitleForItem = createServerFn({ method: "POST" })
   .validator((data: { id: number }) => data)
   .handler(async ({ data }): Promise<CorrectSubtitleResult> => {
-    const { requireAdmin } = await import("../admin.server");
-    await requireAdmin();
+    const { requireAuth, isAdminOrOwner } = await import("../admin.server");
+    const session = await requireAuth();
 
     const { getDb } = await import("../db");
     const row = getDb()
-      .prepare("SELECT name, category, torrent_hash, imdb FROM downloads WHERE id = ?")
+      .prepare(
+        "SELECT name, category, torrent_hash, imdb, requested_by_user_id FROM downloads WHERE id = ?",
+      )
       .get(data.id) as
-      | { name: string; category: number | null; torrent_hash: string | null; imdb: string | null }
+      | {
+          name: string;
+          category: number | null;
+          torrent_hash: string | null;
+          imdb: string | null;
+          requested_by_user_id: number | null;
+        }
       | undefined;
 
     if (!row) {
       return { status: "error", error: "Intrarea nu a fost găsită în jurnal" };
+    }
+    if (!isAdminOrOwner(session, row.requested_by_user_id)) {
+      return {
+        status: "error",
+        error: "Doar cel care a adăugat titlul sau un admin poate corecta subtitrarea",
+      };
     }
     if (!row.torrent_hash) {
       return {
@@ -997,16 +1011,29 @@ export const correctSubtitleForItem = createServerFn({ method: "POST" })
 export const deleteSubtitleForItem = createServerFn({ method: "POST" })
   .validator((data: { id: number }) => data)
   .handler(async ({ data }): Promise<DeleteSubtitleResult> => {
-    const { requireAdmin } = await import("../admin.server");
-    await requireAdmin();
+    const { requireAuth, isAdminOrOwner } = await import("../admin.server");
+    const session = await requireAuth();
 
     const { getDb } = await import("../db");
     const row = getDb()
-      .prepare("SELECT torrent_hash, category FROM downloads WHERE id = ?")
-      .get(data.id) as { torrent_hash: string | null; category: number | null } | undefined;
+      .prepare("SELECT torrent_hash, category, requested_by_user_id FROM downloads WHERE id = ?")
+      .get(data.id) as
+      | {
+          torrent_hash: string | null;
+          category: number | null;
+          requested_by_user_id: number | null;
+        }
+      | undefined;
 
     if (!row) {
       return { status: "error", deleted: [], error: "Intrarea nu a fost găsită în jurnal" };
+    }
+    if (!isAdminOrOwner(session, row.requested_by_user_id)) {
+      return {
+        status: "error",
+        deleted: [],
+        error: "Doar cel care a adăugat titlul sau un admin poate șterge subtitrarea",
+      };
     }
     if (!row.torrent_hash) {
       return {

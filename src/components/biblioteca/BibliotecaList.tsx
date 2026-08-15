@@ -222,6 +222,10 @@ export function BibliotecaList() {
     const { logId } = confirmDeleteTitle;
     const res = await deleteEntryFn({ data: { id: logId } });
     setConfirmDeleteTitle(null);
+    if (!res.ok) {
+      toast.error("Nu am putut șterge titlul", { description: res.error });
+      return;
+    }
     setSelectedKey(null);
     queryClient.invalidateQueries({ queryKey: ["plexLibraryBrowse"] });
     if (res.qbitDeleted) toast.success("Titlu șters complet — fișiere + qBittorrent + Plex");
@@ -460,50 +464,57 @@ export function BibliotecaList() {
 
                 <div className="flex flex-col gap-2 pt-1 border-t border-border">
                   {d.downloadsLogId && d.torrentHash ? (
-                    <>
-                      <div className="flex gap-2 pt-2">
+                    d.canManage ? (
+                      <>
+                        <div className="flex gap-2 pt-2">
+                          <button
+                            type="button"
+                            onClick={correctSubtitle}
+                            disabled={correcting}
+                            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-border bg-muted/40 py-2 text-xs font-medium text-foreground hover:bg-muted/60 transition-colors disabled:opacity-40"
+                          >
+                            {correcting ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Captions className="h-3.5 w-3.5" />
+                            )}
+                            Corectează subtitrare
+                          </button>
+                          <button
+                            type="button"
+                            onClick={deleteSubtitle}
+                            disabled={deletingSubtitle}
+                            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-border bg-muted/40 py-2 text-xs font-medium text-foreground hover:bg-muted/60 transition-colors disabled:opacity-40"
+                          >
+                            {deletingSubtitle ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <CaptionsOff className="h-3.5 w-3.5" />
+                            )}
+                            Șterge subtitrare
+                          </button>
+                        </div>
                         <button
                           type="button"
-                          onClick={correctSubtitle}
-                          disabled={correcting}
-                          className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-border bg-muted/40 py-2 text-xs font-medium text-foreground hover:bg-muted/60 transition-colors disabled:opacity-40"
+                          onClick={() =>
+                            setConfirmDeleteTitle({
+                              logId: d.downloadsLogId!,
+                              title: d.type === "movie" ? d.title : (d.show ?? d.title),
+                              isSeasonPack: d.isSeasonPack,
+                            })
+                          }
+                          className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-border bg-muted/40 py-2 text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors"
                         >
-                          {correcting ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <Captions className="h-3.5 w-3.5" />
-                          )}
-                          Corectează subtitrare
+                          <Trash2 className="h-3.5 w-3.5" />
+                          Șterge titlul complet
                         </button>
-                        <button
-                          type="button"
-                          onClick={deleteSubtitle}
-                          disabled={deletingSubtitle}
-                          className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-border bg-muted/40 py-2 text-xs font-medium text-foreground hover:bg-muted/60 transition-colors disabled:opacity-40"
-                        >
-                          {deletingSubtitle ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <CaptionsOff className="h-3.5 w-3.5" />
-                          )}
-                          Șterge subtitrare
-                        </button>
+                      </>
+                    ) : (
+                      <div className="pt-2 text-[11px] text-muted-foreground">
+                        Doar {d.addedByUsername ?? "cel care a adăugat titlul"} sau un admin poate
+                        corecta/șterge subtitrarea sau șterge titlul.
                       </div>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setConfirmDeleteTitle({
-                            logId: d.downloadsLogId!,
-                            title: d.type === "movie" ? d.title : (d.show ?? d.title),
-                            isSeasonPack: d.isSeasonPack,
-                          })
-                        }
-                        className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-border bg-muted/40 py-2 text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                        Șterge titlul complet
-                      </button>
-                    </>
+                    )
                   ) : (
                     <div className="pt-2 text-[11px] text-muted-foreground">
                       Titlul nu e urmărit în jurnalul de descărcări (adăugat manual sau dinainte de

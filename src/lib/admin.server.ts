@@ -47,3 +47,17 @@ export async function requireAdmin() {
   }
   return session;
 }
+
+// true dacă sesiunea e admin sau chiar contul care a inițiat acțiunea (ex.
+// cel care a descărcat un torrent poate corecta/șterge subtitrarea sau
+// titlul, fără să aibă nevoie de rol de admin) — folosit pentru acțiuni pe
+// intrări din jurnalul de descărcări (downloads.requested_by_user_id).
+// Întoarce bool (nu aruncă), ca apelanții să poată răspunde cu un mesaj
+// prietenos în același format {status:"error"} folosit de restul funcțiilor,
+// nu cu un 401 brut.
+export function isAdminOrOwner(
+  session: { data: AdminSession },
+  ownerUserId: number | null,
+): boolean {
+  return !!session.data.admin || (ownerUserId != null && session.data.userId === ownerUserId);
+}

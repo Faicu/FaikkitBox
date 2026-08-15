@@ -158,6 +158,9 @@ export interface PlexTitleDetail {
   // true dacă intrarea găsită e un pachet de sezon întreg, nu doar acest
   // episod — ștergerea/corectarea ar afecta atunci tot pachetul.
   isSeasonPack: boolean;
+  // true doar pentru cel care a adăugat titlul sau pentru un admin — UI-ul
+  // ascunde butoanele de subtitrare/ștergere pentru oricine altcineva.
+  canManage: boolean;
 }
 
 function isRomanianStream(s: { language?: string; languageCode?: string }): boolean {
@@ -274,6 +277,7 @@ export const getPlexTitleDetail = createServerFn({ method: "GET" })
         let downloadsLogId: number | null = null;
         let torrentHash: string | null = null;
         let isSeasonPack = false;
+        let requestedByUserId: number | null = null;
         if (imdbId) {
           const { findDownloadsRowForImdb } = await import("../filelist/log");
           const match = await findDownloadsRowForImdb(
@@ -286,6 +290,7 @@ export const getPlexTitleDetail = createServerFn({ method: "GET" })
             downloadsLogId = match.id;
             torrentHash = match.torrentHash;
             isSeasonPack = match.isSeasonPack;
+            requestedByUserId = match.requestedByUserId;
           }
         }
 
@@ -300,6 +305,11 @@ export const getPlexTitleDetail = createServerFn({ method: "GET" })
             .get(downloadsLogId) as { username: string } | undefined;
           addedByUsername = row?.username ?? null;
         }
+
+        // Butoanele de corectare/ștergere subtitrare și ștergere completă
+        // sunt vizibile doar celui care a adăugat titlul sau unui admin.
+        const { isAdminOrOwner } = await import("../admin.server");
+        const canManage = isAdminOrOwner(session, requestedByUserId);
 
         return {
           status: "ok",
@@ -323,6 +333,7 @@ export const getPlexTitleDetail = createServerFn({ method: "GET" })
             downloadsLogId,
             torrentHash,
             isSeasonPack,
+            canManage,
           },
         };
       } catch (e) {
