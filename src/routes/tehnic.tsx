@@ -19,6 +19,7 @@ import { runSpeedtest } from "@/lib/speedtest.functions";
 import { formatSpeed } from "@/lib/format";
 import { Metric } from "@/components/tehnic/Metric";
 import { PluginStatusSection } from "@/components/tehnic/sections/PluginStatusSection";
+import { PlexServiceCard } from "@/components/tehnic/sections/PlexServiceCard";
 import { CommitStatsSection } from "@/components/tehnic/sections/CommitStatsSection";
 import { ActivityLogSection } from "@/components/tehnic/sections/ActivityLogSection";
 import { ErrorLogSection } from "@/components/tehnic/sections/ErrorLogSection";
@@ -65,6 +66,9 @@ function TehnicPage() {
   return (
     <PageShell title="Tehnic" subtitle="Plugin-uri, statistici și diagnostice">
       <TehnicSubNav />
+
+      {/* Control serviciu Plex — fosta pagină /plex */}
+      <PlexServiceCard />
 
       {/* Plugin-uri active */}
       <PluginStatusSection />

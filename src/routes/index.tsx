@@ -2,7 +2,6 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
   PlayCircle,
-  ChevronRight,
   Users,
   Tv,
   Film,
@@ -104,7 +103,6 @@ function Overview() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <ServiceRow
           className="sm:col-span-2"
-          to="/plex"
           title="Plex"
           icon={<PlayCircle className="h-5 w-5" />}
           accent="text-amber-400"
@@ -346,7 +344,6 @@ function Overview() {
 }
 
 function ServiceRow({
-  to,
   title,
   icon,
   accent,
@@ -355,7 +352,6 @@ function ServiceRow({
   children,
   className,
 }: {
-  to: "/plex";
   title: string;
   icon: React.ReactNode;
   accent: string;
@@ -366,19 +362,14 @@ function ServiceRow({
 }) {
   return (
     <div className={`rounded-2xl border border-border bg-card p-4 ${className ?? ""}`}>
-      <Link to={to} className="block active:scale-[0.99] transition-transform">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <span className={`${accent}`}>{icon}</span>
-            <span className="font-semibold">{title}</span>
-            <ServicePill status={status} />
-          </div>
-          <ChevronRight className="h-4 w-4 text-muted-foreground" />
-        </div>
-        {status === "error" && error && (
-          <p className="mt-2 text-xs text-red-400 break-words">{error}</p>
-        )}
-      </Link>
+      <div className="flex items-center gap-2.5">
+        <span className={`${accent}`}>{icon}</span>
+        <span className="font-semibold">{title}</span>
+        <ServicePill status={status} />
+      </div>
+      {status === "error" && error && (
+        <p className="mt-2 text-xs text-red-400 break-words">{error}</p>
+      )}
       {children && <div className="mt-3">{children}</div>}
     </div>
   );

@@ -44,18 +44,11 @@ export interface PlexData {
   platform?: string;
   sessions: PlexSession[];
   libraries: PlexLibrary[];
-  recentlyAdded: Array<{ title: string; type: string; addedAt: number }>;
-  topShows?: Array<{ title: string; plays: number; lastViewedAt: number }>;
-  topMovies?: Array<{ title: string; plays: number; lastViewedAt: number }>;
-  topWatchers?: Array<{ user: string; plays: number; lastViewedAt: number }>;
   episodesToday?: number;
   activeUsersToday?: number;
-  moviesAddedLast24h?: number;
-  episodesAddedLast24h?: number;
   userHistory?: Record<string, PlexHistoryEntry[]>;
   todayViews?: PlexHistoryEntry[];
   activeUsersTodayList?: Array<{ user: string; count: number }>;
-  recentHistory?: PlexHistoryEntry[];
 }
 
 export interface PlexHistoryEntry {
@@ -78,15 +71,11 @@ const LIBRARY_COUNT_TTL_MS = 5 * 60 * 1000;
 
 let plexHistoryCache: {
   url: string;
-  topShows: PlexData["topShows"];
-  topMovies: PlexData["topMovies"];
-  topWatchers: PlexData["topWatchers"];
   episodesToday: number;
   activeUsersToday: number;
   userHistory: Record<string, PlexHistoryEntry[]>;
   todayViews: PlexHistoryEntry[];
   activeUsersTodayList: Array<{ user: string; count: number }>;
-  recentHistory: PlexHistoryEntry[];
   expiresAt: number;
 } | null = null;
 
@@ -128,27 +117,19 @@ async function fetchPlexHistory(
   url: string,
   headers: Record<string, string>,
 ): Promise<{
-  topShows: PlexData["topShows"];
-  topMovies: PlexData["topMovies"];
-  topWatchers: PlexData["topWatchers"];
   episodesToday: number;
   activeUsersToday: number;
   userHistory: Record<string, PlexHistoryEntry[]>;
   todayViews: PlexHistoryEntry[];
   activeUsersTodayList: Array<{ user: string; count: number }>;
-  recentHistory: PlexHistoryEntry[];
 }> {
   if (plexHistoryCache && plexHistoryCache.url === url && plexHistoryCache.expiresAt > Date.now()) {
     return {
-      topShows: plexHistoryCache.topShows,
-      topMovies: plexHistoryCache.topMovies,
-      topWatchers: plexHistoryCache.topWatchers,
       episodesToday: plexHistoryCache.episodesToday,
       activeUsersToday: plexHistoryCache.activeUsersToday,
       userHistory: plexHistoryCache.userHistory,
       todayViews: plexHistoryCache.todayViews,
       activeUsersTodayList: plexHistoryCache.activeUsersTodayList,
-      recentHistory: plexHistoryCache.recentHistory,
     };
   }
   const historyJson = await fetchJson<PlexApiResponse>(
@@ -171,9 +152,6 @@ async function fetchPlexHistory(
     // ignore, fallback below
   }
 
-  const showMap = new Map<string, { plays: number; lastViewedAt: number }>();
-  const movieMap = new Map<string, { plays: number; lastViewedAt: number }>();
-  const watcherMap = new Map<string, { plays: number; lastViewedAt: number }>();
   const historyByUser = new Map<string, PlexHistoryEntry[]>();
   // Compute "today" in Europe/Bucharest, not UTC (worker runtime).
   const startOfTodaySec = (() => {
@@ -209,36 +187,15 @@ async function fetchPlexHistory(
   const todayUsers = new Set<string>();
   const todayViews: PlexHistoryEntry[] = [];
   const todayUserCounts = new Map<string, number>();
-  const recentHistory: PlexHistoryEntry[] = [];
 
   for (const e of entries) {
     const viewedAt = Number(e.viewedAt ?? 0);
-    if (e.type === "episode" || e.grandparentTitle) {
-      const key = String(e.grandparentTitle ?? e.title ?? "Unknown");
-      const prev = showMap.get(key) ?? { plays: 0, lastViewedAt: 0 };
-      showMap.set(key, {
-        plays: prev.plays + 1,
-        lastViewedAt: Math.max(prev.lastViewedAt, viewedAt),
-      });
-    } else if (e.type === "movie") {
-      const key = String(e.title ?? "Unknown");
-      const prev = movieMap.get(key) ?? { plays: 0, lastViewedAt: 0 };
-      movieMap.set(key, {
-        plays: prev.plays + 1,
-        lastViewedAt: Math.max(prev.lastViewedAt, viewedAt),
-      });
-    }
     const accountId = e?.accountID != null ? Number(e.accountID) : null;
     const fromMap = accountId != null ? accountMap.get(accountId) : undefined;
     const fromInline = typeof e?.User?.title === "string" ? e.User.title : undefined;
     const user =
       fromMap ?? fromInline ?? (accountId != null ? `Utilizator #${accountId}` : "Necunoscut");
     const wkey = user;
-    const wprev = watcherMap.get(wkey) ?? { plays: 0, lastViewedAt: 0 };
-    watcherMap.set(wkey, {
-      plays: wprev.plays + 1,
-      lastViewedAt: Math.max(wprev.lastViewedAt, viewedAt),
-    });
     const list = historyByUser.get(wkey) ?? [];
     if (list.length < 100) {
       list.push({
@@ -252,18 +209,17 @@ async function fetchPlexHistory(
       });
       historyByUser.set(wkey, list);
     }
-    const entry: PlexHistoryEntry = {
-      title: String(e.title ?? "—"),
-      show: e.grandparentTitle ? String(e.grandparentTitle) : undefined,
-      season: e.parentIndex != null ? Number(e.parentIndex) : undefined,
-      episode: e.index != null ? Number(e.index) : undefined,
-      type: String(e.type ?? "unknown"),
-      viewedAt,
-      player: typeof e?.Player?.title === "string" ? e.Player.title : undefined,
-      user,
-    };
-    if (recentHistory.length < 10) recentHistory.push(entry);
     if (viewedAt >= startOfTodaySec) {
+      const entry: PlexHistoryEntry = {
+        title: String(e.title ?? "—"),
+        show: e.grandparentTitle ? String(e.grandparentTitle) : undefined,
+        season: e.parentIndex != null ? Number(e.parentIndex) : undefined,
+        episode: e.index != null ? Number(e.index) : undefined,
+        type: String(e.type ?? "unknown"),
+        viewedAt,
+        player: typeof e?.Player?.title === "string" ? e.Player.title : undefined,
+        user,
+      };
       episodesToday++;
       todayUsers.add(wkey);
       todayViews.push(entry);
@@ -271,24 +227,12 @@ async function fetchPlexHistory(
     }
   }
 
-  const toRanked = <K extends string, T extends { plays: number; lastViewedAt: number }>(
-    m: Map<string, T>,
-    keyField: K,
-  ): Array<Record<K, string> & T> =>
-    Array.from(m.entries())
-      .map(([k, v]) => ({ [keyField]: k, ...v }) as Record<K, string> & T)
-      .sort((a, b) => b.plays - a.plays)
-      .slice(0, 5);
-
   const userHistory: Record<string, PlexHistoryEntry[]> = {};
   for (const [k, list] of historyByUser.entries()) {
     userHistory[k] = list.sort((a, b) => b.viewedAt - a.viewedAt).slice(0, 50);
   }
 
   const result = {
-    topShows: toRanked(showMap, "title"),
-    topMovies: toRanked(movieMap, "title"),
-    topWatchers: toRanked(watcherMap, "user"),
     episodesToday,
     activeUsersToday: todayUsers.size,
     userHistory,
@@ -296,7 +240,6 @@ async function fetchPlexHistory(
     activeUsersTodayList: Array.from(todayUserCounts.entries())
       .map(([user, count]) => ({ user, count }))
       .sort((a, b) => b.count - a.count),
-    recentHistory,
   };
   plexHistoryCache = { url, ...result, expiresAt: Date.now() + 60_000 };
   return result;
@@ -366,7 +309,6 @@ export const getPlex = createServerFn({ method: "GET" }).handler(async (): Promi
       error: "PLEX_TOKEN not configured",
       sessions: [],
       libraries: [],
-      recentlyAdded: [],
     };
   }
   const headers = { Accept: "application/json", "X-Plex-Token": token };
@@ -379,15 +321,11 @@ export const getPlex = createServerFn({ method: "GET" }).handler(async (): Promi
       fetchJson<PlexApiResponse>(`${url}/status/sessions`, { headers }).catch(() => null),
       fetchJson<PlexApiResponse>(`${url}/library/sections`, { headers }).catch(() => null),
       fetchPlexHistory(url, headers).catch(() => ({
-        topShows: [],
-        topMovies: [],
-        topWatchers: [],
         episodesToday: 0,
         activeUsersToday: 0,
         userHistory: {},
         todayViews: [],
         activeUsersTodayList: [],
-        recentHistory: [],
       })),
     ]);
 
@@ -399,46 +337,6 @@ export const getPlex = createServerFn({ method: "GET" }).handler(async (): Promi
     const mc = rootJson?.MediaContainer ?? {};
     const sessionsMd = sessionsJson?.MediaContainer?.Metadata ?? [];
     const libsMd = libsJson?.MediaContainer?.Directory ?? [];
-    // Combină filme și episoade, sortate după addedAt descrescător, primele 8
-    const movieLibKeys = libsMd
-      .filter((l: PlexDirectoryLike) => l.type === "movie")
-      .map((l: PlexDirectoryLike) => l.key);
-    const showLibKeys = libsMd
-      .filter((l: PlexDirectoryLike) => l.type === "show")
-      .map((l: PlexDirectoryLike) => l.key);
-
-    const [recentMoviesJson, recentEpisodesJson] = await Promise.all([
-      movieLibKeys.length > 0
-        ? fetchJson<PlexApiResponse>(
-            `${url}/library/sections/${movieLibKeys[0]}/recentlyAdded?X-Plex-Container-Start=0&X-Plex-Container-Size=100&type=1`,
-            { headers },
-          ).catch(() => ({ MediaContainer: { Metadata: [] } }))
-        : Promise.resolve({ MediaContainer: { Metadata: [] } }),
-      showLibKeys.length > 0
-        ? fetchJson<PlexApiResponse>(
-            `${url}/library/sections/${showLibKeys[0]}/recentlyAdded?X-Plex-Container-Start=0&X-Plex-Container-Size=100&type=4`,
-            { headers },
-          ).catch(() => ({ MediaContainer: { Metadata: [] } }))
-        : Promise.resolve({ MediaContainer: { Metadata: [] } }),
-    ]);
-
-    const last24hCutoff = Math.floor(Date.now() / 1000) - 24 * 3600;
-    const moviesAddedLast24h = (recentMoviesJson?.MediaContainer?.Metadata ?? []).filter(
-      (m: PlexMetadataItem) => Number(m.addedAt ?? 0) >= last24hCutoff,
-    ).length;
-    const episodesAddedLast24h = (recentEpisodesJson?.MediaContainer?.Metadata ?? []).filter(
-      (m: PlexMetadataItem) => Number(m.addedAt ?? 0) >= last24hCutoff,
-    ).length;
-
-    const recentMd = [
-      ...(recentMoviesJson?.MediaContainer?.Metadata ?? []),
-      ...(recentEpisodesJson?.MediaContainer?.Metadata ?? []),
-    ]
-      .sort(
-        (a: PlexMetadataItem, b: PlexMetadataItem) =>
-          Number(b.addedAt ?? 0) - Number(a.addedAt ?? 0),
-      )
-      .slice(0, 50);
 
     const libraries: PlexLibrary[] = await Promise.all(
       libsMd.map(async (l: PlexDirectoryLike) => {
@@ -489,32 +387,14 @@ export const getPlex = createServerFn({ method: "GET" }).handler(async (): Promi
       platform: mc.platform,
       sessions,
       libraries,
-      recentlyAdded: recentMd.slice(0, 50).map((m: PlexMetadataItem) => {
-        let title = m.title;
-        if (m.grandparentTitle) {
-          const season = m.parentIndex ? `S${String(m.parentIndex).padStart(2, "0")}` : null;
-          const episode = m.index ? `E${String(m.index).padStart(2, "0")}` : null;
-          const epCode = [season, episode].filter(Boolean).join("");
-          title = epCode
-            ? `${m.grandparentTitle} ${epCode} — ${m.title}`
-            : `${m.grandparentTitle} — ${m.title}`;
-        }
-        return { title: title ?? "", type: m.type ?? "", addedAt: Number(m.addedAt ?? 0) };
-      }),
-      topShows: history.topShows,
-      topMovies: history.topMovies,
-      topWatchers: history.topWatchers,
       episodesToday: history.episodesToday,
       activeUsersToday: history.activeUsersToday,
-      moviesAddedLast24h,
-      episodesAddedLast24h,
       userHistory: history.userHistory,
       todayViews: history.todayViews,
       activeUsersTodayList: history.activeUsersTodayList,
-      recentHistory: history.recentHistory,
     };
   } catch (e) {
-    return { status: "error", error: errMsg(e), sessions: [], libraries: [], recentlyAdded: [] };
+    return { status: "error", error: errMsg(e), sessions: [], libraries: [] };
   }
 });
 

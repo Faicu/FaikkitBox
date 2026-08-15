@@ -2,7 +2,6 @@ import { Link, useRouterState } from "@tanstack/react-router";
 
 const items = [
   { to: "/tehnic", label: "Tehnic" },
-  { to: "/plex", label: "Plex" },
   { to: "/immich", label: "Immich" },
   { to: "/qbit", label: "qBit" },
   { to: "/users", label: "Utilizatori" },

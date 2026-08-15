@@ -64,8 +64,8 @@ export const PUSH_TITLES: Record<ActivityType, string> = {
 export const PUSH_URLS: Record<ActivityType, string> = {
   server_start: "/sistem",
   server_stop: "/sistem",
-  plex_watch_start: "/plex",
-  plex_watch_stop: "/plex",
+  plex_watch_start: "/",
+  plex_watch_stop: "/",
   torrent_added: "/biblioteca",
   torrent_complete: "/biblioteca",
   immich_upload: "/immich",

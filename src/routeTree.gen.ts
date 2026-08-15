@@ -14,7 +14,6 @@ import { Route as TehnicRouteImport } from './routes/tehnic'
 import { Route as SistemRouteImport } from './routes/sistem'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as QbitRouteImport } from './routes/qbit'
-import { Route as PlexRouteImport } from './routes/plex'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ImmichRouteImport } from './routes/immich'
 import { Route as DescoperaRouteImport } from './routes/descopera'
@@ -44,11 +43,6 @@ const RegisterRoute = RegisterRouteImport.update({
 const QbitRoute = QbitRouteImport.update({
   id: '/qbit',
   path: '/qbit',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PlexRoute = PlexRouteImport.update({
-  id: '/plex',
-  path: '/plex',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -83,7 +77,6 @@ export interface FileRoutesByFullPath {
   '/descopera': typeof DescoperaRoute
   '/immich': typeof ImmichRoute
   '/login': typeof LoginRoute
-  '/plex': typeof PlexRoute
   '/qbit': typeof QbitRoute
   '/register': typeof RegisterRoute
   '/sistem': typeof SistemRoute
@@ -96,7 +89,6 @@ export interface FileRoutesByTo {
   '/descopera': typeof DescoperaRoute
   '/immich': typeof ImmichRoute
   '/login': typeof LoginRoute
-  '/plex': typeof PlexRoute
   '/qbit': typeof QbitRoute
   '/register': typeof RegisterRoute
   '/sistem': typeof SistemRoute
@@ -110,7 +102,6 @@ export interface FileRoutesById {
   '/descopera': typeof DescoperaRoute
   '/immich': typeof ImmichRoute
   '/login': typeof LoginRoute
-  '/plex': typeof PlexRoute
   '/qbit': typeof QbitRoute
   '/register': typeof RegisterRoute
   '/sistem': typeof SistemRoute
@@ -125,7 +116,6 @@ export interface FileRouteTypes {
     | '/descopera'
     | '/immich'
     | '/login'
-    | '/plex'
     | '/qbit'
     | '/register'
     | '/sistem'
@@ -138,7 +128,6 @@ export interface FileRouteTypes {
     | '/descopera'
     | '/immich'
     | '/login'
-    | '/plex'
     | '/qbit'
     | '/register'
     | '/sistem'
@@ -151,7 +140,6 @@ export interface FileRouteTypes {
     | '/descopera'
     | '/immich'
     | '/login'
-    | '/plex'
     | '/qbit'
     | '/register'
     | '/sistem'
@@ -165,7 +153,6 @@ export interface RootRouteChildren {
   DescoperaRoute: typeof DescoperaRoute
   ImmichRoute: typeof ImmichRoute
   LoginRoute: typeof LoginRoute
-  PlexRoute: typeof PlexRoute
   QbitRoute: typeof QbitRoute
   RegisterRoute: typeof RegisterRoute
   SistemRoute: typeof SistemRoute
@@ -208,13 +195,6 @@ declare module '@tanstack/react-router' {
       path: '/qbit'
       fullPath: '/qbit'
       preLoaderRoute: typeof QbitRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/plex': {
-      id: '/plex'
-      path: '/plex'
-      fullPath: '/plex'
-      preLoaderRoute: typeof PlexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -261,7 +241,6 @@ const rootRouteChildren: RootRouteChildren = {
   DescoperaRoute: DescoperaRoute,
   ImmichRoute: ImmichRoute,
   LoginRoute: LoginRoute,
-  PlexRoute: PlexRoute,
   QbitRoute: QbitRoute,
   RegisterRoute: RegisterRoute,
   SistemRoute: SistemRoute,
