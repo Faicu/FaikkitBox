@@ -1045,6 +1045,25 @@ export const backfillSubtitles = createServerFn({ method: "POST" }).handler(
   },
 );
 
+// Echivalentul de mai sus, apelabil direct (fără graniță de server function/
+// requireAdmin) — folosit de plugin-ul periodic de sincronizare
+// (server/plugins/media-torrent-sync.ts), care rulează în fundal după
+// legătura retroactivă torrent↔Plex, ca orice torrent nou detectat să capete
+// automat și verificarea subtitrării, nu doar statusul actualizat.
+export async function runSubtitleBackfillIfIdle(): Promise<void> {
+  if (backfillRunning) return;
+  const qbitBase = process.env.QBIT_URL ?? "http://192.168.1.192:25556";
+  const qbitUser = process.env.QBIT_USERNAME;
+  const qbitPass = process.env.QBIT_PASSWORD;
+  if (!qbitUser || !qbitPass) return;
+
+  const url = qbitBase.replace(/\/$/, "");
+  backfillRunning = true;
+  backfillProgress = null;
+  lastBackfillResult = null;
+  await runBackfillWork(url, qbitUser, qbitPass);
+}
+
 // Corectează subtitrarea pentru un singur titlu — folosește exact aceeași
 // logică (ensureRomanianSubtitle) ca backfill-ul global, dar aplicată direct
 // pe hash-ul torrentului cerut, fără să mai listeze/itereze toate torrentele

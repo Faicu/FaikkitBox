@@ -397,3 +397,69 @@ export const startMediaBackfill = createServerFn({ method: "POST" }).handler(
     return { status: "ok" };
   },
 );
+
+// Echivalentul de mai sus, apelabil direct (fără graniță de server function/
+// requireAdmin) — folosit de plugin-ul periodic de sincronizare
+// (server/plugins/media-torrent-sync.ts), care rulează în fundal, fără
+// sesiune de admin. Așteaptă finalizarea completă (spre deosebire de
+// startMediaBackfill, care pornește rularea și răspunde imediat, urmărită
+// separat prin polling din UI) — plugin-ul are nevoie de finalul ei înainte
+// de a trece la legătura retroactivă/verificarea subtitrărilor.
+export async function runMediaBackfillIfIdle(): Promise<void> {
+  if (backfillRunning || !process.env.PLEX_TOKEN) return;
+  backfillRunning = true;
+  backfillProgress = null;
+  lastResult = null;
+  await runMediaBackfillWork();
+}
+
+// Leagă retroactiv torrent_hash pentru rândurile `media` deja indexate în
+// Plex (plex_rating_key cunoscut) dar fără torrent asociat — cazul unui
+// torrent adăugat direct în qBittorrent (nu prin aplicație) sau al unui
+// titlu backfill-uit înainte ca torrentul lui să mai fi fost activ la acel
+// moment. Aceeași logică de potrivire ca la backfill (fetchQbitTorrentsByPath
+// — inclusiv pachete de sezon, fiecare fișier video legat individual), doar
+// că verifică toate rândurile neconectate, nu doar cele nou adăugate în
+// această rulare.
+export async function linkUnmatchedTorrents(): Promise<{ checked: number; linked: number }> {
+  const token = process.env.PLEX_TOKEN;
+  if (!token) return { checked: 0, linked: 0 };
+
+  const { getDb } = await import("./db");
+  const db = getDb();
+  const rows = db
+    .prepare(
+      "SELECT id, plex_rating_key FROM media WHERE plex_rating_key IS NOT NULL AND torrent_hash IS NULL",
+    )
+    .all() as Array<{ id: number; plex_rating_key: string }>;
+  if (rows.length === 0) return { checked: 0, linked: 0 };
+
+  const qbitTorrentsByPath = await fetchQbitTorrentsByPath();
+  if (qbitTorrentsByPath.size === 0) return { checked: rows.length, linked: 0 };
+
+  const { url } = await discoverPlexUrl(token, process.env.PLEX_URL);
+  const headers = { Accept: "application/json", "X-Plex-Token": token };
+
+  let linked = 0;
+  for (const row of rows) {
+    try {
+      const detail = await fetchItemDetail(url, headers, row.plex_rating_key);
+      const filePath = detail?.Media?.[0]?.Part?.[0]?.file ?? null;
+      const match = filePath ? qbitTorrentsByPath.get(filePath) : null;
+      if (match) {
+        db.prepare(
+          "UPDATE media SET torrent_hash = ?, torrent_name = ?, updated_at = datetime('now') WHERE id = ?",
+        ).run(match.hash, match.name, row.id);
+        linked++;
+      }
+    } catch (e) {
+      console.warn(`[media-backfill] Nu am putut verifica legătura pentru media.id=${row.id}:`, e);
+    }
+  }
+  if (linked > 0) {
+    console.log(
+      `[media-backfill] Legătură retroactivă: ${linked}/${rows.length} legate de torrente active din qBittorrent`,
+    );
+  }
+  return { checked: rows.length, linked };
+}

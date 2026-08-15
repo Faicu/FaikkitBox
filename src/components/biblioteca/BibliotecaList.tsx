@@ -190,8 +190,9 @@ export function BibliotecaList() {
   });
 
   // Setările de urmărire (auto-download/notify) pentru titlurile fixate —
-  // încărcate o singură dată, folosite doar când drawer-ul arată un titlu cu
-  // status "pinned" (management portat din fostele carduri Lansări).
+  // încărcate o singură dată, folosite când drawer-ul unui titlu (oricare,
+  // nu doar cele fără nimic descărcat) e fixat (management portat din
+  // fostele carduri Lansări, disponibil acum printr-un toggle în drawer).
   useEffect(() => {
     getWatchFn({})
       .then((settings) => {
@@ -223,12 +224,32 @@ export function BibliotecaList() {
     await setWatchFn({ data: next }).catch(() => {});
   }
 
-  async function unpinTitle(id: number, mediaType: "movie" | "tv") {
-    const next = pinnedList.filter((p) => !(p.id === id && p.mediaType === mediaType));
+  // Fixarea nu mai e legată de existența unui card separat — orice titlu din
+  // Bibliotecă (descărcat, în curs, sau doar identificat) poate fi fixat
+  // pentru urmărire automată direct din drawer-ul lui. Dacă titlul e ȘI
+  // descărcat/în bibliotecă, rândul rămâne vizibil în listă chiar și după
+  // scoaterea din fixări (mai are alt motiv să apară); dacă exista în listă
+  // EXCLUSIV pentru că era fixat (status "pinned"), scoaterea îl face să
+  // dispară din listă, deci închidem drawer-ul.
+  async function togglePin(
+    tmdbId: number,
+    mediaType: "movie" | "tv",
+    title: string,
+    originalTitle: string | null,
+    posterUrl: string | null,
+    closeIfRemoved: boolean,
+  ) {
+    const isPinned = pinnedList.some((p) => p.id === tmdbId && p.mediaType === mediaType);
+    const next = isPinned
+      ? pinnedList.filter((p) => !(p.id === tmdbId && p.mediaType === mediaType))
+      : [
+          ...pinnedList,
+          { id: tmdbId, mediaType, title, originalTitle: originalTitle || title, posterUrl },
+        ];
     await setPinnedFn({ data: { items: next } }).catch(() => {});
     await queryClient.invalidateQueries({ queryKey: ["pinnedItems"] });
     await queryClient.invalidateQueries({ queryKey: ["plexLibraryBrowse"] });
-    setSelectedMediaId(null);
+    if (isPinned && closeIfRemoved) setSelectedMediaId(null);
   }
 
   const browseItems = browse.data?.status === "ok" ? browse.data.items : null;
@@ -716,23 +737,63 @@ export function BibliotecaList() {
                   )}
                 </div>
 
+                {d.tmdbId &&
+                  (() => {
+                    const pinnedMediaType = d.type === "movie" ? "movie" : "tv";
+                    const titleForPin = d.type === "movie" ? d.title : (d.show ?? d.title);
+                    const isPinned = pinnedList.some(
+                      (p) => p.id === d.tmdbId && p.mediaType === pinnedMediaType,
+                    );
+                    return (
+                      <div className="flex flex-col gap-2 pt-1 border-t border-border">
+                        {!isPinned && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              togglePin(
+                                d.tmdbId!,
+                                pinnedMediaType,
+                                titleForPin,
+                                d.originalTitle,
+                                d.thumbUrl,
+                                false,
+                              )
+                            }
+                            className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-border bg-muted/40 py-2 text-xs font-medium text-foreground hover:bg-muted/60 transition-colors"
+                          >
+                            <Pin className="h-3.5 w-3.5" />
+                            Fixează pentru urmărire automată
+                          </button>
+                        )}
+                        {isPinned && (
+                          <PinnedTitleManager
+                            tmdbId={d.tmdbId}
+                            mediaType={pinnedMediaType}
+                            title={titleForPin}
+                            originalTitle={d.originalTitle}
+                            posterUrl={d.thumbUrl}
+                            watchSettings={watchMap.get(`${pinnedMediaType}-${d.tmdbId}`) ?? null}
+                            onWatchChange={(patch) =>
+                              updateWatch(d.tmdbId!, pinnedMediaType, patch)
+                            }
+                            onUnpin={() =>
+                              togglePin(
+                                d.tmdbId!,
+                                pinnedMediaType,
+                                titleForPin,
+                                d.originalTitle,
+                                d.thumbUrl,
+                                d.status === "pinned",
+                              )
+                            }
+                          />
+                        )}
+                      </div>
+                    );
+                  })()}
+
                 <div className="flex flex-col gap-2 pt-1 border-t border-border">
-                  {d.status === "pinned" && d.tmdbId ? (
-                    <PinnedTitleManager
-                      tmdbId={d.tmdbId}
-                      mediaType={d.type === "movie" ? "movie" : "tv"}
-                      title={d.type === "movie" ? d.title : (d.show ?? d.title)}
-                      originalTitle={d.originalTitle}
-                      posterUrl={d.thumbUrl}
-                      watchSettings={
-                        watchMap.get(`${d.type === "movie" ? "movie" : "tv"}-${d.tmdbId}`) ?? null
-                      }
-                      onWatchChange={(patch) =>
-                        updateWatch(d.tmdbId!, d.type === "movie" ? "movie" : "tv", patch)
-                      }
-                      onUnpin={() => unpinTitle(d.tmdbId!, d.type === "movie" ? "movie" : "tv")}
-                    />
-                  ) : d.torrentHash ? (
+                  {d.torrentHash ? (
                     d.canManage ? (
                       <>
                         <div className="flex gap-2 pt-2">
