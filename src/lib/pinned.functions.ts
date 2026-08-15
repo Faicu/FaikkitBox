@@ -183,6 +183,35 @@ export const setPinnedItems = createServerFn({ method: "POST" })
     ).run();
   });
 
+// Scoate fixarea unui titlu pentru TOȚI utilizatorii, nu doar pentru cel
+// curent — spre deosebire de setPinnedItems (user_id = ?), care gestionează
+// doar propria listă. Necesar pentru toggle-ul de fixare din Bibliotecă:
+// vizibilitatea unui titlu "doar fixat" în Bibliotecă e o stare comună
+// (EXISTS pe pinned_items, indiferent de user — vezi getPlexLibraryBrowse),
+// deci scoaterea trebuie să fie la fel de comună, altfel titlul rămâne
+// vizibil pentru că altcineva încă îl are fixat (bug real, întâlnit direct:
+// userul a scos fixarea, dar titlul a rămas în Bibliotecă fiindcă era fixat
+// de alt cont).
+export const unpinTitleEverywhere = createServerFn({ method: "POST" })
+  .validator((data: { id: number; mediaType: "movie" | "tv" }) => data)
+  .handler(async ({ data }): Promise<void> => {
+    const { requireAuth } = await import("./admin.server");
+    await requireAuth();
+    const db = getDb();
+    db.prepare("DELETE FROM pinned_items WHERE id = ? AND media_type = ?").run(
+      data.id,
+      data.mediaType,
+    );
+    db.prepare("DELETE FROM pinned_watch_settings WHERE id = ? AND media_type = ?").run(
+      data.id,
+      data.mediaType,
+    );
+    db.prepare("DELETE FROM pinned_watch_state WHERE id = ? AND media_type = ?").run(
+      data.id,
+      data.mediaType,
+    );
+  });
+
 export const getPinnedWatcherStatus = createServerFn({ method: "GET" }).handler(async () => {
   const { requireAdmin } = await import("./admin.server");
   await requireAdmin();

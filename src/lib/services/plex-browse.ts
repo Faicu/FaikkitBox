@@ -185,12 +185,18 @@ export interface PlexTitleDetail {
   // true doar pentru cel care a adăugat titlul sau pentru un admin — UI-ul
   // ascunde butoanele de subtitrare/ștergere pentru oricine altcineva.
   canManage: boolean;
-  // Doar pentru titluri fixate (status "pinned") — id-ul TMDB + titlul
-  // original, necesare ca drawer-ul să poată reda panoul complet de
-  // management al fixării (SeasonPanel/WatchTogglePanel etc., portate din
-  // fostele carduri Lansări) direct în Bibliotecă.
+  // Id-ul TMDB + titlul original, necesare ca drawer-ul să poată reda panoul
+  // complet de management al fixării (SeasonPanel/WatchTogglePanel etc.,
+  // portate din fostele carduri Lansări) direct în Bibliotecă.
   tmdbId: number | null;
   originalTitle: string | null;
+  // Fixat de ORICE utilizator, nu doar de cel curent — fixarea e o stare
+  // comună (vezi getPlexLibraryBrowse, care folosește exact aceeași condiție
+  // ca să decidă vizibilitatea unui titlu "doar fixat" în listă), deci
+  // toggle-ul din drawer trebuie să reflecte/controleze aceeași stare, nu
+  // doar lista personală a userului curent — altfel scoaterea fixării de
+  // către un cont nu are efect dacă titlul e fixat și de alt cont.
+  isPinnedByAnyone: boolean;
 }
 
 interface MediaRow {
@@ -259,6 +265,13 @@ async function buildDetailFromMediaRow(
     addedByUsername = u?.username ?? null;
   }
 
+  const pinnedMediaType = row.media_type === "movie" ? "movie" : "tv";
+  const isPinnedByAnyone = row.tmdb_id
+    ? !!db
+        .prepare("SELECT 1 FROM pinned_items WHERE id = ? AND media_type = ? LIMIT 1")
+        .get(row.tmdb_id, pinnedMediaType)
+    : false;
+
   return {
     mediaId: row.id,
     ratingKey: row.plex_rating_key,
@@ -283,6 +296,7 @@ async function buildDetailFromMediaRow(
     canManage: isAdminOrOwner(session, row.requested_by_user_id),
     tmdbId: row.tmdb_id,
     originalTitle: row.original_title,
+    isPinnedByAnyone,
   };
 }
 

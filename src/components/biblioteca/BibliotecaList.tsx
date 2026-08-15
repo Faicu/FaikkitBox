@@ -51,7 +51,12 @@ import {
 } from "@/lib/filelist.functions";
 import { startMediaBackfill, getMediaBackfillState } from "@/lib/media-backfill";
 import { backfillSubtitles, getBackfillState } from "@/lib/filelist.functions";
-import { setPinnedItems, getWatchSettings, setWatchSettings } from "@/lib/pinned.functions";
+import {
+  setPinnedItems,
+  unpinTitleEverywhere,
+  getWatchSettings,
+  setWatchSettings,
+} from "@/lib/pinned.functions";
 import type { WatchSettings } from "@/lib/pinned.functions";
 import { PinnedItemCard } from "@/components/pinned/PinnedItemCard";
 import { formatMs } from "@/lib/format";
@@ -175,6 +180,7 @@ export function BibliotecaList() {
   const deleteSubtitleFn = useServerFn(deleteSubtitleForMedia);
   const { data: pinnedList = [] } = useQuery(pinnedItemsQuery);
   const setPinnedFn = useServerFn(setPinnedItems);
+  const unpinFn = useServerFn(unpinTitleEverywhere);
   const getWatchFn = useServerFn(getWatchSettings);
   const setWatchFn = useServerFn(setWatchSettings);
   const startBackfillFn = useServerFn(startMediaBackfill);
@@ -231,25 +237,39 @@ export function BibliotecaList() {
   // scoaterea din fixări (mai are alt motiv să apară); dacă exista în listă
   // EXCLUSIV pentru că era fixat (status "pinned"), scoaterea îl face să
   // dispară din listă, deci închidem drawer-ul.
-  async function togglePin(
+  //
+  // Fixarea propriu-zisă (adăugarea) rămâne pe lista personală a userului
+  // curent (setPinnedItems, cu atribuire cine a fixat). Dar scoaterea NU
+  // poate fi doar personală: vizibilitatea unui titlu fixat în Bibliotecă
+  // e o stare comună (EXISTS pe pinned_items, indiferent de user — vezi
+  // isPinnedByAnyone/getPlexLibraryBrowse), deci scoaterea trebuie să fie la
+  // fel de comună (unpinTitleEverywhere) — altfel titlul rămâne în listă
+  // fiindcă mai e fixat de alt cont, deși userul curent tocmai l-a scos din
+  // fixările lui (bug real, raportat direct: "The Odyssey").
+  async function pinTitle(
     tmdbId: number,
     mediaType: "movie" | "tv",
     title: string,
     originalTitle: string | null,
     posterUrl: string | null,
-    closeIfRemoved: boolean,
   ) {
-    const isPinned = pinnedList.some((p) => p.id === tmdbId && p.mediaType === mediaType);
-    const next = isPinned
-      ? pinnedList.filter((p) => !(p.id === tmdbId && p.mediaType === mediaType))
-      : [
-          ...pinnedList,
-          { id: tmdbId, mediaType, title, originalTitle: originalTitle || title, posterUrl },
-        ];
-    await setPinnedFn({ data: { items: next } }).catch(() => {});
+    const already = pinnedList.some((p) => p.id === tmdbId && p.mediaType === mediaType);
+    if (!already) {
+      const next = [
+        ...pinnedList,
+        { id: tmdbId, mediaType, title, originalTitle: originalTitle || title, posterUrl },
+      ];
+      await setPinnedFn({ data: { items: next } }).catch(() => {});
+    }
     await queryClient.invalidateQueries({ queryKey: ["pinnedItems"] });
     await queryClient.invalidateQueries({ queryKey: ["plexLibraryBrowse"] });
-    if (isPinned && closeIfRemoved) setSelectedMediaId(null);
+  }
+
+  async function unpinTitle(tmdbId: number, mediaType: "movie" | "tv", closeIfRemoved: boolean) {
+    await unpinFn({ data: { id: tmdbId, mediaType } }).catch(() => {});
+    await queryClient.invalidateQueries({ queryKey: ["pinnedItems"] });
+    await queryClient.invalidateQueries({ queryKey: ["plexLibraryBrowse"] });
+    if (closeIfRemoved) setSelectedMediaId(null);
   }
 
   const browseItems = browse.data?.status === "ok" ? browse.data.items : null;
@@ -741,22 +761,18 @@ export function BibliotecaList() {
                   (() => {
                     const pinnedMediaType = d.type === "movie" ? "movie" : "tv";
                     const titleForPin = d.type === "movie" ? d.title : (d.show ?? d.title);
-                    const isPinned = pinnedList.some(
-                      (p) => p.id === d.tmdbId && p.mediaType === pinnedMediaType,
-                    );
                     return (
                       <div className="flex flex-col gap-2 pt-1 border-t border-border">
-                        {!isPinned && (
+                        {!d.isPinnedByAnyone && (
                           <button
                             type="button"
                             onClick={() =>
-                              togglePin(
+                              pinTitle(
                                 d.tmdbId!,
                                 pinnedMediaType,
                                 titleForPin,
                                 d.originalTitle,
                                 d.thumbUrl,
-                                false,
                               )
                             }
                             className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-border bg-muted/40 py-2 text-xs font-medium text-foreground hover:bg-muted/60 transition-colors"
@@ -765,7 +781,7 @@ export function BibliotecaList() {
                             Fixează pentru urmărire automată
                           </button>
                         )}
-                        {isPinned && (
+                        {d.isPinnedByAnyone && (
                           <PinnedTitleManager
                             tmdbId={d.tmdbId}
                             mediaType={pinnedMediaType}
@@ -777,14 +793,7 @@ export function BibliotecaList() {
                               updateWatch(d.tmdbId!, pinnedMediaType, patch)
                             }
                             onUnpin={() =>
-                              togglePin(
-                                d.tmdbId!,
-                                pinnedMediaType,
-                                titleForPin,
-                                d.originalTitle,
-                                d.thumbUrl,
-                                d.status === "pinned",
-                              )
+                              unpinTitle(d.tmdbId!, pinnedMediaType, d.status === "pinned")
                             }
                           />
                         )}
