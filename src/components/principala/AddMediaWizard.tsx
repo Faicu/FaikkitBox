@@ -41,7 +41,7 @@ import {
   getTmdbSeasonEpisodes,
   findEpisodeTitle,
 } from "@/lib/tmdb.functions";
-import type { TmdbEpisode } from "@/lib/tmdb.functions";
+import type { TmdbEpisode, TmdbDetails } from "@/lib/tmdb.functions";
 import type { TmdbSearchResult } from "@/lib/tmdb.functions";
 import { checkPlexHasTitle, getPlexEpisodesInSeason } from "@/lib/services.functions";
 import { checkFilelistForItem, downloadFilelist } from "@/lib/filelist.functions";
@@ -119,6 +119,10 @@ export function AddMediaWizard({
   const [searching, setSearching] = useState(false);
   const [selected, setSelected] = useState<TmdbSearchResult | null>(null);
   const [checkResult, setCheckResult] = useState<CheckResult | null>(null);
+  // Detaliile TMDB complete (gen, rezumat RO, tmdb id, status) — reținute ca
+  // să poată fi trimise mai departe la pornirea descărcării, populând
+  // tabela `media`, fără să le mai cerem o dată de la TMDB.
+  const [tmdbDetails, setTmdbDetails] = useState<TmdbDetails | null>(null);
   const [quality, setQuality] = useState<Quality>("1080p");
   const [tvScope, setTvScope] = useState<TvScope>("series");
   const [tvSeason, setTvSeason] = useState<number | null>(null);
@@ -160,6 +164,7 @@ export function AddMediaWizard({
     setResults([]);
     setSelected(null);
     setCheckResult(null);
+    setTmdbDetails(null);
     setQuality("1080p");
     setTvScope("series");
     setTvSeason(null);
@@ -237,6 +242,7 @@ export function AddMediaWizard({
     setStep("checking");
     try {
       const details = await detailsFn({ data: { id: item.id, mediaType: item.mediaType } });
+      setTmdbDetails(details);
       const originalTitle = details.literalTitle || details.originalTitle || item.originalTitle;
       const [plexRes, filelistRes] = await Promise.all([
         plexFn({ data: { title: item.title, originalTitle, mediaType: item.mediaType } }),
@@ -300,7 +306,34 @@ export function AddMediaWizard({
     }
   }
 
-  async function downloadNow(torrent: FilelistTorrent) {
+  // Metadatele TMDB deja cunoscute (titlu, gen, rezumat RO, imdb/tmdb id) —
+  // trimise o dată cu descărcarea, ca torrentul să apară direct în tabela
+  // `media` fără nicio căutare TMDB ulterioară (vezi Bibliotecă). `season`
+  // vine explicit din apelant (nu din tvSeason) — la "Serial complet",
+  // fiecare pachet descărcat e pentru un sezon diferit de starea curentă.
+  function buildMediaPayload(season?: number) {
+    if (!selected || !checkResult) return undefined;
+    const parsedYear = selected.year ? Number(selected.year) : NaN;
+    return {
+      mediaType: (isTv ? "episode" : "movie") as "episode" | "movie",
+      imdbId: checkResult.imdbId,
+      tmdbId: selected.id,
+      title: selected.title,
+      originalTitle: checkResult.originalTitle,
+      literalTitle: tmdbDetails?.literalTitle ?? null,
+      year: Number.isFinite(parsedYear) ? parsedYear : null,
+      season: isTv ? (season ?? tvSeason) : null,
+      episode: isTv && tvScope === "episode" ? tvEpisode : null,
+      overviewRo: tmdbDetails?.overview ?? null,
+      genres: tmdbDetails?.genres ?? [],
+      posterPath: selected.posterUrl ?? null,
+      tvStatus: tmdbDetails?.tvStatus ?? null,
+      isSeasonPack: isTv && tvScope !== "episode",
+      addedVia: "wizard" as const,
+    };
+  }
+
+  async function downloadNow(torrent: FilelistTorrent, season?: number) {
     setBusy(true);
     const toastId = toast.loading(`Se descarcă: ${torrent.name}…`);
     try {
@@ -314,6 +347,7 @@ export function AddMediaWizard({
           freeleech: torrent.freeleech,
           internal: torrent.internal,
           imdb: torrent.imdb,
+          media: buildMediaPayload(season),
         },
       });
       if (res.status === "ok") {
@@ -355,9 +389,8 @@ export function AddMediaWizard({
   ) {
     setBusy(true);
     let okCount = 0;
-    for (const { torrent } of seasonPacks) {
-      // eslint-disable-next-line no-await-in-loop
-      if (await downloadNow(torrent)) okCount++;
+    for (const { season, torrent } of seasonPacks) {
+      if (await downloadNow(torrent, season)) okCount++;
     }
     setBusy(false);
     if (okCount > 0) {
@@ -526,6 +559,7 @@ export function AddMediaWizard({
       setStep("search");
       setSelected(null);
       setCheckResult(null);
+      setTmdbDetails(null);
       setTvScope("series");
       setTvSeason(null);
       setTvEpisode(null);
@@ -543,6 +577,7 @@ export function AddMediaWizard({
       setStep("search");
       setSelected(null);
       setCheckResult(null);
+      setTmdbDetails(null);
       setSelectedTorrentId(null);
       return;
     }

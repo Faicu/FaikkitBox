@@ -508,6 +508,25 @@ interface DownloadFilelistParams {
   skipLog?: boolean;
   imdb?: string | null;
   requestedByUserId?: number | null;
+  // Metadate TMDB, trimise doar de wizard-ul de adăugare (are deja tot ce
+  // trebuie la momentul descărcării) — populează tabela `media`. Absentă
+  // pentru descărcările pornite din căutarea manuală Filelist sau din
+  // auto-download-ul pinned-watcher (rămase pe doar `downloads`, deocamdată).
+  // Proveniența torrent-ului (nume/hash/categorie/mărime/cale) e completată
+  // aici, în downloadFilelistCore, care oricum le are deja calculate — nu e
+  // nevoie ca apelantul să le retrimită.
+  media?: Omit<
+    import("../media").UpsertMediaEntryInput,
+    | "torrentName"
+    | "torrentHash"
+    | "category"
+    | "categoryName"
+    | "size"
+    | "freeleech"
+    | "internal"
+    | "savePath"
+    | "requestedByUserId"
+  >;
 }
 
 // Implementare comună pentru descărcare + upload la qBittorrent, folosită atât
@@ -666,6 +685,26 @@ async function downloadFilelistCore(
       requestedByUserId: params.requestedByUserId ?? null,
     });
 
+    if (params.media) {
+      const { upsertMediaEntry } = await import("../media");
+      try {
+        upsertMediaEntry({
+          ...params.media,
+          torrentName: params.torrentName,
+          torrentHash: torrentHash ?? null,
+          category: catId,
+          categoryName: catName,
+          size: params.size ?? 0,
+          freeleech: params.freeleech ?? false,
+          internal: params.internal ?? false,
+          savePath,
+          requestedByUserId: params.requestedByUserId ?? null,
+        });
+      } catch (e) {
+        console.warn("[filelist] Nu am putut scrie în tabela media:", e);
+      }
+    }
+
     // 7. Pornește polling background — refresh Plex și marchează complet DOAR la final
     const plexType = isMovie ? "movie" : "show";
     if (torrentHash) {
@@ -702,6 +741,7 @@ export const downloadFilelist = createServerFn({ method: "POST" })
       freeleech?: boolean;
       internal?: boolean;
       imdb?: string | null;
+      media?: DownloadFilelistParams["media"];
     }) => ({
       ...data,
       torrentId: Number(data.torrentId),

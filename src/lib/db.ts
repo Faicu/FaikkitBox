@@ -157,6 +157,55 @@ export function getDb(): DatabaseSync {
       user_agent TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_user_logins_user ON user_logins(user_id, logged_in_at DESC);
+
+    -- Sursă unică pentru datele unui titlu media (film/serial/episod), ca
+    -- Bibliotecă/Lansări să nu mai reconstituie prin căutări TMDB live ce
+    -- oricum se știe deja din momentul în care titlul a fost adăugat.
+    -- 'tv_show' e un rând-părinte doar cu metadate (fără torrent propriu);
+    -- episoadele efectiv descărcate ale unui serial ating de el prin
+    -- parent_id, ca genul/descrierea să nu se repete per episod.
+    CREATE TABLE IF NOT EXISTS media (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      media_type TEXT NOT NULL CHECK(media_type IN ('movie','tv_show','episode')),
+      parent_id INTEGER REFERENCES media(id) ON DELETE CASCADE,
+      imdb_id TEXT,
+      tmdb_id INTEGER,
+      title TEXT NOT NULL,
+      original_title TEXT,
+      literal_title TEXT,
+      year INTEGER,
+      season INTEGER,
+      episode INTEGER,
+      overview_ro TEXT,
+      genres TEXT NOT NULL DEFAULT '[]',
+      poster_path TEXT,
+      tv_status TEXT,
+      plex_rating_key TEXT,
+      torrent_name TEXT,
+      torrent_hash TEXT,
+      category INTEGER,
+      category_name TEXT,
+      size INTEGER NOT NULL DEFAULT 0,
+      freeleech INTEGER NOT NULL DEFAULT 0,
+      internal INTEGER NOT NULL DEFAULT 0,
+      save_path TEXT,
+      is_season_pack INTEGER NOT NULL DEFAULT 0,
+      added_via TEXT,
+      requested_by_user_id INTEGER,
+      added_at TEXT NOT NULL DEFAULT (datetime('now')),
+      completed_at TEXT,
+      has_romanian_subtitle INTEGER NOT NULL DEFAULT 0,
+      subtitle_source TEXT,
+      subtitle_detail TEXT,
+      subtitle_checked_at TEXT,
+      quality TEXT,
+      duration_ms INTEGER,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_media_imdb ON media(imdb_id);
+    CREATE INDEX IF NOT EXISTS idx_media_parent ON media(parent_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_media_torrent_hash ON media(torrent_hash) WHERE torrent_hash IS NOT NULL;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_media_plex_key ON media(plex_rating_key) WHERE plex_rating_key IS NOT NULL;
   `);
 
   // Curățări one-time, versionate cu PRAGMA user_version
