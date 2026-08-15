@@ -9,7 +9,6 @@
 
 import { getDb } from "./db";
 
-export type MediaType = "movie" | "tv_show" | "episode";
 export type AddedVia = "wizard" | "manual" | "auto" | "backfill";
 
 export interface UpsertMediaEntryInput {
@@ -250,8 +249,6 @@ export function upsertMediaEntryFromPlex(input: UpsertMediaFromPlexInput): numbe
 // afectează nimic — nu creăm rânduri noi din aceste căi, doar sincronizăm
 // unde există deja unul.
 // ---------------------------------------------------------------------------
-
-export type SubtitleOutcomeKind = "romanian_ok" | "no_romanian" | "unknown";
 
 // Sursa subtitrării, derivată din outcome-ul ensureRomanianSubtitle
 // (subtitles.ts) — vezi SubtitleOutcome acolo pentru lista completă.
