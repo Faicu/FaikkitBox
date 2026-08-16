@@ -3,6 +3,7 @@ import type { FilelistLogEntry, DownloadLogRow } from "./types";
 import { qbitLogin } from "../qbit-client";
 import { refreshPlexLibraryForCategory } from "../plex-refresh";
 import { parseSeasonEpisodeFromName } from "../torrent-name-parse";
+import { deleteMediaByTorrentHash } from "../media";
 
 // ---------------------------------------------------------------------------
 // Log persistent al descărcărilor
@@ -232,7 +233,12 @@ export const deleteMediaEntry = createServerFn({ method: "POST" })
         console.warn("[filelist] Nu am putut șterge din qBit:", e);
       }
 
-      db.prepare("DELETE FROM media WHERE id = ?").run(data.mediaId);
+      // Toate rândurile media care împart același torrent_hash (episoadele
+      // unui pachet de sezon) — nu doar cel apăsat — altfel restul rămân
+      // orfane, cu un hash care nu mai există în qBittorrent, și apar
+      // permanent ca "se descarcă" în Bibliotecă. Mesajul de confirmare din
+      // drawer promite ștergerea întregului pachet — asta chiar face.
+      deleteMediaByTorrentHash(row.torrent_hash);
       db.prepare("DELETE FROM downloads WHERE torrent_hash = ?").run(row.torrent_hash);
 
       if (row.category !== null) {

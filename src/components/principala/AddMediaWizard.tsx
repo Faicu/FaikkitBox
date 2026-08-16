@@ -495,23 +495,26 @@ export function AddMediaWizard({
         ];
         await setPinnedFn({ data: { items: next } });
         await touchMediaAddedAtFn({ data: { mediaType: selected.mediaType, tmdbId: selected.id } });
+        // Doar la fixarea nouă setăm valorile implicite de urmărire — doar
+        // fixare, verificare periodică pe Filelist, FĂRĂ descărcare
+        // automată (asta rămâne opțiune separată, din panoul de fixare al
+        // Bibliotecii). Dacă titlul era deja fixat, NU rescriem setările —
+        // altfel un re-click pe "Fixează" din wizard reseta silențios orice
+        // personalizare (auto-download, urmărire sezon) făcută din Bibliotecă.
+        await setWatchFn({
+          data: {
+            id: selected.id,
+            mediaType: selected.mediaType,
+            watchFilelist: true,
+            watchFilelistSeason: false,
+            watchTmdb: false,
+            autoDownload: false,
+            autoDownloadQuality: "1080p",
+          },
+        });
       }
-      // Doar fixare — verificare periodică pe Filelist, FĂRĂ descărcare
-      // automată (asta rămâne opțiune separată, din panoul de fixare al
-      // Bibliotecii, nu implicită din wizard).
-      await setWatchFn({
-        data: {
-          id: selected.id,
-          mediaType: selected.mediaType,
-          watchFilelist: true,
-          watchFilelistSeason: false,
-          watchTmdb: false,
-          autoDownload: false,
-          autoDownloadQuality: "1080p",
-        },
-      });
       queryClient.invalidateQueries({ queryKey: ["pinnedItems"] });
-      toast.success("Fixat în Bibliotecă", {
+      toast.success(alreadyPinned ? "Deja fixat în Bibliotecă" : "Fixat în Bibliotecă", {
         description: "Vei fi anunțat când apare ceva nou pe Filelist pentru acest titlu.",
         duration: 6000,
       });
