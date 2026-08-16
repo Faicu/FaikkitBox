@@ -66,6 +66,13 @@ function findExistingMediaRow(
       .get(mediaType, input.imdbId) as { id: number } | undefined;
     if (row) return row.id;
   }
+  // Plasa de titlu-exact e folosită DOAR când input-ul curent nu are el
+  // însuși un tmdb_id/imdb_id rezolvat — altfel, pentru un titlu nou cu
+  // tmdb_id rezolvat dar fără rând încă în `media`, s-ar putea potrivi din
+  // greșeală cu un placeholder vechi, nerezolvat, al unui titlu DIFERIT care
+  // are întâmplător exact același nume (remake-uri, titluri generice),
+  // lipind greșit noul tmdb_id pe rândul altui titlu.
+  if (input.tmdbId != null || input.imdbId) return null;
   const row = db
     .prepare(
       "SELECT id FROM media WHERE media_type = ? AND tmdb_id IS NULL AND imdb_id IS NULL AND title = ?",
@@ -241,8 +248,37 @@ export const getDownloadingMediaForTmdbId = createServerFn({ method: "GET" })
     }));
   });
 
+// Un rând deja existent pentru EXACT același torrent (hash + sezon/episod) —
+// posibil dacă un download manual și descărcarea automată din
+// pinned-watcher pornesc aproape simultan pentru același episod/pachet.
+// Fără verificarea asta, upsertMediaEntry ar insera un al doilea rând
+// duplicat pentru același torrent (added_via diferit), amândouă vizibile
+// separat ca "în curs" în wizard/Bibliotecă.
+function findExistingDownloadRow(input: UpsertMediaEntryInput): number | null {
+  if (!input.torrentHash) return null;
+  const db = getDb();
+  if (input.mediaType === "episode") {
+    const row = db
+      .prepare(
+        `SELECT id FROM media WHERE media_type = 'episode' AND torrent_hash = ?
+         AND season IS ? AND episode IS ?`,
+      )
+      .get(input.torrentHash, input.season ?? null, input.episode ?? null) as
+      | { id: number }
+      | undefined;
+    return row?.id ?? null;
+  }
+  const row = db
+    .prepare(`SELECT id FROM media WHERE media_type = 'movie' AND torrent_hash = ?`)
+    .get(input.torrentHash) as { id: number } | undefined;
+  return row?.id ?? null;
+}
+
 export function upsertMediaEntry(input: UpsertMediaEntryInput): number {
   const db = getDb();
+
+  const existingId = findExistingDownloadRow(input);
+  if (existingId != null) return existingId;
 
   const parentId = input.mediaType === "episode" ? ensureMediaPlaceholder("tv_show", input) : null;
 
@@ -319,8 +355,53 @@ export interface UpsertMediaFromPlexInput {
   torrentName?: string | null;
 }
 
+// Un rând deja existent, creat de o descărcare (wizard/manual/auto), pentru
+// care Plex nu a apucat încă să lege plex_rating_key (resolveMediaPlexLinkByTorrentHash
+// e asincronă) — dacă backfill-ul rulează exact în fereastra aia, altfel ar
+// crea un al doilea rând pentru același fișier fizic (unul cu doar
+// torrent_hash, altul cu doar plex_rating_key, niciodată contopite).
+function findUnlinkedDownloadRow(input: UpsertMediaFromPlexInput): number | null {
+  if (input.tmdbId == null) return null;
+  const db = getDb();
+  if (input.mediaType === "episode") {
+    const row = db
+      .prepare(
+        `SELECT id FROM media WHERE media_type = 'episode' AND tmdb_id = ?
+         AND season IS ? AND episode IS ? AND torrent_hash IS NOT NULL AND plex_rating_key IS NULL`,
+      )
+      .get(input.tmdbId, input.season ?? null, input.episode ?? null) as
+      | { id: number }
+      | undefined;
+    return row?.id ?? null;
+  }
+  const row = db
+    .prepare(
+      `SELECT id FROM media WHERE media_type = 'movie' AND tmdb_id = ?
+       AND torrent_hash IS NOT NULL AND plex_rating_key IS NULL`,
+    )
+    .get(input.tmdbId) as { id: number } | undefined;
+  return row?.id ?? null;
+}
+
 export function upsertMediaEntryFromPlex(input: UpsertMediaFromPlexInput): number {
   const db = getDb();
+
+  const existingId = findUnlinkedDownloadRow(input);
+  if (existingId != null) {
+    db.prepare(
+      `UPDATE media SET plex_rating_key = ?, plex_added_at = ?, quality = COALESCE(?, quality),
+       duration_ms = COALESCE(?, duration_ms), has_romanian_subtitle = ?, updated_at = datetime('now')
+       WHERE id = ?`,
+    ).run(
+      input.plexRatingKey,
+      input.plexAddedAt ?? null,
+      input.quality ?? null,
+      input.durationMs ?? null,
+      input.hasRomanianSubtitle ? 1 : 0,
+      existingId,
+    );
+    return existingId;
+  }
 
   const parentId =
     input.mediaType === "episode"
