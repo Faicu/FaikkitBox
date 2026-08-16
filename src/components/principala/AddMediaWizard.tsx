@@ -506,13 +506,25 @@ export function AddMediaWizard({
           const packTorrent = group ? bestOf(pickFromSet(group.byQuality, quality)) : null;
 
           const tmdbEpisodes = schema?.episodes ?? [];
-          // Dacă TMDB n-are încă episoade listate pentru sezon (anunțat, dar
-          // netransmis), folosim cel puțin numerele găsite pe Filelist, ca
-          // sezonul să nu dispară complet din listă.
+          const filelistEpNums = Array.from(group?.episodes.keys() ?? []).sort((a, b) => a - b);
+          // Sezon complet fără nicio urmă nicăieri (nici TMDB, nici Filelist,
+          // nici pachet) — anunțat doar cu un număr de episoade planificate
+          // (episodeCount din rezumatul serialului). Sintetizăm acele
+          // "sloturi" ca nelansate, fără dată — altfel sezonul ar arăta gol/
+          // "—", indistigabil de o eroare, deși chiar urmează să apară. Dacă
+          // există fie episoade TMDB, fie ceva pe Filelist (episoade sau
+          // pachet), NU sintetizăm nimic — folosim datele reale, ca să nu
+          // ascundem un pachet deja disponibil sub un fals "nelansat".
+          const seasonHasNoData =
+            tmdbEpisodes.length === 0 && filelistEpNums.length === 0 && !packTorrent;
           const episodeNums =
             tmdbEpisodes.length > 0
               ? tmdbEpisodes.map((e) => e.episodeNum)
-              : Array.from(group?.episodes.keys() ?? []).sort((a, b) => a - b);
+              : filelistEpNums.length > 0
+                ? filelistEpNums
+                : seasonHasNoData
+                  ? Array.from({ length: s.episodeCount }, (_, i) => i + 1)
+                  : [];
 
           const episodes = episodeNums.map((epNum) => {
             const tmdbEp = tmdbEpisodes.find((e) => e.episodeNum === epNum);
@@ -524,6 +536,8 @@ export function AddMediaWizard({
               availability = { kind: "in_plex", quality: plexEp.quality };
             } else if (tmdbEp && !tmdbEp.aired) {
               availability = { kind: "upcoming", airDate: tmdbEp.airDate };
+            } else if (!tmdbEp && seasonHasNoData) {
+              availability = { kind: "upcoming", airDate: null };
             } else {
               const epTorrent = bestOf(
                 pickFromSet(group?.episodes.get(epNum) ?? emptyQualitySet(), quality),
@@ -640,15 +654,16 @@ export function AddMediaWizard({
 
   return (
     <>
-      <Dialog open={open} onOpenChange={(o) => !o && handleClose()}>
+      <Dialog open={open} onOpenChange={(o) => !o && !busy && handleClose()}>
         <DialogContent className="top-8 flex max-h-[calc(100dvh-4rem)] w-[calc(100%-2rem)] max-w-md translate-y-0 flex-col gap-0 overflow-hidden rounded-2xl p-0 sm:w-full">
           <DialogHeader className="shrink-0 space-y-0 p-4 pb-0 text-left">
             <div className="flex items-center gap-2">
               {step === "result" && (
                 <button
                   type="button"
+                  disabled={busy}
                   onClick={goBack}
-                  className="shrink-0 rounded-lg p-1 text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                  className="shrink-0 rounded-lg p-1 text-muted-foreground hover:text-foreground hover:bg-muted/60 disabled:opacity-40"
                 >
                   <ArrowLeft className="h-4 w-4" />
                 </button>
