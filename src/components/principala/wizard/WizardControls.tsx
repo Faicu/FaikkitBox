@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Loader2, HardDrive, Users, Zap, Pin, Film, Tv } from "lucide-react";
+import { Loader2, HardDrive, Users, Zap, Film, Tv } from "lucide-react";
 
 import { formatBytes } from "@/lib/format";
 import type { FilelistTorrent } from "@/lib/filelist.functions";
-import type { WatchQuality } from "@/lib/pinned.functions";
+
+export type WatchQuality = "720p" | "1080p" | "4K" | "4K HDR";
 
 // ---------------------------------------------------------------------------
 // Piese mici, fără stare proprie (cu excepția QualitySelector) — reutilizate
@@ -104,38 +105,6 @@ export function QualitySelector({
   );
 }
 
-// Butonul de fixare — doar adaugă titlul în Bibliotecă și pornește
-// verificarea periodică pe Filelist (notificare la ceva nou), FĂRĂ
-// descărcare automată — aceea rămâne o opțiune separată, activabilă din
-// panoul de fixare al Bibliotecii. Vizual: iconiță într-un cerc colorat +
-// etichetă, plus stare distinctă când titlul e deja urmărit (idempotent —
-// poate fi apăsat oricum, doar readuce claritate).
-export function WatchButton({
-  busy,
-  alreadyWatching,
-  onClick,
-}: {
-  busy: boolean;
-  alreadyWatching: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      disabled={busy}
-      onClick={onClick}
-      className="flex w-full items-center gap-3 rounded-2xl border border-sky-500/30 bg-sky-500/10 p-3 text-left transition-colors hover:bg-sky-500/15 disabled:opacity-50"
-    >
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sky-500/20 text-sky-400">
-        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pin className="h-4 w-4" />}
-      </span>
-      <span className="text-sm font-semibold text-foreground">
-        {alreadyWatching ? "Urmărești deja" : "Urmărește"}
-      </span>
-    </button>
-  );
-}
-
 export function ActionButton({
   busy,
   icon,
@@ -207,35 +176,6 @@ export function TorrentPicker({
           </button>
         ))}
       </div>
-    </div>
-  );
-}
-
-export function NotFoundWithPin({
-  quality,
-  busy,
-  onPin,
-  label,
-}: {
-  quality: WatchQuality;
-  busy: boolean;
-  onPin: () => void;
-  label: "filmul" | "serialul";
-}) {
-  return (
-    <div className="space-y-2">
-      <div className="rounded-xl border border-border bg-card p-3 text-sm text-muted-foreground">
-        Nu există încă la calitatea {quality} pe Filelist.
-      </div>
-      <button
-        type="button"
-        disabled={busy}
-        onClick={onPin}
-        className="flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-muted/40 py-2.5 text-sm font-semibold text-foreground hover:bg-muted/60 disabled:opacity-50"
-      >
-        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pin className="h-4 w-4" />}
-        Fixează {label} — vei fi anunțat dacă apare pe Filelist
-      </button>
     </div>
   );
 }

@@ -10,7 +10,7 @@
 // Plex, Immich, update-uri, erori...), consumate de activity-log.ts. Dacă
 // vrei să schimbi cum arată orice notificare din aplicație, e un singur loc.
 //
-// Torrentele (download.ts, pinned-watcher.ts) folosesc buildTorrentDisplayName
+// Torrentele (download.ts) folosesc buildTorrentDisplayName
 // (tmdb-title-lookup.ts) + detectTorrentQuality (torrent-quality.ts) — aceeași
 // logică peste tot, nu recalculată ad-hoc per apel.
 // ---------------------------------------------------------------------------
@@ -47,10 +47,6 @@ export const PUSH_TITLES: Record<ActivityType, string> = {
   service_update: "⬆️ Actualizare Aplicată",
   ubuntu_update: "🐧 Ubuntu Actualizat",
   qbit_action: "⚙️ Acțiune qBittorrent",
-  // Gol intenționat: pinned-watcher.ts trimite singur push-uri cu titluri/emoji
-  // mai specifice pentru evenimentele de pinned_update, deci logActivity nu
-  // trebuie să mai trimită unul generic pentru acest tip.
-  pinned_update: "",
   app_error: "⚠️ Eroare Nouă Aplicație",
   // O singură intrare de log per rulare (descărcare unică sau backfill întreg
   // — vezi logSubtitleRun în src/lib/filelist/subtitles.ts), deci un singur
@@ -73,7 +69,6 @@ export const PUSH_URLS: Record<ActivityType, string> = {
   service_update: "/sistem",
   ubuntu_update: "/sistem",
   qbit_action: "/qbit",
-  pinned_update: "/",
   app_error: "/tehnic",
   subtitle_fix: "/biblioteca",
   account_request: "/users",
@@ -104,7 +99,6 @@ export function buildPlexWatchStopMessage(user: string, what: string, progress: 
 export async function buildTorrentAddedNotification(params: {
   torrentName: string;
   imdb?: string | null;
-  auto: boolean; // true = "Auto-descărcat" (pornit din pinned-watcher), false = "Torrent adăugat" (manual)
 }): Promise<PushNotification> {
   const [displayName, image] = await Promise.all([
     buildTorrentDisplayName(params.torrentName, params.imdb).catch(() => params.torrentName),
@@ -112,7 +106,7 @@ export async function buildTorrentAddedNotification(params: {
   ]);
   const quality = detectTorrentQuality(params.torrentName);
   return {
-    title: params.auto ? "⬇️ Descărcare Automată" : "⬇️ Descărcare Inițiată",
+    title: "⬇️ Descărcare Inițiată",
     body: `${displayName} [${quality}]`,
     image,
     url: "/biblioteca",
@@ -132,35 +126,6 @@ export async function buildTorrentCompleteNotification(params: {
     title: "✅ Descărcare Completă",
     body: `${displayName} [${quality}]`,
     image,
-    url: "/biblioteca",
-  };
-}
-
-// --- Monitorizare (server/plugins/pinned-watcher.ts) ------------------------
-// Construiesc doar {title, body, url} — pinned-watcher le pune într-o listă și
-// le trimite pe toate la final, o singură dată per item verificat (nu direct
-// din aceste funcții), ca să nu spargem gruparea existentă.
-
-export function buildEpisodeAiredNotification(
-  showTitle: string,
-  epKey: string,
-  epLabel: string,
-): PushNotification {
-  return { title: `📅 ${showTitle} ${epKey} Lansat`, body: epLabel, url: "/biblioteca" };
-}
-
-export function buildNewTorrentsNotification(showTitle: string, label: string): PushNotification {
-  return { title: `🎞 ${showTitle} - Disponibil`, body: label, url: "/biblioteca" };
-}
-
-export function buildAutoDownloadNotification(
-  showTitle: string,
-  quality: string,
-  bodyName: string,
-): PushNotification {
-  return {
-    title: `⬇️ ${showTitle}`,
-    body: `Descărcare Automată: ${bodyName} [${quality}]`,
     url: "/biblioteca",
   };
 }

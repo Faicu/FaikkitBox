@@ -9,9 +9,9 @@ import {
 } from "./plex-shared";
 
 // ---------------------------------------------------------------------------
-// Căutare titluri/episoade în biblioteca Plex — folosit de fluxul de
-// urmărire "Lansări" (pinned watcher) pentru a verifica dacă un film/episod
-// e deja disponibil. Extras din fostul plex.ts monolitic.
+// Căutare titluri/episoade în biblioteca Plex — folosit de wizard (Acasă)
+// pentru a verifica dacă un film/episod e deja disponibil. Extras din fostul
+// plex.ts monolitic.
 // ---------------------------------------------------------------------------
 
 export interface ShowEpisodeInfo {

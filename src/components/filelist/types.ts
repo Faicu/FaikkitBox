@@ -1,13 +1,5 @@
 import type { FilelistTorrent } from "@/lib/filelist.functions";
 
-export interface PinnedItem {
-  id: number;
-  mediaType: "movie" | "tv";
-  title: string;
-  originalTitle: string;
-  posterUrl: string | null;
-}
-
 // Grupare torrente pe sezoane — ambele moduri pot coexista pe același sezon
 export interface QualitySet {
   t720: FilelistTorrent[];

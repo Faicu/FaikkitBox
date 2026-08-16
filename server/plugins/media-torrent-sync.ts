@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------------
 // Plugin: sincronizare periodică media ↔ qBittorrent ↔ subtitrări, pentru
-// TOATĂ biblioteca (nu doar titlurile fixate — asta face pinned-watcher.ts).
+// TOATĂ biblioteca.
 // Rulează automat, fără acțiune din UI:
 //   1. Completează `media` cu orice titlu din Plex încă neindexat (echivalent
 //      butonului „Completează din TMDB” din Bibliotecă).

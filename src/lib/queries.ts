@@ -12,7 +12,6 @@ import {
   getGitPushStatus,
   getUnpushedCommits,
 } from "./github.functions";
-import { getPinnedItems } from "./pinned.functions";
 import { getPlexLibraryBrowse } from "./services.functions";
 
 // Interval de bază pentru statistici live (Plex/Immich/qBit/Host)
@@ -147,12 +146,6 @@ export const speedtestHistoryQuery = queryOptions({
   queryKey: ["speedtestHistory"],
   queryFn: () => getSpeedtestHistory(),
   staleTime: 60_000,
-});
-
-export const pinnedItemsQuery = queryOptions({
-  queryKey: ["pinnedItems"],
-  queryFn: () => getPinnedItems(),
-  staleTime: 10_000,
 });
 
 export const plexLibraryBrowseQuery = queryOptions({

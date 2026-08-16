@@ -24,7 +24,7 @@ import {
   DrawerDescription,
 } from "@/components/ui/drawer";
 import { AddMediaWizard } from "@/components/principala/AddMediaWizard";
-import { FilelistSection } from "@/components/pinned/sections/FilelistSection";
+import { FilelistSection } from "@/components/filelist/FilelistSection";
 import { plexQuery, plexSessionsQuery, adminStatusQuery } from "@/lib/queries";
 import { formatSpeed } from "@/lib/format";
 

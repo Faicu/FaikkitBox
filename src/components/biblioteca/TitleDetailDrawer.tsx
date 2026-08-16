@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -15,7 +15,6 @@ import {
   Tag,
   Loader2,
   Trash2,
-  Pin,
 } from "lucide-react";
 
 import {
@@ -27,28 +26,17 @@ import {
 } from "@/components/ui/drawer";
 import { getPlexTitleDetail } from "@/lib/services.functions";
 import { correctSubtitleForMedia, deleteSubtitleForMedia } from "@/lib/filelist.functions";
-import {
-  setPinnedItems,
-  unpinTitleEverywhere,
-  getWatchSettings,
-  setWatchSettings,
-} from "@/lib/pinned.functions";
-import type { WatchSettings } from "@/lib/pinned.functions";
-import { pinnedItemsQuery } from "@/lib/queries";
-import { PinnedTitleManager } from "@/components/pinned/PinnedTitleManager";
-import { PlexStatusBadge } from "@/components/pinned/PlexStatusBadge";
-import type { TvPlexStatus } from "@/components/pinned/plex-status";
 import { formatMs } from "@/lib/format";
 import { StatusBadge } from "./StatusBadge";
 import { episodeCode, addedDate } from "./utils";
 
 // Drawer-ul de detalii al unui titlu din Bibliotecă — complet independent de
 // listă: primește doar mediaId, își gestionează singur toată starea (query
-// de detalii, fixare/scoatere fixare, corectare/ștergere subtitrare). Cere
-// listei doar două lucruri, prin callback-uri: să deschidă confirmarea de
-// ștergere completă (dialogul rămâne la nivel de listă, ca să rămână deasupra
-// drawer-ului) și să știe când s-a șters efectiv titlul, ca să închidă
-// drawer-ul și să reîmprospăteze lista.
+// de detalii, corectare/ștergere subtitrare). Cere listei doar două lucruri,
+// prin callback-uri: să deschidă confirmarea de ștergere completă (dialogul
+// rămâne la nivel de listă, ca să rămână deasupra drawer-ului) și să știe
+// când s-a șters efectiv titlul, ca să închidă drawer-ul și să
+// reîmprospăteze lista.
 export function TitleDetailDrawer({
   mediaId,
   onClose,
@@ -61,17 +49,9 @@ export function TitleDetailDrawer({
   const queryClient = useQueryClient();
   const [correcting, setCorrecting] = useState(false);
   const [deletingSubtitle, setDeletingSubtitle] = useState(false);
-  const [watchMap, setWatchMap] = useState<Map<string, WatchSettings>>(new Map());
-  const [pinnedPlexStatus, setPinnedPlexStatus] = useState<TvPlexStatus | null>(null);
-  const [pinnedPlexLoading, setPinnedPlexLoading] = useState(false);
 
   const correctFn = useServerFn(correctSubtitleForMedia);
   const deleteSubtitleFn = useServerFn(deleteSubtitleForMedia);
-  const { data: pinnedList = [] } = useQuery(pinnedItemsQuery);
-  const setPinnedFn = useServerFn(setPinnedItems);
-  const unpinFn = useServerFn(unpinTitleEverywhere);
-  const getWatchFn = useServerFn(getWatchSettings);
-  const setWatchFn = useServerFn(setWatchSettings);
 
   const detail = useQuery({
     queryKey: ["plexTitleDetail", mediaId],
@@ -79,87 +59,6 @@ export function TitleDetailDrawer({
     enabled: !!mediaId,
   });
   const d = detail.data?.status === "ok" ? detail.data.detail : null;
-
-  // Resetat la fiecare titlu deschis, ca badge-ul de status Plex (ridicat din
-  // PinnedTitleManager, afișat sus lângă "Urmărești") să nu arate o valoare veche
-  // rămasă de la titlul anterior cât timp se încarcă cel nou.
-  useEffect(() => {
-    setPinnedPlexStatus(null);
-    setPinnedPlexLoading(false);
-  }, [mediaId]);
-
-  // Setările de urmărire (auto-download/notify) pentru titlurile fixate —
-  // încărcate o singură dată, folosite când titlul deschis (oricare, nu doar
-  // cele fără nimic descărcat) e fixat.
-  useEffect(() => {
-    getWatchFn({})
-      .then((settings) => {
-        const map = new Map<string, WatchSettings>();
-        for (const s of settings) map.set(`${s.mediaType}-${s.id}`, s);
-        setWatchMap(map);
-      })
-      .catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  async function updateWatch(id: number, mediaType: "movie" | "tv", patch: Partial<WatchSettings>) {
-    const key = `${mediaType}-${id}`;
-    const current = watchMap.get(key) ?? {
-      id,
-      mediaType,
-      watchFilelist: false,
-      watchFilelistSeason: false,
-      watchTmdb: false,
-      autoDownload: false,
-      autoDownloadQuality: "1080p" as const,
-    };
-    const next = { ...current, ...patch };
-    if (!next.watchFilelist) {
-      next.watchFilelistSeason = false;
-      next.autoDownload = false;
-    }
-    setWatchMap((m) => new Map(m).set(key, next));
-    await setWatchFn({ data: next }).catch(() => {});
-  }
-
-  // Acest drawer arată doar titluri cu conținut real (rând `media` cu
-  // torrent_hash/plex_rating_key) — titlurile DOAR fixate au propriul drawer
-  // separat (WatchingTitleDrawer), fără rând `media`. Fixarea/scoaterea de-
-  // aici e o completare (titlul rămâne vizibil oricum, pentru conținutul
-  // lui), nu schimbă dacă rândul apare sau nu în listă.
-  //
-  // Fixarea propriu-zisă (adăugarea) rămâne pe lista personală a userului
-  // curent (setPinnedItems, cu atribuire cine a fixat). Dar scoaterea NU
-  // poate fi doar personală: vizibilitatea unui titlu fixat e o stare comună
-  // (EXISTS pe pinned_items, indiferent de user — vezi isPinnedByAnyone/
-  // getPlexLibraryBrowse), deci scoaterea trebuie să fie la fel de comună
-  // (unpinTitleEverywhere) — altfel titlul rămâne fixat pentru alt cont,
-  // deși userul curent tocmai l-a scos din fixările lui (bug real, raportat
-  // direct: "The Odyssey").
-  async function pinTitle(
-    tmdbId: number,
-    mediaType: "movie" | "tv",
-    title: string,
-    originalTitle: string | null,
-    posterUrl: string | null,
-  ) {
-    const already = pinnedList.some((p) => p.id === tmdbId && p.mediaType === mediaType);
-    if (!already) {
-      const next = [
-        ...pinnedList,
-        { id: tmdbId, mediaType, title, originalTitle: originalTitle || title, posterUrl },
-      ];
-      await setPinnedFn({ data: { items: next } }).catch(() => {});
-    }
-    await queryClient.invalidateQueries({ queryKey: ["pinnedItems"] });
-    await queryClient.invalidateQueries({ queryKey: ["plexLibraryBrowse"] });
-  }
-
-  async function unpinTitle(tmdbId: number, mediaType: "movie" | "tv") {
-    await unpinFn({ data: { id: tmdbId, mediaType } }).catch(() => {});
-    await queryClient.invalidateQueries({ queryKey: ["pinnedItems"] });
-    await queryClient.invalidateQueries({ queryKey: ["plexLibraryBrowse"] });
-  }
 
   function invalidateAfterMutation() {
     queryClient.invalidateQueries({ queryKey: ["plexLibraryBrowse"] });
@@ -255,18 +154,6 @@ export function TitleDetailDrawer({
             <>
               <div className="flex flex-wrap items-center gap-2 text-xs">
                 {d.status !== "in_library" && <StatusBadge status={d.status} />}
-                {d.isPinnedByAnyone && (
-                  <span className="flex shrink-0 items-center gap-0.5 rounded-full bg-sky-500/15 px-2 py-0.5 font-medium text-sky-400">
-                    <Pin className="h-3 w-3" /> Urmărești
-                  </span>
-                )}
-                {d.isPinnedByAnyone &&
-                  d.type !== "movie" &&
-                  (pinnedPlexLoading ? (
-                    <span className="h-5 w-20 animate-pulse rounded-full bg-muted/40" />
-                  ) : (
-                    <PlexStatusBadge status={pinnedPlexStatus ?? "lipsa"} />
-                  ))}
                 {d.quality && (
                   <span className="rounded-full bg-amber-500/15 text-amber-400 px-2 py-0.5 font-medium">
                     {d.quality}
@@ -347,50 +234,6 @@ export function TitleDetailDrawer({
                   <div className="text-muted-foreground">Nimeni altcineva încă</div>
                 )}
               </div>
-
-              {d.tmdbId &&
-                (() => {
-                  const pinnedMediaType = d.type === "movie" ? "movie" : "tv";
-                  const titleForPin = d.type === "movie" ? d.title : (d.show ?? d.title);
-                  return (
-                    <div className="flex flex-col gap-2 pt-1 border-t border-border">
-                      {!d.isPinnedByAnyone && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            pinTitle(
-                              d.tmdbId!,
-                              pinnedMediaType,
-                              titleForPin,
-                              d.originalTitle,
-                              d.thumbUrl,
-                            )
-                          }
-                          className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-border bg-muted/40 py-2 text-xs font-medium text-foreground hover:bg-muted/60 transition-colors"
-                        >
-                          <Pin className="h-3.5 w-3.5" />
-                          Fixează pentru urmărire automată
-                        </button>
-                      )}
-                      {d.isPinnedByAnyone && (
-                        <PinnedTitleManager
-                          tmdbId={d.tmdbId}
-                          mediaType={pinnedMediaType}
-                          title={titleForPin}
-                          originalTitle={d.originalTitle}
-                          posterUrl={d.thumbUrl}
-                          watchSettings={watchMap.get(`${pinnedMediaType}-${d.tmdbId}`) ?? null}
-                          onWatchChange={(patch) => updateWatch(d.tmdbId!, pinnedMediaType, patch)}
-                          onUnpin={() => unpinTitle(d.tmdbId!, pinnedMediaType)}
-                          onPlexStatus={(status, loading) => {
-                            setPinnedPlexStatus(status);
-                            setPinnedPlexLoading(loading);
-                          }}
-                        />
-                      )}
-                    </div>
-                  );
-                })()}
 
               <div className="flex flex-col gap-2 pt-1 border-t border-border">
                 {d.torrentHash ? (

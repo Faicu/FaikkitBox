@@ -7,7 +7,6 @@ import {
   Clock,
   Film,
   Tv,
-  Pin,
   LogIn,
   Calendar,
   Monitor,
@@ -114,50 +113,6 @@ export function UserDetailDrawer({ userId, onClose }: { userId: number; onClose:
                 ) : (
                   <div className="rounded-2xl border border-border bg-card p-3 text-xs text-muted-foreground">
                     Niciun cont Plex asociat.
-                  </div>
-                )}
-              </div>
-
-              {/* Fixări */}
-              <div>
-                <h3 className="mb-1.5 px-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
-                  <Pin className="h-3 w-3" /> Titluri urmărite ({user.pinnedItems.length})
-                </h3>
-                {user.pinnedItems.length === 0 ? (
-                  <div className="rounded-2xl border border-border bg-card p-3 text-xs text-muted-foreground">
-                    Nicio fixare.
-                  </div>
-                ) : (
-                  <div className="rounded-2xl border border-border bg-card divide-y divide-border/50">
-                    {user.pinnedItems.map((p) => (
-                      <div
-                        key={`${p.mediaType}-${p.id}`}
-                        className="flex items-center gap-2.5 px-3 py-2"
-                      >
-                        {p.posterUrl ? (
-                          <img
-                            src={p.posterUrl}
-                            alt=""
-                            className="h-12 w-8 rounded object-cover shrink-0"
-                          />
-                        ) : (
-                          <div className="flex h-12 w-8 shrink-0 items-center justify-center rounded bg-muted">
-                            {p.mediaType === "movie" ? (
-                              <Film className="h-3.5 w-3.5 text-muted-foreground" />
-                            ) : (
-                              <Tv className="h-3.5 w-3.5 text-muted-foreground" />
-                            )}
-                          </div>
-                        )}
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate text-sm font-medium">{p.title}</div>
-                          <div className="text-[11px] text-muted-foreground">
-                            {p.mediaType === "movie" ? "Film" : "Serial"} · fixat{" "}
-                            {fmtDate(p.addedAt)}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
                   </div>
                 )}
               </div>

@@ -83,18 +83,6 @@ export function getDb(): DatabaseSync {
     );
     CREATE INDEX IF NOT EXISTS idx_speedtest_ts ON speedtest_history(timestamp DESC);
 
-    CREATE TABLE IF NOT EXISTS pinned_items (
-      user_id INTEGER NOT NULL,
-      id INTEGER NOT NULL,
-      media_type TEXT NOT NULL,
-      title TEXT NOT NULL,
-      original_title TEXT NOT NULL,
-      poster_url TEXT,
-      sort_order INTEGER NOT NULL DEFAULT 0,
-      added_at TEXT NOT NULL DEFAULT (datetime('now')),
-      PRIMARY KEY (user_id, id, media_type)
-    );
-
     CREATE TABLE IF NOT EXISTS plex_active_sessions (
       key TEXT PRIMARY KEY,
       started_at TEXT NOT NULL,
@@ -103,26 +91,6 @@ export function getDb(): DatabaseSync {
       user TEXT NOT NULL,
       title TEXT NOT NULL,
       grandparent_title TEXT
-    );
-
-    CREATE TABLE IF NOT EXISTS pinned_watch_settings (
-      id INTEGER NOT NULL,
-      media_type TEXT NOT NULL,
-      watch_filelist INTEGER NOT NULL DEFAULT 0,
-      watch_tmdb INTEGER NOT NULL DEFAULT 0,
-      watch_filelist_season INTEGER NOT NULL DEFAULT 0,
-      auto_download INTEGER NOT NULL DEFAULT 0,
-      auto_download_quality TEXT NOT NULL DEFAULT '1080p',
-      PRIMARY KEY (id, media_type)
-    );
-
-    CREATE TABLE IF NOT EXISTS pinned_watch_state (
-      id INTEGER NOT NULL,
-      media_type TEXT NOT NULL,
-      last_checked_at TEXT,
-      seen_torrent_ids TEXT NOT NULL DEFAULT '[]',
-      last_aired_key TEXT,
-      PRIMARY KEY (id, media_type)
     );
 
     CREATE TABLE IF NOT EXISTS error_log (
@@ -502,6 +470,19 @@ function runCleanups(database: DatabaseSync): void {
         // deja migrat
       }
       database.exec("PRAGMA user_version = 13");
+    }
+
+    if (version < 14) {
+      // v14: elimină complet funcția de fixare/urmărire ("carduri fixate",
+      // Pinned Watcher, notificările lui) — tabelele nu mai sunt scrise sau
+      // citite de niciun cod, doar clutter mort altfel.
+      database.exec("DROP TABLE IF EXISTS pinned_items");
+      database.exec("DROP TABLE IF EXISTS pinned_watch_settings");
+      database.exec("DROP TABLE IF EXISTS pinned_watch_state");
+      console.log(
+        "[db] Migrare v14: eliminate tabelele pinned_items/pinned_watch_settings/pinned_watch_state",
+      );
+      database.exec("PRAGMA user_version = 14");
     }
   } catch (e) {
     console.warn("[db] Curățare eșuată:", e);

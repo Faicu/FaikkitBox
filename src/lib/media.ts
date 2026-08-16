@@ -1,16 +1,15 @@
 // ---------------------------------------------------------------------------
 // Sursă unică pentru datele unui titlu media — vezi schema `media` din db.ts.
-// Populată de toate cele 4 căi de descărcare (wizard, Lansări manual,
-// auto-download pinned-watcher, căutare manuală Filelist cu rezolvare TMDB
-// best-effort) — vezi upsertMediaEntry — plus, pentru restul bibliotecii
-// deja existente în Plex înainte de acest sistem, de backfill-ul din
-// media-backfill.ts — vezi upsertMediaEntryFromPlex.
+// Populată de căile de descărcare (wizard, căutare manuală Filelist cu
+// rezolvare TMDB best-effort) — vezi upsertMediaEntry — plus, pentru restul
+// bibliotecii deja existente în Plex înainte de acest sistem, de
+// backfill-ul din media-backfill.ts — vezi upsertMediaEntryFromPlex.
 // ---------------------------------------------------------------------------
 
 import { createServerFn } from "@tanstack/react-start";
 import { getDb } from "./db";
 
-export type AddedVia = "wizard" | "manual" | "auto" | "backfill";
+export type AddedVia = "wizard" | "manual" | "backfill";
 
 export interface UpsertMediaEntryInput {
   mediaType: "movie" | "episode";
@@ -97,12 +96,10 @@ export interface MediaPlaceholderInput {
 }
 
 // Creează (sau actualizează, dacă există deja) rândul-părinte al unui serial
-// — apelat intern la fiecare episod inserat (descărcare sau backfill), NU la
-// simpla căutare/fixare a unui titlu — un titlu doar fixat, fără nimic
-// descărcat, nu are deloc rând `media` (vezi pinned_items/getPlexLibraryBrowse
-// pentru secțiunea "Urmărite" din Bibliotecă, complet separată). Actualizarea
-// nu atinge niciodată coloanele de proveniență torrent — cele aparțin doar
-// rândurilor de episod/film create la descărcare (upsertMediaEntry).
+// — apelat intern la fiecare episod inserat (descărcare sau backfill).
+// Actualizarea nu atinge niciodată coloanele de proveniență torrent — cele
+// aparțin doar rândurilor de episod/film create la descărcare
+// (upsertMediaEntry).
 function ensureMediaPlaceholder(
   mediaType: "movie" | "tv_show",
   input: MediaPlaceholderInput,
@@ -193,10 +190,9 @@ export const getDownloadingMediaForTmdbId = createServerFn({ method: "GET" })
   });
 
 // Un rând deja existent pentru EXACT același torrent (hash + sezon/episod) —
-// posibil dacă un download manual și descărcarea automată din
-// pinned-watcher pornesc aproape simultan pentru același episod/pachet.
-// Fără verificarea asta, upsertMediaEntry ar insera un al doilea rând
-// duplicat pentru același torrent (added_via diferit), amândouă vizibile
+// posibil dacă două cereri de descărcare pornesc aproape simultan pentru
+// același episod/pachet. Fără verificarea asta, upsertMediaEntry ar insera
+// un al doilea rând duplicat pentru același torrent, amândouă vizibile
 // separat ca "în curs" în wizard/Bibliotecă.
 function findExistingDownloadRow(input: UpsertMediaEntryInput): number | null {
   if (!input.torrentHash) return null;

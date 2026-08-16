@@ -6,20 +6,19 @@
 // publică.
 //
 // Atât lista cât și detaliile sunt citite exclusiv din `media` (populată de
-// wizard/Lansări/auto-download/backfill — vezi media.ts, media-backfill.ts):
-// zero cereri Plex/TMDB live la navigare, indiferent câți utilizatori o
-// deschid simultan. Un titlu care nu e nici fixat, nici descărcat prin
-// aplicație nu apare — vezi media-backfill.ts pentru restul bibliotecii deja
-// existente în Plex înainte de acest sistem.
+// wizard/Lansări/backfill — vezi media.ts, media-backfill.ts): zero cereri
+// Plex/TMDB live la navigare, indiferent câți utilizatori o deschid
+// simultan. Un titlu care nu e descărcat prin aplicație nu apare — vezi
+// media-backfill.ts pentru restul bibliotecii deja existente în Plex
+// înainte de acest sistem.
 // ---------------------------------------------------------------------------
 
 import { createServerFn } from "@tanstack/react-start";
 
 export interface PlexBrowseItem {
   // Identificator stabil, mereu prezent (id-ul rândului din `media`) —
-  // folosit pentru selecție/detalii; ratingKey lipsește pentru titluri încă
-  // nedescărcate complet (fixate) sau neindexate încă de Plex (în curs de
-  // descărcare).
+  // folosit pentru selecție/detalii; ratingKey lipsește pentru titluri
+  // neindexate încă de Plex (în curs de descărcare).
   mediaId: number;
   ratingKey: string | null;
   title: string;
@@ -32,24 +31,8 @@ export interface PlexBrowseItem {
   addedAt: number;
   watchedByMe: boolean;
   // "downloading" — are torrent, dar Plex nu l-a indexat încă; "in_library"
-  // — normal, deja în Plex. Titlurile doar fixate (nimic descărcat) nu mai
-  // apar aici — vezi `watching`, o listă separată, complet distinctă în DB
-  // (nu mai există rând `media` pentru un titlu doar fixat).
+  // — normal, deja în Plex.
   status: "in_library" | "downloading";
-}
-
-// Titluri doar fixate pentru urmărire — nimic descărcat/în Plex încă pentru
-// ele (dacă apare ceva, tmdb_id-ul capătă un rând real în `media` și titlul
-// trece automat în `items`, dispărând de-aici). Sursă unică: `pinned_items`
-// (fixat de orice utilizator — vezi comentariul de la EXISTS mai jos),
-// deduplicat, fără nicio legătură cu tabela `media`.
-export interface WatchingItem {
-  tmdbId: number;
-  mediaType: "movie" | "tv";
-  title: string;
-  originalTitle: string | null;
-  posterUrl: string | null;
-  addedAt: number;
 }
 
 const BROWSE_LIMIT = 300;
@@ -67,19 +50,9 @@ interface MediaBrowseRow {
   torrent_hash: string | null;
 }
 
-interface PinnedBrowseRow {
-  tmdb_id: number;
-  media_type: string;
-  title: string;
-  original_title: string | null;
-  poster_url: string | null;
-  added_at: string;
-}
-
 export const getPlexLibraryBrowse = createServerFn({ method: "GET" }).handler(
   async (): Promise<
-    | { status: "ok"; items: PlexBrowseItem[]; watching: WatchingItem[] }
-    | { status: "error"; error: string }
+    { status: "ok"; items: PlexBrowseItem[] } | { status: "error"; error: string }
   > => {
     const { requireAuth } = await import("../admin.server");
     const session = await requireAuth();
@@ -90,9 +63,7 @@ export const getPlexLibraryBrowse = createServerFn({ method: "GET" }).handler(
       // Bibliotecă arată doar conținut real: deja confirmat în Plex
       // (plex_rating_key cunoscut, indiferent de sursă: descărcat prin
       // aplicație SAU backfill din restul bibliotecii), sau în curs de
-      // descărcare (torrent_hash cunoscut, încă neindexat de Plex). Un
-      // titlu doar fixat, fără nimic descărcat, nu are deloc rând `media`
-      // — vezi query-ul `watching` mai jos, complet separat.
+      // descărcare (torrent_hash cunoscut, încă neindexat de Plex).
       const rows = db
         .prepare(
           `SELECT m.id, m.plex_rating_key, m.media_type, m.title, m.season, m.episode,
@@ -132,44 +103,13 @@ export const getPlexLibraryBrowse = createServerFn({ method: "GET" }).handler(
         };
       });
 
-      // Titluri doar fixate — fixate de ORICE utilizator (nu doar cel curent,
-      // la fel ca restul fixărilor vizibile în Bibliotecă), deduplicate
-      // (mai mulți useri pot fixa același titlu), excluse dacă tmdb_id-ul
-      // are deja conținut real în `media` (a apărut ceva — titlul trece în
-      // lista de mai sus, nu mai stă și aici).
-      const pinnedRows = db
-        .prepare(
-          `SELECT p.id AS tmdb_id, p.media_type, MIN(p.title) AS title,
-                  MIN(p.original_title) AS original_title, MIN(p.poster_url) AS poster_url,
-                  MIN(p.added_at) AS added_at
-           FROM pinned_items p
-           WHERE NOT EXISTS (
-             SELECT 1 FROM media m
-             WHERE m.tmdb_id = p.id
-               AND m.media_type = CASE p.media_type WHEN 'movie' THEN 'movie' ELSE 'episode' END
-               AND (m.torrent_hash IS NOT NULL OR m.plex_rating_key IS NOT NULL)
-           )
-           GROUP BY p.id, p.media_type
-           ORDER BY MIN(p.added_at) DESC`,
-        )
-        .all() as unknown as PinnedBrowseRow[];
-
-      const watching: WatchingItem[] = pinnedRows.map((r) => ({
-        tmdbId: r.tmdb_id,
-        mediaType: r.media_type === "movie" ? "movie" : "tv",
-        title: r.title,
-        originalTitle: r.original_title,
-        posterUrl: r.poster_url,
-        addedAt: Math.floor(new Date(`${r.added_at.replace(" ", "T")}Z`).getTime() / 1000),
-      }));
-
       // "Am văzut" — badge afișat direct în listă, fără cost suplimentar (nicio
       // cerere nouă către Plex): potrivim doar cu istoricul deja cachuit.
       const me = db
         .prepare("SELECT plex_username FROM users WHERE id = ?")
         .get(session.data.userId!) as { plex_username: string | null } | undefined;
       const myPlexUsername = me?.plex_username ?? null;
-      if (!myPlexUsername) return { status: "ok", items, watching };
+      if (!myPlexUsername) return { status: "ok", items };
 
       const { getPlexUserHistory } = await import("./plex");
       const myHistory = await getPlexUserHistory(myPlexUsername);
@@ -182,7 +122,7 @@ export const getPlexLibraryBrowse = createServerFn({ method: "GET" }).handler(
           it.type === "episode" ? `${it.show}|${it.season}|${it.episode}` : `movie|${it.title}`,
         ),
       }));
-      return { status: "ok", items: withWatched, watching };
+      return { status: "ok", items: withWatched };
     } catch (e) {
       return { status: "error", error: e instanceof Error ? e.message : String(e) };
     }
@@ -214,8 +154,7 @@ export interface PlexTitleDetail {
   addedByUsername: string | null;
   status: "in_library" | "downloading";
   // Butoanele de corectare/ștergere subtitrare și ștergere completă operează
-  // direct pe media.id + torrentHash — absent pentru titluri doar fixate,
-  // fără nimic descărcat încă.
+  // direct pe media.id + torrentHash.
   torrentHash: string | null;
   // true dacă intrarea găsită e un pachet de sezon întreg, nu doar acest
   // episod — ștergerea/corectarea ar afecta atunci tot pachetul.
@@ -223,18 +162,8 @@ export interface PlexTitleDetail {
   // true doar pentru cel care a adăugat titlul sau pentru un admin — UI-ul
   // ascunde butoanele de subtitrare/ștergere pentru oricine altcineva.
   canManage: boolean;
-  // Id-ul TMDB + titlul original, necesare ca drawer-ul să poată reda panoul
-  // complet de management al fixării (SeasonPanel/WatchTogglePanel etc.,
-  // portate din fostele carduri Lansări) direct în Bibliotecă.
   tmdbId: number | null;
   originalTitle: string | null;
-  // Fixat de ORICE utilizator, nu doar de cel curent — fixarea e o stare
-  // comună (vezi getPlexLibraryBrowse, care folosește exact aceeași condiție
-  // ca să decidă vizibilitatea unui titlu "doar fixat" în listă), deci
-  // toggle-ul din drawer trebuie să reflecte/controleze aceeași stare, nu
-  // doar lista personală a userului curent — altfel scoaterea fixării de
-  // către un cont nu are efect dacă titlul e fixat și de alt cont.
-  isPinnedByAnyone: boolean;
 }
 
 interface MediaRow {
@@ -303,13 +232,6 @@ async function buildDetailFromMediaRow(
     addedByUsername = u?.username ?? null;
   }
 
-  const pinnedMediaType = row.media_type === "movie" ? "movie" : "tv";
-  const isPinnedByAnyone = row.tmdb_id
-    ? !!db
-        .prepare("SELECT 1 FROM pinned_items WHERE id = ? AND media_type = ? LIMIT 1")
-        .get(row.tmdb_id, pinnedMediaType)
-    : false;
-
   return {
     mediaId: row.id,
     ratingKey: row.plex_rating_key,
@@ -334,7 +256,6 @@ async function buildDetailFromMediaRow(
     canManage: isAdminOrOwner(session, row.requested_by_user_id),
     tmdbId: row.tmdb_id,
     originalTitle: row.original_title,
-    isPinnedByAnyone,
   };
 }
 

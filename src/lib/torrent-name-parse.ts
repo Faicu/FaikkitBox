@@ -1,6 +1,6 @@
-// Extrage sezon/episod dintr-un nume de lansare — sursă unică, folosită atât
-// de buildTorrentDisplayName (tmdb-title-lookup.ts, notificări) cât și de
-// pinned-watcher.ts (etichetarea "Torrente noi"). `episode: null` înseamnă
+// Extrage sezon/episod dintr-un nume de lansare — sursă unică, folosită de
+// buildTorrentDisplayName (tmdb-title-lookup.ts, notificări) și de
+// use-download.ts (media payload la descărcare). `episode: null` înseamnă
 // pachet de sezon complet (numele conține doar "Sxx", fără "Exx") — distinct
 // de un episod individual, ca să nu etichetăm greșit un pachet de sezon ca
 // fiind un singur episod (FileList înlocuiește des episoadele individuale cu

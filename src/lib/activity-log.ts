@@ -25,7 +25,6 @@ export type ActivityType =
   | "service_update"
   | "ubuntu_update"
   | "qbit_action"
-  | "pinned_update"
   | "app_error"
   | "subtitle_fix"
   | "account_request";

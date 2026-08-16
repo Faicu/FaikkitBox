@@ -1,5 +1,5 @@
 // Captează automat orice console.warn/console.error din tot codul server
-// (server functions, SSR, plugin-uri de fundal precum pinned-watcher) și le
+// (server functions, SSR, plugin-uri de fundal) și le
 // trimite spre logError(), ca să apară în widgetul "Erori aplicație" din
 // Tehnic — fără să fie nevoie de un apel logError() manual la fiecare loc
 // unde cineva scrie console.warn/error. Instalată o singură dată, la

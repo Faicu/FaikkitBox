@@ -1,7 +1,5 @@
 // Detectare calitate dintr-un nume de lansare — sursă unică, folosită atât în
-// download.ts (notificări torrent adăugat/complet) cât și în pinned-watcher.ts
-// (notificări auto-download/torrente noi), ca să nu se repete aceeași logică
-// în ambele locuri.
+// download.ts (notificări torrent adăugat/complet).
 
 export type TorrentQualityLabel = "4K HDR" | "4K" | "1080p" | "720p" | "SD";
 

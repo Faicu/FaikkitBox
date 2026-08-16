@@ -9,7 +9,6 @@ import {
   Images,
   RefreshCw,
   Package,
-  Bell,
   Activity,
   GitCommitHorizontal,
   AlertTriangle,
@@ -36,7 +35,6 @@ const FILTER_GROUPS: { key: string; label: string }[] = [
   { key: "immich", label: "Immich" },
   { key: "updates", label: "Updates" },
   { key: "commits", label: "Commits" },
-  { key: "lansari", label: "Fixări" },
   { key: "conturi", label: "Conturi" },
   { key: "erori", label: "Erori" },
 ];
@@ -54,7 +52,6 @@ const TYPE_TO_GROUP: Record<string, string> = {
   service_restart: "updates",
   service_update: "updates",
   ubuntu_update: "updates",
-  pinned_update: "lansari",
   app_error: "erori",
   account_request: "conturi",
 };
@@ -81,7 +78,6 @@ export function ActivityLogSection() {
     ubuntu_update: <Package className="h-3.5 w-3.5 text-orange-400" />,
     qbit_action: <Download className="h-3.5 w-3.5 text-sky-400" />,
     subtitle_fix: <Captions className="h-3.5 w-3.5 text-teal-400" />,
-    pinned_update: <Bell className="h-3.5 w-3.5 text-sky-400" />,
     app_error: <AlertTriangle className="h-3.5 w-3.5 text-red-400" />,
     account_request: <UserPlus className="h-3.5 w-3.5 text-amber-400" />,
   };

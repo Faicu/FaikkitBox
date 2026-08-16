@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -100,13 +100,4 @@ export function useDownload(mediaContext?: DownloadMediaContext) {
   }
 
   return { downloading, handleDownload };
-}
-
-export function useCountdown(targetIso: string) {
-  const [remaining, setRemaining] = useState(() => new Date(targetIso).getTime() - Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setRemaining(new Date(targetIso).getTime() - Date.now()), 1000);
-    return () => clearInterval(id);
-  }, [targetIso]);
-  return remaining;
 }

@@ -16,9 +16,9 @@ import { searchFilelist } from "@/lib/filelist.functions";
 import type { FilelistCategory, FilelistTorrent } from "@/lib/filelist.functions";
 import { isMovieCategory } from "@/lib/filelist/categories";
 import { formatBytes } from "@/lib/format";
-import { useDownload } from "../hooks";
-import { detectQuality } from "../utils";
-import { DownloadConfirmDialog } from "../DownloadConfirmDialog";
+import { useDownload } from "./use-download";
+import { detectQuality } from "./quality-utils";
+import { DownloadConfirmDialog } from "./DownloadConfirmDialog";
 
 type SortBy = "relevance" | "seeders" | "size";
 

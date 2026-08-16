@@ -418,17 +418,14 @@ export const searchFilelist = createServerFn({ method: "GET" })
   });
 
 // ---------------------------------------------------------------------------
-// Verificare unificată "există pe Filelist?" — sursă unică de adevăr,
-// folosită din toate cele 3 locuri care interoghează Filelist: butonul
-// "Verifică pe Filelist" din Descoperă, "Mai multe detalii" pe un card fixat
-// din Lansări, și job-ul de fundal pinned-watcher (notificări automate la 3
-// ore). Caută secvențial — se oprește la primul rezultat găsit — întâi
-// direct după IMDB ID (cel mai fiabil — funcționează chiar și când numele
-// lansării nu conține niciunul dintre titluri, ex. titluri coreene
-// romanizate diferit de original_title din TMDB), apoi după titlul original,
-// apoi după titlul englez/internațional. Contul Filelist are o limită orară
-// de cereri — un cache scurt (10 min) evită să repetăm aceleași căutări la
-// apeluri repetate în fereastra respectivă.
+// Verificare unificată "există pe Filelist?" — folosită de wizard (Acasă) la
+// identificarea unui titlu. Caută secvențial — se oprește la primul rezultat
+// găsit — întâi direct după IMDB ID (cel mai fiabil — funcționează chiar și
+// când numele lansării nu conține niciunul dintre titluri, ex. titluri
+// coreene romanizate diferit de original_title din TMDB), apoi după titlul
+// original, apoi după titlul englez/internațional. Contul Filelist are o
+// limită orară de cereri — un cache scurt (10 min) evită să repetăm
+// aceleași căutări la apeluri repetate în fereastra respectivă.
 // ---------------------------------------------------------------------------
 
 const filelistCheckCache = new Map<string, { expiresAt: number; result: FilelistSearchResult }>();
@@ -520,13 +517,12 @@ interface DownloadFilelistParams {
   size?: number;
   freeleech?: boolean;
   internal?: boolean;
-  skipLog?: boolean;
   imdb?: string | null;
   requestedByUserId?: number | null;
-  // Metadate TMDB — trimise deja gata calculate de wizard/Lansări/pinned-
-  // watcher (au TMDB details la îndemână la momentul descărcării). Când
-  // lipsesc (căutarea manuală brută din FilelistSection, fără nicio
-  // legătură TMDB în UI), downloadFilelistCore încearcă singur o rezolvare
+  // Metadate TMDB — trimise deja gata calculate de wizard/Lansări (au TMDB
+  // details la îndemână la momentul descărcării). Când lipsesc (căutarea
+  // manuală brută din FilelistSection, fără nicio legătură TMDB în UI),
+  // downloadFilelistCore încearcă singur o rezolvare
   // best-effort (autoResolveManualMedia) — dacă eșuează, titlul pur și
   // simplu nu ajunge în `media`, exact ca acum. Proveniența torrent-ului
   // (nume/hash/categorie/mărime/cale) e completată aici, în
@@ -548,11 +544,11 @@ interface DownloadFilelistParams {
 
 // Rezolvare best-effort a metadatelor TMDB pentru un torrent descărcat din
 // căutarea manuală Filelist (FilelistSection), care n-are nicio legătură
-// TMDB în UI — spre deosebire de wizard/Lansări/pinned-watcher, care trimit
-// deja `media` gata calculat. Dacă torrentul are IMDb id (Filelist l-a
-// confirmat) îl folosim direct; altfel încercăm aceeași căutare pe nume ca
-// la potrivirea subtitrărilor. Fără IMDb id găsit, întoarce null — titlul nu
-// ajunge în `media`, exact comportamentul de dinainte (nimic nu se strică).
+// TMDB în UI — spre deosebire de wizard/Lansări, care trimit deja `media`
+// gata calculat. Dacă torrentul are IMDb id (Filelist l-a confirmat) îl
+// folosim direct; altfel încercăm aceeași căutare pe nume ca la potrivirea
+// subtitrărilor. Fără IMDb id găsit, întoarce null — titlul nu ajunge în
+// `media`, exact comportamentul de dinainte (nimic nu se strică).
 async function autoResolveManualMedia(
   torrentImdb: string | null | undefined,
   torrentName: string,
@@ -710,31 +706,28 @@ async function downloadFilelistCore(
     // 6. Loghează descărcarea imediat (completedAt null = în curs)
     const catName = params.categoryName || CATEGORY_NAMES[catId] || `Cat ${catId}`;
 
-    if (!params.skipLog) {
-      import("../notifications")
-        .then(({ buildTorrentAddedNotification }) =>
-          buildTorrentAddedNotification({
-            torrentName: params.torrentName,
-            imdb: params.imdb,
-            auto: params.skipLog !== false,
-          }),
-        )
-        .then((n) =>
-          import("../activity-log").then(({ logActivity }) =>
-            logActivity(
-              "torrent_added",
-              n.body,
-              {
-                category: catName,
-                savePath,
-                size: params.size,
-              },
-              { image: n.image, url: n.url, title: n.title },
-            ),
+    import("../notifications")
+      .then(({ buildTorrentAddedNotification }) =>
+        buildTorrentAddedNotification({
+          torrentName: params.torrentName,
+          imdb: params.imdb,
+        }),
+      )
+      .then((n) =>
+        import("../activity-log").then(({ logActivity }) =>
+          logActivity(
+            "torrent_added",
+            n.body,
+            {
+              category: catName,
+              savePath,
+              size: params.size,
+            },
+            { image: n.image, url: n.url, title: n.title },
           ),
-        )
-        .catch(() => {});
-    }
+        ),
+      )
+      .catch(() => {});
     await appendDownloadLog({
       id: params.torrentId,
       name: params.torrentName,
@@ -826,7 +819,6 @@ export const downloadFilelist = createServerFn({ method: "POST" })
     const session = await requireAuth();
     return downloadFilelistCore({
       ...data,
-      skipLog: false,
       requestedByUserId: session.data.userId ?? null,
     });
   });

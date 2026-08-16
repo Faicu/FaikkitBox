@@ -16,38 +16,29 @@ import {
   AlertDialogCancel,
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
-import { DownloadConfirmDialog } from "@/components/pinned/DownloadConfirmDialog";
-import { pinnedItemsQuery, adminStatusQuery } from "@/lib/queries";
+import { DownloadConfirmDialog } from "@/components/filelist/DownloadConfirmDialog";
+import { adminStatusQuery } from "@/lib/queries";
 import { searchTmdb, getTmdbDetails, getTmdbAllSeasons } from "@/lib/tmdb.functions";
 import type { TmdbDetails, TmdbSeasonSchema } from "@/lib/tmdb.functions";
 import type { TmdbSearchResult } from "@/lib/tmdb.functions";
 import { checkPlexHasTitle, getPlexEpisodesInSeason } from "@/lib/services.functions";
 import { checkFilelistForItem, downloadFilelist } from "@/lib/filelist.functions";
 import type { FilelistTorrent } from "@/lib/filelist.functions";
-import { setPinnedItems, setWatchSettings } from "@/lib/pinned.functions";
-import type { WatchQuality } from "@/lib/pinned.functions";
 import { getDownloadingMediaForTmdbId } from "@/lib/media";
 import type { DownloadingMediaEntry } from "@/lib/media";
 import {
   detectQuality,
   groupTorrentsBySeasonEpisode,
   emptyQualitySet,
-} from "@/components/pinned/utils";
-import type { QualitySet } from "@/components/pinned/types";
-import {
-  ActionButton,
-  TorrentPicker,
-  NotFoundWithPin,
-  PosterHero,
-  QualitySelector,
-  WatchButton,
-} from "./wizard/WizardControls";
+} from "@/components/filelist/quality-utils";
+import type { QualitySet } from "@/components/filelist/types";
+import { ActionButton, TorrentPicker, PosterHero, QualitySelector } from "./wizard/WizardControls";
 import { SearchStep } from "./wizard/SearchStep";
 import { DoneStep } from "./wizard/DoneStep";
 import { SeasonAccordion } from "./wizard/SeasonAccordion";
 import type { EpisodeAvailability, SeasonRowData } from "./wizard/SeasonAccordion";
 
-type Quality = WatchQuality;
+type Quality = "720p" | "1080p" | "4K" | "4K HDR";
 type Step = "search" | "checking" | "result" | "done";
 
 interface CheckResult {
@@ -144,7 +135,6 @@ export function AddMediaWizard({
   initialItem?: TmdbSearchResult | null;
 }) {
   const queryClient = useQueryClient();
-  const { data: pinned = [] } = useQuery(pinnedItemsQuery);
   const { data: adminData } = useQuery(adminStatusQuery);
   const isAdmin = !!adminData?.isAdmin;
 
@@ -156,8 +146,6 @@ export function AddMediaWizard({
   const allSeasonsFn = useServerFn(getTmdbAllSeasons);
   const downloadingFn = useServerFn(getDownloadingMediaForTmdbId);
   const downloadFn = useServerFn(downloadFilelist);
-  const setPinnedFn = useServerFn(setPinnedItems);
-  const setWatchFn = useServerFn(setWatchSettings);
 
   const [step, setStep] = useState<Step>("search");
   const [query, setQuery] = useState("");
@@ -450,60 +438,6 @@ export function AddMediaWizard({
       toast.success(`${okCount}/${items.length} descărcări adăugate în qBittorrent`);
       setDoneMessage(`${okCount}/${items.length} descărcări adăugate în qBittorrent.`);
       setStep("done");
-    }
-  }
-
-  const alreadyPinned =
-    !!selected && pinned.some((p) => p.id === selected.id && p.mediaType === selected.mediaType);
-
-  async function pinForMonitoring() {
-    if (!selected || !checkResult) return;
-    setBusy(true);
-    try {
-      if (!alreadyPinned) {
-        const next = [
-          ...pinned,
-          {
-            id: selected.id,
-            mediaType: selected.mediaType,
-            title: selected.title,
-            originalTitle: checkResult.originalTitle,
-            posterUrl: selected.posterUrl ?? null,
-          },
-        ];
-        await setPinnedFn({ data: { items: next } });
-        // Doar la fixarea nouă setăm valorile implicite de urmărire — doar
-        // fixare, verificare periodică pe Filelist, FĂRĂ descărcare
-        // automată (asta rămâne opțiune separată, din panoul de fixare al
-        // Bibliotecii). Dacă titlul era deja fixat, NU rescriem setările —
-        // altfel un re-click pe "Fixează" din wizard reseta silențios orice
-        // personalizare (auto-download, urmărire sezon) făcută din Bibliotecă.
-        await setWatchFn({
-          data: {
-            id: selected.id,
-            mediaType: selected.mediaType,
-            watchFilelist: true,
-            watchFilelistSeason: false,
-            watchTmdb: false,
-            autoDownload: false,
-            autoDownloadQuality: "1080p",
-          },
-        });
-      }
-      queryClient.invalidateQueries({ queryKey: ["pinnedItems"] });
-      queryClient.invalidateQueries({ queryKey: ["plexLibraryBrowse"] });
-      toast.success(alreadyPinned ? "Deja fixat în Bibliotecă" : "Fixat în Bibliotecă", {
-        description: "Vei fi anunțat când apare ceva nou pe Filelist pentru acest titlu.",
-        duration: 6000,
-      });
-      setDoneMessage("Fixat în Bibliotecă — vei fi anunțat când apare ceva nou pe Filelist.");
-      setStep("done");
-    } catch (e) {
-      toast.error("Eroare la fixare", {
-        description: e instanceof Error ? e.message : String(e),
-      });
-    } finally {
-      setBusy(false);
     }
   }
 
@@ -805,12 +739,6 @@ export function AddMediaWizard({
 
                     <QualitySelector quality={quality} onChange={setQuality} isAdmin={isAdmin} />
 
-                    <WatchButton
-                      busy={busy && !downloadingTorrentId}
-                      alreadyWatching={alreadyPinned}
-                      onClick={pinForMonitoring}
-                    />
-
                     {bulkPlan.length > 0 && (
                       <ActionButton
                         busy={busy}
@@ -875,12 +803,9 @@ export function AddMediaWizard({
                           />
                         </>
                       ) : (
-                        <NotFoundWithPin
-                          quality={quality}
-                          busy={busy}
-                          onPin={pinForMonitoring}
-                          label="filmul"
-                        />
+                        <div className="rounded-xl border border-border bg-card p-3 text-sm text-muted-foreground">
+                          Nu există încă la calitatea {quality} pe Filelist.
+                        </div>
                       )}
                     </>
                   )

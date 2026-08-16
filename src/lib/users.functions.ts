@@ -79,15 +79,6 @@ export const deleteUser = createServerFn({ method: "POST" })
 // Detalii complete pentru un cont — pagina Utilizatori, la click pe un rând
 // ---------------------------------------------------------------------------
 
-export interface UserPinnedItem {
-  id: number;
-  mediaType: "movie" | "tv";
-  title: string;
-  originalTitle: string;
-  posterUrl: string | null;
-  addedAt: string;
-}
-
 export interface UserLoginEntry {
   id: number;
   loggedInAt: string;
@@ -119,7 +110,6 @@ export interface UserDownloadEntry {
 
 export interface UserDetail extends UserAccount {
   plexAccountId: number | null;
-  pinnedItems: UserPinnedItem[];
   logins: UserLoginEntry[];
   plexActivity: UserPlexActivityEntry[];
   downloads: UserDownloadEntry[];
@@ -154,20 +144,6 @@ export const getUserDetail = createServerFn({ method: "GET" })
         }
       | undefined;
     if (!user) return null;
-
-    const pinnedRows = db
-      .prepare(
-        `SELECT id, media_type, title, original_title, poster_url, added_at
-         FROM pinned_items WHERE user_id = ? ORDER BY added_at DESC`,
-      )
-      .all(user.id) as Array<{
-      id: number;
-      media_type: string;
-      title: string;
-      original_title: string;
-      poster_url: string | null;
-      added_at: string;
-    }>;
 
     const loginRows = db
       .prepare(
@@ -221,14 +197,6 @@ export const getUserDetail = createServerFn({ method: "GET" })
       plexEmail: user.plex_email,
       createdAt: user.created_at,
       lastLoginAt: user.last_login_at,
-      pinnedItems: pinnedRows.map((r) => ({
-        id: r.id,
-        mediaType: r.media_type as "movie" | "tv",
-        title: r.title,
-        originalTitle: r.original_title,
-        posterUrl: r.poster_url,
-        addedAt: r.added_at,
-      })),
       logins: loginRows.map((r) => ({
         id: r.id,
         loggedInAt: r.logged_in_at,
