@@ -16,6 +16,8 @@ import {
   Loader2,
   Trash2,
   Wrench,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 
 import {
@@ -50,6 +52,7 @@ export function TitleDetailDrawer({
   const queryClient = useQueryClient();
   const [correcting, setCorrecting] = useState(false);
   const [deletingSubtitle, setDeletingSubtitle] = useState(false);
+  const [showTech, setShowTech] = useState(false);
 
   const correctFn = useServerFn(correctSubtitleForMedia);
   const deleteSubtitleFn = useServerFn(deleteSubtitleForMedia);
@@ -238,9 +241,19 @@ export function TitleDetailDrawer({
 
               {d.tech && (
                 <div className="text-xs">
-                  <div className="mb-1 flex items-center gap-1 text-muted-foreground">
+                  <button
+                    type="button"
+                    onClick={() => setShowTech((v) => !v)}
+                    className="flex w-full items-center gap-1 py-1 text-muted-foreground hover:text-foreground transition-colors"
+                  >
                     <Wrench className="h-3.5 w-3.5" /> Detalii tehnice
-                  </div>
+                    {showTech ? (
+                      <ChevronDown className="h-3.5 w-3.5 ml-auto" />
+                    ) : (
+                      <ChevronRight className="h-3.5 w-3.5 ml-auto" />
+                    )}
+                  </button>
+                  {showTech && (
                   <div className="flex flex-col gap-1 rounded-lg bg-muted/40 px-2 py-1.5">
                     {[
                       d.tech.torrentName && ["Torrent", d.tech.torrentName],
@@ -280,6 +293,7 @@ export function TitleDetailDrawer({
                         </div>
                       ))}
                   </div>
+                  )}
                 </div>
               )}
 
