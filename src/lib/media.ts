@@ -186,6 +186,43 @@ export const ensureMediaEntryForSearch = createServerFn({ method: "POST" })
     }
   });
 
+export interface DownloadingMediaEntry {
+  season: number | null;
+  episode: number | null;
+  isSeasonPack: boolean;
+  torrentName: string | null;
+}
+
+// Ce e deja în curs de descărcare pentru un titlu (torrent pornit, dar încă
+// neindexat de Plex) — folosit de wizard ca să blocheze orice acțiune nouă
+// pe un sezon/episod/film deja pornit, în loc să lase userul să-l pornească
+// din nou din greșeală (torrent_hash e cunoscut, plex_rating_key încă nu).
+export const getDownloadingMediaForTmdbId = createServerFn({ method: "GET" })
+  .validator((data: { tmdbId: number; mediaType: "movie" | "tv" }) => data)
+  .handler(async ({ data }): Promise<DownloadingMediaEntry[]> => {
+    const { requireAuth } = await import("./admin.server");
+    await requireAuth();
+    const db = getDb();
+    const dbMediaType = data.mediaType === "movie" ? "movie" : "episode";
+    const rows = db
+      .prepare(
+        `SELECT season, episode, is_season_pack, torrent_name FROM media
+         WHERE tmdb_id = ? AND media_type = ? AND torrent_hash IS NOT NULL AND plex_rating_key IS NULL`,
+      )
+      .all(data.tmdbId, dbMediaType) as Array<{
+      season: number | null;
+      episode: number | null;
+      is_season_pack: number;
+      torrent_name: string | null;
+    }>;
+    return rows.map((r) => ({
+      season: r.season,
+      episode: r.episode,
+      isSeasonPack: !!r.is_season_pack,
+      torrentName: r.torrent_name,
+    }));
+  });
+
 export function upsertMediaEntry(input: UpsertMediaEntryInput): number {
   const db = getDb();
 

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Loader2, HardDrive, Users, Zap, Pin, Film, Tv } from "lucide-react";
 
 import { formatBytes } from "@/lib/format";
@@ -5,9 +6,138 @@ import type { FilelistTorrent } from "@/lib/filelist.functions";
 import type { WatchQuality } from "@/lib/pinned.functions";
 
 // ---------------------------------------------------------------------------
-// Piese mici, fără stare proprie — reutilizate în pașii wizard-ului
-// (AddMediaWizard.tsx).
+// Piese mici, fără stare proprie (cu excepția QualitySelector) — reutilizate
+// în pașii wizard-ului (AddMediaWizard.tsx).
 // ---------------------------------------------------------------------------
+
+const QUALITY_STYLES: Record<WatchQuality, { active: string; inactive: string }> = {
+  "720p": {
+    active:
+      "border-neutral-400/70 bg-neutral-500/30 text-neutral-200 shadow-sm shadow-neutral-500/30",
+    inactive:
+      "border-neutral-500/40 bg-neutral-500/10 text-neutral-400 hover:bg-neutral-500/20 hover:text-neutral-300",
+  },
+  "1080p": {
+    active: "border-blue-400/70 bg-blue-500/30 text-blue-200 shadow-sm shadow-blue-500/30",
+    inactive:
+      "border-blue-500/40 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 hover:text-blue-300",
+  },
+  "4K": {
+    active: "border-purple-400/70 bg-purple-500/30 text-purple-200 shadow-sm shadow-purple-500/30",
+    inactive:
+      "border-purple-500/40 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 hover:text-purple-300",
+  },
+  "4K HDR": {
+    active: "border-amber-400/70 bg-amber-500/30 text-amber-200 shadow-sm shadow-amber-500/30",
+    inactive:
+      "border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 hover:text-amber-300",
+  },
+};
+
+function QualityButton({
+  q,
+  active,
+  onClick,
+}: {
+  q: WatchQuality;
+  active: boolean;
+  onClick: () => void;
+}) {
+  const style = active ? QUALITY_STYLES[q].active : QUALITY_STYLES[q].inactive;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex-1 rounded-xl border px-3 py-1.5 text-sm font-medium transition-colors active:scale-95 ${style}`}
+    >
+      {q}
+    </button>
+  );
+}
+
+// Selectorul de calitate — utilizatorii obișnuiți descarcă mereu la 1080p
+// (nici nu văd selectorul); doar admin poate alege altă calitate, ascunsă
+// inițial sub un toggle mic, ca ecranul să rămână curat în cazul comun.
+export function QualitySelector({
+  quality,
+  onChange,
+  isAdmin,
+}: {
+  quality: WatchQuality;
+  onChange: (q: WatchQuality) => void;
+  isAdmin: boolean;
+}) {
+  const [expanded, setExpanded] = useState(quality !== "1080p");
+  if (!isAdmin) return null;
+
+  return (
+    <div>
+      <div className="mb-1.5 flex items-center justify-between">
+        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Calitate
+        </span>
+        {!expanded && (
+          <button
+            type="button"
+            onClick={() => setExpanded(true)}
+            className="text-[11px] text-muted-foreground underline decoration-dotted hover:text-foreground"
+          >
+            Vrei altă calitate?
+          </button>
+        )}
+      </div>
+      <div className="flex gap-2">
+        <QualityButton q="1080p" active={quality === "1080p"} onClick={() => onChange("1080p")} />
+      </div>
+      {expanded && (
+        <div className="mt-2 flex gap-2">
+          <QualityButton q="720p" active={quality === "720p"} onClick={() => onChange("720p")} />
+          <QualityButton q="4K" active={quality === "4K"} onClick={() => onChange("4K")} />
+          <QualityButton
+            q="4K HDR"
+            active={quality === "4K HDR"}
+            onClick={() => onChange("4K HDR")}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Butonul de fixare pentru urmărire automată — mai vizibil/mai simplu decât
+// un buton generic cu bordură: iconiță într-un cerc colorat + etichetă +
+// subtitlu cu calitatea aleasă, plus stare distinctă când titlul e deja
+// urmărit (idempotent — poate fi apăsat oricum, doar readuce claritate).
+export function WatchButton({
+  busy,
+  quality,
+  alreadyWatching,
+  onClick,
+}: {
+  busy: boolean;
+  quality: WatchQuality;
+  alreadyWatching: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={busy}
+      onClick={onClick}
+      className="flex w-full items-center gap-3 rounded-2xl border border-sky-500/30 bg-sky-500/10 p-3 text-left transition-colors hover:bg-sky-500/15 disabled:opacity-50"
+    >
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sky-500/20 text-sky-400">
+        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pin className="h-4 w-4" />}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold text-foreground">
+          {alreadyWatching ? "Urmărești deja" : "Urmărește pentru descărcare automată"}
+        </span>
+        <span className="block text-xs text-muted-foreground">Calitate: {quality}</span>
+      </span>
+    </button>
+  );
+}
 
 export function ActionButton({
   busy,

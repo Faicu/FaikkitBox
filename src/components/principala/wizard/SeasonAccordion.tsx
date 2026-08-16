@@ -12,22 +12,25 @@ import {
 import type { FilelistTorrent } from "@/lib/filelist.functions";
 
 // ---------------------------------------------------------------------------
-// Disponibilitatea unui episod — exact cele 4 stări cerute: deja în Plex,
-// lipsă+descărcabil, lipsă+indisponibil pe Filelist, nelansat încă (cu dată,
-// dacă TMDB o are stabilită — un episod fără dată anunțată e tratat ca
-// "indisponibil", nu ca "nelansat", ca să nu inventăm o dată care nu există).
+// Disponibilitatea unui episod — deja în Plex, deja în curs de descărcare
+// (blochează orice acțiune nouă pe el), lipsă+descărcabil, lipsă+
+// indisponibil pe Filelist, nelansat încă (cu dată, dacă TMDB o are
+// stabilită — un episod fără dată anunțată e tratat ca "indisponibil", nu
+// ca "nelansat", ca să nu inventăm o dată care nu există).
 // ---------------------------------------------------------------------------
 
 export type EpisodeAvailability =
   | { kind: "in_plex"; quality: string | null }
-  | { kind: "episode_torrent"; torrent: FilelistTorrent }
+  | { kind: "downloading" }
+  | { kind: "episode_torrent"; torrents: FilelistTorrent[] }
   | { kind: "pack_only" }
   | { kind: "unavailable" }
   | { kind: "upcoming"; airDate: string | null };
 
 export interface SeasonRowData {
   seasonNumber: number;
-  packTorrent: FilelistTorrent | null;
+  packTorrents: FilelistTorrent[];
+  packDownloading: boolean;
   episodes: Array<{
     episodeNum: number;
     title: string;
@@ -46,6 +49,7 @@ function fmtDate(iso: string): string {
 
 // Badge-ul agregat de pe rândul de sezon închis.
 function seasonBadge(season: SeasonRowData): { tone: string; label: string } {
+  if (season.packDownloading) return { tone: "amber", label: "Se descarcă…" };
   const eps = season.episodes;
   if (eps.length === 0) return { tone: "gray", label: "—" };
   const allInPlex = eps.every((e) => e.availability.kind === "in_plex");
@@ -60,8 +64,10 @@ function seasonBadge(season: SeasonRowData): { tone: string; label: string } {
         : null;
     return { tone: "amber", label: dateLabel ? `Nelansat — ${dateLabel}` : "Nelansat încă" };
   }
+  const anyDownloading = eps.some((e) => e.availability.kind === "downloading");
   const anyAvailable =
-    !!season.packTorrent || eps.some((e) => e.availability.kind === "episode_torrent");
+    season.packTorrents.length > 0 || eps.some((e) => e.availability.kind === "episode_torrent");
+  if (anyDownloading) return { tone: "amber", label: "Se descarcă…" };
   if (anyAvailable) {
     return { tone: "blue", label: anyInPlex ? "Parțial în Plex, restul disponibil" : "Disponibil" };
   }
@@ -84,10 +90,13 @@ function EpisodeRow({
   episode: SeasonRowData["episodes"][number];
   busy: boolean;
   downloadingTorrentId: number | null;
-  onDownloadEpisode: (torrent: FilelistTorrent) => void;
+  onDownloadEpisode: (torrents: FilelistTorrent[]) => void;
 }) {
   const { availability } = episode;
   const epLabel = `E${String(episode.episodeNum).padStart(2, "0")}`;
+  const isDownloadingThis =
+    availability.kind === "episode_torrent" &&
+    availability.torrents.some((t) => t.id === downloadingTorrentId);
 
   return (
     <div className="flex items-center gap-2 py-1.5">
@@ -100,14 +109,19 @@ function EpisodeRow({
           <CheckCircle2 className="h-2.5 w-2.5" /> {availability.quality ?? "În Plex"}
         </span>
       )}
+      {availability.kind === "downloading" && (
+        <span className="flex shrink-0 items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-amber-400">
+          <Loader2 className="h-2.5 w-2.5 animate-spin" /> Se descarcă…
+        </span>
+      )}
       {availability.kind === "episode_torrent" && (
         <button
           type="button"
           disabled={busy}
-          onClick={() => onDownloadEpisode(availability.torrent)}
+          onClick={() => onDownloadEpisode(availability.torrents)}
           className="flex shrink-0 items-center gap-1 rounded-full bg-sky-500/15 px-2 py-0.5 text-[10px] font-medium text-sky-400 hover:bg-sky-500/25 disabled:opacity-50"
         >
-          {downloadingTorrentId === availability.torrent.id ? (
+          {isDownloadingThis ? (
             <Loader2 className="h-2.5 w-2.5 animate-spin" />
           ) : (
             <Download className="h-2.5 w-2.5" />
@@ -148,12 +162,14 @@ function SeasonRow({
   season: SeasonRowData;
   busy: boolean;
   downloadingTorrentId: number | null;
-  onDownloadPack: (torrent: FilelistTorrent) => void;
-  onDownloadEpisode: (torrent: FilelistTorrent) => void;
+  onDownloadPack: (torrents: FilelistTorrent[]) => void;
+  onDownloadEpisode: (torrents: FilelistTorrent[]) => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const badge = seasonBadge(season);
-  const hasPack = !!season.packTorrent;
+  const hasPack = season.packTorrents.length > 0;
+  const isDownloadingPack =
+    season.packDownloading || season.packTorrents.some((t) => t.id === downloadingTorrentId);
 
   return (
     <div className="rounded-xl border border-border/60 overflow-hidden">
@@ -184,20 +200,26 @@ function SeasonRow({
 
       {isOpen && (
         <div className="border-t border-border/60 px-3 py-2">
-          {hasPack && (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => onDownloadPack(season.packTorrent!)}
-              className="mb-2 flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-50"
-            >
-              {downloadingTorrentId === season.packTorrent!.id ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Download className="h-3.5 w-3.5" />
-              )}
-              Descarcă pachetul sezonului
-            </button>
+          {season.packDownloading ? (
+            <div className="mb-2 flex items-center justify-center gap-1.5 rounded-lg bg-amber-500/10 py-1.5 text-xs font-medium text-amber-400">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Pachetul sezonului se descarcă…
+            </div>
+          ) : (
+            hasPack && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => onDownloadPack(season.packTorrents)}
+                className="mb-2 flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-50"
+              >
+                {isDownloadingPack ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Download className="h-3.5 w-3.5" />
+                )}
+                Descarcă pachetul sezonului
+              </button>
+            )
           )}
           <div className="divide-y divide-border/40">
             {season.episodes.map((ep) => (
@@ -226,11 +248,11 @@ export function SeasonAccordion({
   seasons: SeasonRowData[];
   busy: boolean;
   downloadingTorrentId: number | null;
-  onDownloadPack: (season: SeasonRowData, torrent: FilelistTorrent) => void;
+  onDownloadPack: (season: SeasonRowData, torrents: FilelistTorrent[]) => void;
   onDownloadEpisode: (
     season: SeasonRowData,
     episode: SeasonRowData["episodes"][number],
-    torrent: FilelistTorrent,
+    torrents: FilelistTorrent[],
   ) => void;
 }) {
   return (
@@ -241,13 +263,13 @@ export function SeasonAccordion({
           season={season}
           busy={busy}
           downloadingTorrentId={downloadingTorrentId}
-          onDownloadPack={(t) => onDownloadPack(season, t)}
-          onDownloadEpisode={(t) => {
+          onDownloadPack={(torrents) => onDownloadPack(season, torrents)}
+          onDownloadEpisode={(torrents) => {
             const ep = season.episodes.find(
               (e) =>
-                e.availability.kind === "episode_torrent" && e.availability.torrent.id === t.id,
+                e.availability.kind === "episode_torrent" && e.availability.torrents === torrents,
             );
-            if (ep) onDownloadEpisode(season, ep, t);
+            if (ep) onDownloadEpisode(season, ep, torrents);
           }}
         />
       ))}

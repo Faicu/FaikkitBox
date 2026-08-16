@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Loader2, CheckCircle2, Download, Pin, ArrowLeft, Check, Info } from "lucide-react";
+import { Loader2, CheckCircle2, Download, ArrowLeft, Check, Info } from "lucide-react";
 import { toast } from "sonner";
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
 import {
   AlertDialog,
   AlertDialogContent,
@@ -25,14 +26,22 @@ import { checkFilelistForItem, downloadFilelist } from "@/lib/filelist.functions
 import type { FilelistTorrent } from "@/lib/filelist.functions";
 import { setPinnedItems, setWatchSettings } from "@/lib/pinned.functions";
 import type { WatchQuality } from "@/lib/pinned.functions";
-import { ensureMediaEntryForSearch } from "@/lib/media";
+import { ensureMediaEntryForSearch, getDownloadingMediaForTmdbId } from "@/lib/media";
+import type { DownloadingMediaEntry } from "@/lib/media";
 import {
   detectQuality,
   groupTorrentsBySeasonEpisode,
   emptyQualitySet,
 } from "@/components/pinned/utils";
 import type { QualitySet } from "@/components/pinned/types";
-import { ActionButton, TorrentPicker, NotFoundWithPin, PosterHero } from "./wizard/WizardControls";
+import {
+  ActionButton,
+  TorrentPicker,
+  NotFoundWithPin,
+  PosterHero,
+  QualitySelector,
+  WatchButton,
+} from "./wizard/WizardControls";
 import { SearchStep } from "./wizard/SearchStep";
 import { DoneStep } from "./wizard/DoneStep";
 import { SeasonAccordion } from "./wizard/SeasonAccordion";
@@ -62,6 +71,16 @@ interface BulkDownloadItem {
   episode?: number;
   isSeasonPack: boolean;
   label: string;
+}
+
+// Torrentul/pachetul în așteptare de alegere manuală (admin, mai mulți
+// candidați la aceeași calitate) — un pas intermediar înainte de confirmare.
+interface TorrentChoiceContext {
+  label: string;
+  season?: number;
+  episode?: number;
+  isSeasonPack: boolean;
+  candidates: FilelistTorrent[];
 }
 
 function pickFromSet(set: QualitySet, quality: Quality): FilelistTorrent[] {
@@ -99,10 +118,8 @@ function sortBySeeders(list: FilelistTorrent[]): FilelistTorrent[] {
 }
 
 // Toate torrentele care se potrivesc la o calitate, sortate după seederi —
-// spre deosebire de bestOf, păstrează toată lista, ca adminul să poată alege
-// manual între release-uri diferite (ex. grupuri diferite cu același IMDb ID)
-// — folosit doar pentru filme; sezoane/episoade descarcă direct cel mai bun
-// candidat (vezi SeasonAccordion).
+// folosit pentru alegerea manuală (admin), la filme și acum și la
+// sezoane/episoade individuale.
 function matchesForQuality(torrents: FilelistTorrent[], quality: Quality): FilelistTorrent[] {
   return sortBySeeders(
     torrents.filter((t) => {
@@ -137,6 +154,7 @@ export function AddMediaWizard({
   const plexSeasonFn = useServerFn(getPlexEpisodesInSeason);
   const filelistFn = useServerFn(checkFilelistForItem);
   const allSeasonsFn = useServerFn(getTmdbAllSeasons);
+  const downloadingFn = useServerFn(getDownloadingMediaForTmdbId);
   const downloadFn = useServerFn(downloadFilelist);
   const setPinnedFn = useServerFn(setPinnedItems);
   const setWatchFn = useServerFn(setWatchSettings);
@@ -163,11 +181,11 @@ export function AddMediaWizard({
   // Episoadele deja în Plex, per sezon — adus dintr-o dată pentru TOATE
   // sezoanele imediat ce serialul e identificat (selectItem).
   const [plexBySeason, setPlexBySeason] = useState<Map<number, PlexSeasonEpisode[]>>(new Map());
-  // Torrentul ales manual de admin pentru filme, când sunt mai multe
-  // disponibile la aceeași calitate (grupuri de release diferite etc) — dacă
-  // nu alege nimeni explicit, cade pe cel cu cei mai mulți seederi. Sezoanele/
-  // episoadele descarcă direct cel mai bun candidat, fără alegere manuală.
-  const [selectedTorrentId, setSelectedTorrentId] = useState<number | null>(null);
+  // Ce e deja în curs de descărcare pentru titlul curent (torrent pornit,
+  // încă neindexat de Plex) — blochează orice acțiune nouă pe acel
+  // sezon/episod/film, ca să nu pornim din greșeală un al doilea torrent
+  // pentru ceva deja în lucru.
+  const [downloadingEntries, setDownloadingEntries] = useState<DownloadingMediaEntry[]>([]);
   // Torrentul în așteptare de confirmare — nimic nu pornește efectiv în
   // qBittorrent până nu confirmă adminul din dialog. season/episode/
   // isSeasonPack descriu exact ce se descarcă, pentru `media`.
@@ -178,6 +196,11 @@ export function AddMediaWizard({
     episode?: number;
     isSeasonPack?: boolean;
   } | null>(null);
+  // Alegere manuală (admin) între mai mulți candidați la aceeași calitate —
+  // pas intermediar înainte de confirmare, doar când există într-adevăr mai
+  // multe variante.
+  const [torrentChoice, setTorrentChoice] = useState<TorrentChoiceContext | null>(null);
+  const [pickedTorrentId, setPickedTorrentId] = useState<number | null>(null);
   // Planul de descărcare în masă ("Descarcă tot ce lipsește") — listat
   // explicit înainte de confirmare, ca adminul să vadă exact ce urmează să
   // pornească (pachete de sezon + episoade individuale, acolo unde nu există
@@ -198,8 +221,10 @@ export function AddMediaWizard({
     setDoneMessage(null);
     setSeasonSchema([]);
     setPlexBySeason(new Map());
-    setSelectedTorrentId(null);
+    setDownloadingEntries([]);
     setConfirmTorrent(null);
+    setTorrentChoice(null);
+    setPickedTorrentId(null);
     setConfirmBulk(null);
   }
 
@@ -217,11 +242,18 @@ export function AddMediaWizard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialItem?.id, initialItem?.mediaType]);
 
-  // Alegerea manuală de torrent (filme) e legată de o listă de candidați la o
-  // anumită calitate — dacă se schimbă calitatea, lista se schimbă și
+  // Utilizatorii obișnuiți descarcă mereu la 1080p — dacă cineva ajunge cu
+  // altă calitate selectată (ex. sesiune de admin expirată între timp),
+  // cădem înapoi automat.
+  useEffect(() => {
+    if (!isAdmin) setQuality("1080p");
+  }, [isAdmin]);
+
+  // Alegerea manuală de torrent (admin) e legată de o listă de candidați la
+  // o anumită calitate — dacă se schimbă calitatea, lista se schimbă și
   // alegerea veche nu mai are sens (cade înapoi pe "cel mai bun" automat).
   useEffect(() => {
-    setSelectedTorrentId(null);
+    setPickedTorrentId(null);
   }, [quality]);
 
   function onQueryChange(value: string) {
@@ -249,7 +281,7 @@ export function AddMediaWizard({
       const details = await detailsFn({ data: { id: item.id, mediaType: item.mediaType } });
       setTmdbDetails(details);
       const originalTitle = details.literalTitle || details.originalTitle || item.originalTitle;
-      const [plexRes, filelistRes] = await Promise.all([
+      const [plexRes, filelistRes, downloading] = await Promise.all([
         plexFn({ data: { title: item.title, originalTitle, mediaType: item.mediaType } }),
         filelistFn({
           data: {
@@ -259,7 +291,9 @@ export function AddMediaWizard({
             mediaType: item.mediaType,
           },
         }),
+        downloadingFn({ data: { tmdbId: item.id, mediaType: item.mediaType } }).catch(() => []),
       ]);
+      setDownloadingEntries(downloading);
       const seasons = details.seasons
         .filter((s) => s.seasonNumber > 0)
         .map((s) => ({ seasonNumber: s.seasonNumber, episodeCount: s.episodeCount }));
@@ -440,13 +474,13 @@ export function AddMediaWizard({
     }
   }
 
+  const alreadyPinned =
+    !!selected && pinned.some((p) => p.id === selected.id && p.mediaType === selected.mediaType);
+
   async function pinForMonitoring() {
     if (!selected || !checkResult) return;
     setBusy(true);
     try {
-      const alreadyPinned = pinned.some(
-        (p) => p.id === selected.id && p.mediaType === selected.mediaType,
-      );
       if (!alreadyPinned) {
         const next = [
           ...pinned,
@@ -493,17 +527,22 @@ export function AddMediaWizard({
   const seasonGroups = checkResult ? groupTorrentsBySeasonEpisode(checkResult.torrents) : [];
 
   // Schema per-sezon afișată în accordion: pentru fiecare episod, exact una
-  // din cele 4 stări cerute — deja în Plex, lipsă+descărcabil, lipsă+
-  // indisponibil, sau nelansat încă (cu dată, dacă TMDB o are stabilită; fără
-  // dată cunoscută, tratăm episodul ca "indisponibil", nu ca "nelansat" — nu
-  // inventăm o dată care nu există).
+  // din stările posibile — deja în Plex, deja în curs de descărcare, lipsă+
+  // descărcabil, lipsă+indisponibil, sau nelansat încă (cu dată, dacă TMDB o
+  // are stabilită; fără dată cunoscută, tratăm episodul ca "indisponibil",
+  // nu ca "nelansat" — nu inventăm o dată care nu există).
   const seasonRows: SeasonRowData[] =
     isTv && checkResult
       ? checkResult.seasons.map((s) => {
           const schema = seasonSchema.find((x) => x.seasonNumber === s.seasonNumber);
           const group = seasonGroups.find((g) => g.seasonNum === s.seasonNumber);
           const plexMap = new Map((plexBySeason.get(s.seasonNumber) ?? []).map((e) => [e.num, e]));
-          const packTorrent = group ? bestOf(pickFromSet(group.byQuality, quality)) : null;
+          const packCandidates = group
+            ? matchesForQuality(pickFromSet(group.byQuality, quality), quality)
+            : [];
+          const packDownloadingEntry = downloadingEntries.find(
+            (e) => e.season === s.seasonNumber && e.isSeasonPack,
+          );
 
           const tmdbEpisodes = schema?.episodes ?? [];
           const filelistEpNums = Array.from(group?.episodes.keys() ?? []).sort((a, b) => a - b);
@@ -516,7 +555,7 @@ export function AddMediaWizard({
           // pachet), NU sintetizăm nimic — folosim datele reale, ca să nu
           // ascundem un pachet deja disponibil sub un fals "nelansat".
           const seasonHasNoData =
-            tmdbEpisodes.length === 0 && filelistEpNums.length === 0 && !packTorrent;
+            tmdbEpisodes.length === 0 && filelistEpNums.length === 0 && packCandidates.length === 0;
           const episodeNums =
             tmdbEpisodes.length > 0
               ? tmdbEpisodes.map((e) => e.episodeNum)
@@ -530,44 +569,60 @@ export function AddMediaWizard({
             const tmdbEp = tmdbEpisodes.find((e) => e.episodeNum === epNum);
             const plexEp = plexMap.get(epNum);
             const title = tmdbEp?.title ?? `Episodul ${epNum}`;
+            const episodeDownloading = downloadingEntries.some(
+              (e) => e.season === s.seasonNumber && e.episode === epNum && !e.isSeasonPack,
+            );
 
             let availability: EpisodeAvailability;
             if (plexEp) {
               availability = { kind: "in_plex", quality: plexEp.quality };
+            } else if (packDownloadingEntry || episodeDownloading) {
+              availability = { kind: "downloading" };
             } else if (tmdbEp && !tmdbEp.aired) {
               availability = { kind: "upcoming", airDate: tmdbEp.airDate };
             } else if (!tmdbEp && seasonHasNoData) {
               availability = { kind: "upcoming", airDate: null };
             } else {
-              const epTorrent = bestOf(
+              const epCandidates = matchesForQuality(
                 pickFromSet(group?.episodes.get(epNum) ?? emptyQualitySet(), quality),
+                quality,
               );
-              if (epTorrent) availability = { kind: "episode_torrent", torrent: epTorrent };
-              else if (packTorrent) availability = { kind: "pack_only" };
+              if (epCandidates.length > 0)
+                availability = { kind: "episode_torrent", torrents: epCandidates };
+              else if (packCandidates.length > 0) availability = { kind: "pack_only" };
               else availability = { kind: "unavailable" };
             }
             return { episodeNum: epNum, title, availability };
           });
 
-          return { seasonNumber: s.seasonNumber, packTorrent, episodes };
+          return {
+            seasonNumber: s.seasonNumber,
+            packTorrents: packDownloadingEntry ? [] : packCandidates,
+            packDownloading: !!packDownloadingEntry,
+            episodes,
+          };
         })
       : [];
 
-  // "Descarcă tot ce lipsește" — sare peste sezoanele deja complete în Plex;
-  // pentru restul, ia pachetul dacă există, altfel fiecare episod individual
-  // găsit (niciodată ambele deodată pentru același sezon, ca să nu descărcăm
-  // un pachet ȘI episoadele lui separat).
+  // "Descarcă tot ce lipsește" — sare peste sezoanele deja complete în Plex
+  // sau deja în curs de descărcare; pentru restul, ia pachetul dacă există
+  // (cel mai bun candidat automat, fără alegere manuală în masă), altfel
+  // fiecare episod individual găsit.
   const bulkPlan: BulkDownloadItem[] = seasonRows.flatMap((season): BulkDownloadItem[] => {
+    if (season.packDownloading) return [];
     if (
       season.episodes.length > 0 &&
-      season.episodes.every((e) => e.availability.kind === "in_plex")
+      season.episodes.every(
+        (e) => e.availability.kind === "in_plex" || e.availability.kind === "downloading",
+      )
     ) {
       return [];
     }
-    if (season.packTorrent) {
+    const bestPack = bestOf(season.packTorrents);
+    if (bestPack) {
       return [
         {
-          torrent: season.packTorrent,
+          torrent: bestPack,
           season: season.seasonNumber,
           isSeasonPack: true,
           label: `Sezonul ${season.seasonNumber} (pachet)`,
@@ -583,7 +638,7 @@ export function AddMediaWizard({
         } => e.availability.kind === "episode_torrent",
       )
       .map((e) => ({
-        torrent: e.availability.torrent,
+        torrent: bestOf(e.availability.torrents)!,
         season: season.seasonNumber,
         episode: e.episodeNum,
         isSeasonPack: false,
@@ -591,16 +646,33 @@ export function AddMediaWizard({
       }));
   });
 
+  const movieAlreadyDownloading = !isTv && downloadingEntries.length > 0;
   const movieMatches = !isTv && checkResult ? matchesForQuality(checkResult.torrents, quality) : [];
-  const movieMatch = movieMatches.find((t) => t.id === selectedTorrentId) ?? bestOf(movieMatches);
+  const movieMatch = movieMatches.find((t) => t.id === pickedTorrentId) ?? bestOf(movieMatches);
 
   // Pentru filme, "există în Plex" e suficient (verificare atomică).
   const alreadyInPlex = !isTv && !!checkResult?.plexFound;
-  const showQualityAndAction = !isTv && !!checkResult && !alreadyInPlex;
+  const showQualityAndAction = !isTv && !!checkResult && !alreadyInPlex && !movieAlreadyDownloading;
 
-  function handleDownloadPack(season: SeasonRowData, torrent: FilelistTorrent) {
-    setConfirmTorrent({
-      torrent,
+  // Deschide direct confirmarea când există un singur candidat (sau userul
+  // nu e admin — doar adminul poate alege manual), altfel arată mai întâi
+  // alegerea de torrent.
+  function requestDownload(
+    candidates: FilelistTorrent[],
+    ctx: Omit<TorrentChoiceContext, "candidates">,
+  ) {
+    if (!isAdmin || candidates.length <= 1) {
+      const torrent = bestOf(candidates);
+      if (!torrent) return;
+      setConfirmTorrent({ torrent, ...ctx });
+      return;
+    }
+    setPickedTorrentId(bestOf(candidates)!.id);
+    setTorrentChoice({ ...ctx, candidates });
+  }
+
+  function handleDownloadPack(season: SeasonRowData, torrents: FilelistTorrent[]) {
+    requestDownload(torrents, {
       label: `Sezonul ${season.seasonNumber} (pachet)`,
       season: season.seasonNumber,
       isSeasonPack: true,
@@ -610,10 +682,9 @@ export function AddMediaWizard({
   function handleDownloadEpisode(
     season: SeasonRowData,
     episode: SeasonRowData["episodes"][number],
-    torrent: FilelistTorrent,
+    torrents: FilelistTorrent[],
   ) {
-    setConfirmTorrent({
-      torrent,
+    requestDownload(torrents, {
       label: `S${String(season.seasonNumber).padStart(2, "0")}E${String(episode.episodeNum).padStart(2, "0")}`,
       season: season.seasonNumber,
       episode: episode.episodeNum,
@@ -637,7 +708,8 @@ export function AddMediaWizard({
       setTmdbDetails(null);
       setSeasonSchema([]);
       setPlexBySeason(new Map());
-      setSelectedTorrentId(null);
+      setDownloadingEntries([]);
+      setPickedTorrentId(null);
       return;
     }
   }
@@ -747,61 +819,14 @@ export function AddMediaWizard({
                       </div>
                     )}
 
-                    <div>
-                      <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                        Calitate
-                      </div>
-                      <div className="flex gap-2">
-                        {(
-                          [
-                            { q: "720p", color: "neutral" },
-                            { q: "1080p", color: "blue" },
-                            { q: "4K", color: "purple" },
-                            { q: "4K HDR", color: "amber" },
-                          ] as const
-                        ).map(({ q, color }) => {
-                          const active = quality === q;
-                          const styles = {
-                            neutral: active
-                              ? "border-neutral-400/70 bg-neutral-500/30 text-neutral-200 shadow-sm shadow-neutral-500/30"
-                              : "border-neutral-500/40 bg-neutral-500/10 text-neutral-400 hover:bg-neutral-500/20 hover:text-neutral-300",
-                            blue: active
-                              ? "border-blue-400/70 bg-blue-500/30 text-blue-200 shadow-sm shadow-blue-500/30"
-                              : "border-blue-500/40 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 hover:text-blue-300",
-                            purple: active
-                              ? "border-purple-400/70 bg-purple-500/30 text-purple-200 shadow-sm shadow-purple-500/30"
-                              : "border-purple-500/40 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 hover:text-purple-300",
-                            amber: active
-                              ? "border-amber-400/70 bg-amber-500/30 text-amber-200 shadow-sm shadow-amber-500/30"
-                              : "border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 hover:text-amber-300",
-                          };
-                          return (
-                            <button
-                              key={q}
-                              type="button"
-                              onClick={() => setQuality(q)}
-                              className={`flex-1 rounded-xl border px-3 py-1.5 text-sm font-medium transition-colors active:scale-95 ${styles[color]}`}
-                            >
-                              {q}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
+                    <QualitySelector quality={quality} onChange={setQuality} isAdmin={isAdmin} />
 
-                    <button
-                      type="button"
-                      disabled={busy}
+                    <WatchButton
+                      busy={busy && !downloadingTorrentId}
+                      quality={quality}
+                      alreadyWatching={alreadyPinned}
                       onClick={pinForMonitoring}
-                      className="flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-muted/40 py-2.5 text-sm font-semibold text-foreground hover:bg-muted/60 disabled:opacity-50"
-                    >
-                      {busy && !downloadingTorrentId ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Pin className="h-4 w-4" />
-                      )}
-                      Fixează pentru urmărire automată ({quality})
-                    </button>
+                    />
 
                     {bulkPlan.length > 0 && (
                       <ActionButton
@@ -831,50 +856,16 @@ export function AddMediaWizard({
                     Deja în bibliotecă Plex
                     {checkResult.plexQuality ? ` — ${checkResult.plexQuality}` : ""}
                   </div>
+                ) : movieAlreadyDownloading ? (
+                  <div className="flex items-center gap-2 rounded-xl bg-amber-500/10 p-3 text-sm text-amber-400">
+                    <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+                    Filmul se descarcă deja — aștepți să apară în Plex înainte de orice altă
+                    acțiune.
+                  </div>
                 ) : (
                   showQualityAndAction && (
                     <>
-                      <div>
-                        <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                          Calitate
-                        </div>
-                        <div className="flex gap-2">
-                          {(
-                            [
-                              { q: "720p", color: "neutral" },
-                              { q: "1080p", color: "blue" },
-                              { q: "4K", color: "purple" },
-                              { q: "4K HDR", color: "amber" },
-                            ] as const
-                          ).map(({ q, color }) => {
-                            const active = quality === q;
-                            const styles = {
-                              neutral: active
-                                ? "border-neutral-400/70 bg-neutral-500/30 text-neutral-200 shadow-sm shadow-neutral-500/30"
-                                : "border-neutral-500/40 bg-neutral-500/10 text-neutral-400 hover:bg-neutral-500/20 hover:text-neutral-300",
-                              blue: active
-                                ? "border-blue-400/70 bg-blue-500/30 text-blue-200 shadow-sm shadow-blue-500/30"
-                                : "border-blue-500/40 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 hover:text-blue-300",
-                              purple: active
-                                ? "border-purple-400/70 bg-purple-500/30 text-purple-200 shadow-sm shadow-purple-500/30"
-                                : "border-purple-500/40 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 hover:text-purple-300",
-                              amber: active
-                                ? "border-amber-400/70 bg-amber-500/30 text-amber-200 shadow-sm shadow-amber-500/30"
-                                : "border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 hover:text-amber-300",
-                            };
-                            return (
-                              <button
-                                key={q}
-                                type="button"
-                                onClick={() => setQuality(q)}
-                                className={`flex-1 rounded-xl border px-3 py-1.5 text-sm font-medium transition-colors active:scale-95 ${styles[color]}`}
-                              >
-                                {q}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
+                      <QualitySelector quality={quality} onChange={setQuality} isAdmin={isAdmin} />
 
                       {movieMatch ? (
                         <>
@@ -882,7 +873,7 @@ export function AddMediaWizard({
                             <TorrentPicker
                               matches={movieMatches}
                               selectedId={movieMatch.id}
-                              onSelect={setSelectedTorrentId}
+                              onSelect={setPickedTorrentId}
                             />
                           )}
                           <ActionButton
@@ -918,6 +909,41 @@ export function AddMediaWizard({
           </div>
         </DialogContent>
       </Dialog>
+
+      {torrentChoice && (
+        <Drawer open onOpenChange={(o) => !o && setTorrentChoice(null)}>
+          <DrawerContent className="max-h-[85vh]">
+            <DrawerHeader className="text-left">
+              <DrawerTitle>Alege torrentul — {torrentChoice.label}</DrawerTitle>
+            </DrawerHeader>
+            <div className="space-y-3 overflow-y-auto px-4 pb-6">
+              <TorrentPicker
+                matches={torrentChoice.candidates}
+                selectedId={pickedTorrentId ?? torrentChoice.candidates[0].id}
+                onSelect={setPickedTorrentId}
+              />
+              <ActionButton
+                busy={false}
+                icon={<Download className="h-4 w-4" />}
+                label="Continuă"
+                onClick={() => {
+                  const chosen =
+                    torrentChoice.candidates.find((t) => t.id === pickedTorrentId) ??
+                    bestOf(torrentChoice.candidates)!;
+                  setConfirmTorrent({
+                    torrent: chosen,
+                    label: torrentChoice.label,
+                    season: torrentChoice.season,
+                    episode: torrentChoice.episode,
+                    isSeasonPack: torrentChoice.isSeasonPack,
+                  });
+                  setTorrentChoice(null);
+                }}
+              />
+            </div>
+          </DrawerContent>
+        </Drawer>
+      )}
 
       {confirmTorrent && (
         <DownloadConfirmDialog
