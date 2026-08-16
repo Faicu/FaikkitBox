@@ -221,14 +221,16 @@ export function BibliotecaList() {
         ) : (
           <Tv className="h-3.5 w-3.5 shrink-0 text-blue-400" />
         )}
-        <span className="min-w-0 flex-1 truncate text-xs">
-          {indent ? (episodeCode(item.season, item.episode) ?? item.title) : itemLabel(item)}
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-xs">
+            {indent ? (episodeCode(item.season, item.episode) ?? item.title) : itemLabel(item)}
+          </span>
+          <span className="block truncate text-[10px] text-muted-foreground">
+            {addedDate(item.addedAt)}
+          </span>
         </span>
         <StatusBadge status={item.status} />
         {item.watchedByMe && <Eye className="h-3 w-3 shrink-0 text-emerald-400" />}
-        <span className="shrink-0 text-[10px] text-muted-foreground">
-          {addedDate(item.addedAt)}
-        </span>
       </button>
     );
   }
