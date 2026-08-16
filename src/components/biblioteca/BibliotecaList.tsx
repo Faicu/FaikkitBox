@@ -30,9 +30,11 @@ import { plexLibraryBrowseQuery, adminStatusQuery } from "@/lib/queries";
 import { deleteMediaEntry } from "@/lib/filelist.functions";
 import { startMediaBackfill, getMediaBackfillState } from "@/lib/media-backfill";
 import { backfillSubtitles, getBackfillState } from "@/lib/filelist.functions";
-import type { PlexBrowseItem } from "@/lib/services/plex-browse";
+import type { PlexBrowseItem, WatchingItem } from "@/lib/services/plex-browse";
 import { StatusBadge } from "./StatusBadge";
 import { TitleDetailDrawer } from "./TitleDetailDrawer";
+import { WatchingSection } from "./WatchingSection";
+import { WatchingTitleDrawer } from "./WatchingTitleDrawer";
 import { episodeCode, addedDate, itemLabel, groupConsecutiveEpisodes, matchesQuery } from "./utils";
 
 const PAGE_SIZE = 20;
@@ -46,6 +48,7 @@ export function BibliotecaList() {
   const [visible, setVisible] = useState(PAGE_SIZE);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [selectedMediaId, setSelectedMediaId] = useState<number | null>(null);
+  const [selectedWatching, setSelectedWatching] = useState<WatchingItem | null>(null);
   const [confirmDeleteTitle, setConfirmDeleteTitle] = useState<{
     mediaId: number;
     title: string;
@@ -68,6 +71,7 @@ export function BibliotecaList() {
   const subBackfillStateFn = useServerFn(getBackfillState);
 
   const browseItems = browse.data?.status === "ok" ? browse.data.items : null;
+  const watching = browse.data?.status === "ok" ? browse.data.watching : [];
   const allItems = useMemo(() => browseItems ?? [], [browseItems]);
   const filtered = useMemo(
     () => allItems.filter((it) => matchesQuery(it, query)),
@@ -184,7 +188,7 @@ export function BibliotecaList() {
   if (browse.data?.status === "error") {
     return <div className="text-sm text-red-400 px-1">{browse.data.error}</div>;
   }
-  if (allItems.length === 0) {
+  if (allItems.length === 0 && watching.length === 0) {
     return <div className="text-sm text-muted-foreground px-1">Biblioteca Plex e goală.</div>;
   }
 
@@ -237,6 +241,7 @@ export function BibliotecaList() {
 
   return (
     <div className="space-y-3">
+      <WatchingSection items={watching} onSelect={setSelectedWatching} />
       {isAdmin && (
         <div className="flex items-center justify-end gap-1">
           <button
@@ -376,6 +381,8 @@ export function BibliotecaList() {
         onClose={() => setSelectedMediaId(null)}
         onRequestDelete={(info) => setConfirmDeleteTitle(info)}
       />
+
+      <WatchingTitleDrawer item={selectedWatching} onClose={() => setSelectedWatching(null)} />
 
       <AlertDialog
         open={!!confirmDeleteTitle}

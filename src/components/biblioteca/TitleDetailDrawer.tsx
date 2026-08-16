@@ -122,22 +122,20 @@ export function TitleDetailDrawer({
     await setWatchFn({ data: next }).catch(() => {});
   }
 
-  // Fixarea nu mai e legată de existența unui card separat — orice titlu din
-  // Bibliotecă (descărcat, în curs, sau doar identificat) poate fi fixat
-  // pentru urmărire automată direct din drawer-ul lui. Dacă titlul e ȘI
-  // descărcat/în bibliotecă, rândul rămâne vizibil în listă chiar și după
-  // scoaterea din fixări (mai are alt motiv să apară); dacă exista în listă
-  // EXCLUSIV pentru că era fixat (status "pinned"), scoaterea îl face să
-  // dispară din listă, deci închidem drawer-ul.
+  // Acest drawer arată doar titluri cu conținut real (rând `media` cu
+  // torrent_hash/plex_rating_key) — titlurile DOAR fixate au propriul drawer
+  // separat (WatchingTitleDrawer), fără rând `media`. Fixarea/scoaterea de-
+  // aici e o completare (titlul rămâne vizibil oricum, pentru conținutul
+  // lui), nu schimbă dacă rândul apare sau nu în listă.
   //
   // Fixarea propriu-zisă (adăugarea) rămâne pe lista personală a userului
   // curent (setPinnedItems, cu atribuire cine a fixat). Dar scoaterea NU
-  // poate fi doar personală: vizibilitatea unui titlu fixat în Bibliotecă
-  // e o stare comună (EXISTS pe pinned_items, indiferent de user — vezi
-  // isPinnedByAnyone/getPlexLibraryBrowse), deci scoaterea trebuie să fie la
-  // fel de comună (unpinTitleEverywhere) — altfel titlul rămâne în listă
-  // fiindcă mai e fixat de alt cont, deși userul curent tocmai l-a scos din
-  // fixările lui (bug real, raportat direct: "The Odyssey").
+  // poate fi doar personală: vizibilitatea unui titlu fixat e o stare comună
+  // (EXISTS pe pinned_items, indiferent de user — vezi isPinnedByAnyone/
+  // getPlexLibraryBrowse), deci scoaterea trebuie să fie la fel de comună
+  // (unpinTitleEverywhere) — altfel titlul rămâne fixat pentru alt cont,
+  // deși userul curent tocmai l-a scos din fixările lui (bug real, raportat
+  // direct: "The Odyssey").
   async function pinTitle(
     tmdbId: number,
     mediaType: "movie" | "tv",
@@ -157,11 +155,10 @@ export function TitleDetailDrawer({
     await queryClient.invalidateQueries({ queryKey: ["plexLibraryBrowse"] });
   }
 
-  async function unpinTitle(tmdbId: number, mediaType: "movie" | "tv", closeIfRemoved: boolean) {
+  async function unpinTitle(tmdbId: number, mediaType: "movie" | "tv") {
     await unpinFn({ data: { id: tmdbId, mediaType } }).catch(() => {});
     await queryClient.invalidateQueries({ queryKey: ["pinnedItems"] });
     await queryClient.invalidateQueries({ queryKey: ["plexLibraryBrowse"] });
-    if (closeIfRemoved) onClose();
   }
 
   function invalidateAfterMutation() {
@@ -258,7 +255,13 @@ export function TitleDetailDrawer({
             <>
               <div className="flex flex-wrap items-center gap-2 text-xs">
                 {d.status !== "in_library" && <StatusBadge status={d.status} />}
-                {d.status === "pinned" &&
+                {d.isPinnedByAnyone && (
+                  <span className="flex shrink-0 items-center gap-0.5 rounded-full bg-sky-500/15 px-2 py-0.5 font-medium text-sky-400">
+                    <Pin className="h-3 w-3" /> Urmărești
+                  </span>
+                )}
+                {d.isPinnedByAnyone &&
+                  d.type !== "movie" &&
                   (pinnedPlexLoading ? (
                     <span className="h-5 w-20 animate-pulse rounded-full bg-muted/40" />
                   ) : (
@@ -269,18 +272,16 @@ export function TitleDetailDrawer({
                     {d.quality}
                   </span>
                 )}
-                {d.status !== "pinned" && (
-                  <span
-                    className={`flex items-center gap-1 rounded-full px-2 py-0.5 font-medium ${
-                      d.hasRomanianSubtitle
-                        ? "bg-emerald-500/15 text-emerald-400"
-                        : "bg-muted text-muted-foreground"
-                    }`}
-                  >
-                    <Captions className="h-3 w-3" />
-                    {d.hasRomanianSubtitle ? "Subtitrare RO" : "Fără subtitrare RO (doar engleză)"}
-                  </span>
-                )}
+                <span
+                  className={`flex items-center gap-1 rounded-full px-2 py-0.5 font-medium ${
+                    d.hasRomanianSubtitle
+                      ? "bg-emerald-500/15 text-emerald-400"
+                      : "bg-muted text-muted-foreground"
+                  }`}
+                >
+                  <Captions className="h-3 w-3" />
+                  {d.hasRomanianSubtitle ? "Subtitrare RO" : "Fără subtitrare RO (doar engleză)"}
+                </span>
                 {d.durationMs > 0 && (
                   <span className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 font-medium text-muted-foreground">
                     <Clock3 className="h-3 w-3" /> {formatMs(d.durationMs)}
@@ -380,9 +381,7 @@ export function TitleDetailDrawer({
                           posterUrl={d.thumbUrl}
                           watchSettings={watchMap.get(`${pinnedMediaType}-${d.tmdbId}`) ?? null}
                           onWatchChange={(patch) => updateWatch(d.tmdbId!, pinnedMediaType, patch)}
-                          onUnpin={() =>
-                            unpinTitle(d.tmdbId!, pinnedMediaType, d.status === "pinned")
-                          }
+                          onUnpin={() => unpinTitle(d.tmdbId!, pinnedMediaType)}
                           onPlexStatus={(status, loading) => {
                             setPinnedPlexStatus(status);
                             setPinnedPlexLoading(loading);
@@ -393,69 +392,67 @@ export function TitleDetailDrawer({
                   );
                 })()}
 
-              {d.status !== "pinned" && (
-                <div className="flex flex-col gap-2 pt-1 border-t border-border">
-                  {d.torrentHash ? (
-                    d.canManage ? (
-                      <>
-                        <div className="flex gap-2 pt-2">
-                          <button
-                            type="button"
-                            onClick={correctSubtitle}
-                            disabled={correcting}
-                            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-border bg-muted/40 py-2 text-xs font-medium text-foreground hover:bg-muted/60 transition-colors disabled:opacity-40"
-                          >
-                            {correcting ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                              <Captions className="h-3.5 w-3.5" />
-                            )}
-                            Corectează subtitrare
-                          </button>
-                          <button
-                            type="button"
-                            onClick={deleteSubtitle}
-                            disabled={deletingSubtitle}
-                            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-border bg-muted/40 py-2 text-xs font-medium text-foreground hover:bg-muted/60 transition-colors disabled:opacity-40"
-                          >
-                            {deletingSubtitle ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                              <CaptionsOff className="h-3.5 w-3.5" />
-                            )}
-                            Șterge subtitrare
-                          </button>
-                        </div>
+              <div className="flex flex-col gap-2 pt-1 border-t border-border">
+                {d.torrentHash ? (
+                  d.canManage ? (
+                    <>
+                      <div className="flex gap-2 pt-2">
                         <button
                           type="button"
-                          onClick={() =>
-                            onRequestDelete({
-                              mediaId: d.mediaId,
-                              title: d.type === "movie" ? d.title : (d.show ?? d.title),
-                              isSeasonPack: d.isSeasonPack,
-                            })
-                          }
-                          className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-border bg-muted/40 py-2 text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors"
+                          onClick={correctSubtitle}
+                          disabled={correcting}
+                          className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-border bg-muted/40 py-2 text-xs font-medium text-foreground hover:bg-muted/60 transition-colors disabled:opacity-40"
                         >
-                          <Trash2 className="h-3.5 w-3.5" />
-                          Șterge titlul complet
+                          {correcting ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Captions className="h-3.5 w-3.5" />
+                          )}
+                          Corectează subtitrare
                         </button>
-                      </>
-                    ) : (
-                      <div className="pt-2 text-[11px] text-muted-foreground">
-                        Doar {d.addedByUsername ?? "cel care a adăugat titlul"} sau un admin poate
-                        corecta/șterge subtitrarea sau șterge titlul.
+                        <button
+                          type="button"
+                          onClick={deleteSubtitle}
+                          disabled={deletingSubtitle}
+                          className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-border bg-muted/40 py-2 text-xs font-medium text-foreground hover:bg-muted/60 transition-colors disabled:opacity-40"
+                        >
+                          {deletingSubtitle ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <CaptionsOff className="h-3.5 w-3.5" />
+                          )}
+                          Șterge subtitrare
+                        </button>
                       </div>
-                    )
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onRequestDelete({
+                            mediaId: d.mediaId,
+                            title: d.type === "movie" ? d.title : (d.show ?? d.title),
+                            isSeasonPack: d.isSeasonPack,
+                          })
+                        }
+                        className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-border bg-muted/40 py-2 text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Șterge titlul complet
+                      </button>
+                    </>
                   ) : (
                     <div className="pt-2 text-[11px] text-muted-foreground">
-                      Nu știm ce torrent corespunde acestui titlu (a fost adăugat manual în Plex,
-                      sau torrentul nu mai există în qBittorrent) — corectarea/ștergerea subtitrării
-                      și ștergerea completă nu sunt disponibile.
+                      Doar {d.addedByUsername ?? "cel care a adăugat titlul"} sau un admin poate
+                      corecta/șterge subtitrarea sau șterge titlul.
                     </div>
-                  )}
-                </div>
-              )}
+                  )
+                ) : (
+                  <div className="pt-2 text-[11px] text-muted-foreground">
+                    Nu știm ce torrent corespunde acestui titlu (a fost adăugat manual în Plex, sau
+                    torrentul nu mai există în qBittorrent) — corectarea/ștergerea subtitrării și
+                    ștergerea completă nu sunt disponibile.
+                  </div>
+                )}
+              </div>
             </>
           )}
         </div>

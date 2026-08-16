@@ -31,10 +31,25 @@ export interface PlexBrowseItem {
   thumbUrl: string | null;
   addedAt: number;
   watchedByMe: boolean;
-  // "downloading" — are torrent, dar Plex nu l-a indexat încă; "pinned" —
-  // doar fixat pentru urmărire, nimic descărcat; "in_library" — normal,
-  // deja în Plex.
-  status: "in_library" | "downloading" | "pinned";
+  // "downloading" — are torrent, dar Plex nu l-a indexat încă; "in_library"
+  // — normal, deja în Plex. Titlurile doar fixate (nimic descărcat) nu mai
+  // apar aici — vezi `watching`, o listă separată, complet distinctă în DB
+  // (nu mai există rând `media` pentru un titlu doar fixat).
+  status: "in_library" | "downloading";
+}
+
+// Titluri doar fixate pentru urmărire — nimic descărcat/în Plex încă pentru
+// ele (dacă apare ceva, tmdb_id-ul capătă un rând real în `media` și titlul
+// trece automat în `items`, dispărând de-aici). Sursă unică: `pinned_items`
+// (fixat de orice utilizator — vezi comentariul de la EXISTS mai jos),
+// deduplicat, fără nicio legătură cu tabela `media`.
+export interface WatchingItem {
+  tmdbId: number;
+  mediaType: "movie" | "tv";
+  title: string;
+  originalTitle: string | null;
+  posterUrl: string | null;
+  addedAt: number;
 }
 
 const BROWSE_LIMIT = 300;
@@ -52,9 +67,19 @@ interface MediaBrowseRow {
   torrent_hash: string | null;
 }
 
+interface PinnedBrowseRow {
+  tmdb_id: number;
+  media_type: string;
+  title: string;
+  original_title: string | null;
+  poster_url: string | null;
+  added_at: string;
+}
+
 export const getPlexLibraryBrowse = createServerFn({ method: "GET" }).handler(
   async (): Promise<
-    { status: "ok"; items: PlexBrowseItem[] } | { status: "error"; error: string }
+    | { status: "ok"; items: PlexBrowseItem[]; watching: WatchingItem[] }
+    | { status: "error"; error: string }
   > => {
     const { requireAuth } = await import("../admin.server");
     const session = await requireAuth();
@@ -62,37 +87,19 @@ export const getPlexLibraryBrowse = createServerFn({ method: "GET" }).handler(
       const { getDb } = await import("../db");
       const db = getDb();
 
-      // Bibliotecă arată doar ce e "al meu" — deja confirmat în Plex
+      // Bibliotecă arată doar conținut real: deja confirmat în Plex
       // (plex_rating_key cunoscut, indiferent de sursă: descărcat prin
-      // aplicație SAU backfill din restul bibliotecii), în curs de
-      // descărcare (torrent_hash cunoscut, încă neindexat de Plex), sau
-      // fixat pentru urmărire (potrivire cu pinned_items) — nu orice titlu
-      // doar căutat prin wizard, altfel lista s-ar umple de căutări
-      // întâmplătoare. Un serial fixat cu episoade deja descărcate arată
-      // doar prin episoadele lui (rândul-părinte gol e exclus explicit), ca
-      // să nu apară dublu.
+      // aplicație SAU backfill din restul bibliotecii), sau în curs de
+      // descărcare (torrent_hash cunoscut, încă neindexat de Plex). Un
+      // titlu doar fixat, fără nimic descărcat, nu are deloc rând `media`
+      // — vezi query-ul `watching` mai jos, complet separat.
       const rows = db
         .prepare(
           `SELECT m.id, m.plex_rating_key, m.media_type, m.title, m.season, m.episode,
                   m.poster_path, m.plex_added_at, m.added_at, m.torrent_hash
            FROM media m
-           WHERE
-             (
-               m.media_type IN ('movie', 'episode')
-               AND (m.torrent_hash IS NOT NULL OR m.plex_rating_key IS NOT NULL)
-             )
-             OR (
-               m.media_type IN ('movie', 'tv_show')
-               AND EXISTS (
-                 SELECT 1 FROM pinned_items p
-                 WHERE p.id = m.tmdb_id
-                   AND p.media_type = CASE m.media_type WHEN 'movie' THEN 'movie' ELSE 'tv' END
-               )
-               AND (
-                 m.media_type != 'tv_show'
-                 OR NOT EXISTS (SELECT 1 FROM media c WHERE c.parent_id = m.id)
-               )
-             )
+           WHERE m.media_type IN ('movie', 'episode')
+             AND (m.torrent_hash IS NOT NULL OR m.plex_rating_key IS NOT NULL)
            ORDER BY COALESCE(m.plex_added_at, CAST(strftime('%s', m.added_at) AS INTEGER)) DESC
            LIMIT ?`,
         )
@@ -121,9 +128,40 @@ export const getPlexLibraryBrowse = createServerFn({ method: "GET" }).handler(
             r.plex_added_at ??
             Math.floor(new Date(`${r.added_at.replace(" ", "T")}Z`).getTime() / 1000),
           watchedByMe: false,
-          status: r.plex_rating_key ? "in_library" : r.torrent_hash ? "downloading" : "pinned",
+          status: r.plex_rating_key ? "in_library" : "downloading",
         };
       });
+
+      // Titluri doar fixate — fixate de ORICE utilizator (nu doar cel curent,
+      // la fel ca restul fixărilor vizibile în Bibliotecă), deduplicate
+      // (mai mulți useri pot fixa același titlu), excluse dacă tmdb_id-ul
+      // are deja conținut real în `media` (a apărut ceva — titlul trece în
+      // lista de mai sus, nu mai stă și aici).
+      const pinnedRows = db
+        .prepare(
+          `SELECT p.id AS tmdb_id, p.media_type, MIN(p.title) AS title,
+                  MIN(p.original_title) AS original_title, MIN(p.poster_url) AS poster_url,
+                  MIN(p.added_at) AS added_at
+           FROM pinned_items p
+           WHERE NOT EXISTS (
+             SELECT 1 FROM media m
+             WHERE m.tmdb_id = p.id
+               AND m.media_type = CASE p.media_type WHEN 'movie' THEN 'movie' ELSE 'episode' END
+               AND (m.torrent_hash IS NOT NULL OR m.plex_rating_key IS NOT NULL)
+           )
+           GROUP BY p.id, p.media_type
+           ORDER BY MIN(p.added_at) DESC`,
+        )
+        .all() as unknown as PinnedBrowseRow[];
+
+      const watching: WatchingItem[] = pinnedRows.map((r) => ({
+        tmdbId: r.tmdb_id,
+        mediaType: r.media_type === "movie" ? "movie" : "tv",
+        title: r.title,
+        originalTitle: r.original_title,
+        posterUrl: r.poster_url,
+        addedAt: Math.floor(new Date(`${r.added_at.replace(" ", "T")}Z`).getTime() / 1000),
+      }));
 
       // "Am văzut" — badge afișat direct în listă, fără cost suplimentar (nicio
       // cerere nouă către Plex): potrivim doar cu istoricul deja cachuit.
@@ -131,7 +169,7 @@ export const getPlexLibraryBrowse = createServerFn({ method: "GET" }).handler(
         .prepare("SELECT plex_username FROM users WHERE id = ?")
         .get(session.data.userId!) as { plex_username: string | null } | undefined;
       const myPlexUsername = me?.plex_username ?? null;
-      if (!myPlexUsername) return { status: "ok", items };
+      if (!myPlexUsername) return { status: "ok", items, watching };
 
       const { getPlexUserHistory } = await import("./plex");
       const myHistory = await getPlexUserHistory(myPlexUsername);
@@ -144,7 +182,7 @@ export const getPlexLibraryBrowse = createServerFn({ method: "GET" }).handler(
           it.type === "episode" ? `${it.show}|${it.season}|${it.episode}` : `movie|${it.title}`,
         ),
       }));
-      return { status: "ok", items: withWatched };
+      return { status: "ok", items: withWatched, watching };
     } catch (e) {
       return { status: "error", error: e instanceof Error ? e.message : String(e) };
     }
@@ -174,7 +212,7 @@ export interface PlexTitleDetail {
   watchedByMe: boolean;
   watchedByOthers: Array<{ username: string; viewedAt: number }>;
   addedByUsername: string | null;
-  status: "in_library" | "downloading" | "pinned";
+  status: "in_library" | "downloading";
   // Butoanele de corectare/ștergere subtitrare și ștergere completă operează
   // direct pe media.id + torrentHash — absent pentru titluri doar fixate,
   // fără nimic descărcat încă.
@@ -290,7 +328,7 @@ async function buildDetailFromMediaRow(
     watchedByMe,
     watchedByOthers,
     addedByUsername,
-    status: row.plex_rating_key ? "in_library" : row.torrent_hash ? "downloading" : "pinned",
+    status: row.plex_rating_key ? "in_library" : "downloading",
     torrentHash: row.torrent_hash,
     isSeasonPack: !!row.is_season_pack,
     canManage: isAdminOrOwner(session, row.requested_by_user_id),

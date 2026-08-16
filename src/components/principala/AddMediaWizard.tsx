@@ -26,7 +26,7 @@ import { checkFilelistForItem, downloadFilelist } from "@/lib/filelist.functions
 import type { FilelistTorrent } from "@/lib/filelist.functions";
 import { setPinnedItems, setWatchSettings } from "@/lib/pinned.functions";
 import type { WatchQuality } from "@/lib/pinned.functions";
-import { ensureMediaEntryForSearch, getDownloadingMediaForTmdbId, touchMediaAddedAt } from "@/lib/media";
+import { getDownloadingMediaForTmdbId } from "@/lib/media";
 import type { DownloadingMediaEntry } from "@/lib/media";
 import {
   detectQuality,
@@ -158,8 +158,6 @@ export function AddMediaWizard({
   const downloadFn = useServerFn(downloadFilelist);
   const setPinnedFn = useServerFn(setPinnedItems);
   const setWatchFn = useServerFn(setWatchSettings);
-  const ensureMediaEntryFn = useServerFn(ensureMediaEntryForSearch);
-  const touchMediaAddedAtFn = useServerFn(touchMediaAddedAt);
 
   const [step, setStep] = useState<Step>("search");
   const [query, setQuery] = useState("");
@@ -298,26 +296,6 @@ export function AddMediaWizard({
       const seasons = details.seasons
         .filter((s) => s.seasonNumber > 0)
         .map((s) => ({ seasonNumber: s.seasonNumber, episodeCount: s.episodeCount }));
-
-      // Orice titlu identificat aici intră în `media` — indiferent dacă
-      // userul ajunge să-l descarce sau doar îl fixează pentru urmărire (vezi
-      // planul de unificare Lansări → Acasă+Bibliotecă). Best-effort, nu
-      // blochează fluxul dacă eșuează.
-      ensureMediaEntryFn({
-        data: {
-          mediaType: item.mediaType,
-          imdbId: details.imdbId,
-          tmdbId: item.id,
-          title: item.title,
-          originalTitle,
-          literalTitle: details.literalTitle,
-          year: item.year ? Number(item.year) : null,
-          overviewRo: details.overview,
-          genres: details.genres,
-          posterPath: item.posterUrl,
-          tvStatus: details.tvStatus,
-        },
-      }).catch(() => {});
 
       setCheckResult({
         imdbId: details.imdbId,
@@ -494,7 +472,6 @@ export function AddMediaWizard({
           },
         ];
         await setPinnedFn({ data: { items: next } });
-        await touchMediaAddedAtFn({ data: { mediaType: selected.mediaType, tmdbId: selected.id } });
         // Doar la fixarea nouă setăm valorile implicite de urmărire — doar
         // fixare, verificare periodică pe Filelist, FĂRĂ descărcare
         // automată (asta rămâne opțiune separată, din panoul de fixare al
@@ -514,6 +491,7 @@ export function AddMediaWizard({
         });
       }
       queryClient.invalidateQueries({ queryKey: ["pinnedItems"] });
+      queryClient.invalidateQueries({ queryKey: ["plexLibraryBrowse"] });
       toast.success(alreadyPinned ? "Deja fixat în Bibliotecă" : "Fixat în Bibliotecă", {
         description: "Vei fi anunțat când apare ceva nou pe Filelist pentru acest titlu.",
         duration: 6000,

@@ -96,13 +96,13 @@ export interface MediaPlaceholderInput {
   requestedByUserId?: number | null;
 }
 
-// Creează (sau actualizează, dacă există deja) un rând `media` fără
-// proveniență de torrent — rândul-părinte al unui serial (folosit intern la
-// fiecare episod inserat) sau un rând de sine stătător pentru un film,
-// creat direct la căutare/fixare, înainte de orice descărcare (vezi
-// ensureMediaEntryForSearch mai jos). Actualizarea nu atinge niciodată
-// coloanele de proveniență torrent — cele aparțin doar rândurilor de episod/
-// film create la descărcare (upsertMediaEntry).
+// Creează (sau actualizează, dacă există deja) rândul-părinte al unui serial
+// — apelat intern la fiecare episod inserat (descărcare sau backfill), NU la
+// simpla căutare/fixare a unui titlu — un titlu doar fixat, fără nimic
+// descărcat, nu are deloc rând `media` (vezi pinned_items/getPlexLibraryBrowse
+// pentru secțiunea "Urmărite" din Bibliotecă, complet separată). Actualizarea
+// nu atinge niciodată coloanele de proveniență torrent — cele aparțin doar
+// rândurilor de episod/film create la descărcare (upsertMediaEntry).
 function ensureMediaPlaceholder(
   mediaType: "movie" | "tv_show",
   input: MediaPlaceholderInput,
@@ -154,62 +154,6 @@ function ensureMediaPlaceholder(
     );
   return Number(res.lastInsertRowid);
 }
-
-// Apelat când un titlu e fixat pentru prima dată (nu la re-confirmare) —
-// rândul-placeholder din `media` poate exista de mult (creat la o căutare
-// anterioară în wizard, cu added_at din acel moment), deci fără asta, un
-// titlu proaspăt fixat nu urca deloc în capul listei din Bibliotecă (sortată
-// după added_at) — părea "vechi", deși tocmai a fost adăugat la urmărire.
-export const touchMediaAddedAt = createServerFn({ method: "POST" })
-  .validator((data: { mediaType: "movie" | "tv"; tmdbId: number }) => data)
-  .handler(async ({ data }): Promise<void> => {
-    const { requireAuth } = await import("./admin.server");
-    await requireAuth();
-    const db = getDb();
-    const dbMediaType = data.mediaType === "movie" ? "movie" : "tv_show";
-    db.prepare(
-      `UPDATE media SET added_at = datetime('now'), updated_at = datetime('now')
-       WHERE media_type = ? AND tmdb_id = ?`,
-    ).run(dbMediaType, data.tmdbId);
-  });
-
-// Apelat direct din wizard (Acasă), imediat ce un titlu e identificat prin
-// TMDB — indiferent dacă userul ajunge să-l descarce sau doar îl fixează
-// pentru urmărire. Pentru seriale, scrie doar rândul-părinte (episoadele se
-// adaugă separat, la descărcare); pentru filme, un rând de sine stătător,
-// pe care upsertMediaEntry îl va completa ulterior cu proveniența torrent-
-// ului dacă userul chiar descarcă.
-export const ensureMediaEntryForSearch = createServerFn({ method: "POST" })
-  .validator(
-    (data: {
-      mediaType: "movie" | "tv";
-      imdbId: string | null;
-      tmdbId: number;
-      title: string;
-      originalTitle?: string | null;
-      literalTitle?: string | null;
-      year?: number | null;
-      overviewRo?: string | null;
-      genres?: string[];
-      posterPath?: string | null;
-      tvStatus?: string | null;
-    }) => data,
-  )
-  .handler(async ({ data }): Promise<{ ok: boolean }> => {
-    const { requireAuth } = await import("./admin.server");
-    const session = await requireAuth();
-    try {
-      ensureMediaPlaceholder(data.mediaType === "movie" ? "movie" : "tv_show", {
-        ...data,
-        addedVia: "wizard",
-        requestedByUserId: session.data.userId ?? null,
-      });
-      return { ok: true };
-    } catch (e) {
-      console.warn("[media] ensureMediaEntryForSearch eșuat:", e);
-      return { ok: false };
-    }
-  });
 
 export interface DownloadingMediaEntry {
   season: number | null;
@@ -264,8 +208,7 @@ function findExistingDownloadRow(input: UpsertMediaEntryInput): number | null {
          AND season IS ? AND episode IS ?`,
       )
       .get(input.torrentHash, input.season ?? null, input.episode ?? null) as
-      | { id: number }
-      | undefined;
+      { id: number } | undefined;
     return row?.id ?? null;
   }
   const row = db
@@ -369,9 +312,7 @@ function findUnlinkedDownloadRow(input: UpsertMediaFromPlexInput): number | null
         `SELECT id FROM media WHERE media_type = 'episode' AND tmdb_id = ?
          AND season IS ? AND episode IS ? AND torrent_hash IS NOT NULL AND plex_rating_key IS NULL`,
       )
-      .get(input.tmdbId, input.season ?? null, input.episode ?? null) as
-      | { id: number }
-      | undefined;
+      .get(input.tmdbId, input.season ?? null, input.episode ?? null) as { id: number } | undefined;
     return row?.id ?? null;
   }
   const row = db
