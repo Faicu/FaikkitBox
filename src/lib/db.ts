@@ -4,7 +4,6 @@
 // ---------------------------------------------------------------------------
 
 import { DatabaseSync } from "node:sqlite";
-import { mkdir } from "node:fs/promises";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { hashPassword } from "./password";

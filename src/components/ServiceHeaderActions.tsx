@@ -107,7 +107,7 @@ export function ServiceHeaderActions({ service, status, onRestart, onCommandResu
   );
 }
 
-export function CommandOutput({ command, result }: { command: AgentCommand; result: AgentResult }) {
+export function CommandOutput({ result }: { command: AgentCommand; result: AgentResult }) {
   return (
     <div className="rounded-2xl border border-border bg-black/40 p-3">
       <div className={`mb-2 text-xs ${result.ok ? "text-emerald-400" : "text-red-400"}`}>

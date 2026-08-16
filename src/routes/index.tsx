@@ -26,7 +26,6 @@ import {
 import { AddMediaWizard } from "@/components/principala/AddMediaWizard";
 import { FilelistSection } from "@/components/filelist/FilelistSection";
 import { plexQuery, plexSessionsQuery, adminStatusQuery } from "@/lib/queries";
-import { formatSpeed } from "@/lib/format";
 
 export const Route = createFileRoute("/")({
   head: () => ({
