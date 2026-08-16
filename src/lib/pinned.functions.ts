@@ -128,10 +128,21 @@ export const setPinnedItems = createServerFn({ method: "POST" })
     const session = await requireAuth();
     const userId = session.data.userId!;
     const db = getDb();
+    // Păstrăm added_at-ul original al fiecărei fixări existente — altfel,
+    // fiindcă rescriem toată lista (delete + insert) la fiecare fixare nouă,
+    // toate titlurile deja fixate ar primi added_at = acum, arătând ca fixate
+    // chiar în acel moment (vezi Utilizatori > Titluri urmărite).
+    const existingAddedAt = new Map(
+      (
+        db
+          .prepare("SELECT id, media_type, added_at FROM pinned_items WHERE user_id = ?")
+          .all(userId) as Array<{ id: number; media_type: string; added_at: string }>
+      ).map((r) => [`${r.media_type}-${r.id}`, r.added_at]),
+    );
     db.prepare("DELETE FROM pinned_items WHERE user_id = ?").run(userId);
     const stmt = db.prepare(
-      `INSERT INTO pinned_items (user_id, id, media_type, title, original_title, poster_url, sort_order)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO pinned_items (user_id, id, media_type, title, original_title, poster_url, sort_order, added_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')))`,
     );
     data.items.forEach((item, i) => {
       stmt.run(
@@ -142,6 +153,7 @@ export const setPinnedItems = createServerFn({ method: "POST" })
         item.originalTitle,
         item.posterUrl ?? null,
         i,
+        existingAddedAt.get(`${item.mediaType}-${item.id}`) ?? null,
       );
     });
     // Curăță setările/starea de watch pentru itemele pe care NIMENI nu le

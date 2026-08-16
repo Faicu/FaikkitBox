@@ -184,10 +184,15 @@ export const getUserDetail = createServerFn({ method: "GET" })
     // Titlurile efectiv descărcate prin cont — sursate din `media` (nu din
     // `downloads`, jurnalul tehnic vechi), ca să arate titlul real (nu numele
     // tehnic al torrentului) + poster + calitate, consistent cu Bibliotecă.
+    // torrent_hash IS NOT NULL exclude placeholder-ele create la o simplă
+    // căutare în wizard (ensureMediaEntryForSearch) — acelea nu au fost
+    // niciodată descărcate și apăreau altfel ca "în curs" la nesfârșit.
     const downloadRows = db
       .prepare(
-        `SELECT id, media_type, title, season, episode, poster_path, quality, added_at, completed_at
+        `SELECT id, media_type, title, season, episode, poster_path, quality, added_at,
+                COALESCE(completed_at, CASE WHEN plex_rating_key IS NOT NULL THEN added_at END) AS completed_at
          FROM media WHERE requested_by_user_id = ? AND media_type IN ('movie', 'episode')
+         AND torrent_hash IS NOT NULL
          ORDER BY added_at DESC LIMIT 50`,
       )
       .all(user.id) as Array<{
