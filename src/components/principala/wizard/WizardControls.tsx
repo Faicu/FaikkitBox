@@ -9,43 +9,6 @@ import type { WatchQuality } from "@/lib/pinned.functions";
 // (AddMediaWizard.tsx).
 // ---------------------------------------------------------------------------
 
-export function ScopeOption({
-  icon,
-  label,
-  description,
-  meta,
-  active,
-  onClick,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  description: string;
-  meta?: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-colors active:scale-[0.98] ${
-        active ? "border-primary bg-primary/10" : "border-border bg-muted/40 hover:bg-muted/60"
-      }`}
-    >
-      <span className={active ? "text-primary" : "text-muted-foreground"}>{icon}</span>
-      <div className="min-w-0 flex-1">
-        <div className="text-sm font-medium">{label}</div>
-        <div className="text-xs text-muted-foreground">{description}</div>
-      </div>
-      {meta && (
-        <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-          {meta}
-        </span>
-      )}
-    </button>
-  );
-}
-
 export function ActionButton({
   busy,
   icon,

@@ -364,6 +364,99 @@ export const getTmdbSeasonEpisodes = createServerFn({ method: "GET" })
     return getTmdbSeasonEpisodesInternal(data.tmdbId, data.seasonNum);
   });
 
+export interface TmdbSeasonSchema {
+  seasonNumber: number;
+  episodes: TmdbEpisode[];
+}
+
+// Schema completă (toate sezoanele, cu episoade+date de lansare) într-un
+// singur request suplimentar — folosind append_to_response=season/1,season/2,...
+// (posibil doar după ce știm câte sezoane are serialul, din getTmdbDetails).
+// Wizard-ul ("Adaugă film/serial") are nevoie de toată schema dintr-o dată, ca
+// utilizatorul să vadă orice sezon extins fără să aștepte un request nou de
+// fiecare dată — spre deosebire de getTmdbSeasonEpisodes de mai sus (un
+// singur sezon, fetch la cerere, folosit de cardurile de fixare).
+export async function getTmdbAllSeasonsInternal(
+  tmdbId: number,
+  seasonNumbers: number[],
+): Promise<TmdbSeasonSchema[]> {
+  if (seasonNumbers.length === 0) return [];
+  // Plafon de siguranță — peste el, un URL cu zeci de "season/N" ar deveni
+  // nerezonabil de lung; apelantul cade atunci pe fetch per-sezon, la cerere
+  // (getTmdbSeasonEpisodes), exact ca la cardurile de fixare.
+  if (seasonNumbers.length > 40) return [];
+
+  try {
+    const bust = `_=${Date.now()}`;
+    const append = seasonNumbers.map((n) => `season/${n}`).join(",");
+    const roJson = await tmdbFetch<Record<string, TmdbApiSeason>>(
+      `/tv/${tmdbId}?language=ro-RO&append_to_response=${append}&${bust}`,
+    );
+    const roBySeason = new Map<number, TmdbApiSeason>();
+    for (const n of seasonNumbers) {
+      const s = roJson[`season/${n}`];
+      if (s) roBySeason.set(n, s);
+    }
+
+    // Fallback pe engleză — un singur request suplimentar, batched la fel,
+    // declanșat doar dacă chiar lipsește vreun titlu RO undeva (aceeași
+    // logică per-episod ca getTmdbSeasonEpisodesInternal, doar aplicată o
+    // singură dată pentru toate sezoanele, nu per-sezon).
+    const needsEnFallback = [...roBySeason.values()].some((s) =>
+      (s.episodes ?? []).some((e) => isGenericEpisodePlaceholder(e.name, e.episode_number)),
+    );
+    const enBySeason = new Map<number, TmdbApiSeason>();
+    if (needsEnFallback) {
+      try {
+        const enJson = await tmdbFetch<Record<string, TmdbApiSeason>>(
+          `/tv/${tmdbId}?append_to_response=${append}&${bust}`,
+        );
+        for (const n of seasonNumbers) {
+          const s = enJson[`season/${n}`];
+          if (s) enBySeason.set(n, s);
+        }
+      } catch {
+        // fallback rămâne gol — titlurile generice rămân "Episodul N"
+      }
+    }
+
+    const todayStr = new Date().toISOString().slice(0, 10);
+    return seasonNumbers.map((n) => {
+      const season = roBySeason.get(n);
+      const seasonEn = enBySeason.get(n);
+      const enByNum = new Map((seasonEn?.episodes ?? []).map((e) => [e.episode_number, e.name]));
+      const episodes: TmdbEpisode[] = (season?.episodes ?? []).map((e) => {
+        const airDate = e.air_date ?? null;
+        const enName = enByNum.get(e.episode_number)?.trim();
+        const enIsGeneric =
+          enName && new RegExp(`^episode\\s*${e.episode_number}$`, "i").test(enName);
+        const title = isGenericEpisodePlaceholder(e.name, e.episode_number)
+          ? enName && !enIsGeneric
+            ? enName
+            : `Episodul ${e.episode_number}`
+          : e.name!.trim();
+        return {
+          episodeNum: Number(e.episode_number),
+          title,
+          airDate,
+          aired: airDate ? airDate < todayStr : false,
+        };
+      });
+      return { seasonNumber: n, episodes };
+    });
+  } catch {
+    return [];
+  }
+}
+
+export const getTmdbAllSeasons = createServerFn({ method: "GET" })
+  .validator((data: { tmdbId: number; seasonNumbers: number[] }) => data)
+  .handler(async ({ data }): Promise<TmdbSeasonSchema[]> => {
+    const { requireAuth } = await import("./admin.server");
+    await requireAuth();
+    return getTmdbAllSeasonsInternal(data.tmdbId, data.seasonNumbers);
+  });
+
 // ---------------------------------------------------------------------------
 // Rezolvare titlu Plex → id TMDB, prin căutare directă (nu prin IMDb id, pe
 // care Plex nu-l expune fiabil în răspunsul de metadate) — folosit de pagina
