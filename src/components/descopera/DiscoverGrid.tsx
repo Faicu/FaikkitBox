@@ -3,8 +3,12 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Star, Film, Tv } from "lucide-react";
 
-import { getDiscoverTitles } from "@/lib/tmdb.discover.functions";
-import type { DiscoverMediaType, DiscoverSort, DiscoverTitle } from "@/lib/tmdb.discover.functions";
+import { getDiscoverTitles } from "@/lib/tmdb/tmdb.discover.functions";
+import type {
+  DiscoverMediaType,
+  DiscoverSort,
+  DiscoverTitle,
+} from "@/lib/tmdb/tmdb.discover.functions";
 import { SceneViewer } from "./SceneViewer";
 
 export function DiscoverGrid({

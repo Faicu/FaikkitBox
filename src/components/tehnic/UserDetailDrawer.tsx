@@ -23,7 +23,7 @@ import {
   DrawerTitle,
   DrawerDescription,
 } from "@/components/ui/drawer";
-import { getUserDetail } from "@/lib/users.functions";
+import { getUserDetail } from "@/lib/auth/users.functions";
 import { formatDateTime as fmtDate } from "./utils";
 
 function episodeCode(season: number | null, episode: number | null): string | null {

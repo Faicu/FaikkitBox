@@ -113,7 +113,7 @@ export const runAgentCommand = createServerFn({ method: "POST" })
     return data;
   })
   .handler(async ({ data }): Promise<AgentResult> => {
-    const { requireAdmin } = await import("./admin.server");
+    const { requireAdmin } = await import("../auth/admin.server");
     await requireAdmin();
 
     const steps = commandSteps(data.cmd);
@@ -156,7 +156,7 @@ export const runAgentCommand = createServerFn({ method: "POST" })
 
 // Logging activitate agenți (fire and forget, după execuție)
 export async function logAgentActivity(cmd: AgentCommand, ok: boolean): Promise<void> {
-  const { logActivity } = await import("./activity-log");
+  const { logActivity } = await import("../activity-log");
   type ActivityType = Parameters<typeof logActivity>[0];
   const messages: Partial<Record<AgentCommand, string>> = {
     restart_plex: "Plex a fost repornit",

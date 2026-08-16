@@ -43,20 +43,20 @@ import {
   searchSeasonSubtitles,
   downloadSubtitle,
   type OpenSubtitlesResult,
-} from "../opensubtitles-client";
+} from "./opensubtitles-client";
 import {
   searchSubsRo,
   downloadSubsRoZip,
   extractSrtEntriesFromZip,
   subsRoItemMatchesSeason,
-} from "../subsro-client";
+} from "./subsro-client";
 import {
   type SubtitleOutcome,
   CORRECTED_OUTCOMES,
   OK_OUTCOMES,
   SHORT_LABELS,
 } from "./subtitle-outcomes";
-import { lookupTitleByImdbId, searchImdbIdByReleaseName } from "../tmdb-title-lookup";
+import { lookupTitleByImdbId, searchImdbIdByReleaseName } from "../tmdb/tmdb-title-lookup";
 
 export type { SubtitleOutcome };
 

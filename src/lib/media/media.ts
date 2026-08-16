@@ -7,7 +7,7 @@
 // ---------------------------------------------------------------------------
 
 import { createServerFn } from "@tanstack/react-start";
-import { getDb } from "./db";
+import { getDb } from "../db";
 
 export type AddedVia = "wizard" | "manual" | "backfill";
 
@@ -166,7 +166,7 @@ export interface DownloadingMediaEntry {
 export const getDownloadingMediaForTmdbId = createServerFn({ method: "GET" })
   .validator((data: { tmdbId: number; mediaType: "movie" | "tv" }) => data)
   .handler(async ({ data }): Promise<DownloadingMediaEntry[]> => {
-    const { requireAuth } = await import("./admin.server");
+    const { requireAuth } = await import("../auth/admin.server");
     await requireAuth();
     const db = getDb();
     const dbMediaType = data.mediaType === "movie" ? "movie" : "episode";
@@ -491,7 +491,7 @@ export async function resolveMediaPlexLinkByTorrentHash(torrentHash: string): Pr
     | undefined;
   if (!row) return false;
 
-  const { findPlexMovieLink, findPlexEpisodeLink } = await import("./services/plex-library");
+  const { findPlexMovieLink, findPlexEpisodeLink } = await import("../services/plex-library");
   const link =
     row.media_type === "movie"
       ? await findPlexMovieLink(row.title, row.original_title ?? row.title)

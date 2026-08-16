@@ -107,7 +107,7 @@ function parsePythonCliJson(raw: string): SpeedtestResult {
 
 async function saveToHistory(result: SpeedtestResult) {
   try {
-    const { getDb } = await import("./db");
+    const { getDb } = await import("../db");
     const db = getDb();
     db.prepare(
       `INSERT INTO speedtest_history (id, timestamp, download, upload, ping, jitter, isp, server_name, result_url)
@@ -136,7 +136,7 @@ async function saveToHistory(result: SpeedtestResult) {
 
 async function readLastFromHistory(): Promise<SpeedtestResult | null> {
   try {
-    const { getDb } = await import("./db");
+    const { getDb } = await import("../db");
     const db = getDb();
     const row = db
       .prepare("SELECT * FROM speedtest_history ORDER BY timestamp DESC LIMIT 1")
@@ -168,17 +168,17 @@ async function readLastFromHistory(): Promise<SpeedtestResult | null> {
 }
 
 export const getLastSpeedtest = createServerFn({ method: "GET" }).handler(async () => {
-  const { requireAdmin } = await import("./admin.server");
+  const { requireAdmin } = await import("../auth/admin.server");
   await requireAdmin();
   return await readLastFromHistory();
 });
 
 export const getSpeedtestHistory = createServerFn({ method: "GET" }).handler(
   async (): Promise<SpeedtestHistoryEntry[]> => {
-    const { requireAdmin } = await import("./admin.server");
+    const { requireAdmin } = await import("../auth/admin.server");
     await requireAdmin();
     try {
-      const { getDb } = await import("./db");
+      const { getDb } = await import("../db");
       const db = getDb();
       const rows = db
         .prepare("SELECT * FROM speedtest_history ORDER BY timestamp DESC LIMIT 30")
@@ -212,7 +212,7 @@ export const getSpeedtestHistory = createServerFn({ method: "GET" }).handler(
 
 export const runSpeedtest = createServerFn({ method: "POST" }).handler(
   async (): Promise<SpeedtestRunResponse> => {
-    const { requireAdmin } = await import("./admin.server");
+    const { requireAdmin } = await import("../auth/admin.server");
     await requireAdmin();
 
     let lastError: string | null = null;

@@ -1,6 +1,6 @@
 import { Search, Loader2, Film, Tv } from "lucide-react";
 
-import type { TmdbSearchResult } from "@/lib/tmdb.functions";
+import type { TmdbSearchResult } from "@/lib/tmdb/tmdb.functions";
 
 export function SearchStep({
   query,

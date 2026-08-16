@@ -1,4 +1,4 @@
-import type { DiscoverMediaType, DiscoverSort } from "@/lib/tmdb.discover.functions";
+import type { DiscoverMediaType, DiscoverSort } from "@/lib/tmdb/tmdb.discover.functions";
 
 const sortTabs: { value: DiscoverSort; label: string }[] = [
   { value: "trending", label: "Trending" },

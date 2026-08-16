@@ -17,7 +17,7 @@ export const listUsers = createServerFn({ method: "GET" }).handler(
   async (): Promise<UserAccount[]> => {
     const { requireAdmin } = await import("./admin.server");
     await requireAdmin();
-    const { getDb } = await import("./db");
+    const { getDb } = await import("../db");
     const db = getDb();
     const rows = db
       .prepare(
@@ -56,7 +56,7 @@ export const approveUser = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<{ ok: boolean }> => {
     const { requireAdmin } = await import("./admin.server");
     await requireAdmin();
-    const { getDb } = await import("./db");
+    const { getDb } = await import("../db");
     const db = getDb();
     db.prepare("UPDATE users SET status = 'approved' WHERE id = ? AND role = 'user'").run(data.id);
     return { ok: true };
@@ -69,7 +69,7 @@ export const deleteUser = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<{ ok: boolean }> => {
     const { requireAdmin } = await import("./admin.server");
     await requireAdmin();
-    const { getDb } = await import("./db");
+    const { getDb } = await import("../db");
     const db = getDb();
     db.prepare("DELETE FROM users WHERE id = ? AND role = 'user'").run(data.id);
     return { ok: true };
@@ -120,7 +120,7 @@ export const getUserDetail = createServerFn({ method: "GET" })
   .handler(async ({ data }): Promise<UserDetail | null> => {
     const { requireAdmin } = await import("./admin.server");
     await requireAdmin();
-    const { getDb } = await import("./db");
+    const { getDb } = await import("../db");
     const db = getDb();
 
     const user = db
@@ -182,7 +182,7 @@ export const getUserDetail = createServerFn({ method: "GET" })
     }>;
 
     const plexActivity = user.plex_username
-      ? await (await import("./services/plex")).getPlexUserHistory(user.plex_username)
+      ? await (await import("../services/plex")).getPlexUserHistory(user.plex_username)
       : [];
 
     return {

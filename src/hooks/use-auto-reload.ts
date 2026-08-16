@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { emitUpdateDetected } from "@/lib/update-signal";
+import { emitUpdateDetected } from "@/lib/system/update-signal";
 
 export function useAutoReload() {
   const deployedShaRef = useRef<string | null>(null);

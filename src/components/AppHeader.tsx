@@ -5,8 +5,8 @@ import { useServerFn } from "@tanstack/react-start";
 import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { adminStatusQuery, githubSyncQuery } from "@/lib/queries";
-import { adminLogout } from "@/lib/admin.functions";
-import { onUpdateDetected } from "@/lib/update-signal";
+import { adminLogout } from "@/lib/auth/admin.functions";
+import { onUpdateDetected } from "@/lib/system/update-signal";
 
 interface Props {
   title: string;

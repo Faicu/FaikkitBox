@@ -1,5 +1,5 @@
 export default function () {
-  import("../../src/lib/console-capture").then(({ installConsoleErrorCapture }) =>
+  import("../../src/lib/errors/console-capture").then(({ installConsoleErrorCapture }) =>
     installConsoleErrorCapture(),
   );
 

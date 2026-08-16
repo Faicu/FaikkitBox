@@ -1,4 +1,4 @@
-import type { SpeedtestHistoryEntry } from "@/lib/speedtest.functions";
+import type { SpeedtestHistoryEntry } from "@/lib/system/speedtest.functions";
 
 export function SpeedtestChart({ history }: { history: SpeedtestHistoryEntry[] }) {
   const sorted = [...history].reverse();

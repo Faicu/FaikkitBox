@@ -130,7 +130,7 @@ async function pollUntilComplete(
         const wasFirst = await markLogEntryComplete(torrentId);
         if (wasFirst) {
           console.log(`[filelist] "${torrentName}" complet — dau refresh Plex`);
-          import("../notifications")
+          import("../notifications/notifications")
             .then(({ buildTorrentCompleteNotification }) =>
               buildTorrentCompleteNotification({ torrentName, imdb: imdbId }),
             )
@@ -157,13 +157,13 @@ async function pollUntilComplete(
               mediaType: plexType === "movie" ? "movie" : "tv",
             });
             await logSubtitleRun([subtitleItem], "download");
-            const { updateMediaSubtitleStatus } = await import("../media");
+            const { updateMediaSubtitleStatus } = await import("../media/media");
             updateMediaSubtitleStatus(torrentHash, subtitleItem.outcome, subtitleItem.detail);
           } catch (e) {
             console.warn(`[filelist] Eroare subtitrare pentru "${torrentName}":`, e);
           }
           const { markMediaCompleted, resolveMediaPlexLinkByTorrentHash } =
-            await import("../media");
+            await import("../media/media");
           markMediaCompleted(torrentHash);
           await refreshPlexLibrary(plexType);
           console.log(`[filelist] Plex refresh trimis pentru "${plexType}"`);
@@ -327,7 +327,7 @@ export async function searchFilelistRaw(
 export const searchFilelist = createServerFn({ method: "GET" })
   .validator((data: { query: string; category?: FilelistCategory }) => data)
   .handler(async ({ data }): Promise<FilelistSearchResult> => {
-    const { requireAdmin } = await import("../admin.server");
+    const { requireAdmin } = await import("../auth/admin.server");
     await requireAdmin();
     const username = process.env.FILELIST_USERNAME;
     const passkey = process.env.FILELIST_PASSKEY;
@@ -464,7 +464,7 @@ export const checkFilelistForItem = createServerFn({ method: "GET" })
     }) => data,
   )
   .handler(async ({ data }): Promise<FilelistSearchResult> => {
-    const { requireAuth } = await import("../admin.server");
+    const { requireAuth } = await import("../auth/admin.server");
     await requireAuth();
     return checkFilelistForItemInternal(data);
   });
@@ -493,7 +493,7 @@ interface DownloadFilelistParams {
   // downloadFilelistCore, care oricum le are deja calculate — nu e nevoie
   // ca apelantul să le retrimită.
   media?: Omit<
-    import("../media").UpsertMediaEntryInput,
+    import("../media/media").UpsertMediaEntryInput,
     | "torrentName"
     | "torrentHash"
     | "category"
@@ -521,19 +521,19 @@ async function autoResolveManualMedia(
   const mediaType: "movie" | "tv" = isMovie ? "movie" : "tv";
   let imdbId = torrentImdb ?? null;
   if (!imdbId) {
-    const { searchImdbIdByReleaseName } = await import("../tmdb-title-lookup");
+    const { searchImdbIdByReleaseName } = await import("../tmdb/tmdb-title-lookup");
     const found = await searchImdbIdByReleaseName(torrentName, mediaType).catch(() => null);
     imdbId = found?.imdbId ?? null;
   }
   if (!imdbId) return null;
 
-  const { lookupTmdbInfoByImdbId } = await import("../tmdb-title-lookup");
+  const { lookupTmdbInfoByImdbId } = await import("../tmdb/tmdb-title-lookup");
   const info = await lookupTmdbInfoByImdbId(imdbId).catch(() => null);
   if (!info) return null;
 
-  const { getTmdbDetailsInternal } = await import("../tmdb.functions");
+  const { getTmdbDetailsInternal } = await import("../tmdb/tmdb.functions");
   const details = await getTmdbDetailsInternal(info.id, info.mediaType).catch(() => null);
-  const { parseSeasonEpisodeFromName } = await import("../torrent-name-parse");
+  const { parseSeasonEpisodeFromName } = await import("../media/torrent-name-parse");
   const parsed = !isMovie ? parseSeasonEpisodeFromName(torrentName) : null;
 
   return {
@@ -669,7 +669,7 @@ async function downloadFilelistCore(
     // 6. Loghează descărcarea imediat (completedAt null = în curs)
     const catName = params.categoryName || CATEGORY_NAMES[catId] || `Cat ${catId}`;
 
-    import("../notifications")
+    import("../notifications/notifications")
       .then(({ buildTorrentAddedNotification }) =>
         buildTorrentAddedNotification({
           torrentName: params.torrentName,
@@ -714,7 +714,7 @@ async function downloadFilelistCore(
         return null;
       }));
     if (mediaPayload) {
-      const { upsertMediaEntry } = await import("../media");
+      const { upsertMediaEntry } = await import("../media/media");
       try {
         upsertMediaEntry({
           ...mediaPayload,
@@ -778,7 +778,7 @@ export const downloadFilelist = createServerFn({ method: "POST" })
     }),
   )
   .handler(async ({ data }): Promise<FilelistDownloadResult> => {
-    const { requireAuth } = await import("../admin.server");
+    const { requireAuth } = await import("../auth/admin.server");
     const session = await requireAuth();
     return downloadFilelistCore({
       ...data,
@@ -840,7 +840,7 @@ let lastBackfillResult: BackfillSubtitlesResult | null = null;
 
 export const getBackfillState = createServerFn({ method: "GET" }).handler(
   async (): Promise<BackfillState> => {
-    const { requireAdmin } = await import("../admin.server");
+    const { requireAdmin } = await import("../auth/admin.server");
     await requireAdmin();
     return {
       running: backfillRunning,
@@ -966,7 +966,7 @@ async function runBackfillWork(url: string, qbitUser: string, qbitPass: string):
 // (potențial multe minute) se urmărește separat prin getBackfillState.
 export const backfillSubtitles = createServerFn({ method: "POST" }).handler(
   async (): Promise<{ status: "ok" | "error"; error?: string }> => {
-    const { requireAdmin } = await import("../admin.server");
+    const { requireAdmin } = await import("../auth/admin.server");
     await requireAdmin();
 
     if (backfillRunning) {
@@ -1038,7 +1038,7 @@ interface MediaActionRow {
 export const correctSubtitleForMedia = createServerFn({ method: "POST" })
   .validator((data: { mediaId: number }) => data)
   .handler(async ({ data }): Promise<CorrectSubtitleResult> => {
-    const { requireAuth, isAdminOrOwner } = await import("../admin.server");
+    const { requireAuth, isAdminOrOwner } = await import("../auth/admin.server");
     const session = await requireAuth();
 
     const { getDb } = await import("../db");
@@ -1086,7 +1086,7 @@ export const correctSubtitleForMedia = createServerFn({ method: "POST" })
     });
 
     await logSubtitleRun([result], "download");
-    const { updateMediaSubtitleStatus } = await import("../media");
+    const { updateMediaSubtitleStatus } = await import("../media/media");
     updateMediaSubtitleStatus(row.torrent_hash, result.outcome, result.detail);
     if (CORRECTED_OUTCOMES.includes(result.outcome)) {
       await refreshPlexLibrary(plexType).catch(() => {});
@@ -1098,7 +1098,7 @@ export const correctSubtitleForMedia = createServerFn({ method: "POST" })
 export const deleteSubtitleForMedia = createServerFn({ method: "POST" })
   .validator((data: { mediaId: number }) => data)
   .handler(async ({ data }): Promise<DeleteSubtitleResult> => {
-    const { requireAuth, isAdminOrOwner } = await import("../admin.server");
+    const { requireAuth, isAdminOrOwner } = await import("../auth/admin.server");
     const session = await requireAuth();
 
     const { getDb } = await import("../db");
@@ -1147,7 +1147,7 @@ export const deleteSubtitleForMedia = createServerFn({ method: "POST" })
     });
 
     if (result.status === "ok") {
-      const { clearMediaSubtitleStatus } = await import("../media");
+      const { clearMediaSubtitleStatus } = await import("../media/media");
       clearMediaSubtitleStatus(row.torrent_hash);
       if (row.category !== null) {
         const { refreshPlexLibraryForCategory } = await import("../plex-refresh");

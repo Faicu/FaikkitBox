@@ -4,7 +4,7 @@ export const adminLogin = createServerFn({ method: "POST" })
   .validator((data: { user: string; pass: string }) => data)
   .handler(async ({ data }) => {
     const { getSession } = await import("./admin.server");
-    const { getDb } = await import("./db");
+    const { getDb } = await import("../db");
     const { verifyPassword } = await import("./password");
 
     const db = getDb();
@@ -78,7 +78,7 @@ export const addAdminUser = createServerFn({ method: "POST" })
       return { ok: false, error: "Utilizator necompletat sau parolă sub 8 caractere." };
     }
 
-    const { getDb } = await import("./db");
+    const { getDb } = await import("../db");
     const { hashPassword } = await import("./password");
     const db = getDb();
 
@@ -99,7 +99,7 @@ export const deleteAdminUser = createServerFn({ method: "POST" })
     const { requireAdmin } = await import("./admin.server");
     await requireAdmin();
 
-    const { getDb } = await import("./db");
+    const { getDb } = await import("../db");
     const db = getDb();
 
     const count = db.prepare("SELECT COUNT(*) as c FROM users WHERE role = 'admin'").get() as {

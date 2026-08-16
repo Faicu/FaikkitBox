@@ -16,9 +16,9 @@
 // ---------------------------------------------------------------------------
 
 import { sendPushToAll } from "./push";
-import { buildTorrentDisplayName, lookupPosterUrlByImdbId } from "./tmdb-title-lookup";
-import { detectTorrentQuality } from "./torrent-quality";
-import type { ActivityType } from "./activity-log";
+import { buildTorrentDisplayName, lookupPosterUrlByImdbId } from "../tmdb/tmdb-title-lookup";
+import { detectTorrentQuality } from "../media/torrent-quality";
+import type { ActivityType } from "../activity-log";
 
 export interface PushNotification {
   title: string;

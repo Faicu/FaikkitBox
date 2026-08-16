@@ -8,9 +8,9 @@ import { toast } from "sonner";
 import { PageShell } from "@/components/PageShell";
 import { TehnicSubNav } from "@/components/tehnic/TehnicSubNav";
 import { UserDetailDrawer } from "@/components/tehnic/UserDetailDrawer";
-import { requireAdminBeforeLoad } from "@/lib/admin-route-guard";
-import { addAdminUser, deleteAdminUser } from "@/lib/admin.functions";
-import { listUsers, approveUser, deleteUser, type UserAccount } from "@/lib/users.functions";
+import { requireAdminBeforeLoad } from "@/lib/auth/admin-route-guard";
+import { addAdminUser, deleteAdminUser } from "@/lib/auth/admin.functions";
+import { listUsers, approveUser, deleteUser, type UserAccount } from "@/lib/auth/users.functions";
 
 export const Route = createFileRoute("/users")({
   beforeLoad: requireAdminBeforeLoad,

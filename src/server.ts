@@ -1,9 +1,9 @@
-import "./lib/error-capture";
+import "./lib/errors/error-capture";
 
-import { consumeLastCapturedError } from "./lib/error-capture";
-import { renderErrorPage } from "./lib/error-page";
-import { logError } from "./lib/error-log";
-import { installConsoleErrorCapture, withoutConsoleCapture } from "./lib/console-capture";
+import { consumeLastCapturedError } from "./lib/errors/error-capture";
+import { renderErrorPage } from "./lib/errors/error-page";
+import { logError } from "./lib/errors/error-log";
+import { installConsoleErrorCapture, withoutConsoleCapture } from "./lib/errors/console-capture";
 
 // Instalată o singură dată, cât mai devreme în ciclul de viață al
 // procesului — captează automat orice console.warn/error din toată

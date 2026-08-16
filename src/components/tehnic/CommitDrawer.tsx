@@ -26,7 +26,9 @@ export function CommitDrawer({
   const { data, isLoading } = useQuery({
     queryKey: [local ? "localCommitDetail" : "commitDetail", commit.sha],
     queryFn: () =>
-      local ? getLocalDetail({ data: { sha: commit.sha } }) : getDetail({ data: { sha: commit.sha } }),
+      local
+        ? getLocalDetail({ data: { sha: commit.sha } })
+        : getDetail({ data: { sha: commit.sha } }),
     staleTime: local ? 30_000 : 5 * 60_000,
   });
 

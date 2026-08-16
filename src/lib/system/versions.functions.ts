@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { fetchJson as sharedFetchJson } from "./services/shared";
+import { fetchJson as sharedFetchJson } from "../services/shared";
 
 export type ServiceVersion = {
   name: "Plex" | "Immich" | "qBittorrent";
@@ -111,7 +111,7 @@ async function immichVersion(): Promise<ServiceVersion> {
 }
 
 export const getVersions = createServerFn({ method: "GET" }).handler(async () => {
-  const { requireAdmin } = await import("./admin.server");
+  const { requireAdmin } = await import("../auth/admin.server");
   await requireAdmin();
   const [plex, immich] = await Promise.all([plexVersion(), immichVersion()]);
   return { plex, immich, fetchedAt: new Date().toISOString() };

@@ -4,7 +4,7 @@
 // întoarce username + email reale — spre deosebire de /accounts de pe
 // serverul local, care nu are email și include doar cine a vizionat deja.
 
-import { fetchText } from "./services/shared";
+import { fetchText } from "../services/shared";
 
 export interface PlexAccountEntry {
   id: number;

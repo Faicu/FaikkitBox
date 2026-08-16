@@ -36,11 +36,20 @@ export async function searchSubsRo(imdbId: string, language = "ro"): Promise<Sub
   try {
     const res = await fetch(
       `${API_BASE}/search/imdbid/${encodeURIComponent(withTtPrefix(imdbId))}?language=${language}`,
-      { headers: { "X-Subs-Api-Key": key, Accept: "application/json" }, signal: AbortSignal.timeout(15_000) },
+      {
+        headers: { "X-Subs-Api-Key": key, Accept: "application/json" },
+        signal: AbortSignal.timeout(15_000),
+      },
     );
     if (!res.ok) return [];
     const data = (await res.json()) as {
-      items?: Array<{ id: number; title?: string; description?: string; translator?: string; language?: string }>;
+      items?: Array<{
+        id: number;
+        title?: string;
+        description?: string;
+        translator?: string;
+        language?: string;
+      }>;
     };
     return (data.items ?? []).map((it) => ({
       id: it.id,

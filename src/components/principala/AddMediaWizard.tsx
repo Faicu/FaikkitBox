@@ -18,14 +18,14 @@ import {
 } from "@/components/ui/alert-dialog";
 import { DownloadConfirmDialog } from "@/components/filelist/DownloadConfirmDialog";
 import { adminStatusQuery } from "@/lib/queries";
-import { searchTmdb, getTmdbDetails, getTmdbAllSeasons } from "@/lib/tmdb.functions";
-import type { TmdbDetails, TmdbSeasonSchema } from "@/lib/tmdb.functions";
-import type { TmdbSearchResult } from "@/lib/tmdb.functions";
+import { searchTmdb, getTmdbDetails, getTmdbAllSeasons } from "@/lib/tmdb/tmdb.functions";
+import type { TmdbDetails, TmdbSeasonSchema } from "@/lib/tmdb/tmdb.functions";
+import type { TmdbSearchResult } from "@/lib/tmdb/tmdb.functions";
 import { checkPlexHasTitle, getPlexEpisodesInSeason } from "@/lib/services.functions";
 import { checkFilelistForItem, downloadFilelist } from "@/lib/filelist.functions";
 import type { FilelistTorrent } from "@/lib/filelist.functions";
-import { getDownloadingMediaForTmdbId } from "@/lib/media";
-import type { DownloadingMediaEntry } from "@/lib/media";
+import { getDownloadingMediaForTmdbId } from "@/lib/media/media";
+import type { DownloadingMediaEntry } from "@/lib/media/media";
 import {
   detectQuality,
   groupTorrentsBySeasonEpisode,

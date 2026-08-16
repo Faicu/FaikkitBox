@@ -24,10 +24,10 @@ import { StatCard } from "@/components/StatCard";
 import { ErrorCard } from "@/components/ErrorCard";
 import { CommandOutput } from "@/components/ServiceHeaderActions";
 import { TehnicSubNav } from "@/components/tehnic/TehnicSubNav";
-import { logAgentActivity, runAgentCommand } from "@/lib/agent.functions";
-import type { AgentCommand, AgentResult } from "@/lib/agent.functions";
+import { logAgentActivity, runAgentCommand } from "@/lib/system/agent.functions";
+import type { AgentCommand, AgentResult } from "@/lib/system/agent.functions";
 import { hostQuery } from "@/lib/queries";
-import { requireAdminBeforeLoad } from "@/lib/admin-route-guard";
+import { requireAdminBeforeLoad } from "@/lib/auth/admin-route-guard";
 
 import { formatBytes, formatSpeed, formatDurationHMS } from "@/lib/format";
 

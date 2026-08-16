@@ -5,7 +5,7 @@ import { PlayCircle } from "lucide-react";
 import { plexQuery } from "@/lib/queries";
 import { ServiceHeaderActions, CommandOutput } from "@/components/ServiceHeaderActions";
 import { useServiceRecovery } from "@/components/useServiceRecovery";
-import type { AgentCommand, AgentResult } from "@/lib/agent.functions";
+import type { AgentCommand, AgentResult } from "@/lib/system/agent.functions";
 
 // Control pentru serviciul Plex (restart/actualizare) — mutat aici de pe
 // fosta pagină dedicată /plex (ștearsă, vezi planul de unificare: sesiunile/

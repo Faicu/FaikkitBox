@@ -60,7 +60,8 @@ export const SHORT_LABELS: Record<SubtitleOutcome, string> = {
   renamed_srt: "subtitrare corectată (.srt redenumit pentru Plex)",
   reencoded_srt: "subtitrare corectată (encoding UTF-8)",
   downloaded_opensubtitles: "subtitrare descărcată de pe OpenSubtitles",
-  downloaded_opensubtitles_approximate: "subtitrare aproximativă descărcată — verifică sincronizarea",
+  downloaded_opensubtitles_approximate:
+    "subtitrare aproximativă descărcată — verifică sincronizarea",
   multiple_srt_skipped: "mai multe .srt găsite, am sărit peste",
   season_pack_skipped: "pachet de episoade, am sărit peste",
   no_imdb: "fără subtitrare și fără IMDb id pentru căutare",

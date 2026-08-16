@@ -1,7 +1,7 @@
 import { defineEventHandler, readRawBody, getHeader, createError } from "h3";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { getDb } from "../../../src/lib/db";
-import { notifyGithubCommit } from "../../../src/lib/notifications";
+import { notifyGithubCommit } from "../../../src/lib/notifications/notifications";
 
 export default defineEventHandler(async (event) => {
   const secret = process.env.GITHUB_WEBHOOK_SECRET;

@@ -1,10 +1,10 @@
 import { queryOptions } from "@tanstack/react-query";
 import { getPlex, getPlexSessions, getImmich, getQbit, getHost } from "./services.functions";
-import { getAdminStatus } from "./admin.functions";
-import { getVersions } from "./versions.functions";
-import { getLastSpeedtest, getSpeedtestHistory } from "./speedtest.functions";
+import { getAdminStatus } from "./auth/admin.functions";
+import { getVersions } from "./system/versions.functions";
+import { getLastSpeedtest, getSpeedtestHistory } from "./system/speedtest.functions";
 import { getActivityLog } from "./activity-log";
-import { getErrorLogs } from "./error-log";
+import { getErrorLogs } from "./errors/error-log";
 import {
   getRecentCommits,
   getCommitsFromDb,

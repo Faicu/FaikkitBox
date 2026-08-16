@@ -8,9 +8,9 @@ export const getVapidPublicKey = createServerFn({ method: "GET" }).handler(() =>
 export const subscribePush = createServerFn({ method: "POST" })
   .validator((d: { endpoint: string; p256dh: string; auth: string }) => d)
   .handler(async ({ data }) => {
-    const { requireAdmin } = await import("./admin.server");
+    const { requireAdmin } = await import("../auth/admin.server");
     await requireAdmin();
-    const { getDb } = await import("./db");
+    const { getDb } = await import("../db");
     const db = getDb();
     db.prepare(
       "INSERT OR REPLACE INTO push_subscriptions (id, endpoint, p256dh, auth, created_at) VALUES (?, ?, ?, ?, ?)",
@@ -21,9 +21,9 @@ export const subscribePush = createServerFn({ method: "POST" })
 export const unsubscribePush = createServerFn({ method: "POST" })
   .validator((d: { endpoint: string }) => d)
   .handler(async ({ data }) => {
-    const { requireAdmin } = await import("./admin.server");
+    const { requireAdmin } = await import("../auth/admin.server");
     await requireAdmin();
-    const { getDb } = await import("./db");
+    const { getDb } = await import("../db");
     const db = getDb();
     db.prepare("DELETE FROM push_subscriptions WHERE endpoint = ?").run(data.endpoint);
     return { ok: true };

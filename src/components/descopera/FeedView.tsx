@@ -3,9 +3,9 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { ExternalLink, Loader2, Plus } from "lucide-react";
 
-import { getFeedClips } from "@/lib/tmdb.discover.functions";
-import type { DiscoverMediaType, DiscoverSort, FeedClip } from "@/lib/tmdb.discover.functions";
-import { getTmdbDetails } from "@/lib/tmdb.functions";
+import { getFeedClips } from "@/lib/tmdb/tmdb.discover.functions";
+import type { DiscoverMediaType, DiscoverSort, FeedClip } from "@/lib/tmdb/tmdb.discover.functions";
+import { getTmdbDetails } from "@/lib/tmdb/tmdb.functions";
 import { AddMediaWizard } from "@/components/principala/AddMediaWizard";
 
 function FeedCard({ clip, isActive }: { clip: FeedClip; isActive: boolean }) {

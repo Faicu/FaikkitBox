@@ -14,9 +14,12 @@ import appCss from "../styles.css?url";
 import { BottomNav } from "../components/BottomNav";
 import { Toaster } from "../components/ui/sonner";
 import { useAutoReload } from "../hooks/use-auto-reload";
-import { onUpdateDetected } from "../lib/update-signal";
-import { logClientError } from "../lib/error-log";
-import { installClientErrorCapture, withoutClientCapture } from "../lib/client-error-capture";
+import { onUpdateDetected } from "../lib/system/update-signal";
+import { logClientError } from "../lib/errors/error-log";
+import {
+  installClientErrorCapture,
+  withoutClientCapture,
+} from "../lib/errors/client-error-capture";
 import { toast } from "sonner";
 
 function NotFoundComponent() {
@@ -179,7 +182,8 @@ function AutoReloadWatcher() {
       // erori complet în afara controlului nostru — logarea lor umple
       // "Erori aplicație" cu zgomot nefolositor, fără nicio linie de cod
       // proprie de reparat.
-      if (event.filename && new URL(event.filename, location.href).origin !== location.origin) return;
+      if (event.filename && new URL(event.filename, location.href).origin !== location.origin)
+        return;
       reportError(event.error ?? event.message);
     };
     const onRejection = (event: PromiseRejectionEvent) => reportError(event.reason);

@@ -27,7 +27,7 @@ async function runCycle(): Promise<void> {
 
   try {
     const { runMediaBackfillIfIdle, linkUnmatchedTorrents } =
-      await import("../../src/lib/media-backfill");
+      await import("../../src/lib/media/media-backfill");
     const mediaResult = await runMediaBackfillIfIdle();
     if (mediaResult?.status === "ok" && mediaResult.added > 0) foundSomethingNew = true;
 
@@ -53,7 +53,7 @@ async function runCycle(): Promise<void> {
 }
 
 export default function () {
-  import("../../src/lib/console-capture").then(({ installConsoleErrorCapture }) =>
+  import("../../src/lib/errors/console-capture").then(({ installConsoleErrorCapture }) =>
     installConsoleErrorCapture(),
   );
 

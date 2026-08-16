@@ -19,7 +19,7 @@ export async function sendPushToAll(
 ): Promise<void> {
   try {
     ensureVapid();
-    const { getDb } = await import("./db");
+    const { getDb } = await import("../db");
     const db = getDb();
     const subs = db.prepare("SELECT * FROM push_subscriptions").all() as Array<{
       id: string;

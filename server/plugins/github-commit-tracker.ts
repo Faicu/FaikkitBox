@@ -3,7 +3,7 @@
 // Acoperă cazul în care webhook-ul a picat în timpul unui restart.
 
 export default function () {
-  import("../../src/lib/console-capture").then(({ installConsoleErrorCapture }) =>
+  import("../../src/lib/errors/console-capture").then(({ installConsoleErrorCapture }) =>
     installConsoleErrorCapture(),
   );
   setTimeout(syncOnStart, 6_000);
@@ -36,7 +36,7 @@ async function syncOnStart() {
     if (!Array.isArray(raw)) return;
 
     const { getDb } = await import("../../src/lib/db");
-    const { notifyGithubCommit } = await import("../../src/lib/notifications");
+    const { notifyGithubCommit } = await import("../../src/lib/notifications/notifications");
 
     const db = getDb();
     const stmt = db.prepare(

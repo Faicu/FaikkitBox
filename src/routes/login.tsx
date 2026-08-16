@@ -6,7 +6,7 @@ import { Lock, ShieldCheck, User, Eye, EyeOff, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageShell } from "@/components/PageShell";
-import { adminLogin } from "@/lib/admin.functions";
+import { adminLogin } from "@/lib/auth/admin.functions";
 
 export const Route = createFileRoute("/login")({
   head: () => ({ meta: [{ title: "Autentificare — Monitor Server" }] }),

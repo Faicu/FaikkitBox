@@ -1,6 +1,10 @@
 import { useState, useEffect } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { subscribePush, unsubscribePush, getVapidPublicKey } from "@/lib/push.functions";
+import {
+  subscribePush,
+  unsubscribePush,
+  getVapidPublicKey,
+} from "@/lib/notifications/push.functions";
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);

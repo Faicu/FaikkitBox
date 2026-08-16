@@ -16,7 +16,7 @@ import {
 import { toast } from "sonner";
 
 import { PageShell } from "@/components/PageShell";
-import { registerUser } from "@/lib/registration.functions";
+import { registerUser } from "@/lib/auth/registration.functions";
 
 export const Route = createFileRoute("/register")({
   head: () => ({ meta: [{ title: "Înregistrare — Monitor Server" }] }),

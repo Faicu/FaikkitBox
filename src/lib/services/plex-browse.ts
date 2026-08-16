@@ -54,7 +54,7 @@ export const getPlexLibraryBrowse = createServerFn({ method: "GET" }).handler(
   async (): Promise<
     { status: "ok"; items: PlexBrowseItem[] } | { status: "error"; error: string }
   > => {
-    const { requireAuth } = await import("../admin.server");
+    const { requireAuth } = await import("../auth/admin.server");
     const session = await requireAuth();
     try {
       const { getDb } = await import("../db");
@@ -197,7 +197,7 @@ async function buildDetailFromMediaRow(
   session: { data: { userId?: number; admin?: boolean } },
 ): Promise<PlexTitleDetail> {
   const { getDb } = await import("../db");
-  const { isAdminOrOwner } = await import("../admin.server");
+  const { isAdminOrOwner } = await import("../auth/admin.server");
   const db = getDb();
 
   const isEpisode = row.media_type === "episode";
@@ -265,7 +265,7 @@ export const getPlexTitleDetail = createServerFn({ method: "GET" })
     async ({
       data,
     }): Promise<{ status: "ok"; detail: PlexTitleDetail } | { status: "error"; error: string }> => {
-      const { requireAuth } = await import("../admin.server");
+      const { requireAuth } = await import("../auth/admin.server");
       const session = await requireAuth();
 
       const { getDb } = await import("../db");

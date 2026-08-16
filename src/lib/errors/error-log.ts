@@ -80,7 +80,7 @@ function writeGroupedRow(
   message: string,
   stack: string | undefined,
 ): void {
-  import("./db")
+  import("../db")
     .then(({ getDb }) => {
       const db = getDb();
       const now = new Date().toISOString();
@@ -147,7 +147,7 @@ function notifyNewErrorGroup(source: ErrorSource, level: ErrorLevel, message: st
 
   const sourceLabel = source === "ssr" ? "SSR" : source === "client" ? "Browser" : "Server";
   const levelLabel = level === "warn" ? "Avertisment" : "Eroare";
-  import("./activity-log")
+  import("../activity-log")
     .then(({ logActivity }) =>
       logActivity("app_error", `${levelLabel} [${sourceLabel}]: ${message}`, { source, level }),
     )
@@ -178,9 +178,9 @@ function rowToEntry(r: {
 
 export const getErrorLogs = createServerFn({ method: "GET" }).handler(
   async (): Promise<ErrorLogEntry[]> => {
-    const { requireAdmin } = await import("./admin.server");
+    const { requireAdmin } = await import("../auth/admin.server");
     await requireAdmin();
-    const { getDb } = await import("./db");
+    const { getDb } = await import("../db");
     const rows = getDb()
       .prepare(
         `SELECT id, timestamp, last_seen, source, level, message, stack, count
@@ -192,9 +192,9 @@ export const getErrorLogs = createServerFn({ method: "GET" }).handler(
 );
 
 export const clearErrorLogs = createServerFn({ method: "POST" }).handler(async () => {
-  const { requireAdmin } = await import("./admin.server");
+  const { requireAdmin } = await import("../auth/admin.server");
   await requireAdmin();
-  const { getDb } = await import("./db");
+  const { getDb } = await import("../db");
   getDb().exec("DELETE FROM error_log");
 });
 

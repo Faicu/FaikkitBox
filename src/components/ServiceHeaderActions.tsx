@@ -8,9 +8,9 @@ import {
   runAgentCommand,
   type AgentCommand,
   type AgentResult,
-} from "@/lib/agent.functions";
+} from "@/lib/system/agent.functions";
 import { versionsQuery } from "@/lib/queries";
-import type { ServiceVersion } from "@/lib/versions.functions";
+import type { ServiceVersion } from "@/lib/system/versions.functions";
 import { ServicePill } from "@/components/ServicePill";
 
 type Service = "plex" | "immich" | "qbit";

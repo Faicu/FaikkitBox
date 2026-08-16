@@ -6,7 +6,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { hashPassword } from "./password";
+import { hashPassword } from "./auth/password";
 
 function dbPath(): string {
   return process.env.FAIKKITBOX_DB_PATH ?? "/opt/faikkitbox/data/faikkitbox.db";

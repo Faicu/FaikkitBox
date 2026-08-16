@@ -96,7 +96,7 @@ export interface TmdbSearchResult {
 export const searchTmdb = createServerFn({ method: "GET" })
   .validator((data: { query: string }) => data)
   .handler(async ({ data }): Promise<TmdbSearchResult[]> => {
-    const { requireAuth } = await import("./admin.server");
+    const { requireAuth } = await import("../auth/admin.server");
     await requireAuth();
     const q = data.query.trim();
     if (!q) return [];
@@ -251,7 +251,7 @@ export async function getTmdbDetailsInternal(
 export const getTmdbDetails = createServerFn({ method: "GET" })
   .validator((data: { id: number; mediaType: "movie" | "tv" }) => data)
   .handler(async ({ data }): Promise<TmdbDetails> => {
-    const { requireAuth } = await import("./admin.server");
+    const { requireAuth } = await import("../auth/admin.server");
     await requireAuth();
     return getTmdbDetailsInternal(data.id, data.mediaType);
   });
@@ -423,7 +423,7 @@ export async function getTmdbAllSeasonsInternal(
 export const getTmdbAllSeasons = createServerFn({ method: "GET" })
   .validator((data: { tmdbId: number; seasonNumbers: number[] }) => data)
   .handler(async ({ data }): Promise<TmdbSeasonSchema[]> => {
-    const { requireAuth } = await import("./admin.server");
+    const { requireAuth } = await import("../auth/admin.server");
     await requireAuth();
     return getTmdbAllSeasonsInternal(data.tmdbId, data.seasonNumbers);
   });

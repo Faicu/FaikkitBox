@@ -14,8 +14,8 @@ import {
   DrawerDescription,
 } from "@/components/ui/drawer";
 import { lastSpeedtestQuery, speedtestHistoryQuery } from "@/lib/queries";
-import { requireAdminBeforeLoad } from "@/lib/admin-route-guard";
-import { runSpeedtest } from "@/lib/speedtest.functions";
+import { requireAdminBeforeLoad } from "@/lib/auth/admin-route-guard";
+import { runSpeedtest } from "@/lib/system/speedtest.functions";
 import { formatSpeed } from "@/lib/format";
 import { Metric } from "@/components/tehnic/Metric";
 import { PluginStatusSection } from "@/components/tehnic/sections/PluginStatusSection";

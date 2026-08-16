@@ -68,7 +68,7 @@ export interface DiscoverPageResult {
 export const getDiscoverTitles = createServerFn({ method: "GET" })
   .validator((data: { mediaType: DiscoverMediaType; sort: DiscoverSort; page?: number }) => data)
   .handler(async ({ data }): Promise<DiscoverPageResult> => {
-    const { requireAuth } = await import("./admin.server");
+    const { requireAuth } = await import("../auth/admin.server");
     await requireAuth();
     try {
       const items = await fetchDiscoverPage(data.mediaType, data.sort, data.page ?? 1);
@@ -110,7 +110,7 @@ async function fetchVideosFor(mediaType: DiscoverMediaType, id: number): Promise
 export const getTmdbVideos = createServerFn({ method: "GET" })
   .validator((data: { id: number; mediaType: DiscoverMediaType }) => data)
   .handler(async ({ data }): Promise<TmdbVideo[]> => {
-    const { requireAuth } = await import("./admin.server");
+    const { requireAuth } = await import("../auth/admin.server");
     await requireAuth();
     try {
       return await fetchVideosFor(data.mediaType, data.id);
@@ -137,7 +137,7 @@ export interface FeedClipsResult {
 export const getFeedClips = createServerFn({ method: "GET" })
   .validator((data: { mediaType: DiscoverMediaType | "all"; sort: DiscoverSort }) => data)
   .handler(async ({ data }): Promise<FeedClipsResult> => {
-    const { requireAuth } = await import("./admin.server");
+    const { requireAuth } = await import("../auth/admin.server");
     await requireAuth();
     try {
       const mediaTypes: DiscoverMediaType[] =

@@ -4,9 +4,9 @@ import { useServerFn } from "@tanstack/react-start";
 import { ExternalLink, Shuffle, Plus } from "lucide-react";
 
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
-import { getTmdbVideos } from "@/lib/tmdb.discover.functions";
-import type { DiscoverTitle } from "@/lib/tmdb.discover.functions";
-import { getTmdbDetails } from "@/lib/tmdb.functions";
+import { getTmdbVideos } from "@/lib/tmdb/tmdb.discover.functions";
+import type { DiscoverTitle } from "@/lib/tmdb/tmdb.discover.functions";
+import { getTmdbDetails } from "@/lib/tmdb/tmdb.functions";
 import { AddMediaWizard } from "@/components/principala/AddMediaWizard";
 
 export function SceneViewer({ item, onClose }: { item: DiscoverTitle; onClose: () => void }) {

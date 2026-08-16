@@ -25,8 +25,8 @@ import { ServiceHeaderActions, CommandOutput } from "@/components/ServiceHeaderA
 import { useServiceRecovery } from "@/components/useServiceRecovery";
 import { TehnicSubNav } from "@/components/tehnic/TehnicSubNav";
 import { qbitQuery } from "@/lib/queries";
-import { requireAdminBeforeLoad } from "@/lib/admin-route-guard";
-import type { AgentCommand, AgentResult } from "@/lib/agent.functions";
+import { requireAdminBeforeLoad } from "@/lib/auth/admin-route-guard";
+import type { AgentCommand, AgentResult } from "@/lib/system/agent.functions";
 import { formatBytes, formatSpeed, formatEta } from "@/lib/format";
 import { qbitAction } from "@/lib/services.functions";
 

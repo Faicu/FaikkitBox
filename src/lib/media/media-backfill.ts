@@ -9,7 +9,7 @@
 // ---------------------------------------------------------------------------
 
 import { createServerFn } from "@tanstack/react-start";
-import { fetchJson } from "./services/shared";
+import { fetchJson } from "../services/shared";
 import {
   discoverPlexUrl,
   plexQualityFromMedia,
@@ -17,7 +17,7 @@ import {
   extractGuidId,
   type PlexApiResponse,
   type PlexMetadataItem,
-} from "./services/plex-shared";
+} from "../services/plex-shared";
 
 interface PlexDirectoryLike {
   key?: string;
@@ -115,7 +115,7 @@ async function fetchQbitTorrentsByPath(): Promise<Map<string, QbitTorrentMatch>>
   const qbitPass = process.env.QBIT_PASSWORD;
   if (!qbitUser || !qbitPass) return byPath;
   try {
-    const { qbitGet, qbitListFiles } = await import("./qbit-client");
+    const { qbitGet, qbitListFiles } = await import("../qbit-client");
     const res = await qbitGet(qbitUrl, "/api/v2/torrents/info", qbitUser, qbitPass);
     if (!res.ok) return byPath;
     const list = (await res.json()) as Array<{
@@ -187,7 +187,7 @@ export const getMediaBackfillState = createServerFn({ method: "GET" }).handler(
     progress: MediaBackfillProgress | null;
     lastResult: MediaBackfillResult | null;
   }> => {
-    const { requireAdmin } = await import("./admin.server");
+    const { requireAdmin } = await import("../auth/admin.server");
     await requireAdmin();
     return {
       running: backfillRunning,
@@ -215,7 +215,7 @@ async function runMediaBackfillWork(): Promise<void> {
 
     const allItems = await fetchFullPlexLibrary();
 
-    const { getDb } = await import("./db");
+    const { getDb } = await import("../db");
     const db = getDb();
     const alreadyLinked = new Set(
       (
@@ -235,7 +235,7 @@ async function runMediaBackfillWork(): Promise<void> {
     let skipped = 0;
 
     const { searchTmdbTopResultInternal, getTmdbDetailsInternal, getTmdbEpisodeOverviewInternal } =
-      await import("./tmdb.functions");
+      await import("../tmdb/tmdb.functions");
     const { upsertMediaEntryFromPlex } = await import("./media");
     const qbitTorrentsByPath: Map<string, QbitTorrentMatch> =
       pending.length > 0 ? await fetchQbitTorrentsByPath() : new Map();
@@ -376,7 +376,7 @@ async function runMediaBackfillWork(): Promise<void> {
 
 export const startMediaBackfill = createServerFn({ method: "POST" }).handler(
   async (): Promise<{ status: "ok" | "error"; error?: string }> => {
-    const { requireAdmin } = await import("./admin.server");
+    const { requireAdmin } = await import("../auth/admin.server");
     await requireAdmin();
 
     if (backfillRunning) {
@@ -427,7 +427,7 @@ export async function linkUnmatchedTorrents(): Promise<{ checked: number; linked
   const token = process.env.PLEX_TOKEN;
   if (!token) return { checked: 0, linked: 0 };
 
-  const { getDb } = await import("./db");
+  const { getDb } = await import("../db");
   const db = getDb();
   const rows = db
     .prepare(

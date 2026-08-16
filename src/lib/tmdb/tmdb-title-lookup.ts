@@ -6,7 +6,7 @@
 // ---------------------------------------------------------------------------
 
 import { tmdbFetch } from "./tmdb-client";
-import { parseSeasonEpisodeFromName } from "./torrent-name-parse";
+import { parseSeasonEpisodeFromName } from "../media/torrent-name-parse";
 
 interface TmdbFindResponse {
   movie_results?: Array<{ title?: string }>;

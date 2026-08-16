@@ -75,7 +75,7 @@ async function readProcDiskstats(
 }
 
 export const getHost = createServerFn({ method: "GET" }).handler(async (): Promise<HostData> => {
-  const { requireAdmin } = await import("../admin.server");
+  const { requireAdmin } = await import("../auth/admin.server");
   await requireAdmin();
   try {
     const si = await import("systeminformation");

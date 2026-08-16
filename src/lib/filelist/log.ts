@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import type { FilelistLogEntry, DownloadLogRow } from "./types";
 import { qbitLogin } from "../qbit-client";
 import { refreshPlexLibraryForCategory } from "../plex-refresh";
-import { deleteMediaByTorrentHash } from "../media";
+import { deleteMediaByTorrentHash } from "../media/media";
 
 // ---------------------------------------------------------------------------
 // Log persistent al descărcărilor
@@ -113,7 +113,7 @@ export async function markLogEntryComplete(torrentId: number): Promise<boolean> 
 export const deleteMediaEntry = createServerFn({ method: "POST" })
   .validator((data: { mediaId: number }) => data)
   .handler(async ({ data }): Promise<{ ok: boolean; qbitDeleted?: boolean; error?: string }> => {
-    const { requireAuth, isAdminOrOwner } = await import("../admin.server");
+    const { requireAuth, isAdminOrOwner } = await import("../auth/admin.server");
     const session = await requireAuth();
     try {
       const { getDb } = await import("../db");

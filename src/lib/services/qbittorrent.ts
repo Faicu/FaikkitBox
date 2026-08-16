@@ -43,7 +43,7 @@ export interface QbitData {
 export const qbitAction = createServerFn({ method: "POST" })
   .validator((data: { hashes: string[] | "all"; action: "pause" | "resume" | "delete" }) => data)
   .handler(async ({ data }): Promise<{ ok: boolean; error?: string }> => {
-    const { requireAdmin } = await import("../admin.server");
+    const { requireAdmin } = await import("../auth/admin.server");
     try {
       await requireAdmin();
     } catch (e) {
@@ -121,7 +121,7 @@ export const qbitAction = createServerFn({ method: "POST" })
   });
 
 export const getQbit = createServerFn({ method: "GET" }).handler(async (): Promise<QbitData> => {
-  const { requireAdmin } = await import("../admin.server");
+  const { requireAdmin } = await import("../auth/admin.server");
   await requireAdmin();
   const base = process.env.QBIT_URL;
   const user = process.env.QBIT_USERNAME;

@@ -1,8 +1,8 @@
 import { createStart, createMiddleware } from "@tanstack/react-start";
 
-import { renderErrorPage } from "./lib/error-page";
-import { logError } from "./lib/error-log";
-import { withoutConsoleCapture } from "./lib/console-capture";
+import { renderErrorPage } from "./lib/errors/error-page";
+import { logError } from "./lib/errors/error-log";
+import { withoutConsoleCapture } from "./lib/errors/console-capture";
 
 const errorMiddleware = createMiddleware().server(async ({ next }) => {
   try {

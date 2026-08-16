@@ -119,11 +119,7 @@ export function CommitStatsSection() {
       </button>
 
       {selectedUnpushed && (
-        <CommitDrawer
-          commit={selectedUnpushed}
-          local
-          onClose={() => setSelectedUnpushed(null)}
-        />
+        <CommitDrawer commit={selectedUnpushed} local onClose={() => setSelectedUnpushed(null)} />
       )}
     </section>
   );

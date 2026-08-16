@@ -4,7 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { downloadFilelist } from "@/lib/filelist.functions";
 import type { FilelistTorrent } from "@/lib/filelist.functions";
-import { parseSeasonEpisodeFromName } from "@/lib/torrent-name-parse";
+import { parseSeasonEpisodeFromName } from "@/lib/media/torrent-name-parse";
 
 // ---------------------------------------------------------------------------
 // Hook reutilizabil pentru descărcare torrent

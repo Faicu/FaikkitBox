@@ -17,7 +17,7 @@ export const registerUser = createServerFn({ method: "POST" })
       return { ok: false, error: "Email invalid." };
     }
 
-    const { getDb } = await import("./db");
+    const { getDb } = await import("../db");
     const db = getDb();
 
     const exists = db.prepare("SELECT 1 FROM users WHERE username = ?").get(username);
@@ -49,7 +49,7 @@ export const registerUser = createServerFn({ method: "POST" })
       plexMatch.email,
     );
 
-    const { logActivity } = await import("./activity-log");
+    const { logActivity } = await import("../activity-log");
     await logActivity(
       "account_request",
       `Cerere nouă de aprobare cont: ${username} (Plex: ${plexMatch.username})`,

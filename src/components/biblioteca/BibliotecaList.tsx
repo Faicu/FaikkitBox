@@ -28,7 +28,7 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { plexLibraryBrowseQuery, adminStatusQuery } from "@/lib/queries";
 import { deleteMediaEntry } from "@/lib/filelist.functions";
-import { startMediaBackfill, getMediaBackfillState } from "@/lib/media-backfill";
+import { startMediaBackfill, getMediaBackfillState } from "@/lib/media/media-backfill";
 import { backfillSubtitles, getBackfillState } from "@/lib/filelist.functions";
 import type { PlexBrowseItem } from "@/lib/services/plex-browse";
 import { StatusBadge } from "./StatusBadge";

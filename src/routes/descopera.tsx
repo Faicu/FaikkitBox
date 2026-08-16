@@ -6,8 +6,8 @@ import { PageShell } from "@/components/PageShell";
 import { DiscoverGrid } from "@/components/descopera/DiscoverGrid";
 import { FeedView } from "@/components/descopera/FeedView";
 import { FilterTabs } from "@/components/descopera/FilterTabs";
-import { requireAuthBeforeLoad } from "@/lib/admin-route-guard";
-import type { DiscoverMediaType, DiscoverSort } from "@/lib/tmdb.discover.functions";
+import { requireAuthBeforeLoad } from "@/lib/auth/admin-route-guard";
+import type { DiscoverMediaType, DiscoverSort } from "@/lib/tmdb/tmdb.discover.functions";
 
 export const Route = createFileRoute("/descopera")({
   beforeLoad: requireAuthBeforeLoad,

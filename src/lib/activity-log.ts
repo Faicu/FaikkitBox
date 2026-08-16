@@ -7,7 +7,7 @@ import {
   buildServerStopMessage,
   buildPlexWatchStartMessage,
   buildPlexWatchStopMessage,
-} from "./notifications";
+} from "./notifications/notifications";
 
 // ---------------------------------------------------------------------------
 // Tipuri
@@ -77,7 +77,7 @@ export async function logActivity(
   // subtitle_fix pentru o descărcare unde n-a fost nevoie de nicio corecție)
   const pushTitle = options?.title ?? PUSH_TITLES[type];
   if (pushTitle && !options?.skipPush) {
-    import("./push")
+    import("./notifications/push")
       .then(({ sendPushToAll }) =>
         sendPushToAll(pushTitle, message, {
           image: options?.image,
@@ -94,7 +94,7 @@ export async function logActivity(
 
 export const getActivityLog = createServerFn({ method: "GET" }).handler(
   async (): Promise<ActivityEntry[]> => {
-    const { requireAdmin } = await import("./admin.server");
+    const { requireAdmin } = await import("./auth/admin.server");
     await requireAdmin();
     try {
       const { getDb } = await import("./db");
@@ -382,7 +382,7 @@ function logServerStopSync(): void {
     // Push best-effort, fără await — la oprire avem doar 300ms (fast-shutdown.ts)
     // înainte de ieșirea forțată, insuficient garantat pentru un round-trip
     // web-push, dar merită încercat când apucă.
-    import("./push")
+    import("./notifications/push")
       .then(({ sendPushToAll }) =>
         sendPushToAll(PUSH_TITLES.server_stop, message, { url: PUSH_URLS.server_stop }),
       )
