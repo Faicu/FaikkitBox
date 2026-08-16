@@ -164,6 +164,23 @@ export interface PlexTitleDetail {
   canManage: boolean;
   tmdbId: number | null;
   originalTitle: string | null;
+  // Detalii tehnice — populate doar pentru admin (vezi isAdminOrOwner mai
+  // jos); UI-ul le ascunde complet pentru restul utilizatorilor.
+  tech: {
+    imdbId: string | null;
+    torrentName: string | null;
+    categoryName: string | null;
+    sizeBytes: number;
+    freeleech: boolean;
+    internal: boolean;
+    savePath: string | null;
+    addedVia: string | null;
+    completedAt: string | null;
+    subtitleSource: string | null;
+    subtitleDetail: string | null;
+    subtitleCheckedAt: string | null;
+    plexRatingKey: string | null;
+  } | null;
 }
 
 interface MediaRow {
@@ -171,6 +188,7 @@ interface MediaRow {
   media_type: string;
   title: string;
   original_title: string | null;
+  imdb_id: string | null;
   tmdb_id: number | null;
   season: number | null;
   episode: number | null;
@@ -180,11 +198,22 @@ interface MediaRow {
   quality: string | null;
   has_romanian_subtitle: number;
   duration_ms: number | null;
+  torrent_name: string | null;
   torrent_hash: string | null;
+  category_name: string | null;
+  size: number;
+  freeleech: number;
+  internal: number;
+  save_path: string | null;
+  added_via: string | null;
   plex_rating_key: string | null;
   is_season_pack: number;
   requested_by_user_id: number | null;
   added_at: string;
+  completed_at: string | null;
+  subtitle_source: string | null;
+  subtitle_detail: string | null;
+  subtitle_checked_at: string | null;
 }
 
 // Orice titlu clicabil din Bibliotecă are un rând `media` (lista provine
@@ -224,6 +253,9 @@ async function buildDetailFromMediaRow(
     : false;
   const watchedByOthers = watchedByAll.filter((w) => w.username !== myPlexUsername);
 
+  const canManage = isAdminOrOwner(session, row.requested_by_user_id);
+  const isAdmin = !!session.data.admin;
+
   let addedByUsername: string | null = null;
   if (row.requested_by_user_id != null) {
     const u = db
@@ -253,9 +285,26 @@ async function buildDetailFromMediaRow(
     status: row.plex_rating_key ? "in_library" : "downloading",
     torrentHash: row.torrent_hash,
     isSeasonPack: !!row.is_season_pack,
-    canManage: isAdminOrOwner(session, row.requested_by_user_id),
+    canManage,
     tmdbId: row.tmdb_id,
     originalTitle: row.original_title,
+    tech: isAdmin
+      ? {
+          imdbId: row.imdb_id,
+          torrentName: row.torrent_name,
+          categoryName: row.category_name,
+          sizeBytes: row.size,
+          freeleech: !!row.freeleech,
+          internal: !!row.internal,
+          savePath: row.save_path,
+          addedVia: row.added_via,
+          completedAt: row.completed_at,
+          subtitleSource: row.subtitle_source,
+          subtitleDetail: row.subtitle_detail,
+          subtitleCheckedAt: row.subtitle_checked_at,
+          plexRatingKey: row.plex_rating_key,
+        }
+      : null,
   };
 }
 
@@ -271,9 +320,11 @@ export const getPlexTitleDetail = createServerFn({ method: "GET" })
       const { getDb } = await import("../db");
       const mediaRow = getDb()
         .prepare(
-          `SELECT id, media_type, title, original_title, tmdb_id, season, episode, poster_path,
-           overview_ro, genres, quality, has_romanian_subtitle, duration_ms, torrent_hash,
-           plex_rating_key, is_season_pack, requested_by_user_id, added_at
+          `SELECT id, media_type, title, original_title, imdb_id, tmdb_id, season, episode, poster_path,
+           overview_ro, genres, quality, has_romanian_subtitle, duration_ms, torrent_name, torrent_hash,
+           category_name, size, freeleech, internal, save_path, added_via,
+           plex_rating_key, is_season_pack, requested_by_user_id, added_at, completed_at,
+           subtitle_source, subtitle_detail, subtitle_checked_at
            FROM media WHERE id = ?`,
         )
         .get(data.mediaId) as MediaRow | undefined;

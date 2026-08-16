@@ -15,6 +15,7 @@ import {
   Tag,
   Loader2,
   Trash2,
+  Wrench,
 } from "lucide-react";
 
 import {
@@ -26,7 +27,7 @@ import {
 } from "@/components/ui/drawer";
 import { getPlexTitleDetail } from "@/lib/services.functions";
 import { correctSubtitleForMedia, deleteSubtitleForMedia } from "@/lib/filelist.functions";
-import { formatMs } from "@/lib/format";
+import { formatMs, formatBytes } from "@/lib/format";
 import { StatusBadge } from "./StatusBadge";
 import { episodeCode, addedDate } from "./utils";
 
@@ -234,6 +235,53 @@ export function TitleDetailDrawer({
                   <div className="text-muted-foreground">Nimeni altcineva încă</div>
                 )}
               </div>
+
+              {d.tech && (
+                <div className="text-xs">
+                  <div className="mb-1 flex items-center gap-1 text-muted-foreground">
+                    <Wrench className="h-3.5 w-3.5" /> Detalii tehnice
+                  </div>
+                  <div className="flex flex-col gap-1 rounded-lg bg-muted/40 px-2 py-1.5">
+                    {[
+                      d.tech.torrentName && ["Torrent", d.tech.torrentName],
+                      d.tech.sizeBytes > 0 && ["Mărime", formatBytes(d.tech.sizeBytes)],
+                      d.tech.categoryName && ["Categorie", d.tech.categoryName],
+                      (d.tech.freeleech || d.tech.internal) && [
+                        "Steaguri",
+                        [d.tech.freeleech && "freeleech", d.tech.internal && "internal"]
+                          .filter(Boolean)
+                          .join(", "),
+                      ],
+                      d.tech.savePath && ["Cale disk", d.tech.savePath],
+                      d.tech.addedVia && ["Adăugat via", d.tech.addedVia],
+                      d.tech.completedAt && ["Finalizat", addedDate(Math.floor(new Date(`${d.tech.completedAt.replace(" ", "T")}Z`).getTime() / 1000))],
+                      d.tech.subtitleSource && ["Sursă subtitrare", d.tech.subtitleSource],
+                      d.tech.subtitleDetail && ["Detaliu subtitrare", d.tech.subtitleDetail],
+                      d.tech.subtitleCheckedAt && [
+                        "Subtitrare verificată",
+                        addedDate(
+                          Math.floor(
+                            new Date(`${d.tech.subtitleCheckedAt.replace(" ", "T")}Z`).getTime() /
+                              1000,
+                          ),
+                        ),
+                      ],
+                      d.tech.plexRatingKey && ["Plex ratingKey", d.tech.plexRatingKey],
+                      d.tech.imdbId && ["IMDb", d.tech.imdbId],
+                      d.torrentHash && ["Torrent hash", d.torrentHash],
+                    ]
+                      .filter((row): row is [string, string] => !!row)
+                      .map(([label, value]) => (
+                        <div key={label} className="flex justify-between gap-3">
+                          <span className="shrink-0 text-muted-foreground">{label}</span>
+                          <span className="min-w-0 truncate text-right text-foreground" title={value}>
+                            {value}
+                          </span>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
 
               <div className="flex flex-col gap-2 pt-1 border-t border-border">
                 {d.torrentHash ? (
