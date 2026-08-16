@@ -104,18 +104,18 @@ export function QualitySelector({
   );
 }
 
-// Butonul de fixare pentru urmărire automată — mai vizibil/mai simplu decât
-// un buton generic cu bordură: iconiță într-un cerc colorat + etichetă +
-// subtitlu cu calitatea aleasă, plus stare distinctă când titlul e deja
-// urmărit (idempotent — poate fi apăsat oricum, doar readuce claritate).
+// Butonul de fixare — doar adaugă titlul în Bibliotecă și pornește
+// verificarea periodică pe Filelist (notificare la ceva nou), FĂRĂ
+// descărcare automată — aceea rămâne o opțiune separată, activabilă din
+// panoul de fixare al Bibliotecii. Vizual: iconiță într-un cerc colorat +
+// etichetă, plus stare distinctă când titlul e deja urmărit (idempotent —
+// poate fi apăsat oricum, doar readuce claritate).
 export function WatchButton({
   busy,
-  quality,
   alreadyWatching,
   onClick,
 }: {
   busy: boolean;
-  quality: WatchQuality;
   alreadyWatching: boolean;
   onClick: () => void;
 }) {
@@ -129,11 +129,8 @@ export function WatchButton({
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sky-500/20 text-sky-400">
         {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pin className="h-4 w-4" />}
       </span>
-      <span className="min-w-0 flex-1">
-        <span className="block text-sm font-semibold text-foreground">
-          {alreadyWatching ? "Urmărești deja" : "Urmărește pentru descărcare automată"}
-        </span>
-        <span className="block text-xs text-muted-foreground">Calitate: {quality}</span>
+      <span className="text-sm font-semibold text-foreground">
+        {alreadyWatching ? "Urmărești deja" : "Urmărește"}
       </span>
     </button>
   );
@@ -237,7 +234,7 @@ export function NotFoundWithPin({
         className="flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-muted/40 py-2.5 text-sm font-semibold text-foreground hover:bg-muted/60 disabled:opacity-50"
       >
         {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pin className="h-4 w-4" />}
-        Fixează {label} pentru monitorizare automată ({quality})
+        Fixează {label} — vei fi anunțat dacă apare pe Filelist
       </button>
     </div>
   );

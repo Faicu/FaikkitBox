@@ -148,6 +148,24 @@ function ensureMediaPlaceholder(
   return Number(res.lastInsertRowid);
 }
 
+// Apelat când un titlu e fixat pentru prima dată (nu la re-confirmare) —
+// rândul-placeholder din `media` poate exista de mult (creat la o căutare
+// anterioară în wizard, cu added_at din acel moment), deci fără asta, un
+// titlu proaspăt fixat nu urca deloc în capul listei din Bibliotecă (sortată
+// după added_at) — părea "vechi", deși tocmai a fost adăugat la urmărire.
+export const touchMediaAddedAt = createServerFn({ method: "POST" })
+  .validator((data: { mediaType: "movie" | "tv"; tmdbId: number }) => data)
+  .handler(async ({ data }): Promise<void> => {
+    const { requireAuth } = await import("./admin.server");
+    await requireAuth();
+    const db = getDb();
+    const dbMediaType = data.mediaType === "movie" ? "movie" : "tv_show";
+    db.prepare(
+      `UPDATE media SET added_at = datetime('now'), updated_at = datetime('now')
+       WHERE media_type = ? AND tmdb_id = ?`,
+    ).run(dbMediaType, data.tmdbId);
+  });
+
 // Apelat direct din wizard (Acasă), imediat ce un titlu e identificat prin
 // TMDB — indiferent dacă userul ajunge să-l descarce sau doar îl fixează
 // pentru urmărire. Pentru seriale, scrie doar rândul-părinte (episoadele se

@@ -26,7 +26,7 @@ import { checkFilelistForItem, downloadFilelist } from "@/lib/filelist.functions
 import type { FilelistTorrent } from "@/lib/filelist.functions";
 import { setPinnedItems, setWatchSettings } from "@/lib/pinned.functions";
 import type { WatchQuality } from "@/lib/pinned.functions";
-import { ensureMediaEntryForSearch, getDownloadingMediaForTmdbId } from "@/lib/media";
+import { ensureMediaEntryForSearch, getDownloadingMediaForTmdbId, touchMediaAddedAt } from "@/lib/media";
 import type { DownloadingMediaEntry } from "@/lib/media";
 import {
   detectQuality,
@@ -159,6 +159,7 @@ export function AddMediaWizard({
   const setPinnedFn = useServerFn(setPinnedItems);
   const setWatchFn = useServerFn(setWatchSettings);
   const ensureMediaEntryFn = useServerFn(ensureMediaEntryForSearch);
+  const touchMediaAddedAtFn = useServerFn(touchMediaAddedAt);
 
   const [step, setStep] = useState<Step>("search");
   const [query, setQuery] = useState("");
@@ -493,7 +494,11 @@ export function AddMediaWizard({
           },
         ];
         await setPinnedFn({ data: { items: next } });
+        await touchMediaAddedAtFn({ data: { mediaType: selected.mediaType, tmdbId: selected.id } });
       }
+      // Doar fixare — verificare periodică pe Filelist, FĂRĂ descărcare
+      // automată (asta rămâne opțiune separată, din panoul de fixare al
+      // Bibliotecii, nu implicită din wizard).
       await setWatchFn({
         data: {
           id: selected.id,
@@ -501,18 +506,16 @@ export function AddMediaWizard({
           watchFilelist: true,
           watchFilelistSeason: false,
           watchTmdb: false,
-          autoDownload: true,
-          autoDownloadQuality: quality,
+          autoDownload: false,
+          autoDownloadQuality: "1080p",
         },
       });
       queryClient.invalidateQueries({ queryKey: ["pinnedItems"] });
-      toast.success("Fixat pentru monitorizare automată", {
-        description: `Se descarcă automat orice sezon nou apărut, la calitatea ${quality}.`,
+      toast.success("Fixat în Bibliotecă", {
+        description: "Vei fi anunțat când apare ceva nou pe Filelist pentru acest titlu.",
         duration: 6000,
       });
-      setDoneMessage(
-        `Fixat pentru monitorizare automată — se descarcă orice sezon nou apărut, la calitatea ${quality}.`,
-      );
+      setDoneMessage("Fixat în Bibliotecă — vei fi anunțat când apare ceva nou pe Filelist.");
       setStep("done");
     } catch (e) {
       toast.error("Eroare la fixare", {
@@ -823,7 +826,6 @@ export function AddMediaWizard({
 
                     <WatchButton
                       busy={busy && !downloadingTorrentId}
-                      quality={quality}
                       alreadyWatching={alreadyPinned}
                       onClick={pinForMonitoring}
                     />
