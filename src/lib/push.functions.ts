@@ -28,14 +28,3 @@ export const unsubscribePush = createServerFn({ method: "POST" })
     db.prepare("DELETE FROM push_subscriptions WHERE endpoint = ?").run(data.endpoint);
     return { ok: true };
   });
-
-export const getPushSubscriptionCount = createServerFn({ method: "GET" }).handler(async () => {
-  const { requireAdmin } = await import("./admin.server");
-  await requireAdmin();
-  const { getDb } = await import("./db");
-  const db = getDb();
-  const row = db.prepare("SELECT COUNT(*) as count FROM push_subscriptions").get() as {
-    count: number;
-  };
-  return { count: row.count };
-});

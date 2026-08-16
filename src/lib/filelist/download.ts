@@ -86,42 +86,6 @@ async function findTorrentHashByName(
   return null;
 }
 
-// Căutare imediată (o singură trecere, fără reîncercări) a hash-ului unui
-// torrent după nume, în TOATĂ lista din qBittorrent — nu doar cele recente.
-// Folosită la oprirea unei descărcări în curs: dacă utilizatorul întrerupe
-// chiar în fereastra scurtă în care findTorrentHashByName încă reîncearcă
-// (vezi mai sus), jurnalul propriu poate avea torrent_hash încă null, dar
-// torrentul deja există în qBittorrent de ceva vreme — nu mai are rost să
-// limităm la ultimele 20 adăugate.
-export async function findTorrentHashNow(
-  qbitUrl: string,
-  cookie: string,
-  torrentName: string,
-): Promise<string | null> {
-  const needle = String(torrentName)
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "");
-  try {
-    const listRes = await fetch(`${qbitUrl}/api/v2/torrents/info`, {
-      headers: { Cookie: cookie },
-      signal: AbortSignal.timeout(10_000),
-    });
-    if (listRes.ok) {
-      const list: QbitTorrentInfo[] = await listRes.json();
-      const match = list.find((t) => {
-        const hay = String(t.name ?? "")
-          .toLowerCase()
-          .replace(/[^a-z0-9]/g, "");
-        return hay.includes(needle.slice(0, 30)) || needle.includes(hay.slice(0, 30));
-      });
-      return match?.hash ?? null;
-    }
-  } catch (e) {
-    console.warn("[filelist] findTorrentHashNow eșuat:", e);
-  }
-  return null;
-}
-
 // ---------------------------------------------------------------------------
 // Background polling: verifică progresul torrentului și refresh Plex la final
 // ---------------------------------------------------------------------------
@@ -591,9 +555,8 @@ async function autoResolveManualMedia(
   };
 }
 
-// Implementare comună pentru descărcare + upload la qBittorrent, folosită atât
-// de server function-ul public (downloadFilelist) cât și de fluxul intern de
-// auto-descărcare din plugin-uri (downloadFilelistInternal).
+// Implementare comună pentru descărcare + upload la qBittorrent, folosită de
+// server function-ul public (downloadFilelist).
 async function downloadFilelistCore(
   params: DownloadFilelistParams,
 ): Promise<FilelistDownloadResult> {
@@ -822,13 +785,6 @@ export const downloadFilelist = createServerFn({ method: "POST" })
       requestedByUserId: session.data.userId ?? null,
     });
   });
-
-// Versiune internă pentru plugin (fără requireAdmin)
-export async function downloadFilelistInternal(
-  params: DownloadFilelistParams,
-): Promise<FilelistDownloadResult> {
-  return downloadFilelistCore(params);
-}
 
 // ---------------------------------------------------------------------------
 // Backfill: aplică ensureRomanianSubtitle retroactiv pe TOATE torrentele
