@@ -77,17 +77,18 @@ export const qbitAction = createServerFn({ method: "POST" })
           deleteFiles: "true",
         });
         if (res.ok) {
-          const { refreshPlexLibrary, refreshPlexLibraries } = await import("../plex-refresh");
+          const { refreshPlexLibraryAndEmptyTrash, refreshPlexLibrariesAndEmptyTrash } =
+            await import("../plex-refresh");
           const hasMovies = categories.has("filme");
           const hasShows = categories.has("seriale");
           if (hasMovies && !hasShows) {
-            refreshPlexLibrary("movie").catch(() => {});
+            refreshPlexLibraryAndEmptyTrash("movie").catch(() => {});
           } else if (hasShows && !hasMovies) {
-            refreshPlexLibrary("show").catch(() => {});
+            refreshPlexLibraryAndEmptyTrash("show").catch(() => {});
           } else {
             // Fie ambele categorii amestecate (ștergere multiplă), fie
             // categoria n-a putut fi determinată — rescanăm ambele biblioteci.
-            refreshPlexLibraries().catch(() => {});
+            refreshPlexLibrariesAndEmptyTrash().catch(() => {});
           }
         }
         return { ok: res.ok };

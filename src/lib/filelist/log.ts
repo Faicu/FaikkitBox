@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import type { FilelistLogEntry, DownloadLogRow } from "./types";
 import { qbitLogin } from "../qbit-client";
-import { refreshPlexLibraryForCategory } from "../plex-refresh";
+import { refreshPlexLibraryForCategoryAndEmptyTrash } from "../plex-refresh";
 import { deleteMediaByTorrentHash } from "../media/media";
 
 // ---------------------------------------------------------------------------
@@ -165,7 +165,7 @@ export const deleteMediaEntry = createServerFn({ method: "POST" })
       db.prepare("DELETE FROM downloads WHERE torrent_hash = ?").run(row.torrent_hash);
 
       if (row.category !== null) {
-        refreshPlexLibraryForCategory(row.category).catch(() => {});
+        refreshPlexLibraryForCategoryAndEmptyTrash(row.category).catch(() => {});
       }
 
       return { ok: true, qbitDeleted };
