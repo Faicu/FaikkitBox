@@ -28,20 +28,31 @@ function withTtPrefix(imdbId: string): string {
 }
 
 // Caută subtitrări pentru un IMDb id. Fail-soft: listă goală la orice eroare
-// sau lipsă cheie API — consistent cu restul integrărilor externe.
+// sau lipsă cheie API — consistent cu restul integrărilor externe. Loghează
+// distinct fiecare caz de eșec (cheie lipsă / HTTP non-ok / excepție) ca să
+// se poată diagnostica ulterior de ce o căutare a întors 0 rezultate — vezi
+// istoricul „The Invite" (2026), unde eșecul silențios era indistinguibil
+// de „subs.ro chiar nu are subtitrarea".
 export async function searchSubsRo(imdbId: string, language = "ro"): Promise<SubsRoItem[]> {
   const key = apiKey();
-  if (!key) return [];
+  const ttImdbId = withTtPrefix(imdbId);
+  if (!key) {
+    console.warn(`[subsro] căutare ${ttImdbId} săltată — SUBSRO_API_KEY lipsă`);
+    return [];
+  }
 
   try {
     const res = await fetch(
-      `${API_BASE}/search/imdbid/${encodeURIComponent(withTtPrefix(imdbId))}?language=${language}`,
+      `${API_BASE}/search/imdbid/${encodeURIComponent(ttImdbId)}?language=${language}`,
       {
         headers: { "X-Subs-Api-Key": key, Accept: "application/json" },
         signal: AbortSignal.timeout(15_000),
       },
     );
-    if (!res.ok) return [];
+    if (!res.ok) {
+      console.warn(`[subsro] căutare ${ttImdbId} eșuată — HTTP ${res.status} ${res.statusText}`);
+      return [];
+    }
     const data = (await res.json()) as {
       items?: Array<{
         id: number;
@@ -51,14 +62,17 @@ export async function searchSubsRo(imdbId: string, language = "ro"): Promise<Sub
         language?: string;
       }>;
     };
-    return (data.items ?? []).map((it) => ({
+    const items = (data.items ?? []).map((it) => ({
       id: it.id,
       title: it.title ?? "",
       description: it.description ?? "",
       translator: it.translator ?? "",
       language: it.language ?? language,
     }));
-  } catch {
+    console.log(`[subsro] căutare ${ttImdbId} → ${items.length} rezultat(e)`);
+    return items;
+  } catch (err) {
+    console.warn(`[subsro] căutare ${ttImdbId} — excepție: ${(err as Error).message}`);
     return [];
   }
 }
@@ -76,16 +90,23 @@ export function subsRoItemMatchesSeason(item: SubsRoItem, seasonNumber: number):
 // Descarcă arhiva .zip a unei subtitrări (bytes bruți). null la orice eroare.
 export async function downloadSubsRoZip(id: number): Promise<Buffer | null> {
   const key = apiKey();
-  if (!key) return null;
+  if (!key) {
+    console.warn(`[subsro] descărcare arhivă ${id} săltată — SUBSRO_API_KEY lipsă`);
+    return null;
+  }
 
   try {
     const res = await fetch(`${API_BASE}/subtitle/${id}/download`, {
       headers: { "X-Subs-Api-Key": key },
       signal: AbortSignal.timeout(20_000),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.warn(`[subsro] descărcare arhivă ${id} eșuată — HTTP ${res.status} ${res.statusText}`);
+      return null;
+    }
     return Buffer.from(await res.arrayBuffer());
-  } catch {
+  } catch (err) {
+    console.warn(`[subsro] descărcare arhivă ${id} — excepție: ${(err as Error).message}`);
     return null;
   }
 }

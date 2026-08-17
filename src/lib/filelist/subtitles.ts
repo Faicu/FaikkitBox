@@ -268,6 +268,17 @@ async function resolveBestSubtitle(
       () => 0,
       targetName,
     );
+    console.log(
+      `[subtitles] „${targetName}" — OpenSubtitles: ${
+        osBest ? `scor ${osBest.score} (release „${osBest.candidate.release}", confident=${osBest.confident})` : "fără candidați"
+      }; subs.ro: ${
+        subsRoCandidates.length === 0
+          ? "0 candidați"
+          : subsRoBest
+            ? `scor ${subsRoBest.score} (release „${subsRoBest.candidate.release}", confident=${subsRoBest.confident}) din ${subsRoCandidates.length} candidați`
+            : `niciun candidat scorat din ${subsRoCandidates.length} primiți`
+      }`,
+    );
     if (subsRoBest && subsRoBest.score > winnerScore) {
       const chosenContent = subsRoBest.candidate.content;
       winner = {
