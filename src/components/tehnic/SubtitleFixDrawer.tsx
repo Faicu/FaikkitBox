@@ -22,6 +22,8 @@ interface SubtitleRunItemMeta {
   detail: string;
   release?: string;
   path?: string;
+  matchedCriteria?: number;
+  maxCriteria?: number;
 }
 
 const CORRECTED_OUTCOMES = new Set<string>(CORRECTED_OUTCOMES_LIST);
@@ -111,7 +113,20 @@ export function SubtitleFixDrawer({
                         {it.torrentName}
                       </div>
                     )}
-                    <div className="mt-0.5 text-muted-foreground break-words">{it.detail}</div>
+                    <div className="mt-0.5 text-muted-foreground break-words">
+                      {it.maxCriteria != null && it.maxCriteria > 0 && (
+                        <span
+                          className={`mr-1.5 inline-block rounded px-1 py-0.5 font-mono text-[10px] font-medium ${
+                            it.matchedCriteria === it.maxCriteria
+                              ? "bg-emerald-500/15 text-emerald-400"
+                              : "bg-amber-500/15 text-amber-400"
+                          }`}
+                        >
+                          {it.matchedCriteria}/{it.maxCriteria}
+                        </span>
+                      )}
+                      {it.detail}
+                    </div>
                   </div>
                 </div>
               ))}

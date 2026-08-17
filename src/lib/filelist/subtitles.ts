@@ -228,6 +228,8 @@ interface SubtitleWinner {
   source: "opensubtitles" | "subsro";
   release: string;
   getContent: () => Promise<Buffer | null>;
+  matchedCriteria: number;
+  maxCriteria: number;
 }
 
 // Alege cea mai bună subtitrare disponibilă pentru un fișier țintă: întâi
@@ -255,6 +257,8 @@ async function resolveBestSubtitle(
       source: "opensubtitles",
       release: osBest.candidate.release,
       getContent: () => downloadSubtitle(osBest.candidate.fileId),
+      matchedCriteria: osBest.matchedCriteria,
+      maxCriteria: osBest.maxCriteria,
     };
     winnerScore = osBest.score;
     winnerConfident = osBest.confident;
@@ -285,6 +289,8 @@ async function resolveBestSubtitle(
         source: "subsro",
         release: subsRoBest.candidate.release,
         getContent: async () => chosenContent,
+        matchedCriteria: subsRoBest.matchedCriteria,
+        maxCriteria: subsRoBest.maxCriteria,
       };
       winnerConfident = subsRoBest.confident;
     }
@@ -300,14 +306,18 @@ async function downloadAndWriteSubtitle(
   winner: SubtitleWinner,
   confident: boolean,
   destPath: string,
-): Promise<{ outcome: SubtitleOutcome; detail: string }> {
+): Promise<{ outcome: SubtitleOutcome; detail: string; matchedCriteria: number; maxCriteria: number }> {
   const sourceLabel = winner.source === "opensubtitles" ? "OpenSubtitles" : "subs.ro";
+  const { matchedCriteria, maxCriteria } = winner;
+  const isPerfect = maxCriteria > 0 && matchedCriteria === maxCriteria;
   const content = await winner.getContent();
   if (!content) {
     console.warn(`[subtitles] descărcare ${sourceLabel} eșuată pentru release „${winner.release}"`);
     return {
       outcome: "download_failed",
       detail: `descărcarea subtitrării de pe ${sourceLabel} (release „${winner.release}") a eșuat`,
+      matchedCriteria,
+      maxCriteria,
     };
   }
 
@@ -317,9 +327,14 @@ async function downloadAndWriteSubtitle(
     const encodingNote = wasConverted ? " (encoding convertit la UTF-8)" : "";
     if (confident) {
       console.log(`[subtitles] subtitrare ${sourceLabel} salvată → ${destPath}`);
+      const matchNote = isPerfect
+        ? "potrivire perfectă"
+        : `potrivire sursă+rezoluție confirmată, ${matchedCriteria}/${maxCriteria} criterii`;
       return {
         outcome: "downloaded_opensubtitles",
-        detail: `subtitrare descărcată de pe ${sourceLabel}, release „${winner.release}" (potrivire sursă+rezoluție confirmată)${encodingNote}`,
+        detail: `${isPerfect ? "subtitrare perfectă" : "subtitrare"} descărcată de pe ${sourceLabel}, release „${winner.release}" (${matchNote})${encodingNote}`,
+        matchedCriteria,
+        maxCriteria,
       };
     }
     console.warn(
@@ -327,13 +342,17 @@ async function downloadAndWriteSubtitle(
     );
     return {
       outcome: "downloaded_opensubtitles_approximate",
-      detail: `subtitrare aproximativă descărcată de pe ${sourceLabel}, release „${winner.release}" (fără potrivire clară de sursă/rezoluție — verifică sincronizarea)${encodingNote}`,
+      detail: `subtitrare aproximativă descărcată de pe ${sourceLabel}, release „${winner.release}" (${matchedCriteria}/${maxCriteria} criterii — fără potrivire clară de sursă/rezoluție, verifică sincronizarea)${encodingNote}`,
+      matchedCriteria,
+      maxCriteria,
     };
   } catch (e) {
     console.warn(`[subtitles] scriere .srt eșuată (${destPath}):`, e);
     return {
       outcome: "download_failed",
       detail: `scrierea subtitrării descărcate pe disk a eșuat: ${e instanceof Error ? e.message : e}`,
+      matchedCriteria,
+      maxCriteria,
     };
   }
 }
@@ -449,6 +468,12 @@ export interface SubtitleRunItem {
   detail: string;
   release?: string;
   path?: string;
+  // Câte din criteriile aplicabile (rezoluție/mod obținere/platformă/codec/
+  // grup) s-au potrivit, din câte erau identificabile în numele fișierului
+  // țintă — prezent doar când s-a descărcat efectiv o subtitrare (nu la
+  // rezultate gen "deja are subtitrare" unde nu s-a făcut nicio scorare).
+  matchedCriteria?: number;
+  maxCriteria?: number;
 }
 
 function item(
@@ -456,7 +481,7 @@ function item(
   displayTitle: string,
   outcome: SubtitleOutcome,
   detail: string,
-  extra?: { release?: string; path?: string },
+  extra?: { release?: string; path?: string; matchedCriteria?: number; maxCriteria?: number },
 ): SubtitleRunItem {
   return { torrentName, displayTitle, outcome, detail, ...extra };
 }
@@ -642,7 +667,7 @@ export async function ensureRomanianSubtitle(
   }
 
   const destPath = join(savePath, mediaDir === "." ? "" : mediaDir, `${mediaBaseName}.ro.srt`);
-  const { outcome, detail } = await downloadAndWriteSubtitle(
+  const { outcome, detail, matchedCriteria, maxCriteria } = await downloadAndWriteSubtitle(
     resolved.winner,
     resolved.confident,
     destPath,
@@ -650,6 +675,8 @@ export async function ensureRomanianSubtitle(
   return item(torrentName, displayTitle, outcome, detail, {
     release: resolved.winner.release,
     path: destPath,
+    matchedCriteria,
+    maxCriteria,
   });
 }
 
@@ -983,6 +1010,8 @@ export async function logSubtitleRun(
           detail: it.detail,
           release: it.release,
           path: it.path,
+          matchedCriteria: it.matchedCriteria,
+          maxCriteria: it.maxCriteria,
         })),
       },
       { skipPush },
@@ -1137,6 +1166,23 @@ function findTag(name: string, tags: string[]): string | null {
   return null;
 }
 
+// Codec-urile pot apărea cu separator opțional între literă și cifre —
+// "H264", "H.264" sau "H 264" (subs.ro normalizează descrierile cu spații în
+// loc de puncte, ex. "The Invite 2026 1080p AMZN WEB-DL DDP5 1 H 264-BYNDR")
+// — deci, spre deosebire de findTag, inserăm un separator opțional exact la
+// granița literă/cifră, nu doar la capetele tag-ului.
+function findCodecTag(name: string): string | null {
+  for (const tag of CODEC_TAGS) {
+    const parts = tag
+      .split(/(?<=[A-Za-z])(?=[0-9])|(?<=[0-9])(?=[A-Za-z])/)
+      .map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+    const escaped = parts.join("[.\\s_-]?");
+    const re = new RegExp(`(?:^|[.\\s_-])${escaped}(?:[.\\s_-]|$)`, "i");
+    if (re.test(name)) return tag;
+  }
+  return null;
+}
+
 interface ReleaseTags {
   resolution: string | null;
   acquisition: string | null;
@@ -1149,7 +1195,7 @@ function extractTags(name: string): ReleaseTags {
   const resolution = findTag(name, RESOLUTION_TAGS);
   const acquisition = findTag(name, ACQUISITION_TAGS);
   const platform = findTag(name, PLATFORM_TAGS);
-  const codec = findTag(name, CODEC_TAGS);
+  const codec = findCodecTag(name);
   const groupMatch = name.match(/-([A-Za-z0-9]+)$/);
   const group = groupMatch ? groupMatch[1].toLowerCase() : null;
   return { resolution, acquisition, platform, codec, group };
@@ -1159,6 +1205,14 @@ export interface ScoredRelease<T> {
   candidate: T;
   score: number;
   confident: boolean;
+  // Criterii (din rezoluție/mod obținere/platformă/codec/grup) aplicabile
+  // pentru fișierul țintă (adică pentru care numele lui conține un tag
+  // identificabil) și câte dintre ele s-au potrivit — folosit pentru afișarea
+  // unui scor gen "5/5" în UI. `matchedCriteria` din `maxCriteria`, nu din 5
+  // fix, ca să nu pară o potrivire imperfectă atunci când fișierul țintă pur
+  // și simplu nu conține un anume tag (ex. fără platformă în nume).
+  matchedCriteria: number;
+  maxCriteria: number;
 }
 
 // Alege, dintr-o listă de candidați (rezultate OpenSubtitles, variante dintr-o
@@ -1184,35 +1238,62 @@ function pickBestByRelease<T>(
   if (!candidates.length) return null;
 
   const target = extractTags(targetName);
+  const maxCriteria = [target.resolution, target.acquisition, target.platform, target.codec, target.group].filter(
+    (t) => t !== null,
+  ).length;
 
   let best: T | null = null;
   let bestScore = -1;
   let bestConfident = false;
+  let bestMatchedCriteria = 0;
   let bestPopularity = -Infinity;
 
   for (const c of candidates) {
     const tags = extractTags(releaseOf(c) || "");
     let score = 0;
+    let matchedCriteria = 0;
     const resMatch = !!target.resolution && tags.resolution === target.resolution;
     const acqMatch = !!target.acquisition && tags.acquisition === target.acquisition;
     const platformMatch = !!target.platform && tags.platform === target.platform;
     const codecMatch = !!target.codec && tags.codec === target.codec;
     const groupMatch = !!target.group && tags.group === target.group;
-    if (resMatch) score += 3;
-    if (acqMatch) score += 2;
-    if (platformMatch) score += 2;
-    if (codecMatch) score += 1;
-    if (groupMatch) score += 2;
+    if (resMatch) {
+      score += 3;
+      matchedCriteria++;
+    }
+    if (acqMatch) {
+      score += 2;
+      matchedCriteria++;
+    }
+    if (platformMatch) {
+      score += 2;
+      matchedCriteria++;
+    }
+    if (codecMatch) {
+      score += 1;
+      matchedCriteria++;
+    }
+    if (groupMatch) {
+      score += 2;
+      matchedCriteria++;
+    }
 
     const popularity = popularityOf(c);
     if (score > bestScore || (score === bestScore && popularity > bestPopularity)) {
       best = c;
       bestScore = score;
       bestConfident = resMatch && acqMatch;
+      bestMatchedCriteria = matchedCriteria;
       bestPopularity = popularity;
     }
   }
 
   if (!best) return null;
-  return { candidate: best, score: bestScore, confident: bestConfident };
+  return {
+    candidate: best,
+    score: bestScore,
+    confident: bestConfident,
+    matchedCriteria: bestMatchedCriteria,
+    maxCriteria,
+  };
 }
