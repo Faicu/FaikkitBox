@@ -176,10 +176,15 @@ export async function getTmdbDetailsInternal(
         const enMovie = await tmdbFetch<TmdbApiMovie>(`/movie/${id}`).catch(() => null);
         overview = enMovie?.overview?.trim() || null;
       }
+      let title = movie.title?.trim() || movie.original_title?.trim() || "";
+      if (title && title === movie.original_title?.trim()) {
+        const { findRomanianAkaTitle } = await import("./tmdb-title-lookup");
+        title = (await findRomanianAkaTitle("movie", id)) || title;
+      }
       return {
         id,
         mediaType: "movie",
-        title: movie.title ?? movie.original_title ?? "",
+        title,
         originalTitle: movie.original_title ?? movie.title ?? "",
         literalTitle: findLiteralTitle(movie.alternative_titles?.titles),
         imdbId: movie.external_ids?.imdb_id ?? movie.imdb_id ?? null,
@@ -199,6 +204,11 @@ export async function getTmdbDetailsInternal(
         const enShow = await tmdbFetch<TmdbApiTvShow>(`/tv/${id}`).catch(() => null);
         overview = enShow?.overview?.trim() || null;
       }
+      let title = show.name?.trim() || show.original_name?.trim() || "";
+      if (title && title === show.original_name?.trim()) {
+        const { findRomanianAkaTitle } = await import("./tmdb-title-lookup");
+        title = (await findRomanianAkaTitle("tv", id)) || title;
+      }
       const seasons = (show.seasons ?? [])
         .filter((s) => s.season_number > 0)
         .map((s) => ({
@@ -209,7 +219,7 @@ export async function getTmdbDetailsInternal(
       return {
         id,
         mediaType: "tv",
-        title: show.name ?? show.original_name ?? "",
+        title,
         originalTitle: show.original_name ?? show.name ?? "",
         literalTitle: findLiteralTitle(show.alternative_titles?.results),
         imdbId: show.external_ids?.imdb_id ?? null,

@@ -61,6 +61,37 @@ interface TmdbFindResponseFull {
   tv_results?: TmdbFindItem[];
 }
 
+interface TmdbAlternativeTitle {
+  iso_3166_1?: string;
+  title?: string;
+  name?: string;
+}
+interface TmdbAlternativeTitlesResponse {
+  titles?: TmdbAlternativeTitle[]; // /movie/{id}/alternative_titles
+  results?: TmdbAlternativeTitle[]; // /tv/{id}/alternative_titles
+}
+
+// TMDB nu are întotdeauna o traducere ro-RO a titlului (câmpul `title` cade
+// atunci pe engleză) — dar are des un titlu românesc listat separat ca "AKA"
+// (alternative_titles, iso_3166_1 "RO"), exact ce arată și IMDb la "also
+// known as". Apelat doar când traducerea normală a picat pe engleză, ca să nu
+// adăugăm un fetch în plus la fiecare căutare.
+export async function findRomanianAkaTitle(
+  mediaType: "movie" | "tv",
+  id: number,
+): Promise<string | null> {
+  try {
+    const data = await tmdbFetch<TmdbAlternativeTitlesResponse>(
+      `/${mediaType}/${id}/alternative_titles`,
+    );
+    const list = mediaType === "movie" ? data.titles : data.results;
+    const ro = list?.find((t) => t.iso_3166_1 === "RO");
+    return (ro?.title ?? ro?.name)?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
 export interface TmdbBasicInfo {
   id: number;
   mediaType: "movie" | "tv";
@@ -95,19 +126,32 @@ export async function lookupTmdbInfoByImdbId(imdbId: string): Promise<TmdbBasicI
     const show = ro.tv_results?.[0];
     if (movie) {
       const enMovie = en?.movie_results?.[0];
+      const roTitle = movie.title?.trim();
+      const enTitle = enMovie?.title?.trim();
+      let title = roTitle || enTitle || "";
+      // ro-RO n-a întors o traducere reală (a picat pe engleză) — încercăm AKA.
+      if (!roTitle || roTitle === enTitle) {
+        title = (await findRomanianAkaTitle("movie", movie.id)) || title;
+      }
       info = {
         id: movie.id,
         mediaType: "movie",
-        title: movie.title?.trim() || enMovie?.title?.trim() || "",
+        title,
         year: (movie.release_date || enMovie?.release_date || "").slice(0, 4) || null,
         posterPath: movie.poster_path || enMovie?.poster_path || null,
       };
     } else if (show) {
       const enShow = en?.tv_results?.[0];
+      const roTitle = show.name?.trim();
+      const enTitle = enShow?.name?.trim();
+      let title = roTitle || enTitle || "";
+      if (!roTitle || roTitle === enTitle) {
+        title = (await findRomanianAkaTitle("tv", show.id)) || title;
+      }
       info = {
         id: show.id,
         mediaType: "tv",
-        title: show.name?.trim() || enShow?.name?.trim() || "",
+        title,
         year: (show.first_air_date || enShow?.first_air_date || "").slice(0, 4) || null,
         posterPath: show.poster_path || enShow?.poster_path || null,
       };
