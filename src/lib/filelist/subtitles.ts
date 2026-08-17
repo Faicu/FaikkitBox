@@ -47,7 +47,7 @@ import {
 import {
   searchSubsRo,
   downloadSubsRoZip,
-  extractSrtEntriesFromZip,
+  extractSrtEntries,
   subsRoItemMatchesSeason,
 } from "./subsro-client";
 import {
@@ -627,7 +627,7 @@ export async function ensureRomanianSubtitle(
     const zipEntries: Array<{ release: string; content: Buffer }> = [];
     for (const it of subsRoItems.slice(0, 3)) {
       const zipBuf = await downloadSubsRoZip(it.id);
-      if (zipBuf) zipEntries.push(...extractSrtEntriesFromZip(zipBuf));
+      if (zipBuf) zipEntries.push(...(await extractSrtEntries(zipBuf)));
     }
     return zipEntries;
   });
@@ -795,7 +795,7 @@ async function processSeasonPack(params: ProcessSeasonPackParams): Promise<Subti
     const seasonItems = items.filter((it) => subsRoItemMatchesSeason(it, seasonNumber!));
     for (const it of seasonItems.slice(0, 6)) {
       const zipBuf = await downloadSubsRoZip(it.id);
-      if (zipBuf) subsRoEntries.push(...extractSrtEntriesFromZip(zipBuf));
+      if (zipBuf) subsRoEntries.push(...(await extractSrtEntries(zipBuf)));
     }
     return subsRoEntries;
   }

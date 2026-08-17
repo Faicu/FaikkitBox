@@ -7,6 +7,13 @@
 // ---------------------------------------------------------------------------
 
 import AdmZip from "adm-zip";
+import { execFile } from "node:child_process";
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { promisify } from "node:util";
+
+const execFileAsync = promisify(execFile);
 
 const API_BASE = "https://api.subs.ro/v1.0";
 
@@ -122,20 +129,68 @@ export interface SubsRoSrtEntry {
   content: Buffer;
 }
 
-// Extrage toate fișierele .srt dintr-o arhivă subs.ro — poate conține mai
-// multe variante (una per sursă/rezoluție). Fail-soft: listă goală dacă
-// arhiva nu poate fi citită.
-export function extractSrtEntriesFromZip(buf: Buffer): SubsRoSrtEntry[] {
+// subs.ro nu garantează formatul arhivei — unele subtitrări sunt .zip, altele
+// .rar (ex. "The Invite" 2026, id 130446) — detectat din magic bytes, nu din
+// Content-Type (API-ul nu-l expune diferențiat).
+function isRarArchive(buf: Buffer): boolean {
+  return buf.length >= 6 && buf.subarray(0, 6).toString("hex") === "526172211a07";
+}
+
+function extractSrtEntriesFromZip(buf: Buffer): SubsRoSrtEntry[] {
+  const zip = new AdmZip(buf);
+  return zip
+    .getEntries()
+    .filter((e) => !e.isDirectory && e.entryName.toLowerCase().endsWith(".srt"))
+    .map((e) => ({
+      release: (e.entryName.split("/").pop() ?? e.entryName).replace(/\.srt$/i, ""),
+      content: e.getData(),
+    }));
+}
+
+// Extrage via binarul de sistem `unrar` (apt) într-un folder temporar —
+// nicio librărie JS pură pentru RAR5 nu era suficient de fiabilă/simplă de
+// integrat în build-ul curent.
+async function extractSrtEntriesFromRar(buf: Buffer): Promise<SubsRoSrtEntry[]> {
+  const dir = await mkdtemp(join(tmpdir(), "subsro-rar-"));
   try {
-    const zip = new AdmZip(buf);
-    return zip
-      .getEntries()
-      .filter((e) => !e.isDirectory && e.entryName.toLowerCase().endsWith(".srt"))
-      .map((e) => ({
-        release: (e.entryName.split("/").pop() ?? e.entryName).replace(/\.srt$/i, ""),
-        content: e.getData(),
-      }));
-  } catch {
+    const rarPath = join(dir, "archive.rar");
+    await writeFile(rarPath, buf);
+    await execFileAsync("unrar", ["x", "-y", "-inul", rarPath, dir + "/"], {
+      timeout: 15_000,
+    });
+    const names = await readdir(dir);
+    const entries: SubsRoSrtEntry[] = [];
+    for (const name of names) {
+      if (!name.toLowerCase().endsWith(".srt")) continue;
+      entries.push({
+        release: name.replace(/\.srt$/i, ""),
+        content: await readFile(join(dir, name)),
+      });
+    }
+    return entries;
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+
+// Extrage toate fișierele .srt dintr-o arhivă subs.ro (.zip sau .rar) — poate
+// conține mai multe variante (una per sursă/rezoluție). Fail-soft: listă
+// goală dacă arhiva nu poate fi citită, cu logging distinct pentru
+// diagnosticare (vezi istoricul „The Invite" 2026, unde eșecul de extragere
+// dintr-un .rar tratat ca .zip era indistinguibil de „0 fișiere .srt").
+export async function extractSrtEntries(buf: Buffer): Promise<SubsRoSrtEntry[]> {
+  try {
+    const entries = isRarArchive(buf) ? await extractSrtEntriesFromRar(buf) : extractSrtEntriesFromZip(buf);
+    if (entries.length === 0) {
+      console.warn(
+        `[subsro] arhivă (${isRarArchive(buf) ? "rar" : "zip"}, ${buf.length} bytes) — 0 fișiere .srt extrase`,
+      );
+    }
+    return entries;
+  } catch (err) {
+    console.warn(
+      `[subsro] extragere arhivă (${isRarArchive(buf) ? "rar" : "zip"}) eșuată — ${(err as Error).message}`,
+    );
     return [];
   }
 }
