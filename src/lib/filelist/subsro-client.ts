@@ -27,13 +27,16 @@ function withTtPrefix(imdbId: string): string {
   return /^tt/i.test(imdbId) ? imdbId : `tt${imdbId}`;
 }
 
-// Caută subtitrări pentru un IMDb id. Fail-soft: listă goală la orice eroare
-// sau lipsă cheie API — consistent cu restul integrărilor externe. Loghează
-// distinct fiecare caz de eșec (cheie lipsă / HTTP non-ok / excepție) ca să
-// se poată diagnostica ulterior de ce o căutare a întors 0 rezultate — vezi
-// istoricul „The Invite" (2026), unde eșecul silențios era indistinguibil
-// de „subs.ro chiar nu are subtitrarea".
-export async function searchSubsRo(imdbId: string, language = "ro"): Promise<SubsRoItem[]> {
+// Caută subtitrări pentru un IMDb id. Nu trimitem parametrul `language` —
+// subs.ro publică exclusiv subtitrări românești, dar eticheta internă
+// `language` a itemelor e uneori greșită (ex. "The Invite" 2026, marcată
+// "en" deși descrierea/traducătorul arată clar RO), iar filtrarea după ea
+// ratează rezultate reale.
+// Fail-soft: listă goală la orice eroare sau lipsă cheie API — consistent
+// cu restul integrărilor externe. Loghează distinct fiecare caz de eșec
+// (cheie lipsă / HTTP non-ok / excepție) ca să se poată diagnostica ulterior
+// de ce o căutare a întors 0 rezultate.
+export async function searchSubsRo(imdbId: string): Promise<SubsRoItem[]> {
   const key = apiKey();
   const ttImdbId = withTtPrefix(imdbId);
   if (!key) {
@@ -43,7 +46,7 @@ export async function searchSubsRo(imdbId: string, language = "ro"): Promise<Sub
 
   try {
     const res = await fetch(
-      `${API_BASE}/search/imdbid/${encodeURIComponent(ttImdbId)}?language=${language}`,
+      `${API_BASE}/search/imdbid/${encodeURIComponent(ttImdbId)}`,
       {
         headers: { "X-Subs-Api-Key": key, Accept: "application/json" },
         signal: AbortSignal.timeout(15_000),
@@ -67,7 +70,7 @@ export async function searchSubsRo(imdbId: string, language = "ro"): Promise<Sub
       title: it.title ?? "",
       description: it.description ?? "",
       translator: it.translator ?? "",
-      language: it.language ?? language,
+      language: it.language ?? "ro",
     }));
     console.log(`[subsro] căutare ${ttImdbId} → ${items.length} rezultat(e)`);
     return items;

@@ -623,7 +623,7 @@ export async function ensureRomanianSubtitle(
   const resolved = await resolveBestSubtitle(torrentName, osResults, async () => {
     // O arhivă subs.ro poate conține mai multe variante (una per
     // sursă/rezoluție), fiecare tratată ca un candidat separat, scorat la fel.
-    const subsRoItems = await searchSubsRo(imdbId, "ro");
+    const subsRoItems = await searchSubsRo(imdbId);
     const zipEntries: Array<{ release: string; content: Buffer }> = [];
     for (const it of subsRoItems.slice(0, 3)) {
       const zipBuf = await downloadSubsRoZip(it.id);
@@ -791,7 +791,7 @@ async function processSeasonPack(params: ProcessSeasonPackParams): Promise<Subti
   async function getSubsRoEntries(): Promise<Array<{ release: string; content: Buffer }>> {
     if (subsRoEntries) return subsRoEntries;
     subsRoEntries = [];
-    const items = await searchSubsRo(imdbId!, "ro");
+    const items = await searchSubsRo(imdbId!);
     const seasonItems = items.filter((it) => subsRoItemMatchesSeason(it, seasonNumber!));
     for (const it of seasonItems.slice(0, 6)) {
       const zipBuf = await downloadSubsRoZip(it.id);
