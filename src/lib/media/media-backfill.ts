@@ -14,6 +14,7 @@ import {
   discoverPlexUrl,
   plexQualityFromMedia,
   hasEmbeddedRomanianSubtitle,
+  hasRomanianAudio,
   extractGuidId,
   type PlexApiResponse,
   type PlexMetadataItem,
@@ -269,6 +270,7 @@ async function runMediaBackfillWork(): Promise<void> {
         const media = detail?.Media?.[0] ?? item.Media?.[0];
         const quality = plexQualityFromMedia(media);
         const hasRomanianSubtitle = hasEmbeddedRomanianSubtitle(media);
+        const hasRoAudio = hasRomanianAudio(media);
         const durationMs = Number((detail ?? item).duration ?? 0);
         const filePath = media?.Part?.[0]?.file ?? null;
         const matchedTorrent = filePath ? (qbitTorrentsByPath.get(filePath) ?? null) : null;
@@ -305,6 +307,7 @@ async function runMediaBackfillWork(): Promise<void> {
             quality,
             durationMs,
             hasRomanianSubtitle,
+            hasRomanianAudio: hasRoAudio,
             torrentHash: matchedTorrent?.hash ?? null,
             torrentName: matchedTorrent?.name ?? null,
           });
@@ -339,6 +342,7 @@ async function runMediaBackfillWork(): Promise<void> {
             quality,
             durationMs,
             hasRomanianSubtitle,
+            hasRomanianAudio: hasRoAudio,
             torrentHash: matchedTorrent?.hash ?? null,
             torrentName: matchedTorrent?.name ?? null,
           });

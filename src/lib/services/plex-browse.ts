@@ -218,6 +218,7 @@ export interface PlexTitleDetail {
   durationMs: number;
   quality: string | null;
   hasRomanianSubtitle: boolean;
+  hasRomanianAudio: boolean;
   summary: string | null;
   genres: string[];
   watchedByMe: boolean;
@@ -272,6 +273,7 @@ interface MediaRow {
   genres: string;
   quality: string | null;
   has_romanian_subtitle: number;
+  has_romanian_audio: number;
   duration_ms: number | null;
   torrent_name: string | null;
   torrent_hash: string | null;
@@ -364,6 +366,7 @@ async function buildDetailFromMediaRow(
     durationMs: row.duration_ms ?? 0,
     quality: row.quality,
     hasRomanianSubtitle: !!row.has_romanian_subtitle,
+    hasRomanianAudio: !!row.has_romanian_audio,
     summary: row.overview_ro,
     genres: JSON.parse(row.genres || "[]"),
     watchedByMe,
@@ -411,7 +414,7 @@ export const getPlexTitleDetail = createServerFn({ method: "GET" })
       const mediaRow = getDb()
         .prepare(
           `SELECT id, media_type, title, original_title, imdb_id, tmdb_id, season, episode, poster_path,
-           overview_ro, genres, quality, has_romanian_subtitle, duration_ms, torrent_name, torrent_hash,
+           overview_ro, genres, quality, has_romanian_subtitle, has_romanian_audio, duration_ms, torrent_name, torrent_hash,
            category_name, size, freeleech, internal, save_path, added_via,
            plex_rating_key, is_season_pack, requested_by_user_id, added_at, completed_at,
            subtitle_source, subtitle_detail, subtitle_checked_at

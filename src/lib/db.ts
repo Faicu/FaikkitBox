@@ -163,6 +163,7 @@ export function getDb(): DatabaseSync {
       added_at TEXT NOT NULL DEFAULT (datetime('now')),
       completed_at TEXT,
       has_romanian_subtitle INTEGER NOT NULL DEFAULT 0,
+      has_romanian_audio INTEGER NOT NULL DEFAULT 0,
       subtitle_source TEXT,
       subtitle_detail TEXT,
       subtitle_checked_at TEXT,
@@ -482,6 +483,16 @@ function runCleanups(database: DatabaseSync): void {
         "[db] Migrare v14: eliminate tabelele pinned_items/pinned_watch_settings/pinned_watch_state",
       );
       database.exec("PRAGMA user_version = 14");
+    }
+
+    if (version < 15) {
+      try {
+        database.exec("ALTER TABLE media ADD COLUMN has_romanian_audio INTEGER NOT NULL DEFAULT 0");
+        console.log("[db] Migrare v15: adăugat media.has_romanian_audio");
+      } catch {
+        // coloana există deja dintr-o rulare anterioară
+      }
+      database.exec("PRAGMA user_version = 15");
     }
   } catch (e) {
     console.warn("[db] Curățare eșuată:", e);

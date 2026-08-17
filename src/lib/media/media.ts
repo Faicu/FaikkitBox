@@ -286,6 +286,7 @@ export interface UpsertMediaFromPlexInput {
   quality?: string | null;
   durationMs?: number | null;
   hasRomanianSubtitle?: boolean;
+  hasRomanianAudio?: boolean;
   // Rezolvat retroactiv, potrivind calea fișierului din Plex cu lista de
   // torrente din qBittorrent (vezi media-backfill.ts) — dacă torrentul încă
   // seed-uiește, titlul backfill-uit devine gestionabil complet (corectare/
@@ -327,7 +328,8 @@ export function upsertMediaEntryFromPlex(input: UpsertMediaFromPlexInput): numbe
   if (existingId != null) {
     db.prepare(
       `UPDATE media SET plex_rating_key = ?, plex_added_at = ?, quality = COALESCE(?, quality),
-       duration_ms = COALESCE(?, duration_ms), has_romanian_subtitle = ?, updated_at = datetime('now')
+       duration_ms = COALESCE(?, duration_ms), has_romanian_subtitle = ?, has_romanian_audio = ?,
+       updated_at = datetime('now')
        WHERE id = ?`,
     ).run(
       input.plexRatingKey,
@@ -335,6 +337,7 @@ export function upsertMediaEntryFromPlex(input: UpsertMediaFromPlexInput): numbe
       input.quality ?? null,
       input.durationMs ?? null,
       input.hasRomanianSubtitle ? 1 : 0,
+      input.hasRomanianAudio ? 1 : 0,
       existingId,
     );
     return existingId;
@@ -351,8 +354,8 @@ export function upsertMediaEntryFromPlex(input: UpsertMediaFromPlexInput): numbe
         media_type, parent_id, imdb_id, tmdb_id, title, original_title, literal_title,
         year, season, episode, overview_ro, genres, poster_path, tv_status,
         plex_rating_key, plex_added_at, quality, duration_ms, has_romanian_subtitle,
-        torrent_hash, torrent_name, added_via
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'backfill')`,
+        has_romanian_audio, torrent_hash, torrent_name, added_via
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'backfill')`,
     )
     .run(
       input.mediaType,
@@ -374,6 +377,7 @@ export function upsertMediaEntryFromPlex(input: UpsertMediaFromPlexInput): numbe
       input.quality ?? null,
       input.durationMs ?? null,
       input.hasRomanianSubtitle ? 1 : 0,
+      input.hasRomanianAudio ? 1 : 0,
       input.torrentHash ?? null,
       input.torrentName ?? null,
     );

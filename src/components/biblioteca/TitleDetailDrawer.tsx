@@ -9,6 +9,7 @@ import {
   EyeOff,
   Captions,
   CaptionsOff,
+  Flag,
   Clock3,
   Users,
   User,
@@ -172,16 +173,23 @@ export function TitleDetailDrawer({
                     {d.quality}
                   </span>
                 )}
-                <span
-                  className={`flex items-center gap-1 rounded-full px-2 py-0.5 font-medium ${
-                    d.hasRomanianSubtitle
-                      ? "bg-emerald-500/15 text-emerald-400"
-                      : "bg-muted text-muted-foreground"
-                  }`}
-                >
-                  <Captions className="h-3 w-3" />
-                  {d.hasRomanianSubtitle ? "Subtitrare RO" : "Fără subtitrare RO (doar engleză)"}
-                </span>
+                {d.hasRomanianAudio ? (
+                  <span className="flex items-center gap-1 rounded-full bg-emerald-500/15 text-emerald-400 px-2 py-0.5 font-medium">
+                    <Flag className="h-3 w-3" />
+                    Românesc
+                  </span>
+                ) : (
+                  <span
+                    className={`flex items-center gap-1 rounded-full px-2 py-0.5 font-medium ${
+                      d.hasRomanianSubtitle
+                        ? "bg-emerald-500/15 text-emerald-400"
+                        : "bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    <Captions className="h-3 w-3" />
+                    {d.hasRomanianSubtitle ? "Subtitrare RO" : "Fără subtitrare RO (doar engleză)"}
+                  </span>
+                )}
                 {d.durationMs > 0 && (
                   <span className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 font-medium text-muted-foreground">
                     <Clock3 className="h-3 w-3" /> {formatMs(d.durationMs)}

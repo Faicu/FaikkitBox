@@ -99,6 +99,14 @@ export function hasEmbeddedRomanianSubtitle(media: PlexMedia | undefined): boole
   return streams.some((s) => s.streamType === 3 && isRomanianStream(s));
 }
 
+// Are titlul un stream audio română (dublaj) — arată că titlul e deja
+// "românesc" în sine (ex. Insula Iubirii), caz în care subtitrarea RO
+// devine irelevantă.
+export function hasRomanianAudio(media: PlexMedia | undefined): boolean {
+  const streams = media?.Part?.[0]?.Stream ?? [];
+  return streams.some((s) => s.streamType === 2 && isRomanianStream(s));
+}
+
 // Extrage id-ul dintr-un Guid Plex de forma "imdb://tt1234567" sau
 // "tmdb://12345" — mai fiabil și mai ieftin (zero căutare TMDB) decât
 // potrivirea prin căutare pe titlu, când e disponibil (mereu la filme,
