@@ -217,6 +217,11 @@ export function TitleDetailDrawer({
                     <Clock3 className="h-3 w-3" /> {formatMs(d.durationMs)}
                   </span>
                 )}
+                {d.year && (
+                  <span className="rounded-full bg-muted px-2 py-0.5 font-medium text-muted-foreground">
+                    {d.year}
+                  </span>
+                )}
               </div>
 
               {d.status === "downloading" && d.progress != null && (

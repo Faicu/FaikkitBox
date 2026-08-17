@@ -216,6 +216,7 @@ export interface PlexTitleDetail {
   thumbUrl: string | null;
   addedAt: number;
   durationMs: number;
+  year: number | null;
   quality: string | null;
   hasRomanianSubtitle: boolean;
   hasRomanianAudio: boolean;
@@ -272,6 +273,7 @@ interface MediaRow {
   season: number | null;
   episode: number | null;
   poster_path: string | null;
+  year: number | null;
   overview_ro: string | null;
   genres: string;
   quality: string | null;
@@ -367,6 +369,7 @@ async function buildDetailFromMediaRow(
     thumbUrl: row.poster_path,
     addedAt: Math.floor(new Date(`${row.added_at.replace(" ", "T")}Z`).getTime() / 1000),
     durationMs: row.duration_ms ?? 0,
+    year: row.year,
     quality: row.quality,
     hasRomanianSubtitle: !!row.has_romanian_subtitle,
     hasRomanianAudio: !!row.has_romanian_audio,
@@ -417,7 +420,7 @@ export const getPlexTitleDetail = createServerFn({ method: "GET" })
       const { getDb } = await import("../db");
       const mediaRow = getDb()
         .prepare(
-          `SELECT id, media_type, title, original_title, imdb_id, tmdb_id, season, episode, poster_path,
+          `SELECT id, media_type, title, original_title, imdb_id, tmdb_id, season, episode, poster_path, year,
            overview_ro, genres, quality, has_romanian_subtitle, has_romanian_audio, duration_ms, torrent_name, torrent_hash,
            category_name, size, freeleech, internal, save_path, added_via,
            plex_rating_key, is_season_pack, requested_by_user_id, added_at, completed_at,
