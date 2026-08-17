@@ -196,16 +196,21 @@ export function TitleDetailDrawer({
                     Românesc
                   </span>
                 ) : (
-                  <span
-                    className={`flex items-center gap-1 rounded-full px-2 py-0.5 font-medium ${
-                      d.hasRomanianSubtitle
-                        ? "bg-emerald-500/15 text-emerald-400"
-                        : "bg-muted text-muted-foreground"
-                    }`}
-                  >
-                    <Captions className="h-3 w-3" />
-                    {d.hasRomanianSubtitle ? "Subtitrare RO" : "Fără subtitrare RO (doar engleză)"}
-                  </span>
+                  // Cât timp titlul e în descărcare, subtitrarea încă nu a fost
+                  // căutată/verificată — un badge "Fără subtitrare RO" ar fi fals,
+                  // nu doar incomplet, de-aia îl ascundem până se termină.
+                  d.status !== "downloading" && (
+                    <span
+                      className={`flex items-center gap-1 rounded-full px-2 py-0.5 font-medium ${
+                        d.hasRomanianSubtitle
+                          ? "bg-emerald-500/15 text-emerald-400"
+                          : "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      <Captions className="h-3 w-3" />
+                      {d.hasRomanianSubtitle ? "Subtitrare RO" : "Fără subtitrare RO (doar engleză)"}
+                    </span>
+                  )
                 )}
                 {d.durationMs > 0 && (
                   <span className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 font-medium text-muted-foreground">
