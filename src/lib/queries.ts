@@ -152,4 +152,12 @@ export const plexLibraryBrowseQuery = queryOptions({
   queryKey: ["plexLibraryBrowse"],
   queryFn: () => getPlexLibraryBrowse(),
   staleTime: 60_000,
+  // Refresh rapid cât timp există titluri în descărcare (progres live din
+  // qBittorrent), altfel se oprește — nicio cerere extra când totul e deja
+  // în bibliotecă.
+  refetchInterval: (query) => {
+    const data = query.state.data;
+    const items = data?.status === "ok" ? data.items : [];
+    return items.some((it) => it.status === "downloading") ? 2500 : false;
+  },
 });

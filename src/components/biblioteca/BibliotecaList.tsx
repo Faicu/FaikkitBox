@@ -229,7 +229,7 @@ export function BibliotecaList() {
             {addedDate(item.addedAt)}
           </span>
         </span>
-        <StatusBadge status={item.status} />
+        <StatusBadge status={item.status} progress={item.progress} />
         {item.watchedByMe && <Eye className="h-3 w-3 shrink-0 text-emerald-400" />}
       </button>
     );

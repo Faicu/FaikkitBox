@@ -33,6 +33,56 @@ export interface PlexBrowseItem {
   // "downloading" — are torrent, dar Plex nu l-a indexat încă; "in_library"
   // — normal, deja în Plex.
   status: "in_library" | "downloading";
+  // Progres live din qBittorrent — populate doar pentru status "downloading"
+  // cu torrent_hash cunoscut; null dacă torrentul nu mai e găsit acolo
+  // (ex. șters manual) sau qBit nu e configurat/disponibil.
+  progress: number | null; // 0-100
+  dlspeed: number | null; // bytes/s
+  eta: number | null; // secunde
+}
+
+// ---------------------------------------------------------------------------
+// Progres live qBittorrent — un singur request cu toate hash-urile relevante,
+// reutilizat atât de listă cât și de detalii (vezi qbit-client.ts pentru
+// autentificarea cu cookie SID + retry).
+// ---------------------------------------------------------------------------
+
+interface QbitProgressInfo {
+  progress: number;
+  dlspeed: number;
+  eta: number;
+}
+
+async function fetchQbitProgress(hashes: string[]): Promise<Map<string, QbitProgressInfo>> {
+  const result = new Map<string, QbitProgressInfo>();
+  if (hashes.length === 0) return result;
+  const base = process.env.QBIT_URL;
+  const user = process.env.QBIT_USERNAME;
+  const pass = process.env.QBIT_PASSWORD;
+  if (!base || !user || !pass) return result;
+  try {
+    const { qbitGet } = await import("../qbit-client");
+    const url = base.replace(/\/$/, "");
+    const res = await qbitGet(
+      url,
+      `/api/v2/torrents/info?hashes=${hashes.join("|")}`,
+      user,
+      pass,
+    );
+    if (!res.ok) return result;
+    const list = (await res.json()) as Array<{
+      hash: string;
+      progress: number;
+      dlspeed: number;
+      eta: number;
+    }>;
+    for (const t of list) {
+      result.set(t.hash, { progress: t.progress, dlspeed: t.dlspeed, eta: t.eta });
+    }
+  } catch {
+    // qBit indisponibil — badge-ul rămâne fără procent, nu blocăm lista.
+  }
+  return result;
 }
 
 const BROWSE_LIMIT = 300;
@@ -100,8 +150,29 @@ export const getPlexLibraryBrowse = createServerFn({ method: "GET" }).handler(
             Math.floor(new Date(`${r.added_at.replace(" ", "T")}Z`).getTime() / 1000),
           watchedByMe: false,
           status: r.plex_rating_key ? "in_library" : "downloading",
+          progress: null,
+          dlspeed: null,
+          eta: null,
         };
       });
+
+      // Progres live: un singur request către qBit cu toate hash-urile
+      // titlurilor încă în descărcare, nu unul per titlu.
+      const hashByMediaId = new Map(
+        rows.filter((r) => !r.plex_rating_key && r.torrent_hash).map((r) => [r.id, r.torrent_hash!]),
+      );
+      if (hashByMediaId.size > 0) {
+        const progressByHash = await fetchQbitProgress([...new Set(hashByMediaId.values())]);
+        for (const item of items) {
+          const hash = hashByMediaId.get(item.mediaId);
+          const info = hash ? progressByHash.get(hash) : undefined;
+          if (info) {
+            item.progress = Math.round(info.progress * 1000) / 10;
+            item.dlspeed = info.dlspeed;
+            item.eta = info.eta;
+          }
+        }
+      }
 
       // "Am văzut" — badge afișat direct în listă, fără cost suplimentar (nicio
       // cerere nouă către Plex): potrivim doar cu istoricul deja cachuit.
@@ -153,6 +224,10 @@ export interface PlexTitleDetail {
   watchedByOthers: Array<{ username: string; viewedAt: number }>;
   addedByUsername: string | null;
   status: "in_library" | "downloading";
+  // Progres live din qBittorrent — vezi PlexBrowseItem.
+  progress: number | null;
+  dlspeed: number | null;
+  eta: number | null;
   // Butoanele de corectare/ștergere subtitrare și ștergere completă operează
   // direct pe media.id + torrentHash.
   torrentHash: string | null;
@@ -256,6 +331,18 @@ async function buildDetailFromMediaRow(
   const canManage = isAdminOrOwner(session, row.requested_by_user_id);
   const isAdmin = !!session.data.admin;
 
+  let progress: number | null = null;
+  let dlspeed: number | null = null;
+  let eta: number | null = null;
+  if (!row.plex_rating_key && row.torrent_hash) {
+    const info = (await fetchQbitProgress([row.torrent_hash])).get(row.torrent_hash);
+    if (info) {
+      progress = Math.round(info.progress * 1000) / 10;
+      dlspeed = info.dlspeed;
+      eta = info.eta;
+    }
+  }
+
   let addedByUsername: string | null = null;
   if (row.requested_by_user_id != null) {
     const u = db
@@ -283,6 +370,9 @@ async function buildDetailFromMediaRow(
     watchedByOthers,
     addedByUsername,
     status: row.plex_rating_key ? "in_library" : "downloading",
+    progress,
+    dlspeed,
+    eta,
     torrentHash: row.torrent_hash,
     isSeasonPack: !!row.is_season_pack,
     canManage,

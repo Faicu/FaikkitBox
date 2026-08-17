@@ -29,7 +29,8 @@ import {
 } from "@/components/ui/drawer";
 import { getPlexTitleDetail } from "@/lib/services.functions";
 import { correctSubtitleForMedia, deleteSubtitleForMedia } from "@/lib/filelist.functions";
-import { formatMs, formatBytes } from "@/lib/format";
+import { formatMs, formatBytes, formatSpeed, formatEta } from "@/lib/format";
+import { Progress } from "@/components/ui/progress";
 import { StatusBadge } from "./StatusBadge";
 import { episodeCode, addedDate } from "./utils";
 
@@ -61,6 +62,12 @@ export function TitleDetailDrawer({
     queryKey: ["plexTitleDetail", mediaId],
     queryFn: () => getPlexTitleDetail({ data: { mediaId: mediaId! } }),
     enabled: !!mediaId,
+    // Progres live cât timp titlul e în descărcare — se oprește automat
+    // când trece la "in_library" (vezi și plexLibraryBrowseQuery).
+    refetchInterval: (query) => {
+      const d = query.state.data;
+      return d?.status === "ok" && d.detail.status === "downloading" ? 2500 : false;
+    },
   });
   const d = detail.data?.status === "ok" ? detail.data.detail : null;
 
@@ -157,7 +164,9 @@ export function TitleDetailDrawer({
           {d && (
             <>
               <div className="flex flex-wrap items-center gap-2 text-xs">
-                {d.status !== "in_library" && <StatusBadge status={d.status} />}
+                {d.status !== "in_library" && (
+                  <StatusBadge status={d.status} progress={d.progress} />
+                )}
                 {d.quality && (
                   <span className="rounded-full bg-amber-500/15 text-amber-400 px-2 py-0.5 font-medium">
                     {d.quality}
@@ -179,6 +188,19 @@ export function TitleDetailDrawer({
                   </span>
                 )}
               </div>
+
+              {d.status === "downloading" && d.progress != null && (
+                <div>
+                  <Progress value={d.progress} />
+                  <div className="mt-1 flex items-center justify-between text-[11px] text-muted-foreground">
+                    <span>{d.progress.toFixed(1)}%</span>
+                    <span>
+                      {d.dlspeed != null && formatSpeed(d.dlspeed)}
+                      {d.eta != null && ` · rămas ${formatEta(d.eta)}`}
+                    </span>
+                  </div>
+                </div>
+              )}
 
               {d.genres.length > 0 && (
                 <div className="flex flex-wrap items-center gap-1.5 text-xs">
