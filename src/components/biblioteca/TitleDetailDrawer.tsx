@@ -19,6 +19,7 @@ import {
   Wrench,
   ChevronDown,
   ChevronRight,
+  ExternalLink,
 } from "lucide-react";
 
 import {
@@ -150,6 +151,22 @@ export function TitleDetailDrawer({
                   {episodeCode(d.season, d.episode) ?? ""}
                   {d.title ? ` · ${d.title}` : ""}
                 </DrawerDescription>
+              )}
+              {d?.originalTitle &&
+                d.originalTitle !== (d.type === "movie" ? d.title : (d.show ?? d.title)) && (
+                  <div className="mt-0.5 truncate text-xs text-muted-foreground italic">
+                    {d.originalTitle}
+                  </div>
+                )}
+              {d?.imdbId && (
+                <a
+                  href={`https://www.imdb.com/title/${d.imdbId}/`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-1 inline-flex w-fit items-center gap-1 rounded-full bg-muted/60 px-2 py-0.5 text-[11px] font-medium text-foreground hover:bg-muted transition-colors"
+                >
+                  <ExternalLink className="h-3 w-3" /> IMDb
+                </a>
               )}
             </div>
           </div>

@@ -240,6 +240,9 @@ export interface PlexTitleDetail {
   canManage: boolean;
   tmdbId: number | null;
   originalTitle: string | null;
+  // Vizibil pentru toți (nu doar admin, spre deosebire de tech.imdbId) —
+  // folosit direct pentru butonul de link către IMDb.
+  imdbId: string | null;
   // Detalii tehnice — populate doar pentru admin (vezi isAdminOrOwner mai
   // jos); UI-ul le ascunde complet pentru restul utilizatorilor.
   tech: {
@@ -381,6 +384,7 @@ async function buildDetailFromMediaRow(
     canManage,
     tmdbId: row.tmdb_id,
     originalTitle: row.original_title,
+    imdbId: row.imdb_id,
     tech: isAdmin
       ? {
           imdbId: row.imdb_id,
