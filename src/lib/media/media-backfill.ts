@@ -254,7 +254,23 @@ async function runMediaBackfillWork(): Promise<MediaBackfillResult> {
       return info;
     }
 
-    for (const item of pending) {
+    // Procesare cu concurență limitată — fiecare item face 1-2 cereri
+    // secvențiale (Plex + TMDB), cu rate-limit-ul lor propriu; rulate strict
+    // secvențial, o bibliotecă mare (mii de episoade neindexate, ex. primul
+    // backfill după instalare) dura de ordinul orelor. 4 workeri în paralel,
+    // fiecare cu aceeași pauză de 250ms între iteme — păstrează presiunea pe
+    // TMDB/Plex sub control, dar reduce timpul total de ~4 ori.
+    const BACKFILL_CONCURRENCY = 4;
+    let nextIndex = 0;
+    async function worker(): Promise<void> {
+      while (true) {
+        const i = nextIndex++;
+        if (i >= pending.length) return;
+        const item = pending[i];
+        await processPendingItem(item);
+      }
+    }
+    async function processPendingItem(item: PlexMetadataItem): Promise<void> {
       try {
         const isEpisode = item.type === "episode";
         const detail = await fetchItemDetail(url, headers, String(item.ratingKey));
@@ -345,10 +361,15 @@ async function runMediaBackfillWork(): Promise<MediaBackfillResult> {
         skipped++;
       }
       backfillJob.setProgress({ total: pending.length, done: ++done });
-      // Pauză mică între iteme — TMDB are rate-limit, iar o bibliotecă mare
-      // (sute-mii de episoade) nu trebuie lovită dintr-o dată.
+      // Pauză mică între iteme — TMDB are rate-limit; păstrată per-worker (nu
+      // doar global) ca 4 workeri concurenți să nu însumeze o rată efectivă
+      // de 4× cererilor pe secundă.
       await new Promise((r) => setTimeout(r, 250));
     }
+
+    await Promise.all(
+      Array.from({ length: Math.min(BACKFILL_CONCURRENCY, pending.length) }, () => worker()),
+    );
 
     console.log(
       `[media-backfill] ${processed} procesate, ${added} adăugate, ${skipped} sărite (din ${allItems.length} titluri totale în Plex, ${alreadyLinked.size} deja legate)`,

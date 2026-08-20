@@ -401,19 +401,20 @@ export const searchFilelist = createServerFn({ method: "GET" })
 
 const filelistCheckCache = new Map<string, { expiresAt: number; result: FilelistSearchResult }>();
 const FILELIST_CHECK_CACHE_TTL = 10 * 60_000;
-const FILELIST_CHECK_CACHE_SWEEP_THRESHOLD = 500;
 
-// Intrările expirate se elimină lazy — doar când o cheie e recitită. Fără
-// măturare, un cache uitat ar crește nemărginit pe termen lung (titluri
-// distincte verificate o singură dată rămân în memorie la infinit). Măturăm
-// când Map-ul devine suficient de mare încât să merite costul unei treceri.
+// Măturare pe timer, nu pe prag de mărime — o bibliotecă mare (mii de
+// titluri distincte verificate o singură dată, ex. tot ce se răsfoiește în
+// Descoperă) putea oscila mereu sub un prag fix (500 chei) și nu declanșa
+// niciodată curățarea, deși intrările expiraseră demult (TTL 10 min). Rulează
+// la fiecare jumătate de TTL — suficient de des ca memoria să nu crească
+// nemărginit, fără să coste o trecere la fiecare citire/scriere din cache.
 function sweepExpiredFilelistCache(): void {
-  if (filelistCheckCache.size < FILELIST_CHECK_CACHE_SWEEP_THRESHOLD) return;
   const now = Date.now();
   for (const [key, entry] of filelistCheckCache) {
     if (entry.expiresAt <= now) filelistCheckCache.delete(key);
   }
 }
+setInterval(sweepExpiredFilelistCache, FILELIST_CHECK_CACHE_TTL / 2).unref?.();
 
 export async function checkFilelistForItemInternal(data: {
   title: string;
@@ -453,7 +454,6 @@ export async function checkFilelistForItemInternal(data: {
     });
 
     const result: FilelistSearchResult = { status: "ok", torrents: found };
-    sweepExpiredFilelistCache();
     filelistCheckCache.set(cacheKey, { expiresAt: Date.now() + FILELIST_CHECK_CACHE_TTL, result });
     return result;
   } catch (e) {
@@ -670,98 +670,131 @@ async function downloadFilelistCore(
       console.warn("qBit upload răspuns neașteptat:", uploadText);
     }
 
-    // 5. Găsește hash-ul torrentului proaspăt adăugat (cu reîncercări)
-    const torrentHash = await findTorrentHashByName(url, cookie, params.torrentName);
-
-    // 6. Loghează descărcarea imediat (completedAt null = în curs)
+    // 5-7. Restul (găsire hash, jurnalizare, notificare, scriere media,
+    // pornire polling) rulează în fundal, fără să blocheze răspunsul —
+    // findTorrentHashByName poate aștepta până la 10s (reîncercări) până
+    // torrentul apare în lista qBittorrent, iar clientul n-are nevoie de
+    // hash ca să știe că upload-ul a reușit (apăsarea "Descarcă" nu mai
+    // pare blocată câteva secunde bune).
     const catName = params.categoryName || CATEGORY_NAMES[catId] || `Cat ${catId}`;
-
-    import("../notifications/notifications")
-      .then(({ buildTorrentAddedNotification }) =>
-        buildTorrentAddedNotification({
-          torrentName: params.torrentName,
-          imdb: params.imdb,
-        }),
-      )
-      .then((n) =>
-        import("../activity-log").then(({ logActivity }) =>
-          logActivity(
-            "torrent_added",
-            n.body,
-            {
-              category: catName,
-              savePath,
-              size: params.size,
-            },
-            { image: n.image, url: n.url, title: n.title },
-          ),
-        ),
-      )
-      .catch(() => {});
-    await appendDownloadLog({
-      id: params.torrentId,
-      name: params.torrentName,
-      size: params.size ?? 0,
-      category: catId,
-      categoryName: catName,
-      freeleech: params.freeleech ?? false,
-      internal: params.internal ?? false,
+    finishFilelistDownload({
+      params,
+      catId,
+      catName,
       savePath,
-      downloadedAt: new Date().toISOString(),
-      completedAt: null,
-      torrentHash: torrentHash ?? undefined,
-      imdb: params.imdb ?? undefined,
-      requestedByUserId: params.requestedByUserId ?? null,
-    });
-
-    const mediaPayload =
-      params.media ??
-      (await autoResolveManualMedia(params.imdb, params.torrentName, isMovie).catch((e) => {
-        console.warn("[filelist] Rezolvare automată media eșuată:", e);
-        return null;
-      }));
-    if (mediaPayload) {
-      const { upsertMediaEntry } = await import("../media/media");
-      try {
-        upsertMediaEntry({
-          ...mediaPayload,
-          torrentName: params.torrentName,
-          torrentHash: torrentHash ?? null,
-          category: catId,
-          categoryName: catName,
-          size: params.size ?? 0,
-          freeleech: params.freeleech ?? false,
-          internal: params.internal ?? false,
-          savePath,
-          requestedByUserId: params.requestedByUserId ?? null,
-        });
-      } catch (e) {
-        console.warn("[filelist] Nu am putut scrie în tabela media:", e);
-      }
-    }
-
-    // 7. Pornește polling background — refresh Plex și marchează complet DOAR la final
-    const plexType = isMovie ? "movie" : "show";
-    if (torrentHash) {
-      pollUntilComplete(
-        url,
-        cookie,
-        torrentHash,
-        plexType,
-        params.torrentName,
-        params.torrentId,
-        qbitUser,
-        qbitPass,
-        params.imdb,
-      ).catch((e) => console.error("[filelist] Eroare polling:", e));
-    } else {
-      console.warn("[filelist] Hash nedisponibil — Plex nu va fi refreshuit automat");
-    }
+      isMovie,
+      url,
+      cookie,
+      qbitUser,
+      qbitPass,
+    }).catch((e) => console.error("[filelist] Eroare la finalizarea descărcării în fundal:", e));
 
     return { status: "ok", torrentName: params.torrentName, savePath };
   } finally {
     // Curăță fișierul temporar
     await unlink(tmpPath).catch(() => {});
+  }
+}
+
+// Pasul de finalizare (5-7 din downloadFilelistCore) — separat ca să poată
+// rula fără await, imediat după ce upload-ul la qBittorrent a fost confirmat.
+async function finishFilelistDownload(ctx: {
+  params: DownloadFilelistParams;
+  catId: number;
+  catName: string;
+  savePath: string;
+  isMovie: boolean;
+  url: string;
+  cookie: string;
+  qbitUser: string;
+  qbitPass: string;
+}): Promise<void> {
+  const { params, catId, catName, savePath, isMovie, url, cookie, qbitUser, qbitPass } = ctx;
+
+  // 5. Găsește hash-ul torrentului proaspăt adăugat (cu reîncercări)
+  const torrentHash = await findTorrentHashByName(url, cookie, params.torrentName);
+
+  // 6. Loghează descărcarea imediat (completedAt null = în curs)
+  import("../notifications/notifications")
+    .then(({ buildTorrentAddedNotification }) =>
+      buildTorrentAddedNotification({
+        torrentName: params.torrentName,
+        imdb: params.imdb,
+      }),
+    )
+    .then((n) =>
+      import("../activity-log").then(({ logActivity }) =>
+        logActivity(
+          "torrent_added",
+          n.body,
+          {
+            category: catName,
+            savePath,
+            size: params.size,
+          },
+          { image: n.image, url: n.url, title: n.title },
+        ),
+      ),
+    )
+    .catch(() => {});
+  await appendDownloadLog({
+    id: params.torrentId,
+    name: params.torrentName,
+    size: params.size ?? 0,
+    category: catId,
+    categoryName: catName,
+    freeleech: params.freeleech ?? false,
+    internal: params.internal ?? false,
+    savePath,
+    downloadedAt: new Date().toISOString(),
+    completedAt: null,
+    torrentHash: torrentHash ?? undefined,
+    imdb: params.imdb ?? undefined,
+    requestedByUserId: params.requestedByUserId ?? null,
+  });
+
+  const mediaPayload =
+    params.media ??
+    (await autoResolveManualMedia(params.imdb, params.torrentName, isMovie).catch((e) => {
+      console.warn("[filelist] Rezolvare automată media eșuată:", e);
+      return null;
+    }));
+  if (mediaPayload) {
+    const { upsertMediaEntry } = await import("../media/media");
+    try {
+      upsertMediaEntry({
+        ...mediaPayload,
+        torrentName: params.torrentName,
+        torrentHash: torrentHash ?? null,
+        category: catId,
+        categoryName: catName,
+        size: params.size ?? 0,
+        freeleech: params.freeleech ?? false,
+        internal: params.internal ?? false,
+        savePath,
+        requestedByUserId: params.requestedByUserId ?? null,
+      });
+    } catch (e) {
+      console.warn("[filelist] Nu am putut scrie în tabela media:", e);
+    }
+  }
+
+  // 7. Pornește polling background — refresh Plex și marchează complet DOAR la final
+  const plexType = isMovie ? "movie" : "show";
+  if (torrentHash) {
+    pollUntilComplete(
+      url,
+      cookie,
+      torrentHash,
+      plexType,
+      params.torrentName,
+      params.torrentId,
+      qbitUser,
+      qbitPass,
+      params.imdb,
+    ).catch((e) => console.error("[filelist] Eroare polling:", e));
+  } else {
+    console.warn("[filelist] Hash nedisponibil — Plex nu va fi refreshuit automat");
   }
 }
 
