@@ -94,6 +94,7 @@ transversale, fără un singur domeniu clar.
 | `activity-log.ts` | Jurnal de activitate (SQLite) — `logActivity`, tipuri de eveniment (`ActivityType`), citire paginată. | `tehnic/sections/ActivityLogSection.tsx`, orice cod care loghează un eveniment. |
 | `qbit-client.ts` | Client qBittorrent unic — autentificare cookie SID + fetch cu retry automat la 401/403. Folosit deopotrivă de `filelist/` și `services/`, nu are un singur "acasă" domeniu. | `filelist/download.ts`, `services/qbittorrent.ts`, `media/media-backfill.ts`. |
 | `plex-refresh.ts` | SINGURUL loc care ar trebui să declanșeze un rescan de bibliotecă Plex, după orice modificare pe disk. | `filelist/download.ts`, `filelist/log.ts`, `services/qbittorrent.ts`. |
+| `background-job.ts` | `BackgroundJob<TProgress, TResult>` — stare unificată pentru "un singur job rulează odată" (running/progress/lastResult), urmărit prin polling din UI. Extras dintr-o duplicare aproape identică între `media/media-backfill.ts` și `filelist/download.ts`. | `media/media-backfill.ts`, `filelist/download.ts`. |
 | `github.functions.ts` | Server functions GitHub — listă commit-uri, push manual din Tehnic (`pushToGitHub`), commit-uri locale nepublicate. | `tehnic/sections/CommitStatsSection.tsx`. |
 | `format.ts` | Formatări reutilizate — bytes, viteză, durată, ETA. | Aproape toate rutele/componentele cu date numerice. |
 | `utils.ts` | `cn()` — helper Tailwind pentru merge de clase (clsx + tailwind-merge). | Toate componentele `ui/*` + majoritatea componentelor cu `className` condiționat. |
@@ -125,8 +126,8 @@ transversale, fără un singur domeniu clar.
 
 | Fișier | Ce conține | Folosit de |
 |---|---|---|
-| `media.ts` | Sursă unică pentru tabela `media` (filme/seriale/episoade reale — descărcate sau backfill din Plex). `upsertMediaEntry`, `upsertMediaEntryFromPlex`, `ensureMediaPlaceholder` (rând-părinte serial). | `filelist/download.ts`, `filelist/log.ts`, `media-backfill.ts`, `services/plex-browse.ts`. |
-| `media-backfill.ts` | Completează `media` pentru tot ce era deja în Plex înainte de acest sistem — scanează toată biblioteca Plex, rezolvă TMDB best-effort, leagă torrente existente din qBittorrent. | `media-torrent-sync.ts` (plugin), `BibliotecaList.tsx` (buton admin). |
+| `media.ts` | Sursă unică pentru tabela `media` (filme/seriale/episoade reale — descărcate sau backfill din Plex). `upsertMediaEntry`, `upsertMediaEntryFromPlex` (întoarce `{ id, created }`), `ensureMediaPlaceholder` (rând-părinte serial), `cleanupOrphanSeasonPackPlaceholders` (șterge placeholder-ele de pachet de sezon rămase orfane, apelată periodic). | `filelist/download.ts`, `filelist/log.ts`, `media-backfill.ts`, `services/plex-browse.ts`, `media-torrent-sync.ts` (plugin). |
+| `media-backfill.ts` | Completează `media` pentru tot ce era deja în Plex înainte de acest sistem — scanează toată biblioteca Plex, rezolvă TMDB best-effort, leagă torrente existente din qBittorrent. Procesare cu 4 workeri concurenți (`BACKFILL_CONCURRENCY`), prin `BackgroundJob`. | `media-torrent-sync.ts` (plugin), `BibliotecaList.tsx` (buton admin). |
 | `torrent-name-parse.ts` | Extrage sezon/episod dintr-un nume de lansare (`parseSeasonEpisodeFromName`). | `tmdb/tmdb-title-lookup.ts`, `filelist/log.ts`, `components/filelist/use-download.ts`. |
 | `torrent-quality.ts` | Detectare calitate (720p/1080p/4K/4K HDR) dintr-un nume de lansare, pentru notificări. | `notifications/notifications.ts`, `filelist/download.ts`. |
 
@@ -163,12 +164,13 @@ transversale, fără un singur domeniu clar.
 |---|---|---|
 | `types.ts` | Interfețe comune (`FilelistTorrent`, `FilelistCategory` etc). | Restul modulului + componente client. |
 | `categories.ts` | Maparea completă a celor 31 de categorii Filelist.io (verificată direct pe API). | `download.ts`, `components/filelist/FilelistSection.tsx`. |
-| `download.ts` | Cel mai mare fișier din `filelist/` — căutare Filelist (`checkFilelistForItemInternal`, `searchFilelistRaw`), orchestrare descărcare + upload qBittorrent (`downloadFilelistCore`), polling până la completare, backfill subtitrări (`runSubtitleBackfillIfIdle`). | `filelist.functions.ts` (barrel), `media-torrent-sync.ts`. |
+| `download.ts` | Cel mai mare fișier din `filelist/` — căutare Filelist strict pe IMDb id (`checkFilelistForItemInternal`, `searchFilelistRaw`, cache 10 min măturat pe timer), orchestrare descărcare + upload qBittorrent (`downloadFilelistCore` — răspunde imediat după upload, restul — hash, jurnal, `media`, polling — rulează în fundal prin `finishFilelistDownload`), polling până la completare, backfill subtitrări (`runSubtitleBackfillIfIdle`, prin `BackgroundJob`). | `filelist.functions.ts` (barrel), `media-torrent-sync.ts`. |
 | `log.ts` | Jurnal persistent al descărcărilor (SQLite `downloads`) + `deleteMediaEntry` (șterge titlu complet: qBittorrent + disk + `media` + `downloads`). | `filelist.functions.ts`, `BibliotecaList.tsx`. |
 | `subtitles.ts` | Cel mai mare fișier din proiect — `ensureRomanianSubtitle`: verifică/corectează subtitrarea RO la finalul unei descărcări (embedded → tracked .srt → OpenSubtitles → subs.ro), inclusiv pachete de sezon episod cu episod. | `download.ts` (`pollUntilComplete`), backfill. |
 | `subtitle-outcomes.ts` | Doar tipuri + constante pentru rezultatele `ensureRomanianSubtitle` — fișier "curat" (fără `node:fs`/`iconv-lite`) ca să poată fi importat și din componente client. | `SubtitleFixDrawer.tsx`, `subtitles.ts`. |
 | `opensubtitles-client.ts` | Client OpenSubtitles REST v1 — sursă de rezervă pentru subtitrări RO. Mutat aici (era la rădăcina `lib/`) fiindcă e folosit exclusiv de `subtitles.ts`. | `subtitles.ts`. |
 | `subsro-client.ts` | Client subs.ro — a doua sursă de rezervă pentru subtitrări RO. Mutat aici pentru același motiv. | `subtitles.ts`. |
+| `release-scoring.ts` | `pickBestByRelease`/`extractTags`/`findTag` — potrivire nume de release (rezoluție/mod obținere/platformă/codec/grup) între candidați de subtitrare și fișierul media țintă. Extras din `subtitles.ts` (funcții pure, fără I/O). | `subtitles.ts`. |
 
 ### src/lib/services/
 
@@ -301,9 +303,12 @@ fost eliminate 2026-08-16, nefolosite niciodată.
 ## Analiză cantitativă
 
 Generată programatic (grep/python pe tot `src/`+`server/`) — 2026-08-17,
-după regruparea `lib/` pe subfoldere de domeniu.
-Regenerează cu același script dacă vrei o poză actualizată; nu ține pasul
-automat cu schimbările de cod.
+după regruparea `lib/` pe subfoldere de domeniu; rândurile pentru fișierele
+noi/schimbate (`release-scoring.ts`, `background-job.ts`, `download.ts`,
+`subtitles.ts`, `media-backfill.ts`) actualizate manual pe 2026-08-20, restul
+tabelului rămâne poza din 2026-08-17.
+Regenerează cu același script dacă vrei o poză complet actualizată; nu ține
+pasul automat cu schimbările de cod.
 
 **Total: 122 fișiere, ~19 787 linii, ~418 funcții** (numărătoare aproximativă —
 funcții numite + `const x = (...) =>`, nu include metode de clasă sau
@@ -366,17 +371,17 @@ lib/{auth,tmdb,media,notifications,errors,system,filelist,services}/*
 — nu sunt moarte, sunt încărcate de Nitro prin convenție de folder, nu prin
 import explicit (vezi secțiunea `server/` de mai sus).
 
-### Tabel complet, toate cele 122 de fișiere (sortat descrescător după linii)
+### Tabel complet, toate cele 124 de fișiere (sortat descrescător după linii)
 
 | Fișier | Linii | Funcții | Fan-in |
 |---|---:|---:|---:|
-| `src/lib/filelist/subtitles.ts` | 1208 | 33 | 1 |
-| `src/lib/filelist/download.ts` | 1160 | 14 | 1 |
+| `src/lib/filelist/download.ts` | 1184 | 14 | 1 |
+| `src/lib/filelist/subtitles.ts` | 1119 | 26 | 1 |
 | `src/components/principala/AddMediaWizard.tsx` | 905 | 18 | 3 |
 | `src/lib/media/media.ts` | 509 | 11 | 3 |
 | `src/lib/tmdb/tmdb.functions.ts` | 493 | 10 | 6 |
 | `src/lib/db.ts` | 490 | 3 | 2 |
-| `src/lib/media/media-backfill.ts` | 468 | 10 | 1 |
+| `src/lib/media/media-backfill.ts` | 470 | 7 | 1 |
 | `src/lib/activity-log.ts` | 454 | 12 | 4 |
 | `src/routes/qbit.tsx` | 452 | 3 | 0 |
 | `src/lib/github.functions.ts` | 437 | 2 | 5 |
@@ -407,6 +412,7 @@ import explicit (vezi secțiunea `server/` de mai sus).
 | `src/routes/immich.tsx` | 196 | 1 | 0 |
 | `src/components/descopera/FeedView.tsx` | 195 | 3 | 1 |
 | `src/lib/filelist/opensubtitles-client.ts` | 192 | 8 | 1 |
+| `src/lib/filelist/release-scoring.ts` | 189 | 4 | 1 |
 | `src/lib/system/agent.functions.ts` | 186 | 2 | 6 |
 | `src/routes/register.tsx` | 181 | 1 | 0 |
 | `src/lib/filelist/log.ts` | 177 | 6 | 2 |
@@ -440,6 +446,7 @@ import explicit (vezi secțiunea `server/` de mai sus).
 | `server/plugins/github-commit-tracker.ts` | 74 | 1 | 0 |
 | `src/components/BottomNav.tsx` | 74 | 1 | 1 |
 | `src/lib/plex-refresh.ts` | 74 | 6 | 2 |
+| `src/lib/background-job.ts` | 73 | 6 | 2 |
 | `src/components/tehnic/sections/PluginStatusSection.tsx` | 72 | 3 | 1 |
 | `src/components/ui/dialog.tsx` | 70 | 1 | 1 |
 | `src/components/biblioteca/utils.ts` | 69 | 6 | 2 |

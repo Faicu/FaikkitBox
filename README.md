@@ -53,7 +53,7 @@ Sistem cu două roluri, o singură tabelă `users` (nu conturi separate pentru a
 | **Admin** | Creat manual de un alt admin, din pagina Utilizatori (`addAdminUser`). Aprobat automat (`status='approved'`). | Toate paginile. |
 | **User obișnuit** | Auto-înregistrare publică (`/register`) + aprobare manuală de admin. | Acasă (public oricum), Descoperă, Bibliotecă, qBittorrent (fără căutarea manuală Filelist și alegerea manuală a torrentului, admin-only) — vezi tabelul de mai sus. |
 
-**Înregistrare** (`registerUser`, `src/lib/registration.functions.ts`) — formular Username/Parolă/Email/Telefon (WhatsApp). Username-ul **sau** email-ul introdus trebuie să corespundă unui cont din biblioteca Plex (`matchPlexAccount`, `src/lib/plex-users.server.ts` — interoghează `plex.tv/api/users`, parsat manual din XML, cache 5 min; API-ul ignoră `Accept: application/json`), altfel cererea e respinsă direct, cu mesaj clar. Contul creat intră cu `status='pending'` — nu poate face login până nu e aprobat. Fiecare cerere nouă generează automat o intrare `account_request` în Jurnalul de activitate + notificare push.
+**Înregistrare** (`registerUser`, `src/lib/auth/registration.functions.ts`) — formular Username/Parolă/Email/Telefon (WhatsApp). Username-ul **sau** email-ul introdus trebuie să corespundă unui cont din biblioteca Plex (`matchPlexAccount`, `src/lib/auth/plex-users.server.ts` — interoghează `plex.tv/api/users`, parsat manual din XML, cache 5 min; API-ul ignoră `Accept: application/json`), altfel cererea e respinsă direct, cu mesaj clar. Contul creat intră cu `status='pending'` — nu poate face login până nu e aprobat. Fiecare cerere nouă generează automat o intrare `account_request` în Jurnalul de activitate + notificare push.
 
 **Aprobare** (`/users`, pagina Utilizatori) — admin vede cererile pending cu detalii (contact + legătura Plex găsită) și poate Aproba sau Respinge (respingerea șterge direct rândul — nu există status `rejected`). Orice cont existent poate fi „revocat" (șters) din secțiunea Utilizatori aprobați.
 
@@ -89,13 +89,9 @@ Wizard-ul de adăugare (`AddMediaWizard.tsx`) — accesibil din butonul „Adaug
 
 Căutarea „există pe Filelist?" e **unificată** într-o singură sursă de adevăr (`checkFilelistForItemInternal`, `src/lib/filelist/download.ts`), folosită atât de wizard cât și de căutarea manuală (`FilelistSection`, admin, de pe Acasă).
 
-Caută secvențial, se oprește la primul rezultat:
+Caută **strict după IMDb id** — fallback-ul pe titlu a fost eliminat deliberat (confirmat de suportul Filelist: căutarea pe titlu dă rezultate nesigure). Fără IMDb id găsit pentru un titlu, nu se face niciun apel către Filelist.
 
-1. **IMDB ID** — cel mai fiabil, funcționează indiferent cum e denumită lansarea pe scenă.
-2. **Titlul original literal** — romanizarea reală (ex. „Gunche"), luată din TMDB `alternative_titles` (`type: "literal title"`), **nu** `original_title` brut (care rămâne în scriptul nativ, ex. „군체", inutil ca text de căutare).
-3. **Titlul englez/internațional**.
-
-Fiecare rezultat păstrează `matchedVia` (prin ce criteriu a fost găsit) și `matchedByImdb` — vizibile prin butonul **„Info Căutare"** din dialogul de confirmare descărcare (`DownloadConfirmDialog.tsx`).
+Fiecare rezultat păstrează `matchedByImdb` — vizibil prin butonul **„Info Căutare"** din dialogul de confirmare descărcare (`DownloadConfirmDialog.tsx`).
 
 ### Subtitrare română automată (`src/lib/filelist/subtitles.ts`)
 
@@ -105,13 +101,15 @@ La finalul fiecărei descărcări (înainte de refresh-ul Plex), `ensureRomanian
 2. **Există un `.srt` în torrent, dar cu denumire greșită pentru Plex?** — Plex identifică limba unei subtitrări externe după numele fișierului (`<nume-media>.ro.srt`), nu după conținut. Dacă torrentul conține exact un `.srt`, conținutul e verificat întâi (diacritice ă/â/î/ș/ț ca semnal principal, cuvinte uzuale RO ca rezervă) — **nu se presupune** că e automat română doar pentru că e singurul fișier `.srt` din torrent (unele lansări vin cu subtitrare engleză bundle-uită). Dacă pare română, e **redenumit prin API-ul qBittorrent** (`torrents/renameFile`) — obligatoriu prin API, nu direct pe disk, altfel qBittorrent pierde evidența fișierului. Dacă nu pare română, e redenumit `.en.srt` (nu rămâne ambiguă pentru Plex) și se continuă la pasul 3, ca și cum n-ar fi existat niciun `.srt`.
 3. **Nicio subtitrare deloc?** — se caută pe **OpenSubtitles** (`OPENSUBTITLES_API_KEY` în `.env`) după IMDb id, limba română. Din rezultate se alege cel al cărui `release` se potrivește cel mai bine cu sursa/rezoluția torrentului (ex. WEB-DL/AMZN 1080p vs BluRay 2160p) — o subtitrare pentru altă sursă desincronizează timpii de afișare. Dacă OpenSubtitles nu are o potrivire clară (sursă+rezoluție), se caută și pe **subs.ro** (`SUBSRO_API_KEY` în `.env`) — arhivele de acolo conțin adesea mai multe variante (una per sursă/rezoluție), extrase și scorate la fel; câștigă oricare din cele două surse cu potrivirea mai bună. Dacă nici așa nu există o potrivire clară, se salvează totuși cel mai apropiat rezultat, dar cu un avertisment în log ("verifică sincronizarea").
 
-**Backfill**: butonul „Verifică subtitrări" din Bibliotecă (admin) rulează aceeași verificare retroactiv pe toate torrentele active din qBittorrent, nu doar cele din jurnalul aplicației.
+**Backfill**: butonul „Verifică subtitrări" din Bibliotecă (admin) rulează aceeași verificare retroactiv pe toate torrentele active din qBittorrent, nu doar cele din jurnalul aplicației. Backfill-ul de completare din Plex (`media-backfill.ts`) rulează cu 4 workeri concurenți, nu strict secvențial — o bibliotecă mare (mii de episoade neindexate) nu mai durează ore la primul backfill. Pornirea/urmărirea unui job de fundal (running/progress/lastResult) e unificată în `src/lib/background-job.ts` (`BackgroundJob`), folosit atât aici cât și de backfill-ul de subtitrări.
+
+Descărcarea de pe Filelist răspunde imediat după ce upload-ul la qBittorrent e confirmat — găsirea hash-ului torrentului (poate dura până la 10s), jurnalizarea, scrierea în `media` și pornirea polling-ului rulează în fundal, nu mai blochează cererea HTTP a clientului.
 
 ### Sincronizare de fundal (`server/plugins/media-torrent-sync.ts`)
 
 Rulează periodic, fără acțiune din UI: completează `media` cu orice titlu din Plex încă neindexat (echivalent backfill-ului manual), leagă retroactiv torrente existente din qBittorrent de rândurile `media` corespunzătoare, și verifică subtitrările pentru descărcările vechi.
 
-Conținutul (titlu + text) notificărilor de torrent adăugat/complet trăiește în `src/lib/notifications.ts` — sursă unică, nu recalculat inline la fiecare loc care trimite o notificare.
+Conținutul (titlu + text) notificărilor de torrent adăugat/complet trăiește în `src/lib/notifications/notifications.ts` — sursă unică, nu recalculat inline la fiecare loc care trimite o notificare.
 
 ---
 
@@ -121,9 +119,9 @@ Toate `console.warn`/`console.error` din **toată aplicația** — server functi
 
 | Componentă | Rol |
 |---|---|
-| `src/lib/console-capture.ts` | Suprascrie `console.error`/`console.warn` server-side, trimite spre `logError()`. Instalată idempotent din `server.ts` și fiecare plugin de fundal. |
-| `src/lib/client-error-capture.ts` | Echivalentul pentru browser, trimite spre `logClientError()` (server function, cu rate-limit per IP). Instalat din `__root.tsx`, alături de listenere `window.onerror`/`unhandledrejection`. |
-| `src/lib/error-log.ts` | Nucleul: grupare, rate-limit, retenție, notificare. |
+| `src/lib/errors/console-capture.ts` | Suprascrie `console.error`/`console.warn` server-side, trimite spre `logError()`. Instalată idempotent din `server.ts` și fiecare plugin de fundal. |
+| `src/lib/errors/client-error-capture.ts` | Echivalentul pentru browser, trimite spre `logClientError()` (server function, cu rate-limit per IP). Instalat din `__root.tsx`, alături de listenere `window.onerror`/`unhandledrejection`. |
+| `src/lib/errors/error-log.ts` | Nucleul: grupare, rate-limit, retenție, notificare. |
 
 **Grupare** — erori identice (sursă + nivel + mesaj) incrementează un contor (`×N`) pe același rând, în loc să umple jurnalul cu duplicate.
 
@@ -165,8 +163,15 @@ src/
     ui/                 componente shadcn/ui
   hooks/              hook-uri React custom
   lib/                funcții server, organizate pe domeniu
+    auth/               autentificare, conturi, legătură Plex
+    media/              tabela `media` (upsert, backfill din Plex)
+    errors/             captare erori server+client, jurnal
+    notifications/       conținut notificări push
     services/           Plex, Immich, qBittorrent, Host — agregare status dashboard
-    filelist/           căutare unificată, download+upload qBittorrent, jurnal, subtitrări
+    filelist/           căutare unificată, download+upload qBittorrent, jurnal,
+                        subtitrări, scoring de release (release-scoring.ts)
+    background-job.ts    stare job de fundal (running/progress/lastResult),
+                        folosit de backfill-urile din media/ și filelist/
     *.functions.ts      server functions TanStack (admin, github, push, tmdb...)
   routes/             pagini: index, descopera, biblioteca, immich, qbit, sistem,
                       tehnic, users, login, register
