@@ -290,7 +290,7 @@ async function runMediaBackfillWork(): Promise<void> {
             ).catch(() => null);
             if (epOverview) overviewRo = epOverview;
           }
-          upsertMediaEntryFromPlex({
+          const { created } = upsertMediaEntryFromPlex({
             mediaType: "episode",
             imdbId: showInfo?.imdbId ?? null,
             tmdbId: showInfo?.tmdbId ?? null,
@@ -311,7 +311,7 @@ async function runMediaBackfillWork(): Promise<void> {
             torrentHash: matchedTorrent?.hash ?? null,
             torrentName: matchedTorrent?.name ?? null,
           });
-          added++;
+          if (created) added++;
         } else {
           const title = item.title ?? "—";
           const year =
@@ -326,7 +326,7 @@ async function runMediaBackfillWork(): Promise<void> {
             ? Number(guidTmdbId)
             : await searchTmdbTopResultInternal(title, "movie", year);
           const details = tmdbId ? await getTmdbDetailsInternal(tmdbId, "movie") : null;
-          upsertMediaEntryFromPlex({
+          const { created } = upsertMediaEntryFromPlex({
             mediaType: "movie",
             imdbId: details?.imdbId ?? null,
             tmdbId: tmdbId ?? null,
@@ -346,7 +346,7 @@ async function runMediaBackfillWork(): Promise<void> {
             torrentHash: matchedTorrent?.hash ?? null,
             torrentName: matchedTorrent?.name ?? null,
           });
-          added++;
+          if (created) added++;
         }
         processed++;
       } catch (e) {

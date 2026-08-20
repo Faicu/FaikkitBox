@@ -71,13 +71,20 @@ async function findTorrentHashByName(
       );
       if (listRes.ok) {
         const list: QbitTorrentInfo[] = await listRes.json();
-        const match = list.find((t) => {
+        // Potrivire exactă pe numele normalizat — numele torrentului în
+        // qBittorrent vine direct din .torrent-ul descărcat de la Filelist,
+        // deci ar trebui să fie identic cu `torrentName` primit. O potrivire
+        // prin `includes()` pe doar primele 30 de caractere (varianta veche)
+        // putea confunda două descărcări cu nume aproape identice pornite în
+        // aceeași fereastră (ex. episoade consecutive ale aceluiași serial),
+        // legând hash-ul greșit de rândul `media` greșit.
+        const exactMatch = list.find((t) => {
           const hay = String(t.name ?? "")
             .toLowerCase()
             .replace(/[^a-z0-9]/g, "");
-          return hay.includes(needle.slice(0, 30)) || needle.includes(hay.slice(0, 30));
+          return hay === needle;
         });
-        if (match?.hash) return match.hash;
+        if (exactMatch?.hash) return exactMatch.hash;
       }
     } catch (e) {
       console.warn("[filelist] Nu am putut obține hash-ul torrentului:", e);
@@ -883,12 +890,20 @@ async function runBackfillWork(url: string, qbitUser: string, qbitPass: string):
     );
     const moviesPath = process.env.MEDIA_MOVIES_PATH ?? "/media/ssd2tb/Filme";
     const seriesPath = process.env.MEDIA_SERIES_PATH ?? "/media/ssd2tb/Seriale";
+    // Normalizare: fără trailing slash, ca un savePath cu "/" la final (unele
+    // montări/clienți îl adaugă) să nu rateze un `startsWith` altfel corect —
+    // fără asta, subtitrarea se corecta dar Plex nu mai era rescanat pentru
+    // acel titlu (plexType rămânea null).
+    const normalizePath = (p: string): string => p.replace(/\/+$/, "");
+    const normMoviesPath = normalizePath(moviesPath);
+    const normSeriesPath = normalizePath(seriesPath);
 
     function inferPlexType(hash: string, savePath: string | undefined): "movie" | "show" | null {
       const known = ownLogByHash.get(hash);
       if (known) return isMovieCategory(known.category) ? "movie" : "show";
-      if (savePath?.startsWith(moviesPath)) return "movie";
-      if (savePath?.startsWith(seriesPath)) return "show";
+      const normSavePath = savePath ? normalizePath(savePath) : undefined;
+      if (normSavePath?.startsWith(normMoviesPath)) return "movie";
+      if (normSavePath?.startsWith(normSeriesPath)) return "show";
       return null;
     }
 

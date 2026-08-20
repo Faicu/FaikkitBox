@@ -321,7 +321,9 @@ function findUnlinkedDownloadRow(input: UpsertMediaFromPlexInput): number | null
   return row?.id ?? null;
 }
 
-export function upsertMediaEntryFromPlex(input: UpsertMediaFromPlexInput): number {
+export function upsertMediaEntryFromPlex(
+  input: UpsertMediaFromPlexInput,
+): { id: number; created: boolean } {
   const db = getDb();
 
   const existingId = findUnlinkedDownloadRow(input);
@@ -340,7 +342,7 @@ export function upsertMediaEntryFromPlex(input: UpsertMediaFromPlexInput): numbe
       input.hasRomanianAudio ? 1 : 0,
       existingId,
     );
-    return existingId;
+    return { id: existingId, created: false };
   }
 
   // Placeholder-ul de pachet de sezon (episode NULL, creat la pornirea
@@ -395,7 +397,7 @@ export function upsertMediaEntryFromPlex(input: UpsertMediaFromPlexInput): numbe
       input.torrentHash ?? null,
       input.torrentName ?? null,
     );
-  return Number(res.lastInsertRowid);
+  return { id: Number(res.lastInsertRowid), created: true };
 }
 
 // ---------------------------------------------------------------------------
