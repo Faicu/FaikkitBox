@@ -343,6 +343,20 @@ export function upsertMediaEntryFromPlex(input: UpsertMediaFromPlexInput): numbe
     return existingId;
   }
 
+  // Placeholder-ul de pachet de sezon (episode NULL, creat la pornirea
+  // descărcării — vezi isSeasonPack în filelist/download.ts) nu e niciodată
+  // găsit de findUnlinkedDownloadRow de mai sus (potrivire exactă season+
+  // episode), deci rămâne orfan cu plex_rating_key NULL după ce episoadele
+  // reale se leagă unul câte unul mai jos — apărea la nesfârșit în Bibliotecă
+  // ca "Se descarcă" separat de serial. Odată ce un episod real din același
+  // sezon are legătură cu Plex, placeholder-ul e redundant — îl ștergem.
+  if (input.mediaType === "episode" && input.season != null) {
+    db.prepare(
+      `DELETE FROM media WHERE media_type = 'episode' AND tmdb_id = ? AND season = ?
+       AND episode IS NULL AND plex_rating_key IS NULL`,
+    ).run(input.tmdbId, input.season);
+  }
+
   const parentId =
     input.mediaType === "episode"
       ? ensureMediaPlaceholder("tv_show", { ...input, addedVia: "backfill" })
