@@ -18,6 +18,7 @@ import {
   parseCategoryId,
   isMovieCategory,
 } from "./categories";
+import { BackgroundJob, type BackgroundJobState } from "../background-job";
 import { qbitLogin, qbitEnsureCookie, resetQbitCookie, qbitGet } from "../qbit-client";
 import {
   readDownloadLog,
@@ -816,14 +817,6 @@ export interface BackfillProgress {
   done: number;
 }
 
-export interface BackfillState {
-  running: boolean;
-  progress: BackfillProgress | null;
-  // Rezultatul ultimei rulări complete — disponibil doar cât timp running e
-  // false; se golește la începutul unei rulări noi.
-  lastResult: BackfillSubtitlesResult | null;
-}
-
 interface QbitTorrentListItem {
   hash: string;
   name: string;
@@ -840,23 +833,21 @@ interface QbitTorrentListItem {
 // (reverse-proxy/browser), lăsând UI-ul fără răspuns aproape de final deși
 // server-ul chiar termina treaba. Clientul urmărește progresul + rezultatul
 // final exclusiv prin polling pe getBackfillState.
-let backfillRunning = false;
-let backfillProgress: BackfillProgress | null = null;
-let lastBackfillResult: BackfillSubtitlesResult | null = null;
+const backfillJob = new BackgroundJob<BackfillProgress, BackfillSubtitlesResult>();
 
 export const getBackfillState = createServerFn({ method: "GET" }).handler(
-  async (): Promise<BackfillState> => {
+  async (): Promise<BackgroundJobState<BackfillProgress, BackfillSubtitlesResult>> => {
     const { requireAdmin } = await import("../auth/admin.server");
     await requireAdmin();
-    return {
-      running: backfillRunning,
-      progress: backfillProgress,
-      lastResult: backfillRunning ? null : lastBackfillResult,
-    };
+    return backfillJob.getState();
   },
 );
 
-async function runBackfillWork(url: string, qbitUser: string, qbitPass: string): Promise<void> {
+async function runBackfillWork(
+  url: string,
+  qbitUser: string,
+  qbitPass: string,
+): Promise<BackfillSubtitlesResult> {
   try {
     // Listă completă a torrentelor din qBittorrent — indiferent dacă au fost
     // adăugate prin site sau manual din WebUI.
@@ -866,14 +857,13 @@ async function runBackfillWork(url: string, qbitUser: string, qbitPass: string):
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       qbitTorrents = (await res.json()) as QbitTorrentListItem[];
     } catch (e) {
-      lastBackfillResult = {
+      return {
         status: "error",
         error: `Nu am putut lista torrentele din qBittorrent: ${e instanceof Error ? e.message : e}`,
         processed: 0,
         skipped: 0,
         corrected: 0,
       };
-      return;
     }
     const completedTorrents = qbitTorrents.filter((t) =>
       isTorrentComplete(Number(t.progress ?? 0), t.state ?? ""),
@@ -915,7 +905,8 @@ async function runBackfillWork(url: string, qbitUser: string, qbitPass: string):
       result: Awaited<ReturnType<typeof ensureRomanianSubtitle>>;
     }> = [];
 
-    backfillProgress = { total: completedTorrents.length, done: 0 };
+    backfillJob.setProgress({ total: completedTorrents.length, done: 0 });
+    let done = 0;
     for (const torrent of completedTorrents) {
       const plexType = inferPlexType(torrent.hash, torrent.save_path);
       try {
@@ -934,7 +925,7 @@ async function runBackfillWork(url: string, qbitUser: string, qbitPass: string):
         console.warn(`[filelist] Backfill subtitrare eșuat pentru "${torrent.name}":`, e);
         skipped++;
       }
-      backfillProgress = { total: completedTorrents.length, done: backfillProgress.done + 1 };
+      backfillJob.setProgress({ total: completedTorrents.length, done: ++done });
       await new Promise((r) => setTimeout(r, 2000));
     }
 
@@ -960,19 +951,16 @@ async function runBackfillWork(url: string, qbitUser: string, qbitPass: string):
       "backfill",
     );
 
-    lastBackfillResult = { status: "ok", processed, skipped, corrected };
+    return { status: "ok", processed, skipped, corrected };
   } catch (e) {
     console.error("[filelist] Backfill subtitrări — eroare neașteptată:", e);
-    lastBackfillResult = {
+    return {
       status: "error",
       error: e instanceof Error ? e.message : String(e),
       processed: 0,
       skipped: 0,
       corrected: 0,
     };
-  } finally {
-    backfillProgress = null;
-    backfillRunning = false;
   }
 }
 
@@ -983,7 +971,7 @@ export const backfillSubtitles = createServerFn({ method: "POST" }).handler(
     const { requireAdmin } = await import("../auth/admin.server");
     await requireAdmin();
 
-    if (backfillRunning) {
+    if (backfillJob.isRunning()) {
       return { status: "error", error: "Un backfill este deja în curs" };
     }
 
@@ -995,13 +983,7 @@ export const backfillSubtitles = createServerFn({ method: "POST" }).handler(
     }
 
     const url = qbitBase.replace(/\/$/, "");
-    backfillRunning = true;
-    backfillProgress = null;
-    lastBackfillResult = null;
-    runBackfillWork(url, qbitUser, qbitPass).catch((e) => {
-      console.error("[filelist] Backfill subtitrări — eroare neprinsă:", e);
-      backfillRunning = false;
-    });
+    backfillJob.start(() => runBackfillWork(url, qbitUser, qbitPass));
 
     return { status: "ok" };
   },
@@ -1013,17 +995,13 @@ export const backfillSubtitles = createServerFn({ method: "POST" }).handler(
 // legătura retroactivă torrent↔Plex, ca orice torrent nou detectat să capete
 // automat și verificarea subtitrării, nu doar statusul actualizat.
 export async function runSubtitleBackfillIfIdle(): Promise<void> {
-  if (backfillRunning) return;
   const qbitBase = process.env.QBIT_URL ?? "http://192.168.1.192:25556";
   const qbitUser = process.env.QBIT_USERNAME;
   const qbitPass = process.env.QBIT_PASSWORD;
   if (!qbitUser || !qbitPass) return;
 
   const url = qbitBase.replace(/\/$/, "");
-  backfillRunning = true;
-  backfillProgress = null;
-  lastBackfillResult = null;
-  await runBackfillWork(url, qbitUser, qbitPass);
+  await backfillJob.runIfIdle(() => runBackfillWork(url, qbitUser, qbitPass));
 }
 
 // Corectează subtitrarea pentru un singur titlu — folosește exact aceeași

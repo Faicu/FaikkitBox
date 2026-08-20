@@ -9,6 +9,7 @@
 // ---------------------------------------------------------------------------
 
 import { createServerFn } from "@tanstack/react-start";
+import { BackgroundJob, type BackgroundJobState } from "../background-job";
 import { fetchJson } from "../services/shared";
 import {
   discoverPlexUrl,
@@ -178,38 +179,27 @@ export interface MediaBackfillResult {
   skipped: number;
 }
 
-let backfillRunning = false;
-let backfillProgress: MediaBackfillProgress | null = null;
-let lastResult: MediaBackfillResult | null = null;
+const backfillJob = new BackgroundJob<MediaBackfillProgress, MediaBackfillResult>();
 
 export const getMediaBackfillState = createServerFn({ method: "GET" }).handler(
-  async (): Promise<{
-    running: boolean;
-    progress: MediaBackfillProgress | null;
-    lastResult: MediaBackfillResult | null;
-  }> => {
+  async (): Promise<BackgroundJobState<MediaBackfillProgress, MediaBackfillResult>> => {
     const { requireAdmin } = await import("../auth/admin.server");
     await requireAdmin();
-    return {
-      running: backfillRunning,
-      progress: backfillProgress,
-      lastResult: backfillRunning ? null : lastResult,
-    };
+    return backfillJob.getState();
   },
 );
 
-async function runMediaBackfillWork(): Promise<void> {
+async function runMediaBackfillWork(): Promise<MediaBackfillResult> {
   try {
     const token = process.env.PLEX_TOKEN;
     if (!token) {
-      lastResult = {
+      return {
         status: "error",
         error: "PLEX_TOKEN nu este configurat",
         processed: 0,
         added: 0,
         skipped: 0,
       };
-      return;
     }
     const { url } = await discoverPlexUrl(token, process.env.PLEX_URL);
     const headers = { Accept: "application/json", "X-Plex-Token": token };
@@ -230,10 +220,11 @@ async function runMediaBackfillWork(): Promise<void> {
       (it) => it.ratingKey && !alreadyLinked.has(String(it.ratingKey)),
     );
 
-    backfillProgress = { total: pending.length, done: 0 };
+    backfillJob.setProgress({ total: pending.length, done: 0 });
     let processed = 0;
     let added = 0;
     let skipped = 0;
+    let done = 0;
 
     const { searchTmdbTopResultInternal, getTmdbDetailsInternal, getTmdbEpisodeOverviewInternal } =
       await import("../tmdb/tmdb.functions");
@@ -353,7 +344,7 @@ async function runMediaBackfillWork(): Promise<void> {
         console.warn(`[media-backfill] Eroare la "${item.title}":`, e);
         skipped++;
       }
-      backfillProgress = { total: pending.length, done: backfillProgress.done + 1 };
+      backfillJob.setProgress({ total: pending.length, done: ++done });
       // Pauză mică între iteme — TMDB are rate-limit, iar o bibliotecă mare
       // (sute-mii de episoade) nu trebuie lovită dintr-o dată.
       await new Promise((r) => setTimeout(r, 250));
@@ -362,19 +353,16 @@ async function runMediaBackfillWork(): Promise<void> {
     console.log(
       `[media-backfill] ${processed} procesate, ${added} adăugate, ${skipped} sărite (din ${allItems.length} titluri totale în Plex, ${alreadyLinked.size} deja legate)`,
     );
-    lastResult = { status: "ok", processed, added, skipped };
+    return { status: "ok", processed, added, skipped };
   } catch (e) {
     console.error("[media-backfill] Eroare neașteptată:", e);
-    lastResult = {
+    return {
       status: "error",
       error: e instanceof Error ? e.message : String(e),
       processed: 0,
       added: 0,
       skipped: 0,
     };
-  } finally {
-    backfillProgress = null;
-    backfillRunning = false;
   }
 }
 
@@ -383,20 +371,14 @@ export const startMediaBackfill = createServerFn({ method: "POST" }).handler(
     const { requireAdmin } = await import("../auth/admin.server");
     await requireAdmin();
 
-    if (backfillRunning) {
+    if (backfillJob.isRunning()) {
       return { status: "error", error: "Un backfill este deja în curs" };
     }
     if (!process.env.PLEX_TOKEN) {
       return { status: "error", error: "PLEX_TOKEN nu este configurat" };
     }
 
-    backfillRunning = true;
-    backfillProgress = null;
-    lastResult = null;
-    runMediaBackfillWork().catch((e) => {
-      console.error("[media-backfill] Eroare neprinsă:", e);
-      backfillRunning = false;
-    });
+    backfillJob.start(runMediaBackfillWork);
 
     return { status: "ok" };
   },
@@ -411,12 +393,8 @@ export const startMediaBackfill = createServerFn({ method: "POST" }).handler(
 // rezultat ca să decidă dacă merită să declanșeze și verificarea
 // subtitrărilor (doar dacă chiar s-a adăugat ceva nou, nu la fiecare ciclu).
 export async function runMediaBackfillIfIdle(): Promise<MediaBackfillResult | null> {
-  if (backfillRunning || !process.env.PLEX_TOKEN) return null;
-  backfillRunning = true;
-  backfillProgress = null;
-  lastResult = null;
-  await runMediaBackfillWork();
-  return lastResult;
+  if (!process.env.PLEX_TOKEN) return null;
+  return backfillJob.runIfIdle(runMediaBackfillWork);
 }
 
 // Leagă retroactiv torrent_hash pentru rândurile `media` deja indexate în
