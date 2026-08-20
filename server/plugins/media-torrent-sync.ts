@@ -8,6 +8,10 @@
 //      plex_rating_key dar nu și torrent — cazul unui torrent adăugat direct
 //      în qBittorrent, în afara aplicației, care altfel rămânea "nu știm ce
 //      torrent corespunde" până la o rulare manuală.
+//   2b. Curăță placeholder-ele de pachet de sezon (episode NULL) rămase
+//       orfane — cazul în care toate episoadele reale s-au legat deja de
+//       Plex înainte ca acest ciclu să mai proceseze ceva nou pentru acel
+//       serial (vezi cleanupOrphanSeasonPackPlaceholders în media.ts).
 //   3. Verifică/corectează subtitrarea RO pentru toate torrentele active din
 //      qBittorrent (echivalent butonului „Verifică subtitrări” din
 //      Bibliotecă) — ca un torrent nou legat la pasul 2 să capete automat și
@@ -38,6 +42,12 @@ async function runCycle(): Promise<void> {
       );
     }
     if (linked > 0) foundSomethingNew = true;
+
+    const { cleanupOrphanSeasonPackPlaceholders } = await import("../../src/lib/media/media");
+    const cleaned = cleanupOrphanSeasonPackPlaceholders();
+    if (cleaned > 0) {
+      console.log(`[media-torrent-sync] Placeholder-e de pachet orfane șterse: ${cleaned}`);
+    }
   } catch (e) {
     console.warn("[media-torrent-sync] Completare/legătură media eșuată:", e);
   }

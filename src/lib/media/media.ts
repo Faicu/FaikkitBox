@@ -466,6 +466,30 @@ export function clearMediaSubtitleStatus(torrentHash: string): void {
     .run(torrentHash);
 }
 
+// Curățare generală a placeholder-elor de pachet de sezon (episode NULL)
+// rămase orfane — cazul unde niciun episod nou nu s-a mai legat de Plex de
+// la crearea placeholder-ului (fix-ul din upsertMediaEntryFromPlex prinde
+// doar momentul legării unui episod nou, nu și pachetele deja complete la
+// data fix-ului). Apelat periodic din media-torrent-sync.ts. Șterge doar
+// placeholder-ul pentru care există deja măcar un episod real, legat de
+// Plex, în același sezon — altfel un pachet încă în curs de indexare și-ar
+// pierde singurul rând care arată "Se descarcă".
+export function cleanupOrphanSeasonPackPlaceholders(): number {
+  const res = getDb()
+    .prepare(
+      `DELETE FROM media
+       WHERE media_type = 'episode' AND episode IS NULL AND plex_rating_key IS NULL
+         AND EXISTS (
+           SELECT 1 FROM media m2
+           WHERE m2.media_type = 'episode' AND m2.tmdb_id = media.tmdb_id
+             AND m2.season = media.season AND m2.episode IS NOT NULL
+             AND m2.plex_rating_key IS NOT NULL
+         )`,
+    )
+    .run();
+  return Number(res.changes);
+}
+
 // Apelat când torrentul a ajuns la 100% (pollUntilComplete) — marchează
 // finalizarea, exact ca downloads.completed_at.
 export function markMediaCompleted(torrentHash: string): void {
