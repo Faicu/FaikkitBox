@@ -390,13 +390,12 @@ export const searchFilelist = createServerFn({ method: "GET" })
 
 // ---------------------------------------------------------------------------
 // Verificare unificată "există pe Filelist?" — folosită de wizard (Acasă) la
-// identificarea unui titlu. Caută secvențial — se oprește la primul rezultat
-// găsit — întâi direct după IMDB ID (cel mai fiabil — funcționează chiar și
-// când numele lansării nu conține niciunul dintre titluri, ex. titluri
-// coreene romanizate diferit de original_title din TMDB), apoi după titlul
-// original, apoi după titlul englez/internațional. Contul Filelist are o
-// limită orară de cereri — un cache scurt (10 min) evită să repetăm
-// aceleași căutări la apeluri repetate în fereastra respectivă.
+// identificarea unui titlu. Caută STRICT după IMDb id — fallback-ul pe titlu
+// a fost eliminat deliberat (confirmat de suportul Filelist: căutarea pe
+// titlu dă rezultate nesigure). Fără IMDb id, întoarce direct listă goală,
+// fără niciun apel către Filelist. Contul Filelist are o limită orară de
+// cereri — un cache scurt (10 min) evită să repetăm aceleași căutări la
+// apeluri repetate în fereastra respectivă.
 // ---------------------------------------------------------------------------
 
 const filelistCheckCache = new Map<string, { expiresAt: number; result: FilelistSearchResult }>();
