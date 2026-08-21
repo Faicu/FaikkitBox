@@ -268,7 +268,13 @@ export function TitleDetailDrawer({
                 ) : (
                   <EyeOff className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                 )}
-                <span>{d.watchedByMe ? "Ai văzut acest titlu" : "Nu ai văzut acest titlu"}</span>
+                <span>
+                  {d.watchedByMe
+                    ? d.watchedByMeAt
+                      ? `Ai văzut acest titlu · ${addedDate(d.watchedByMeAt)}`
+                      : "Ai văzut acest titlu"
+                    : "Nu ai văzut acest titlu"}
+                </span>
               </div>
 
               <div className="text-xs">

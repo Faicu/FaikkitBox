@@ -246,6 +246,7 @@ export interface PlexTitleDetail {
   summary: string | null;
   genres: string[];
   watchedByMe: boolean;
+  watchedByMeAt: number | null;
   watchedByOthers: Array<{ username: string; viewedAt: number }>;
   addedByUsername: string | null;
   status: "in_library" | "downloading";
@@ -395,9 +396,11 @@ async function buildDetailFromMediaRow(
         { plex_username: string | null } | undefined)
     : undefined;
   const myPlexUsername = me?.plex_username ?? null;
-  const watchedByMe = myPlexUsername
-    ? watchedByAll.some((w) => w.username === myPlexUsername)
-    : false;
+  const myWatched = myPlexUsername
+    ? watchedByAll.find((w) => w.username === myPlexUsername)
+    : undefined;
+  const watchedByMe = !!myWatched;
+  const watchedByMeAt = myWatched && myWatched.viewedAt > 0 ? myWatched.viewedAt : null;
   const watchedByOthers = watchedByAll.filter((w) => w.username !== myPlexUsername);
 
   const canManage = isAdminOrOwner(session, row.requested_by_user_id);
@@ -441,6 +444,7 @@ async function buildDetailFromMediaRow(
     summary: row.overview_ro,
     genres: JSON.parse(row.genres || "[]"),
     watchedByMe,
+    watchedByMeAt,
     watchedByOthers,
     addedByUsername,
     status: row.plex_rating_key ? "in_library" : "downloading",
