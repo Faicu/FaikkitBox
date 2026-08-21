@@ -101,6 +101,61 @@ export function isItemWatched(
   return index.titleKeys.has(key);
 }
 
+// Contul "owner" al serverului (cel căruia îi aparține PLEX_TOKEN) — folosit
+// ca fallback pentru "Marchează ca vizionat" din Plex, care setează
+// viewCount direct pe item FĂRĂ să scrie o intrare de istoric/scrobble
+// (deci invizibil pentru `getPlexWatchedIndex`, oricât de bine ar potrivi
+// ratingKey-ul). viewCount raportat prin PLEX_TOKEN e scopat la contul
+// acelui token, deci fallback-ul e sigur doar pentru owner, nu pentru
+// utilizatorii gestionați (Plex Home) — aceia au propria stare, invizibilă
+// prin tokenul owner-ului.
+let plexOwnerUsernameCache: { url: string; username: string | null; expiresAt: number } | null = null;
+
+export async function getPlexOwnerUsername(): Promise<string | null> {
+  const token = process.env.PLEX_TOKEN;
+  if (!token) return null;
+  try {
+    const { url } = await discoverPlexUrl(token, process.env.PLEX_URL);
+    if (plexOwnerUsernameCache && plexOwnerUsernameCache.url === url && plexOwnerUsernameCache.expiresAt > Date.now()) {
+      return plexOwnerUsernameCache.username;
+    }
+    const headers = { Accept: "application/json", "X-Plex-Token": token };
+    const accountsJson = await fetchJson<PlexApiResponse>(`${url}/accounts`, { headers }, 8000);
+    const accounts = accountsJson?.MediaContainer?.Account ?? [];
+    const owner = accounts.find((a) => Number(a?.id) === 1);
+    const username = (owner ? String(owner?.name ?? owner?.title ?? "").trim() : "") || null;
+    plexOwnerUsernameCache = { url, username, expiresAt: Date.now() + 5 * 60 * 1000 };
+    return username;
+  } catch {
+    return null;
+  }
+}
+
+// Verifică viewCount direct pe item-ele date (un singur request batch către
+// Plex) — folosit doar ca fallback pentru owner, când istoricul n-are nimic.
+export async function getPlexViewedRatingKeys(ratingKeys: string[]): Promise<Set<string>> {
+  if (ratingKeys.length === 0) return new Set();
+  const token = process.env.PLEX_TOKEN;
+  if (!token) return new Set();
+  try {
+    const { url } = await discoverPlexUrl(token, process.env.PLEX_URL);
+    const headers = { Accept: "application/json", "X-Plex-Token": token };
+    const json = await fetchJson<PlexApiResponse>(
+      `${url}/library/metadata/${ratingKeys.join(",")}`,
+      { headers },
+      12000,
+    );
+    const items = json?.MediaContainer?.Metadata ?? [];
+    const viewed = new Set<string>();
+    for (const it of items) {
+      if (it.ratingKey != null && Number(it.viewCount ?? 0) > 0) viewed.add(String(it.ratingKey));
+    }
+    return viewed;
+  } catch {
+    return new Set();
+  }
+}
+
 let plexHistoryCache: {
   url: string;
   episodesToday: number;

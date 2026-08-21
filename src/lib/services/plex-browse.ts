@@ -183,7 +183,8 @@ export const getPlexLibraryBrowse = createServerFn({ method: "GET" }).handler(
       const myPlexUsername = me?.plex_username ?? null;
       if (!myPlexUsername) return { status: "ok", items };
 
-      const { getPlexWatchedIndex, isItemWatched } = await import("./plex");
+      const { getPlexWatchedIndex, isItemWatched, getPlexOwnerUsername, getPlexViewedRatingKeys } =
+        await import("./plex");
       const watchedIndex = await getPlexWatchedIndex(myPlexUsername);
       const originalTitleById = new Map(rows.map((r) => [r.id, r.original_title || r.title]));
       const withWatched = items.map((it) => {
@@ -199,6 +200,22 @@ export const getPlexLibraryBrowse = createServerFn({ method: "GET" }).handler(
           }),
         };
       });
+
+      // Fallback pentru "Marchează ca vizionat" din Plex (nu scrie istoric,
+      // deci `watchedIndex` nu-l vede) — sigur doar pentru owner-ul
+      // serverului, ale cărui viewCount-uri sunt reflectate de PLEX_TOKEN.
+      const ownerUsername = await getPlexOwnerUsername();
+      if (myPlexUsername === ownerUsername) {
+        const stillUnwatched = withWatched.filter((it) => !it.watchedByMe && it.ratingKey);
+        if (stillUnwatched.length > 0) {
+          const viewedKeys = await getPlexViewedRatingKeys(
+            stillUnwatched.map((it) => it.ratingKey as string),
+          );
+          for (const it of withWatched) {
+            if (it.ratingKey && viewedKeys.has(it.ratingKey)) it.watchedByMe = true;
+          }
+        }
+      }
       return { status: "ok", items: withWatched };
     } catch (e) {
       return { status: "error", error: e instanceof Error ? e.message : String(e) };
@@ -320,7 +337,13 @@ async function buildDetailFromMediaRow(
   const isEpisode = row.media_type === "episode";
   const isShow = row.media_type === "tv_show";
 
-  const { getAllPlexUserHistory, getAllPlexWatchedIndexes, isItemWatched } = await import("./plex");
+  const {
+    getAllPlexUserHistory,
+    getAllPlexWatchedIndexes,
+    isItemWatched,
+    getPlexOwnerUsername,
+    getPlexViewedRatingKeys,
+  } = await import("./plex");
   const titleForMatch = row.original_title || row.title;
   const matchesItem = (e: {
     title: string;
@@ -352,6 +375,20 @@ async function buildDetailFromMediaRow(
     const match = (allHistory[username] ?? []).find(matchesItem);
     watchedByAll.push({ username, viewedAt: match?.viewedAt ?? 0 });
   }
+
+  // Fallback pentru "Marchează ca vizionat" din Plex (nu scrie istoric,
+  // deci `allWatchedIndexes` nu-l vede) — sigur doar pentru owner-ul
+  // serverului, ale cărui viewCount-uri sunt reflectate de PLEX_TOKEN.
+  if (!isShow && row.plex_rating_key) {
+    const ownerUsername = await getPlexOwnerUsername();
+    if (ownerUsername && !watchedByAll.some((w) => w.username === ownerUsername)) {
+      const viewedKeys = await getPlexViewedRatingKeys([row.plex_rating_key]);
+      if (viewedKeys.has(row.plex_rating_key)) {
+        watchedByAll.push({ username: ownerUsername, viewedAt: 0 });
+      }
+    }
+  }
+
   const me = session.data.userId
     ? (db.prepare("SELECT plex_username FROM users WHERE id = ?").get(session.data.userId) as
         { plex_username: string | null } | undefined)
