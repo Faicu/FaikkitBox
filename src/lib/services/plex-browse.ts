@@ -315,10 +315,19 @@ async function buildDetailFromMediaRow(
   const isShow = row.media_type === "tv_show";
 
   const { getAllPlexUserHistory } = await import("./plex");
-  const matchesItem = (e: { title: string; show?: string; season?: number; episode?: number }) =>
-    isEpisode
-      ? e.show === row.title && e.season === row.season && e.episode === row.episode
-      : !isShow && !e.show && e.title === row.title;
+  const matchesItem = (e: {
+    title: string;
+    show?: string;
+    season?: number;
+    episode?: number;
+    ratingKey?: string;
+  }) => {
+    if (row.plex_rating_key && e.ratingKey) return e.ratingKey === row.plex_rating_key;
+    const titleForMatch = row.original_title || row.title;
+    return isEpisode
+      ? e.show === titleForMatch && e.season === row.season && e.episode === row.episode
+      : !isShow && !e.show && e.title === titleForMatch;
+  };
   const allHistory = isShow ? {} : await getAllPlexUserHistory();
   const watchedByAll: Array<{ username: string; viewedAt: number }> = [];
   for (const [username, entries] of Object.entries(allHistory)) {

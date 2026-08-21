@@ -56,6 +56,7 @@ export interface PlexHistoryEntry {
   show?: string;
   season?: number;
   episode?: number;
+  ratingKey?: string;
   type: string;
   viewedAt: number;
   player?: string;
@@ -203,6 +204,7 @@ async function fetchPlexHistory(
         show: e.grandparentTitle ? String(e.grandparentTitle) : undefined,
         season: e.parentIndex != null ? Number(e.parentIndex) : undefined,
         episode: e.index != null ? Number(e.index) : undefined,
+        ratingKey: e.ratingKey != null ? String(e.ratingKey) : undefined,
         type: String(e.type ?? "unknown"),
         viewedAt,
         player: typeof e?.Player?.title === "string" ? e.Player.title : undefined,
