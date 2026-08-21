@@ -71,15 +71,16 @@ const libraryCountCache = new Map<string, { count: number | null; expiresAt: num
 const LIBRARY_COUNT_TTL_MS = 5 * 60 * 1000;
 
 // Index "văzut de X" — sursă unică de adevăr pentru orice ecran care
-// afișează starea de vizionare (listă Bibliotecă + drawer de detalii).
-// Spre deosebire de `userHistory` (plafonat la 50/user, gândit doar pentru
-// afișarea istoricului recent), acest index acoperă TOATE intrările primite
-// de la Plex (până la 1000), ca un utilizator activ să nu "piardă" din
-// matching titluri vizionate mai demult doar pentru că a mai văzut multe
-// altele între timp.
+// afișează starea de vizionare SAU data vizionării (listă Bibliotecă +
+// drawer de detalii, atât badge-ul boolean cât și data afișată). Spre
+// deosebire de `userHistory` (plafonat la 50/user, gândit doar pentru
+// afișarea istoricului recent din dashboard), acest index ține TOATE
+// intrările primite de la Plex (până la 1000, per key → ultimul viewedAt),
+// ca un utilizator activ să nu "piardă" din matching (sau din dată) titluri
+// vizionate mai demult doar pentru că a mai văzut multe altele între timp.
 export interface PlexWatchedIndex {
-  ratingKeys: Set<string>;
-  titleKeys: Set<string>;
+  ratingKeys: Map<string, number>; // ratingKey -> ultimul viewedAt
+  titleKeys: Map<string, number>; // titlu|sezon|episod (sau movie|titlu) -> ultimul viewedAt
 }
 
 function episodeKeyFor(show: string, season?: number | null, episode?: number | null): string {
@@ -96,9 +97,27 @@ export function isItemWatched(
     episode?: number | null;
   },
 ): boolean {
-  if (item.ratingKey && index.ratingKeys.has(item.ratingKey)) return true;
+  return getWatchedAt(index, item) != null;
+}
+
+// La fel ca `isItemWatched`, dar întoarce și data — folosit oriunde UI-ul
+// afișează "văzut pe <dată>", ca să nu mai depindă de istoricul plafonat.
+export function getWatchedAt(
+  index: PlexWatchedIndex,
+  item: {
+    ratingKey?: string | null;
+    title: string;
+    show?: string | null;
+    season?: number | null;
+    episode?: number | null;
+  },
+): number | null {
+  if (item.ratingKey && index.ratingKeys.has(item.ratingKey)) {
+    return index.ratingKeys.get(item.ratingKey) ?? 0;
+  }
   const key = item.show ? episodeKeyFor(item.show, item.season, item.episode) : `movie|${item.title}`;
-  return index.titleKeys.has(key);
+  if (index.titleKeys.has(key)) return index.titleKeys.get(key) ?? 0;
+  return null;
 }
 
 // Contul "owner" al serverului (cel căruia îi aparține PLEX_TOKEN) — folosit
@@ -189,36 +208,19 @@ export async function getPlexUserHistory(username: string): Promise<PlexHistoryE
   }
 }
 
-// Istoricul TUTUROR utilizatorilor Plex — folosit pentru "cine a mai văzut
-// acest titlu" în pagina de bibliotecă de pe Acasă. Aceeași sursă/cache ca
-// getPlexUserHistory, doar că întoarce toată harta, nu doar un user.
-export async function getAllPlexUserHistory(): Promise<Record<string, PlexHistoryEntry[]>> {
-  const token = process.env.PLEX_TOKEN;
-  if (!token) return {};
-  try {
-    const { url } = await discoverPlexUrl(token, process.env.PLEX_URL);
-    const headers = { Accept: "application/json", "X-Plex-Token": token };
-    const history = await fetchPlexHistory(url, headers);
-    return history.userHistory;
-  } catch {
-    return {};
-  }
-}
-
 // Index "văzut" neplafonat, pentru un singur user — folosit de listă/drawer
-// prin `isItemWatched`. Vezi comentariul de pe `PlexWatchedIndex`.
+// prin `isItemWatched`/`getWatchedAt`. Vezi comentariul de pe `PlexWatchedIndex`.
 export async function getPlexWatchedIndex(username: string): Promise<PlexWatchedIndex> {
+  const empty = (): PlexWatchedIndex => ({ ratingKeys: new Map(), titleKeys: new Map() });
   const token = process.env.PLEX_TOKEN;
-  if (!token) return { ratingKeys: new Set(), titleKeys: new Set() };
+  if (!token) return empty();
   try {
     const { url } = await discoverPlexUrl(token, process.env.PLEX_URL);
     const headers = { Accept: "application/json", "X-Plex-Token": token };
     const history = await fetchPlexHistory(url, headers);
-    return (
-      history.watchedIndexByUser[username] ?? { ratingKeys: new Set(), titleKeys: new Set() }
-    );
+    return history.watchedIndexByUser[username] ?? empty();
   } catch {
-    return { ratingKeys: new Set(), titleKeys: new Set() };
+    return empty();
   }
 }
 
@@ -345,13 +347,18 @@ async function fetchPlexHistory(
     }
 
     // Neplafonat, spre deosebire de `historyByUser` — vezi comentariul de
-    // pe `PlexWatchedIndex`.
+    // pe `PlexWatchedIndex`. Ținem ultimul (cel mai recent) viewedAt per key.
     const watchedIndex = watchedIndexByUser.get(wkey) ?? {
-      ratingKeys: new Set<string>(),
-      titleKeys: new Set<string>(),
+      ratingKeys: new Map<string, number>(),
+      titleKeys: new Map<string, number>(),
     };
-    if (ratingKey) watchedIndex.ratingKeys.add(ratingKey);
-    watchedIndex.titleKeys.add(show ? episodeKeyFor(show, season, episode) : `movie|${title}`);
+    if (ratingKey && viewedAt > (watchedIndex.ratingKeys.get(ratingKey) ?? -1)) {
+      watchedIndex.ratingKeys.set(ratingKey, viewedAt);
+    }
+    const tkey = show ? episodeKeyFor(show, season, episode) : `movie|${title}`;
+    if (viewedAt > (watchedIndex.titleKeys.get(tkey) ?? -1)) {
+      watchedIndex.titleKeys.set(tkey, viewedAt);
+    }
     watchedIndexByUser.set(wkey, watchedIndex);
     if (viewedAt >= startOfTodaySec) {
       const entry: PlexHistoryEntry = {

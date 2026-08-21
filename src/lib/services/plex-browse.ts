@@ -338,43 +338,21 @@ async function buildDetailFromMediaRow(
   const isEpisode = row.media_type === "episode";
   const isShow = row.media_type === "tv_show";
 
-  const {
-    getAllPlexUserHistory,
-    getAllPlexWatchedIndexes,
-    isItemWatched,
-    getPlexOwnerUsername,
-    getPlexViewedRatingKeys,
-  } = await import("./plex");
+  const { getAllPlexWatchedIndexes, getWatchedAt, getPlexOwnerUsername, getPlexViewedRatingKeys } =
+    await import("./plex");
   const titleForMatch = row.original_title || row.title;
-  const matchesItem = (e: {
-    title: string;
-    show?: string;
-    season?: number;
-    episode?: number;
-    ratingKey?: string;
-  }) => {
-    if (row.plex_rating_key && e.ratingKey) return e.ratingKey === row.plex_rating_key;
-    return isEpisode
-      ? e.show === titleForMatch && e.season === row.season && e.episode === row.episode
-      : !isShow && !e.show && e.title === titleForMatch;
-  };
-  const [allHistory, allWatchedIndexes] = isShow
-    ? [{}, {}]
-    : await Promise.all([getAllPlexUserHistory(), getAllPlexWatchedIndexes()]);
+  const allWatchedIndexes = isShow ? {} : await getAllPlexWatchedIndexes();
   const watchedByAll: Array<{ username: string; viewedAt: number }> = [];
   for (const [username, index] of Object.entries(allWatchedIndexes)) {
-    const watched = isItemWatched(index, {
+    const viewedAt = getWatchedAt(index, {
       ratingKey: row.plex_rating_key,
       title: titleForMatch,
       show: isEpisode ? titleForMatch : null,
       season: row.season,
       episode: row.episode,
     });
-    if (!watched) continue;
-    // Best-effort dată de vizionare pentru afișare — istoricul capat la 50/
-    // user poate rata intrări mai vechi, caz în care afișăm fără dată.
-    const match = (allHistory[username] ?? []).find(matchesItem);
-    watchedByAll.push({ username, viewedAt: match?.viewedAt ?? 0 });
+    if (viewedAt == null) continue;
+    watchedByAll.push({ username, viewedAt });
   }
 
   // Fallback pentru "Marchează ca vizionat" din Plex (nu scrie istoric,
