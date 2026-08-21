@@ -26,6 +26,8 @@ import { checkFilelistForItem, downloadFilelist } from "@/lib/filelist.functions
 import type { FilelistTorrent } from "@/lib/filelist.functions";
 import { getDownloadingMediaForTmdbId } from "@/lib/media/media";
 import type { DownloadingMediaEntry } from "@/lib/media/media";
+import { getTvmazeAirstamps } from "@/lib/tvmaze/tvmaze.functions";
+import type { TvmazeAirstamp } from "@/lib/tvmaze/tvmaze.functions";
 import {
   detectQuality,
   groupTorrentsBySeasonEpisode,
@@ -144,6 +146,7 @@ export function AddMediaWizard({
   const plexSeasonFn = useServerFn(getPlexEpisodesInSeason);
   const filelistFn = useServerFn(checkFilelistForItem);
   const allSeasonsFn = useServerFn(getTmdbAllSeasons);
+  const tvmazeFn = useServerFn(getTvmazeAirstamps);
   const downloadingFn = useServerFn(getDownloadingMediaForTmdbId);
   const downloadFn = useServerFn(downloadFilelist);
 
@@ -165,6 +168,9 @@ export function AddMediaWizard({
   // singur request suplimentar (vezi getTmdbAllSeasons), adus o dată la
   // verificare, nu per sezon la extindere.
   const [seasonSchema, setSeasonSchema] = useState<TmdbSeasonSchema[]>([]);
+  // Ora de lansare per episod, din TVmaze (TMDB oferă doar data) — cheiat pe
+  // imdbId, adus o dată la verificare, la fel ca seasonSchema.
+  const [tvmazeAirstamps, setTvmazeAirstamps] = useState<TvmazeAirstamp[]>([]);
   // Episoadele deja în Plex, per sezon — adus dintr-o dată pentru TOATE
   // sezoanele imediat ce serialul e identificat (selectItem).
   const [plexBySeason, setPlexBySeason] = useState<Map<number, PlexSeasonEpisode[]>>(new Map());
@@ -207,6 +213,7 @@ export function AddMediaWizard({
     setDownloadingTorrentId(null);
     setDoneMessage(null);
     setSeasonSchema([]);
+    setTvmazeAirstamps([]);
     setPlexBySeason(new Map());
     setDownloadingEntries([]);
     setConfirmTorrent(null);
@@ -299,7 +306,7 @@ export function AddMediaWizard({
       // sezoanele deodată) — totul gata înainte de a arăta ecranul de
       // rezultat, ca extinderea unui sezon să nu declanșeze cereri noi.
       if (item.mediaType === "tv" && seasons.length > 0) {
-        const [plexResults, schema] = await Promise.all([
+        const [plexResults, schema, airstamps] = await Promise.all([
           Promise.allSettled(
             seasons.map((s) =>
               plexSeasonFn({ data: { showTitle: originalTitle, season: s.seasonNumber } }),
@@ -308,6 +315,7 @@ export function AddMediaWizard({
           allSeasonsFn({
             data: { tmdbId: item.id, seasonNumbers: seasons.map((s) => s.seasonNumber) },
           }),
+          details.imdbId ? tvmazeFn({ data: { imdbId: details.imdbId } }) : Promise.resolve([]),
         ]);
         const map = new Map<number, PlexSeasonEpisode[]>();
         seasons.forEach((s, i) => {
@@ -316,6 +324,7 @@ export function AddMediaWizard({
         });
         setPlexBySeason(map);
         setSeasonSchema(schema);
+        setTvmazeAirstamps(airstamps);
       }
       setStep("result");
     } catch (e) {
@@ -463,6 +472,11 @@ export function AddMediaWizard({
           );
 
           const tmdbEpisodes = schema?.episodes ?? [];
+          const airstampMap = new Map(
+            tvmazeAirstamps
+              .filter((a) => a.seasonNumber === s.seasonNumber)
+              .map((a) => [a.episodeNum, a.airstamp]),
+          );
           const filelistEpNums = Array.from(group?.episodes.keys() ?? []).sort((a, b) => a - b);
           // Sezon complet fără nicio urmă nicăieri (nici TMDB, nici Filelist,
           // nici pachet) — anunțat doar cu un număr de episoade planificate
@@ -497,9 +511,17 @@ export function AddMediaWizard({
             } else if (packDownloadingEntry || episodeDownloading) {
               availability = { kind: "downloading" };
             } else if (tmdbEp && !tmdbEp.aired) {
-              availability = { kind: "upcoming", airDate: tmdbEp.airDate };
+              availability = {
+                kind: "upcoming",
+                airDate: tmdbEp.airDate,
+                airStamp: airstampMap.get(epNum) ?? null,
+              };
             } else if (!tmdbEp && seasonHasNoData) {
-              availability = { kind: "upcoming", airDate: null };
+              availability = {
+                kind: "upcoming",
+                airDate: null,
+                airStamp: airstampMap.get(epNum) ?? null,
+              };
             } else {
               const epCandidates = matchesForQuality(
                 pickFromSet(group?.episodes.get(epNum) ?? emptyQualitySet(), quality),
@@ -625,6 +647,7 @@ export function AddMediaWizard({
       setCheckResult(null);
       setTmdbDetails(null);
       setSeasonSchema([]);
+      setTvmazeAirstamps([]);
       setPlexBySeason(new Map());
       setDownloadingEntries([]);
       setPickedTorrentId(null);

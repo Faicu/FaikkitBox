@@ -25,7 +25,7 @@ export type EpisodeAvailability =
   | { kind: "episode_torrent"; torrents: FilelistTorrent[] }
   | { kind: "pack_only" }
   | { kind: "unavailable" }
-  | { kind: "upcoming"; airDate: string | null };
+  | { kind: "upcoming"; airDate: string | null; airStamp?: string | null };
 
 export interface SeasonRowData {
   seasonNumber: number;
@@ -47,6 +47,24 @@ function fmtDate(iso: string): string {
   });
 }
 
+// Ora vine din TVmaze (TMDB nu o oferă) — dacă lipsește, arătăm doar data.
+function fmtDateTime(airStamp: string): string {
+  const d = new Date(airStamp);
+  const time = d.toLocaleTimeString("ro-RO", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "Europe/Bucharest",
+  });
+  return `${fmtDate(airStamp)}, ${time}`;
+}
+
+function upcomingLabel(availability: { airDate: string | null; airStamp?: string | null }): string {
+  if (availability.airStamp) return fmtDateTime(availability.airStamp);
+  if (availability.airDate) return fmtDate(availability.airDate);
+  return "Nelansat";
+}
+
 // Badge-ul agregat de pe rândul de sezon închis.
 function seasonBadge(season: SeasonRowData): { tone: string; label: string } {
   if (season.packDownloading) return { tone: "amber", label: "Se descarcă…" };
@@ -57,11 +75,11 @@ function seasonBadge(season: SeasonRowData): { tone: string; label: string } {
   const anyInPlex = eps.some((e) => e.availability.kind === "in_plex");
   const allUpcoming = eps.every((e) => e.availability.kind === "upcoming");
   if (allUpcoming) {
-    const firstDate = eps.find((e) => e.availability.kind === "upcoming" && e.availability.airDate);
+    const firstDate = eps.find(
+      (e) => e.availability.kind === "upcoming" && (e.availability.airStamp || e.availability.airDate),
+    );
     const dateLabel =
-      firstDate?.availability.kind === "upcoming" && firstDate.availability.airDate
-        ? fmtDate(firstDate.availability.airDate)
-        : null;
+      firstDate?.availability.kind === "upcoming" ? upcomingLabel(firstDate.availability) : null;
     return { tone: "amber", label: dateLabel ? `Nelansat — ${dateLabel}` : "Nelansat încă" };
   }
   const anyDownloading = eps.some((e) => e.availability.kind === "downloading");
@@ -145,7 +163,7 @@ function EpisodeRow({
       {availability.kind === "upcoming" && (
         <span className="flex shrink-0 items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-amber-400">
           <Clock3 className="h-2.5 w-2.5" />
-          {availability.airDate ? fmtDate(availability.airDate) : "Nelansat"}
+          {upcomingLabel(availability)}
         </span>
       )}
     </div>
