@@ -145,6 +145,7 @@ export async function trackPlexSessions(
     user: string;
     title: string;
     grandparentTitle?: string;
+    ratingKey?: string;
     player?: string;
     viewOffsetMs?: number;
     durationMs?: number;
@@ -152,6 +153,20 @@ export async function trackPlexSessions(
 ): Promise<void> {
   const { getDb } = await import("./db");
   const db = getDb();
+
+  // Sesiunile Plex vin cu titlul original (limba din bibliotecă), nu cel
+  // tradus RO folosit peste tot în restul aplicației (Bibliotecă etc.) —
+  // căutăm rândul din `media` după ratingKey-ul item-ului redat, ca să
+  // afișăm în jurnal același titlu ca în Bibliotecă. Pentru episoade,
+  // `media.title` conține deja numele serialului (nu se ține titlu
+  // separat per episod — vezi media.ts).
+  function resolveDisplayTitle(ratingKey: string | undefined, isEpisode: boolean): string | null {
+    if (!ratingKey) return null;
+    const row = db
+      .prepare("SELECT title FROM media WHERE plex_rating_key = ? AND media_type = ?")
+      .get(ratingKey, isEpisode ? "episode" : "movie") as { title: string } | undefined;
+    return row?.title || null;
+  }
 
   // Citește sesiunile active din SQLite (supraviețuiesc restarturilor)
   const stored = db.prepare("SELECT * FROM plex_active_sessions").all() as Array<{
@@ -197,6 +212,15 @@ export async function trackPlexSessions(
   for (const s of sessions) {
     const key = sessionKey(s.user, s.title, s.grandparentTitle);
     if (!storedMap.has(key)) {
+      // Titlul afișat/stocat e cel tradus RO (dacă titlul redat e cunoscut
+      // local) — atât aici cât și la stop (care citește din DB, nu recalculează).
+      const displayGrandparentTitle = s.grandparentTitle
+        ? resolveDisplayTitle(s.ratingKey, true) ?? s.grandparentTitle
+        : undefined;
+      const displayTitle = !s.grandparentTitle
+        ? (resolveDisplayTitle(s.ratingKey, false) ?? s.title)
+        : s.title;
+
       // Sesiune nouă — inserăm în DB și logăm start
       db.prepare(
         `INSERT OR REPLACE INTO plex_active_sessions
@@ -208,15 +232,15 @@ export async function trackPlexSessions(
         s.viewOffsetMs ?? 0,
         s.durationMs ?? 0,
         s.user,
-        s.title,
-        s.grandparentTitle ?? null,
+        displayTitle,
+        displayGrandparentTitle ?? null,
       );
 
-      const what = s.grandparentTitle ? `${s.grandparentTitle} — ${s.title}` : s.title;
+      const what = displayGrandparentTitle ? `${displayGrandparentTitle} — ${displayTitle}` : displayTitle;
       await logActivity("plex_watch_start", buildPlexWatchStartMessage(s.user, what), {
         user: s.user,
-        title: s.title,
-        grandparentTitle: s.grandparentTitle,
+        title: displayTitle,
+        grandparentTitle: displayGrandparentTitle,
         player: s.player,
       });
     }

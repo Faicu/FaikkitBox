@@ -15,6 +15,7 @@ export { checkPlexHasEpisode, getPlexEpisodesInSeason, checkPlexHasTitle } from 
 export interface PlexSession {
   title: string;
   grandparentTitle?: string;
+  ratingKey?: string;
   type: string;
   user: string;
   device: string;
@@ -414,6 +415,7 @@ function mapPlexSessions(sessionsMd: PlexMetadataItem[]): PlexSession[] {
     return {
       title: s.title ?? "Unknown",
       grandparentTitle: s.grandparentTitle,
+      ratingKey: s.ratingKey,
       type: s.type ?? "",
       user: s?.User?.title ?? "?",
       device: s?.Player?.device ?? s?.Player?.product ?? "?",
@@ -526,6 +528,7 @@ export const getPlex = createServerFn({ method: "GET" }).handler(async (): Promi
         user: s.user,
         title: s.title,
         grandparentTitle: s.grandparentTitle,
+        ratingKey: s.ratingKey,
         player: s.player,
         viewOffsetMs: s.viewOffsetMs,
         durationMs: s.durationMs,

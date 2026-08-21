@@ -28,6 +28,7 @@ export default function () {
             viewOffset?: number;
             title?: string;
             grandparentTitle?: string;
+            ratingKey?: string;
             User?: { title?: string };
             Player?: { title?: string };
           }>;
@@ -44,6 +45,7 @@ export default function () {
             user: s.User?.title ?? "unknown",
             title: s.title ?? "",
             grandparentTitle: s.grandparentTitle || undefined,
+            ratingKey: s.ratingKey || undefined,
             player: s.Player?.title || undefined,
             viewOffsetMs: off,
             durationMs: dur,
