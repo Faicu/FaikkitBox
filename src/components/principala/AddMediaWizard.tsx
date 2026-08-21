@@ -754,7 +754,31 @@ export function AddMediaWizard({
                         <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
                         <span>
                           {tmdbDetails.nextEpisode
-                            ? `Episodul S${String(tmdbDetails.nextEpisode.seasonNumber).padStart(2, "0")}E${String(tmdbDetails.nextEpisode.episodeNumber).padStart(2, "0")} apare pe ${new Date(tmdbDetails.nextEpisode.airDate).toLocaleDateString("ro-RO", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Bucharest" })}.`
+                            ? (() => {
+                                const ne = tmdbDetails.nextEpisode;
+                                const airstamp = tvmazeAirstamps.find(
+                                  (a) =>
+                                    a.seasonNumber === ne.seasonNumber &&
+                                    a.episodeNum === ne.episodeNumber,
+                                )?.airstamp;
+                                const dateLabel = new Date(
+                                  airstamp ?? ne.airDate,
+                                ).toLocaleDateString("ro-RO", {
+                                  day: "numeric",
+                                  month: "long",
+                                  year: "numeric",
+                                  timeZone: "Europe/Bucharest",
+                                });
+                                const timeLabel = airstamp
+                                  ? new Date(airstamp).toLocaleTimeString("ro-RO", {
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                      hour12: false,
+                                      timeZone: "Europe/Bucharest",
+                                    })
+                                  : null;
+                                return `Episodul S${String(ne.seasonNumber).padStart(2, "0")}E${String(ne.episodeNumber).padStart(2, "0")} apare pe ${dateLabel}${timeLabel ? `, ora ${timeLabel}` : ""}.`;
+                              })()
                             : `Serialul e reînnoit (${tvStatusLabel(tmdbDetails.tvStatus)}), dar fără dată anunțată încă pentru episoade noi.`}
                         </span>
                       </div>
