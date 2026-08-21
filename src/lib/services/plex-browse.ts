@@ -383,8 +383,9 @@ async function buildDetailFromMediaRow(
     const ownerUsername = await getPlexOwnerUsername();
     if (ownerUsername && !watchedByAll.some((w) => w.username === ownerUsername)) {
       const viewedKeys = await getPlexViewedRatingKeys([row.plex_rating_key]);
-      if (viewedKeys.has(row.plex_rating_key)) {
-        watchedByAll.push({ username: ownerUsername, viewedAt: 0 });
+      const lastViewedAt = viewedKeys.get(row.plex_rating_key);
+      if (lastViewedAt != null) {
+        watchedByAll.push({ username: ownerUsername, viewedAt: lastViewedAt });
       }
     }
   }

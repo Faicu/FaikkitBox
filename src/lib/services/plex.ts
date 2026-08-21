@@ -133,10 +133,12 @@ export async function getPlexOwnerUsername(): Promise<string | null> {
 
 // Verifică viewCount direct pe item-ele date (un singur request batch către
 // Plex) — folosit doar ca fallback pentru owner, când istoricul n-are nimic.
-export async function getPlexViewedRatingKeys(ratingKeys: string[]): Promise<Set<string>> {
-  if (ratingKeys.length === 0) return new Set();
+// Întoarce data ultimei vizionări (lastViewedAt) per ratingKey, ca să poată
+// fi afișată în UI la fel ca pentru cazurile găsite prin istoric.
+export async function getPlexViewedRatingKeys(ratingKeys: string[]): Promise<Map<string, number>> {
+  if (ratingKeys.length === 0) return new Map();
   const token = process.env.PLEX_TOKEN;
-  if (!token) return new Set();
+  if (!token) return new Map();
   try {
     const { url } = await discoverPlexUrl(token, process.env.PLEX_URL);
     const headers = { Accept: "application/json", "X-Plex-Token": token };
@@ -146,13 +148,15 @@ export async function getPlexViewedRatingKeys(ratingKeys: string[]): Promise<Set
       12000,
     );
     const items = json?.MediaContainer?.Metadata ?? [];
-    const viewed = new Set<string>();
+    const viewed = new Map<string, number>();
     for (const it of items) {
-      if (it.ratingKey != null && Number(it.viewCount ?? 0) > 0) viewed.add(String(it.ratingKey));
+      if (it.ratingKey != null && Number(it.viewCount ?? 0) > 0) {
+        viewed.set(String(it.ratingKey), Number(it.lastViewedAt ?? 0));
+      }
     }
     return viewed;
   } catch {
-    return new Set();
+    return new Map();
   }
 }
 
