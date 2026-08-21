@@ -92,6 +92,7 @@ interface MediaBrowseRow {
   plex_rating_key: string | null;
   media_type: string;
   title: string;
+  original_title: string | null;
   season: number | null;
   episode: number | null;
   poster_path: string | null;
@@ -116,7 +117,7 @@ export const getPlexLibraryBrowse = createServerFn({ method: "GET" }).handler(
       // descărcare (torrent_hash cunoscut, încă neindexat de Plex).
       const rows = db
         .prepare(
-          `SELECT m.id, m.plex_rating_key, m.media_type, m.title, m.season, m.episode,
+          `SELECT m.id, m.plex_rating_key, m.media_type, m.title, m.original_title, m.season, m.episode,
                   m.poster_path, m.plex_added_at, m.added_at, m.torrent_hash
            FROM media m
            WHERE m.media_type IN ('movie', 'episode')
@@ -184,15 +185,20 @@ export const getPlexLibraryBrowse = createServerFn({ method: "GET" }).handler(
 
       const { getPlexUserHistory } = await import("./plex");
       const myHistory = await getPlexUserHistory(myPlexUsername);
-      const watchedKeys = new Set(
+      const watchedRatingKeys = new Set(myHistory.map((e) => e.ratingKey).filter(Boolean));
+      const watchedTitleKeys = new Set(
         myHistory.map((e) => (e.show ? `${e.show}|${e.season}|${e.episode}` : `movie|${e.title}`)),
       );
-      const withWatched = items.map((it) => ({
-        ...it,
-        watchedByMe: watchedKeys.has(
-          it.type === "episode" ? `${it.show}|${it.season}|${it.episode}` : `movie|${it.title}`,
-        ),
-      }));
+      const originalTitleById = new Map(rows.map((r) => [r.id, r.original_title || r.title]));
+      const withWatched = items.map((it) => {
+        if (it.ratingKey && watchedRatingKeys.has(it.ratingKey)) {
+          return { ...it, watchedByMe: true };
+        }
+        const titleForMatch = originalTitleById.get(it.mediaId) ?? it.title;
+        const titleKey =
+          it.type === "episode" ? `${titleForMatch}|${it.season}|${it.episode}` : `movie|${titleForMatch}`;
+        return { ...it, watchedByMe: watchedTitleKeys.has(titleKey) };
+      });
       return { status: "ok", items: withWatched };
     } catch (e) {
       return { status: "error", error: e instanceof Error ? e.message : String(e) };
