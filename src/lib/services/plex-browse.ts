@@ -183,21 +183,21 @@ export const getPlexLibraryBrowse = createServerFn({ method: "GET" }).handler(
       const myPlexUsername = me?.plex_username ?? null;
       if (!myPlexUsername) return { status: "ok", items };
 
-      const { getPlexUserHistory } = await import("./plex");
-      const myHistory = await getPlexUserHistory(myPlexUsername);
-      const watchedRatingKeys = new Set(myHistory.map((e) => e.ratingKey).filter(Boolean));
-      const watchedTitleKeys = new Set(
-        myHistory.map((e) => (e.show ? `${e.show}|${e.season}|${e.episode}` : `movie|${e.title}`)),
-      );
+      const { getPlexWatchedIndex, isItemWatched } = await import("./plex");
+      const watchedIndex = await getPlexWatchedIndex(myPlexUsername);
       const originalTitleById = new Map(rows.map((r) => [r.id, r.original_title || r.title]));
       const withWatched = items.map((it) => {
-        if (it.ratingKey && watchedRatingKeys.has(it.ratingKey)) {
-          return { ...it, watchedByMe: true };
-        }
         const titleForMatch = originalTitleById.get(it.mediaId) ?? it.title;
-        const titleKey =
-          it.type === "episode" ? `${titleForMatch}|${it.season}|${it.episode}` : `movie|${titleForMatch}`;
-        return { ...it, watchedByMe: watchedTitleKeys.has(titleKey) };
+        return {
+          ...it,
+          watchedByMe: isItemWatched(watchedIndex, {
+            ratingKey: it.ratingKey,
+            title: titleForMatch,
+            show: it.type === "episode" ? titleForMatch : null,
+            season: it.season,
+            episode: it.episode,
+          }),
+        };
       });
       return { status: "ok", items: withWatched };
     } catch (e) {
@@ -320,7 +320,8 @@ async function buildDetailFromMediaRow(
   const isEpisode = row.media_type === "episode";
   const isShow = row.media_type === "tv_show";
 
-  const { getAllPlexUserHistory } = await import("./plex");
+  const { getAllPlexUserHistory, getAllPlexWatchedIndexes, isItemWatched } = await import("./plex");
+  const titleForMatch = row.original_title || row.title;
   const matchesItem = (e: {
     title: string;
     show?: string;
@@ -329,16 +330,27 @@ async function buildDetailFromMediaRow(
     ratingKey?: string;
   }) => {
     if (row.plex_rating_key && e.ratingKey) return e.ratingKey === row.plex_rating_key;
-    const titleForMatch = row.original_title || row.title;
     return isEpisode
       ? e.show === titleForMatch && e.season === row.season && e.episode === row.episode
       : !isShow && !e.show && e.title === titleForMatch;
   };
-  const allHistory = isShow ? {} : await getAllPlexUserHistory();
+  const [allHistory, allWatchedIndexes] = isShow
+    ? [{}, {}]
+    : await Promise.all([getAllPlexUserHistory(), getAllPlexWatchedIndexes()]);
   const watchedByAll: Array<{ username: string; viewedAt: number }> = [];
-  for (const [username, entries] of Object.entries(allHistory)) {
-    const match = entries.find(matchesItem);
-    if (match) watchedByAll.push({ username, viewedAt: match.viewedAt });
+  for (const [username, index] of Object.entries(allWatchedIndexes)) {
+    const watched = isItemWatched(index, {
+      ratingKey: row.plex_rating_key,
+      title: titleForMatch,
+      show: isEpisode ? titleForMatch : null,
+      season: row.season,
+      episode: row.episode,
+    });
+    if (!watched) continue;
+    // Best-effort dată de vizionare pentru afișare — istoricul capat la 50/
+    // user poate rata intrări mai vechi, caz în care afișăm fără dată.
+    const match = (allHistory[username] ?? []).find(matchesItem);
+    watchedByAll.push({ username, viewedAt: match?.viewedAt ?? 0 });
   }
   const me = session.data.userId
     ? (db.prepare("SELECT plex_username FROM users WHERE id = ?").get(session.data.userId) as

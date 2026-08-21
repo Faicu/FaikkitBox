@@ -70,11 +70,43 @@ export interface PlexHistoryEntry {
 const libraryCountCache = new Map<string, { count: number | null; expiresAt: number }>();
 const LIBRARY_COUNT_TTL_MS = 5 * 60 * 1000;
 
+// Index "văzut de X" — sursă unică de adevăr pentru orice ecran care
+// afișează starea de vizionare (listă Bibliotecă + drawer de detalii).
+// Spre deosebire de `userHistory` (plafonat la 50/user, gândit doar pentru
+// afișarea istoricului recent), acest index acoperă TOATE intrările primite
+// de la Plex (până la 1000), ca un utilizator activ să nu "piardă" din
+// matching titluri vizionate mai demult doar pentru că a mai văzut multe
+// altele între timp.
+export interface PlexWatchedIndex {
+  ratingKeys: Set<string>;
+  titleKeys: Set<string>;
+}
+
+function episodeKeyFor(show: string, season?: number | null, episode?: number | null): string {
+  return `${show}|${season}|${episode}`;
+}
+
+export function isItemWatched(
+  index: PlexWatchedIndex,
+  item: {
+    ratingKey?: string | null;
+    title: string;
+    show?: string | null;
+    season?: number | null;
+    episode?: number | null;
+  },
+): boolean {
+  if (item.ratingKey && index.ratingKeys.has(item.ratingKey)) return true;
+  const key = item.show ? episodeKeyFor(item.show, item.season, item.episode) : `movie|${item.title}`;
+  return index.titleKeys.has(key);
+}
+
 let plexHistoryCache: {
   url: string;
   episodesToday: number;
   activeUsersToday: number;
   userHistory: Record<string, PlexHistoryEntry[]>;
+  watchedIndexByUser: Record<string, PlexWatchedIndex>;
   todayViews: PlexHistoryEntry[];
   activeUsersTodayList: Array<{ user: string; count: number }>;
   expiresAt: number;
@@ -114,6 +146,38 @@ export async function getAllPlexUserHistory(): Promise<Record<string, PlexHistor
   }
 }
 
+// Index "văzut" neplafonat, pentru un singur user — folosit de listă/drawer
+// prin `isItemWatched`. Vezi comentariul de pe `PlexWatchedIndex`.
+export async function getPlexWatchedIndex(username: string): Promise<PlexWatchedIndex> {
+  const token = process.env.PLEX_TOKEN;
+  if (!token) return { ratingKeys: new Set(), titleKeys: new Set() };
+  try {
+    const { url } = await discoverPlexUrl(token, process.env.PLEX_URL);
+    const headers = { Accept: "application/json", "X-Plex-Token": token };
+    const history = await fetchPlexHistory(url, headers);
+    return (
+      history.watchedIndexByUser[username] ?? { ratingKeys: new Set(), titleKeys: new Set() }
+    );
+  } catch {
+    return { ratingKeys: new Set(), titleKeys: new Set() };
+  }
+}
+
+// La fel ca `getPlexWatchedIndex`, dar pentru toți userii deodată — folosit
+// de drawer pentru "alți utilizatori care au văzut".
+export async function getAllPlexWatchedIndexes(): Promise<Record<string, PlexWatchedIndex>> {
+  const token = process.env.PLEX_TOKEN;
+  if (!token) return {};
+  try {
+    const { url } = await discoverPlexUrl(token, process.env.PLEX_URL);
+    const headers = { Accept: "application/json", "X-Plex-Token": token };
+    const history = await fetchPlexHistory(url, headers);
+    return history.watchedIndexByUser;
+  } catch {
+    return {};
+  }
+}
+
 async function fetchPlexHistory(
   url: string,
   headers: Record<string, string>,
@@ -121,6 +185,7 @@ async function fetchPlexHistory(
   episodesToday: number;
   activeUsersToday: number;
   userHistory: Record<string, PlexHistoryEntry[]>;
+  watchedIndexByUser: Record<string, PlexWatchedIndex>;
   todayViews: PlexHistoryEntry[];
   activeUsersTodayList: Array<{ user: string; count: number }>;
 }> {
@@ -129,6 +194,7 @@ async function fetchPlexHistory(
       episodesToday: plexHistoryCache.episodesToday,
       activeUsersToday: plexHistoryCache.activeUsersToday,
       userHistory: plexHistoryCache.userHistory,
+      watchedIndexByUser: plexHistoryCache.watchedIndexByUser,
       todayViews: plexHistoryCache.todayViews,
       activeUsersTodayList: plexHistoryCache.activeUsersTodayList,
     };
@@ -154,6 +220,7 @@ async function fetchPlexHistory(
   }
 
   const historyByUser = new Map<string, PlexHistoryEntry[]>();
+  const watchedIndexByUser = new Map<string, PlexWatchedIndex>();
   // Compute "today" in Europe/Bucharest, not UTC (worker runtime).
   const startOfTodaySec = (() => {
     const now = new Date();
@@ -197,20 +264,36 @@ async function fetchPlexHistory(
     const user =
       fromMap ?? fromInline ?? (accountId != null ? `Utilizator #${accountId}` : "Necunoscut");
     const wkey = user;
+    const title = String(e.title ?? "—");
+    const show = e.grandparentTitle ? String(e.grandparentTitle) : undefined;
+    const season = e.parentIndex != null ? Number(e.parentIndex) : undefined;
+    const episode = e.index != null ? Number(e.index) : undefined;
+    const ratingKey = e.ratingKey != null ? String(e.ratingKey) : undefined;
+
     const list = historyByUser.get(wkey) ?? [];
     if (list.length < 100) {
       list.push({
-        title: String(e.title ?? "—"),
-        show: e.grandparentTitle ? String(e.grandparentTitle) : undefined,
-        season: e.parentIndex != null ? Number(e.parentIndex) : undefined,
-        episode: e.index != null ? Number(e.index) : undefined,
-        ratingKey: e.ratingKey != null ? String(e.ratingKey) : undefined,
+        title,
+        show,
+        season,
+        episode,
+        ratingKey,
         type: String(e.type ?? "unknown"),
         viewedAt,
         player: typeof e?.Player?.title === "string" ? e.Player.title : undefined,
       });
       historyByUser.set(wkey, list);
     }
+
+    // Neplafonat, spre deosebire de `historyByUser` — vezi comentariul de
+    // pe `PlexWatchedIndex`.
+    const watchedIndex = watchedIndexByUser.get(wkey) ?? {
+      ratingKeys: new Set<string>(),
+      titleKeys: new Set<string>(),
+    };
+    if (ratingKey) watchedIndex.ratingKeys.add(ratingKey);
+    watchedIndex.titleKeys.add(show ? episodeKeyFor(show, season, episode) : `movie|${title}`);
+    watchedIndexByUser.set(wkey, watchedIndex);
     if (viewedAt >= startOfTodaySec) {
       const entry: PlexHistoryEntry = {
         title: String(e.title ?? "—"),
@@ -238,6 +321,7 @@ async function fetchPlexHistory(
     episodesToday,
     activeUsersToday: todayUsers.size,
     userHistory,
+    watchedIndexByUser: Object.fromEntries(watchedIndexByUser),
     todayViews: todayViews.sort((a, b) => b.viewedAt - a.viewedAt),
     activeUsersTodayList: Array.from(todayUserCounts.entries())
       .map(([user, count]) => ({ user, count }))
