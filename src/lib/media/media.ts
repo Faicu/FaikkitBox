@@ -152,6 +152,66 @@ function ensureMediaPlaceholder(
   return Number(res.lastInsertRowid);
 }
 
+export interface LibraryTitleMatch {
+  mediaId: number;
+  mediaType: "movie" | "tv";
+  tmdbId: number | null;
+  imdbId: string | null;
+  title: string;
+  originalTitle: string | null;
+  literalTitle: string | null;
+  year: number | null;
+  posterPath: string | null;
+  tvStatus: string | null;
+}
+
+// Căutare de titluri deja existente în bibliotecă (rânduri-rădăcină, fără
+// parent_id) — folosită la descărcarea manuală de pe Filelist, ca adminul să
+// poată lega explicit un torrent de un show/film corect din bibliotecă, în
+// loc să lase rezolvarea automată (autoResolveManualMedia) să ghicească după
+// IMDb ID-ul torrentului — greșit pentru titluri indexate pe Filelist sub
+// ID-ul altei producții din aceeași franciză (vezi spinoff-uri/reunion-uri).
+export const searchLibraryTitles = createServerFn({ method: "GET" })
+  .validator((data: { query: string }) => data)
+  .handler(async ({ data }): Promise<LibraryTitleMatch[]> => {
+    const { requireAdmin } = await import("../auth/admin.server");
+    await requireAdmin();
+    const q = data.query.trim();
+    if (q.length < 2) return [];
+    const db = getDb();
+    const rows = db
+      .prepare(
+        `SELECT id, media_type, tmdb_id, imdb_id, title, original_title, literal_title, year, poster_path, tv_status
+         FROM media
+         WHERE parent_id IS NULL AND media_type IN ('movie', 'tv_show') AND title LIKE ?
+         ORDER BY title LIMIT 20`,
+      )
+      .all(`%${q}%`) as Array<{
+      id: number;
+      media_type: string;
+      tmdb_id: number | null;
+      imdb_id: string | null;
+      title: string;
+      original_title: string | null;
+      literal_title: string | null;
+      year: number | null;
+      poster_path: string | null;
+      tv_status: string | null;
+    }>;
+    return rows.map((r) => ({
+      mediaId: r.id,
+      mediaType: r.media_type === "movie" ? "movie" : "tv",
+      tmdbId: r.tmdb_id,
+      imdbId: r.imdb_id,
+      title: r.title,
+      originalTitle: r.original_title,
+      literalTitle: r.literal_title,
+      year: r.year,
+      posterPath: r.poster_path,
+      tvStatus: r.tv_status,
+    }));
+  });
+
 export interface DownloadingMediaEntry {
   season: number | null;
   episode: number | null;

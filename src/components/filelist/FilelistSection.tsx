@@ -275,8 +275,8 @@ export function FilelistSection() {
         <DownloadConfirmDialog
           torrent={confirmTorrent}
           label={isMovieCategory(confirmTorrent.category) ? "Film" : "Serial"}
-          onConfirm={() => {
-            handleDownload(confirmTorrent);
+          onConfirm={(mediaContext) => {
+            handleDownload(confirmTorrent, mediaContext);
             setConfirmTorrent(null);
           }}
           onCancel={() => setConfirmTorrent(null)}

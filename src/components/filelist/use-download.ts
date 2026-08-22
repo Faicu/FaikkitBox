@@ -10,16 +10,17 @@ import { parseSeasonEpisodeFromName } from "@/lib/media/torrent-name-parse";
 // Hook reutilizabil pentru descărcare torrent
 // ---------------------------------------------------------------------------
 
-// Metadatele TMDB deja cunoscute de card (MovieCard/ShowCard au deja `item` +
-// `details` încărcate pentru orice titlu fixat) — trimise o dată cu
-// descărcarea, ca torrentul să apară direct în tabela `media`, la fel ca la
-// wizard, fără nicio căutare TMDB suplimentară. Opțional: fără context (ex.
-// căutarea manuală brută din FilelistSection, fără legătură TMDB), rămâne pe
-// vechiul comportament — doar `downloads`, fără `media`.
+// Metadatele TMDB/bibliotecă ale titlului de legat, trimise o dată cu
+// descărcarea, ca torrentul să apară direct în tabela `media` legat corect,
+// fără nicio rezolvare automată ulterioară. Opțional, per apel: fără context
+// (căutarea manuală brută din FilelistSection, fără titlu ales explicit),
+// rămâne pe vechiul comportament — server-ul ghicește automat titlul din
+// IMDb ID-ul torrentului (autoResolveManualMedia), care poate greși pentru
+// torrente indexate pe Filelist sub ID-ul altei producții din franciză.
 export interface DownloadMediaContext {
   mediaType: "movie" | "tv";
   imdbId: string | null;
-  tmdbId: number;
+  tmdbId: number | null;
   title: string;
   originalTitle?: string | null;
   literalTitle?: string | null;
@@ -52,12 +53,12 @@ function buildMediaPayload(context: DownloadMediaContext, torrent: FilelistTorre
   };
 }
 
-export function useDownload(mediaContext?: DownloadMediaContext) {
+export function useDownload() {
   const qc = useQueryClient();
   const downloadFn = useServerFn(downloadFilelist);
   const [downloading, setDownloading] = useState<number | null>(null);
 
-  async function handleDownload(torrent: FilelistTorrent) {
+  async function handleDownload(torrent: FilelistTorrent, mediaContext?: DownloadMediaContext) {
     setDownloading(torrent.id);
     const toastId = toast.loading(`Se descarcă: ${torrent.name}…`);
     try {
