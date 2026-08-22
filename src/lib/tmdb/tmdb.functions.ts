@@ -101,30 +101,52 @@ export const searchTmdb = createServerFn({ method: "GET" })
     const q = data.query.trim();
     if (!q) return [];
     try {
-      const json = await tmdbFetch<TmdbApiSearchResponse>(
-        `/search/multi?query=${encodeURIComponent(q)}&include_adult=false&language=en-US&page=1`,
+      // Potrivirea (query-ul, ordinea, ce rezultate ies) rămâne pe apelul
+      // en-US, ca înainte — doar titlul afișat/salvat e suprascris cu
+      // traducerea ro-RO, unde există (altfel rămâne titlul englez). Fără
+      // asta, titlul din wizard ajungea nemodificat în `media.title` și
+      // apărea englezesc peste tot în aplicație (Bibliotecă, notificări).
+      const [json, roJson] = await Promise.all([
+        tmdbFetch<TmdbApiSearchResponse>(
+          `/search/multi?query=${encodeURIComponent(q)}&include_adult=false&language=en-US&page=1`,
+        ),
+        tmdbFetch<TmdbApiSearchResponse>(
+          `/search/multi?query=${encodeURIComponent(q)}&include_adult=false&language=ro-RO&page=1`,
+        ).catch(() => null),
+      ]);
+      const roByKey = new Map(
+        (roJson?.results ?? []).map((r) => [`${r.media_type}:${r.id}`, r]),
       );
       const results = json.results ?? [];
       return results
         .filter((r) => r.media_type === "movie" || r.media_type === "tv")
         .slice(0, 8)
-        .map((r) => ({
-          id: r.id,
-          mediaType: r.media_type as "movie" | "tv",
-          title:
+        .map((r) => {
+          const roR = roByKey.get(`${r.media_type}:${r.id}`);
+          const enTitle =
             r.media_type === "movie"
               ? (r.title ?? r.original_title ?? "")
-              : (r.name ?? r.original_name ?? ""),
-          originalTitle:
-            r.media_type === "movie"
-              ? (r.original_title ?? r.title ?? "")
-              : (r.original_name ?? r.name ?? ""),
-          year:
-            r.media_type === "movie"
-              ? (r.release_date ?? "").slice(0, 4) || null
-              : (r.first_air_date ?? "").slice(0, 4) || null,
-          posterUrl: r.poster_path ? `https://image.tmdb.org/t/p/w92${r.poster_path}` : null,
-        }));
+              : (r.name ?? r.original_name ?? "");
+          const roTitle = roR
+            ? r.media_type === "movie"
+              ? roR.title
+              : roR.name
+            : null;
+          return {
+            id: r.id,
+            mediaType: r.media_type as "movie" | "tv",
+            title: roTitle?.trim() || enTitle,
+            originalTitle:
+              r.media_type === "movie"
+                ? (r.original_title ?? r.title ?? "")
+                : (r.original_name ?? r.name ?? ""),
+            year:
+              r.media_type === "movie"
+                ? (r.release_date ?? "").slice(0, 4) || null
+                : (r.first_air_date ?? "").slice(0, 4) || null,
+            posterUrl: r.poster_path ? `https://image.tmdb.org/t/p/w92${r.poster_path}` : null,
+          };
+        });
     } catch {
       return [];
     }
