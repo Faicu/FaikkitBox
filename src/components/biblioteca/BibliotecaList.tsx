@@ -7,6 +7,7 @@ import {
   Film,
   Tv,
   Eye,
+  Users,
   ChevronDown,
   ChevronRight,
   Layers,
@@ -120,6 +121,12 @@ export function BibliotecaList() {
           </span>
         </span>
         <StatusBadge status={item.status} progress={item.progress} />
+        {item.watchedCount > 0 && (
+          <span className="flex shrink-0 items-center gap-0.5 text-[10px] text-muted-foreground">
+            <Users className="h-3 w-3" />
+            {item.watchedCount}
+          </span>
+        )}
         {item.watchedByMe && <Eye className="h-3 w-3 shrink-0 text-emerald-400" />}
       </button>
     );

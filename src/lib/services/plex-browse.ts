@@ -29,6 +29,9 @@ export interface PlexBrowseItem {
   thumbUrl: string | null;
   addedAt: number;
   watchedByMe: boolean;
+  // Câți utilizatori distincți (din conturile Plex mapate la conturi
+  // FaikkitBox) au vizionat titlul — afișat ca badge separat în listă.
+  watchedCount: number;
   // "downloading" — are torrent, dar Plex nu l-a indexat încă; "in_library"
   // — normal, deja în Plex.
   status: "in_library" | "downloading";
@@ -165,6 +168,7 @@ export const getPlexLibraryBrowse = createServerFn({ method: "GET" }).handler(
             r.plex_added_at ??
             Math.floor(new Date(`${r.added_at.replace(" ", "T")}Z`).getTime() / 1000),
           watchedByMe: false,
+          watchedCount: 0,
           status: r.plex_rating_key ? "in_library" : "downloading",
           progress: null,
           dlspeed: null,
@@ -190,29 +194,35 @@ export const getPlexLibraryBrowse = createServerFn({ method: "GET" }).handler(
         }
       }
 
-      // "Am văzut" — badge afișat direct în listă, fără cost suplimentar (nicio
-      // cerere nouă către Plex): potrivim doar cu istoricul deja cachuit.
+      // "Am văzut" + "văzut de N" — badge-uri afișate direct în listă, fără
+      // cost suplimentar (nicio cerere nouă către Plex): potrivim doar cu
+      // istoricul deja cachuit, pentru toți utilizatorii deodată.
       const me = db
         .prepare("SELECT plex_username FROM users WHERE id = ?")
         .get(session.data.userId!) as { plex_username: string | null } | undefined;
       const myPlexUsername = me?.plex_username ?? null;
       if (!myPlexUsername) return { status: "ok", items };
 
-      const { getPlexWatchedIndex, isItemWatched } = await import("./plex");
-      const watchedIndex = await getPlexWatchedIndex(myPlexUsername);
+      const { getAllPlexWatchedIndexes, isItemWatched } = await import("./plex");
+      const allWatchedIndexes = await getAllPlexWatchedIndexes();
       const originalTitleById = new Map(rows.map((r) => [r.id, r.original_title || r.title]));
       const withWatched = items.map((it) => {
         const titleForMatch = originalTitleById.get(it.mediaId) ?? it.title;
-        return {
-          ...it,
-          watchedByMe: isItemWatched(watchedIndex, {
-            ratingKey: it.ratingKey,
-            title: titleForMatch,
-            show: it.type === "episode" ? titleForMatch : null,
-            season: it.season,
-            episode: it.episode,
-          }),
+        const matchItem = {
+          ratingKey: it.ratingKey,
+          title: titleForMatch,
+          show: it.type === "episode" ? titleForMatch : null,
+          season: it.season,
+          episode: it.episode,
         };
+        let watchedCount = 0;
+        let watchedByMe = false;
+        for (const [username, index] of Object.entries(allWatchedIndexes)) {
+          if (!isItemWatched(index, matchItem)) continue;
+          watchedCount += 1;
+          if (username === myPlexUsername) watchedByMe = true;
+        }
+        return { ...it, watchedByMe, watchedCount };
       });
 
       const ownerViewedAt = await getOwnerViewedAtByRatingKey(
@@ -220,7 +230,10 @@ export const getPlexLibraryBrowse = createServerFn({ method: "GET" }).handler(
         withWatched.filter((it) => !it.watchedByMe && it.ratingKey).map((it) => it.ratingKey as string),
       );
       for (const it of withWatched) {
-        if (it.ratingKey && ownerViewedAt.has(it.ratingKey)) it.watchedByMe = true;
+        if (it.ratingKey && ownerViewedAt.has(it.ratingKey) && !it.watchedByMe) {
+          it.watchedByMe = true;
+          it.watchedCount += 1;
+        }
       }
       return { status: "ok", items: withWatched };
     } catch (e) {
