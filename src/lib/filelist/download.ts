@@ -140,7 +140,7 @@ async function pollUntilComplete(
           console.log(`[filelist] "${torrentName}" complet — dau refresh Plex`);
           import("../notifications/notifications")
             .then(({ buildTorrentCompleteNotification }) =>
-              buildTorrentCompleteNotification({ torrentName, imdb: imdbId }),
+              buildTorrentCompleteNotification({ torrentName, imdb: imdbId, torrentHash }),
             )
             .then((n) =>
               import("../activity-log").then(({ logActivity }) =>
@@ -714,12 +714,42 @@ async function finishFilelistDownload(ctx: {
   // 5. Găsește hash-ul torrentului proaspăt adăugat (cu reîncercări)
   const torrentHash = await findTorrentHashByName(url, cookie, params.torrentName);
 
-  // 6. Loghează descărcarea imediat (completedAt null = în curs)
+  // 6. Scrie în `media` ÎNAINTE de notificare — sursă unică pentru titlu/
+  // poster, ca notificarea (mai jos) să le citească de-acolo, nu să le
+  // recalculeze independent printr-un lookup TMDB live paralel.
+  const mediaPayload =
+    params.media ??
+    (await autoResolveManualMedia(params.imdb, params.torrentName, isMovie).catch((e) => {
+      console.warn("[filelist] Rezolvare automată media eșuată:", e);
+      return null;
+    }));
+  if (mediaPayload) {
+    const { upsertMediaEntry } = await import("../media/media");
+    try {
+      upsertMediaEntry({
+        ...mediaPayload,
+        torrentName: params.torrentName,
+        torrentHash: torrentHash ?? null,
+        category: catId,
+        categoryName: catName,
+        size: params.size ?? 0,
+        freeleech: params.freeleech ?? false,
+        internal: params.internal ?? false,
+        savePath,
+        requestedByUserId: params.requestedByUserId ?? null,
+      });
+    } catch (e) {
+      console.warn("[filelist] Nu am putut scrie în tabela media:", e);
+    }
+  }
+
+  // 7. Loghează descărcarea imediat (completedAt null = în curs)
   import("../notifications/notifications")
     .then(({ buildTorrentAddedNotification }) =>
       buildTorrentAddedNotification({
         torrentName: params.torrentName,
         imdb: params.imdb,
+        torrentHash,
       }),
     )
     .then((n) =>
@@ -753,33 +783,7 @@ async function finishFilelistDownload(ctx: {
     requestedByUserId: params.requestedByUserId ?? null,
   });
 
-  const mediaPayload =
-    params.media ??
-    (await autoResolveManualMedia(params.imdb, params.torrentName, isMovie).catch((e) => {
-      console.warn("[filelist] Rezolvare automată media eșuată:", e);
-      return null;
-    }));
-  if (mediaPayload) {
-    const { upsertMediaEntry } = await import("../media/media");
-    try {
-      upsertMediaEntry({
-        ...mediaPayload,
-        torrentName: params.torrentName,
-        torrentHash: torrentHash ?? null,
-        category: catId,
-        categoryName: catName,
-        size: params.size ?? 0,
-        freeleech: params.freeleech ?? false,
-        internal: params.internal ?? false,
-        savePath,
-        requestedByUserId: params.requestedByUserId ?? null,
-      });
-    } catch (e) {
-      console.warn("[filelist] Nu am putut scrie în tabela media:", e);
-    }
-  }
-
-  // 7. Pornește polling background — refresh Plex și marchează complet DOAR la final
+  // 8. Pornește polling background — refresh Plex și marchează complet DOAR la final
   const plexType = isMovie ? "movie" : "show";
   if (torrentHash) {
     pollUntilComplete(

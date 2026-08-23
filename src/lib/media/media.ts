@@ -563,6 +563,22 @@ export function markMediaCompleted(torrentHash: string): void {
     .run(torrentHash);
 }
 
+// Titlu + poster deja cunoscute în `media` pentru un torrent — folosit de
+// notificările de descărcare (download.ts), ca să NU-și mai recalculeze
+// singure titlul/poster-ul printr-un lookup TMDB live paralel (sursă de
+// adevăr unică: ce s-a scris deja în `media` la adăugare, vezi
+// upsertMediaEntry) — TMDB live rămâne doar fallback, pentru torrente fără
+// nicio legătură media (autoResolveManualMedia eșuat).
+export function getMediaDisplayByTorrentHash(
+  torrentHash: string,
+): { title: string; posterPath: string | null } | null {
+  const row = getDb()
+    .prepare("SELECT title, poster_path FROM media WHERE torrent_hash = ?")
+    .get(torrentHash) as { title: string; poster_path: string | null } | undefined;
+  if (!row) return null;
+  return { title: row.title, posterPath: row.poster_path };
+}
+
 // Apelat la "Șterge titlul complet" (Lansări/Bibliotecă) — elimină rândul
 // din `media`, ca torrentul șters din downloads/qBittorrent/disk să dispară
 // și de-aici.

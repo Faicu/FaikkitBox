@@ -95,15 +95,38 @@ export function buildPlexWatchStopMessage(user: string, what: string, progress: 
 }
 
 // --- Torrente (filelist/download.ts) ----------------------------------------
+//
+// Sursa de adevăr pentru titlu/poster e rândul deja scris în `media`
+// (upsertMediaEntry, la rândul lui alimentat de wizard/autoResolveManualMedia
+// — vezi getMediaDisplayByTorrentHash). Lookup-ul TMDB live de mai jos e
+// DOAR fallback, pentru fereastra scurtă dinaintea scrierii în `media` (sau
+// pentru torrente care n-au ajuns deloc să fie legate de un rând media) —
+// altfel am recalcula independent ceva ce riscă să difere de ce arată deja
+// Biblioteca/jurnalul Plex pentru același titlu.
 
-export async function buildTorrentAddedNotification(params: {
+async function resolveTorrentDisplay(params: {
   torrentName: string;
   imdb?: string | null;
-}): Promise<PushNotification> {
+  torrentHash?: string | null;
+}): Promise<{ displayName: string; image: string | null }> {
+  if (params.torrentHash) {
+    const { getMediaDisplayByTorrentHash } = await import("../media/media");
+    const known = getMediaDisplayByTorrentHash(params.torrentHash);
+    if (known) return { displayName: known.title, image: known.posterPath };
+  }
   const [displayName, image] = await Promise.all([
     buildTorrentDisplayName(params.torrentName, params.imdb).catch(() => params.torrentName),
     params.imdb ? lookupPosterUrlByImdbId(params.imdb).catch(() => null) : Promise.resolve(null),
   ]);
+  return { displayName, image };
+}
+
+export async function buildTorrentAddedNotification(params: {
+  torrentName: string;
+  imdb?: string | null;
+  torrentHash?: string | null;
+}): Promise<PushNotification> {
+  const { displayName, image } = await resolveTorrentDisplay(params);
   const quality = detectTorrentQuality(params.torrentName);
   return {
     title: "⬇️ Descărcare Inițiată",
@@ -116,11 +139,9 @@ export async function buildTorrentAddedNotification(params: {
 export async function buildTorrentCompleteNotification(params: {
   torrentName: string;
   imdb?: string | null;
+  torrentHash?: string | null;
 }): Promise<PushNotification> {
-  const [displayName, image] = await Promise.all([
-    buildTorrentDisplayName(params.torrentName, params.imdb).catch(() => params.torrentName),
-    params.imdb ? lookupPosterUrlByImdbId(params.imdb).catch(() => null) : Promise.resolve(null),
-  ]);
+  const { displayName, image } = await resolveTorrentDisplay(params);
   const quality = detectTorrentQuality(params.torrentName);
   return {
     title: "✅ Descărcare Completă",
