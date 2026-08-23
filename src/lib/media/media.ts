@@ -1,9 +1,7 @@
 // ---------------------------------------------------------------------------
 // Sursă unică pentru datele unui titlu media — vezi schema `media` din db.ts.
-// Populată de căile de descărcare (wizard, căutare manuală Filelist cu
-// rezolvare TMDB best-effort) — vezi upsertMediaEntry — plus, pentru restul
-// bibliotecii deja existente în Plex înainte de acest sistem, de
-// backfill-ul din media-backfill.ts — vezi upsertMediaEntryFromPlex.
+// Populată exclusiv de căile de descărcare (wizard, căutare manuală
+// Filelist cu rezolvare TMDB best-effort) — vezi upsertMediaEntry.
 // ---------------------------------------------------------------------------
 
 import { createServerFn } from "@tanstack/react-start";
@@ -321,146 +319,6 @@ export function upsertMediaEntry(input: UpsertMediaEntryInput): number {
 }
 
 // ---------------------------------------------------------------------------
-// Backfill — titluri deja existente în Plex înainte de acest sistem, fără
-// nicio descărcare/torrent asociat(ă) în aplicație. Rândul se leagă direct
-// de ratingKey-ul Plex (deja cunoscut, spre deosebire de upsertMediaEntry,
-// unde legătura se rezolvă abia ulterior, prin resolveMediaPlexLinkByTorrentHash).
-// ---------------------------------------------------------------------------
-
-export interface UpsertMediaFromPlexInput {
-  mediaType: "movie" | "episode";
-  imdbId: string | null;
-  tmdbId: number | null;
-  title: string;
-  originalTitle?: string | null;
-  literalTitle?: string | null;
-  year?: number | null;
-  season?: number | null;
-  episode?: number | null;
-  overviewRo?: string | null;
-  genres?: string[];
-  posterPath?: string | null;
-  tvStatus?: string | null;
-  plexRatingKey: string;
-  plexAddedAt?: number | null;
-  quality?: string | null;
-  durationMs?: number | null;
-  hasRomanianSubtitle?: boolean;
-  hasRomanianAudio?: boolean;
-  // Rezolvat retroactiv, potrivind calea fișierului din Plex cu lista de
-  // torrente din qBittorrent (vezi media-backfill.ts) — dacă torrentul încă
-  // seed-uiește, titlul backfill-uit devine gestionabil complet (corectare/
-  // ștergere subtitrare, ștergere titlu), nu doar afișat.
-  torrentHash?: string | null;
-  torrentName?: string | null;
-}
-
-// Un rând deja existent, creat de o descărcare (wizard/manual/auto), pentru
-// care Plex nu a apucat încă să lege plex_rating_key (resolveMediaPlexLinkByTorrentHash
-// e asincronă) — dacă backfill-ul rulează exact în fereastra aia, altfel ar
-// crea un al doilea rând pentru același fișier fizic (unul cu doar
-// torrent_hash, altul cu doar plex_rating_key, niciodată contopite).
-function findUnlinkedDownloadRow(input: UpsertMediaFromPlexInput): number | null {
-  if (input.tmdbId == null) return null;
-  const db = getDb();
-  if (input.mediaType === "episode") {
-    const row = db
-      .prepare(
-        `SELECT id FROM media WHERE media_type = 'episode' AND tmdb_id = ?
-         AND season IS ? AND episode IS ? AND torrent_hash IS NOT NULL AND plex_rating_key IS NULL`,
-      )
-      .get(input.tmdbId, input.season ?? null, input.episode ?? null) as { id: number } | undefined;
-    return row?.id ?? null;
-  }
-  const row = db
-    .prepare(
-      `SELECT id FROM media WHERE media_type = 'movie' AND tmdb_id = ?
-       AND torrent_hash IS NOT NULL AND plex_rating_key IS NULL`,
-    )
-    .get(input.tmdbId) as { id: number } | undefined;
-  return row?.id ?? null;
-}
-
-export function upsertMediaEntryFromPlex(
-  input: UpsertMediaFromPlexInput,
-): { id: number; created: boolean } {
-  const db = getDb();
-
-  const existingId = findUnlinkedDownloadRow(input);
-  if (existingId != null) {
-    db.prepare(
-      `UPDATE media SET plex_rating_key = ?, plex_added_at = ?, quality = COALESCE(?, quality),
-       duration_ms = COALESCE(?, duration_ms), has_romanian_subtitle = ?, has_romanian_audio = ?,
-       updated_at = datetime('now')
-       WHERE id = ?`,
-    ).run(
-      input.plexRatingKey,
-      input.plexAddedAt ?? null,
-      input.quality ?? null,
-      input.durationMs ?? null,
-      input.hasRomanianSubtitle ? 1 : 0,
-      input.hasRomanianAudio ? 1 : 0,
-      existingId,
-    );
-    return { id: existingId, created: false };
-  }
-
-  // Placeholder-ul de pachet de sezon (episode NULL, creat la pornirea
-  // descărcării — vezi isSeasonPack în filelist/download.ts) nu e niciodată
-  // găsit de findUnlinkedDownloadRow de mai sus (potrivire exactă season+
-  // episode), deci rămâne orfan cu plex_rating_key NULL după ce episoadele
-  // reale se leagă unul câte unul mai jos — apărea la nesfârșit în Bibliotecă
-  // ca "Se descarcă" separat de serial. Odată ce un episod real din același
-  // sezon are legătură cu Plex, placeholder-ul e redundant — îl ștergem.
-  if (input.mediaType === "episode" && input.season != null) {
-    db.prepare(
-      `DELETE FROM media WHERE media_type = 'episode' AND tmdb_id = ? AND season = ?
-       AND episode IS NULL AND plex_rating_key IS NULL`,
-    ).run(input.tmdbId, input.season);
-  }
-
-  const parentId =
-    input.mediaType === "episode"
-      ? ensureMediaPlaceholder("tv_show", { ...input, addedVia: "backfill" })
-      : null;
-
-  const res = db
-    .prepare(
-      `INSERT INTO media (
-        media_type, parent_id, imdb_id, tmdb_id, title, original_title, literal_title,
-        year, season, episode, overview_ro, genres, poster_path, tv_status,
-        plex_rating_key, plex_added_at, quality, duration_ms, has_romanian_subtitle,
-        has_romanian_audio, torrent_hash, torrent_name, added_via
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'backfill')`,
-    )
-    .run(
-      input.mediaType,
-      parentId,
-      input.imdbId,
-      input.tmdbId,
-      input.title,
-      input.originalTitle ?? null,
-      input.literalTitle ?? null,
-      input.year ?? null,
-      input.season ?? null,
-      input.episode ?? null,
-      input.overviewRo ?? null,
-      JSON.stringify(input.genres ?? []),
-      input.posterPath ?? null,
-      input.tvStatus ?? null,
-      input.plexRatingKey,
-      input.plexAddedAt ?? null,
-      input.quality ?? null,
-      input.durationMs ?? null,
-      input.hasRomanianSubtitle ? 1 : 0,
-      input.hasRomanianAudio ? 1 : 0,
-      input.torrentHash ?? null,
-      input.torrentName ?? null,
-    );
-  return { id: Number(res.lastInsertRowid), created: true };
-}
-
-// ---------------------------------------------------------------------------
 // Sincronizare ulterioară — actualizează rândul/rândurile deja existente
 // (create de wizard), potrivite după torrent_hash (mai multe rânduri pot
 // partaja un hash pentru pachetele de sezon — vezi migrarea v13 din db.ts).
@@ -526,30 +384,6 @@ export function clearMediaSubtitleStatus(torrentHash: string): void {
        WHERE torrent_hash = ?`,
     )
     .run(torrentHash);
-}
-
-// Curățare generală a placeholder-elor de pachet de sezon (episode NULL)
-// rămase orfane — cazul unde niciun episod nou nu s-a mai legat de Plex de
-// la crearea placeholder-ului (fix-ul din upsertMediaEntryFromPlex prinde
-// doar momentul legării unui episod nou, nu și pachetele deja complete la
-// data fix-ului). Apelat periodic din media-torrent-sync.ts. Șterge doar
-// placeholder-ul pentru care există deja măcar un episod real, legat de
-// Plex, în același sezon — altfel un pachet încă în curs de indexare și-ar
-// pierde singurul rând care arată "Se descarcă".
-export function cleanupOrphanSeasonPackPlaceholders(): number {
-  const res = getDb()
-    .prepare(
-      `DELETE FROM media
-       WHERE media_type = 'episode' AND episode IS NULL AND plex_rating_key IS NULL
-         AND EXISTS (
-           SELECT 1 FROM media m2
-           WHERE m2.media_type = 'episode' AND m2.tmdb_id = media.tmdb_id
-             AND m2.season = media.season AND m2.episode IS NOT NULL
-             AND m2.plex_rating_key IS NOT NULL
-         )`,
-    )
-    .run();
-  return Number(res.changes);
 }
 
 // Apelat când torrentul a ajuns la 100% (pollUntilComplete) — marchează

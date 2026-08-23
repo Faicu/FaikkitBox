@@ -90,11 +90,10 @@ export async function markLogEntryComplete(torrentId: number): Promise<boolean> 
 
 // Echivalentul de mai sus, dar sursat direct din `media` (media.id), nu din
 // `downloads` — folosit de Bibliotecă. Orice rând `media` cu torrent_hash
-// cunoscut e ștergibil, indiferent dacă provine dintr-o descărcare pornită
-// prin aplicație sau a fost rezolvat retroactiv la backfill (vezi
-// media-backfill.ts) — nu mai depinde de existența unui rând `downloads`
-// (care, dacă totuși există pentru același torrent, e curățat și el, prin
-// torrent_hash — nu mai are sens să rămână orfan).
+// cunoscut e ștergibil, indiferent de proveniență — nu mai depinde de
+// existența unui rând `downloads` (care, dacă totuși există pentru același
+// torrent, e curățat și el, prin torrent_hash — nu mai are sens să rămână
+// orfan).
 export const deleteMediaEntry = createServerFn({ method: "POST" })
   .validator((data: { mediaId: number }) => data)
   .handler(async ({ data }): Promise<{ ok: boolean; qbitDeleted?: boolean; error?: string }> => {

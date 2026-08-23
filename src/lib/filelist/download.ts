@@ -834,9 +834,7 @@ export type CorrectSubtitleResult =
 // ---------------------------------------------------------------------------
 // Echivalentele de mai sus, dar sursate direct din `media` (media.id), nu din
 // `downloads` — folosite de Bibliotecă. Orice rând `media` cu torrent_hash
-// cunoscut e gestionabil, indiferent dacă provine dintr-o descărcare pornită
-// prin aplicație sau a fost rezolvat retroactiv la backfill (vezi
-// media-backfill.ts) — nu mai depinde de existența unui rând `downloads`.
+// cunoscut e gestionabil — nu mai depinde de existența unui rând `downloads`.
 // ---------------------------------------------------------------------------
 
 interface MediaActionRow {

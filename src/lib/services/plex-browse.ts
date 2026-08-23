@@ -5,12 +5,11 @@
 // (orice cont aprobat) — spre deosebire de restul paginii Acasă, care rămâne
 // publică.
 //
-// Atât lista cât și detaliile sunt citite exclusiv din `media` (populată de
-// wizard/Lansări/backfill — vezi media.ts, media-backfill.ts): zero cereri
+// Atât lista cât și detaliile sunt citite exclusiv din `media` (populată
+// doar de wizard/căutarea manuală Filelist — vezi media.ts): zero cereri
 // Plex/TMDB live la navigare, indiferent câți utilizatori o deschid
-// simultan. Un titlu care nu e descărcat prin aplicație nu apare — vezi
-// media-backfill.ts pentru restul bibliotecii deja existente în Plex
-// înainte de acest sistem.
+// simultan. Un titlu care nu e adăugat prin aplicație nu apare deloc în
+// Bibliotecă (nu mai există backfill retroactiv din Plex).
 // ---------------------------------------------------------------------------
 
 import { createServerFn } from "@tanstack/react-start";
@@ -150,8 +149,7 @@ export const getPlexLibraryBrowse = createServerFn({ method: "GET" }).handler(
           mediaId: r.id,
           ratingKey: r.plex_rating_key,
           // Pentru episoade/seriale, `title` pe rândul din `media` e deja
-          // titlul serialului (nu se ține un titlu separat per episod) —
-          // vezi media.ts/media-backfill.ts.
+          // titlul serialului (nu se ține un titlu separat per episod).
           title: isEpisodeLike || r.media_type === "tv_show" ? "" : r.title,
           type:
             r.media_type === "episode"
