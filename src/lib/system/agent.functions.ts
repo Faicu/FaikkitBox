@@ -154,32 +154,35 @@ export const runAgentCommand = createServerFn({ method: "POST" })
     }
   });
 
-// Logging activitate agenți (fire and forget, după execuție)
-export async function logAgentActivity(cmd: AgentCommand, ok: boolean): Promise<void> {
-  const { logActivity } = await import("../activity-log");
-  type ActivityType = Parameters<typeof logActivity>[0];
-  const messages: Partial<Record<AgentCommand, string>> = {
-    restart_plex: "Plex a fost repornit",
-    restart_immich: "Immich a fost repornit",
-    restart_qbit: "qBittorrent a fost repornit",
-    deploy_app: "Aplicația FaikkitBox a fost actualizată (pull + build + restart)",
-    update_plex: "Plex a fost actualizat (docker pull + up)",
-    update_immich: "Immich a fost actualizat (docker pull + up)",
-    apt_update: "Ubuntu: apt-get update rulat",
-    apt_upgrade: "Ubuntu: apt-get upgrade rulat",
-    apt_full_upgrade: "Ubuntu actualizat complet (update + upgrade)",
-    flush_dns: "Cache DNS curățat + qBittorrent repornit",
-    uptime: undefined,
-  };
-  const msg = messages[cmd];
-  if (!msg) return;
-  const type: ActivityType =
-    cmd === "deploy_app"
-      ? "service_update"
-      : cmd.startsWith("update_")
+// Logging activitate agenți (fire and forget, după execuție) — server-only,
+// altfel db.ts (node:sqlite / node:path) ajunge bundle-uit pentru client.
+export const logAgentActivity = createServerFn({ method: "POST" })
+  .validator((data: { cmd: AgentCommand; ok: boolean }) => data)
+  .handler(async ({ data: { cmd, ok } }): Promise<void> => {
+    const { logActivity } = await import("../activity-log");
+    type ActivityType = Parameters<typeof logActivity>[0];
+    const messages: Partial<Record<AgentCommand, string>> = {
+      restart_plex: "Plex a fost repornit",
+      restart_immich: "Immich a fost repornit",
+      restart_qbit: "qBittorrent a fost repornit",
+      deploy_app: "Aplicația FaikkitBox a fost actualizată (pull + build + restart)",
+      update_plex: "Plex a fost actualizat (docker pull + up)",
+      update_immich: "Immich a fost actualizat (docker pull + up)",
+      apt_update: "Ubuntu: apt-get update rulat",
+      apt_upgrade: "Ubuntu: apt-get upgrade rulat",
+      apt_full_upgrade: "Ubuntu actualizat complet (update + upgrade)",
+      flush_dns: "Cache DNS curățat + qBittorrent repornit",
+      uptime: undefined,
+    };
+    const msg = messages[cmd];
+    if (!msg) return;
+    const type: ActivityType =
+      cmd === "deploy_app"
         ? "service_update"
-        : cmd.startsWith("restart_")
-          ? "service_restart"
-          : "ubuntu_update";
-  await logActivity(type, ok ? msg : `${msg} — EȘUAT`, { cmd, ok });
-}
+        : cmd.startsWith("update_")
+          ? "service_update"
+          : cmd.startsWith("restart_")
+            ? "service_restart"
+            : "ubuntu_update";
+    await logActivity(type, ok ? msg : `${msg} — EȘUAT`, { cmd, ok });
+  });

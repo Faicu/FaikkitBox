@@ -43,13 +43,14 @@ function HostPage() {
   const push = usePushNotifications();
 
   const runCmd = useServerFn(runAgentCommand);
+  const logActivity = useServerFn(logAgentActivity);
   const [lastCmd, setLastCmd] = useState<{ cmd: AgentCommand; result: AgentResult } | null>(null);
 
   const upgrade = useMutation({
     mutationFn: async () => {
       const cmd: AgentCommand = "apt_full_upgrade";
       const result = await runCmd({ data: { cmd } });
-      await logAgentActivity(cmd, result.ok);
+      await logActivity({ data: { cmd, ok: result.ok } });
       return { cmd, result };
     },
     onSuccess: (data) => setLastCmd(data),

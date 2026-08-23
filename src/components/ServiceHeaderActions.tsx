@@ -34,6 +34,7 @@ type Props = {
 export function ServiceHeaderActions({ service, status, onRestart, onCommandResult }: Props) {
   const versions = useQuery(versionsQuery);
   const run = useServerFn(runAgentCommand);
+  const logActivity = useServerFn(logAgentActivity);
   const config = serviceConfig[service];
   const version = (versions.data as Partial<Record<Service, ServiceVersion>> | undefined)?.[
     service
@@ -45,7 +46,7 @@ export function ServiceHeaderActions({ service, status, onRestart, onCommandResu
       if (command === config.restartCmd || command === config.updateCmd) onRestart?.();
     },
     onSuccess: (result, command) => {
-      logAgentActivity(command, result.ok).catch(() => {});
+      logActivity({ data: { cmd: command, ok: result.ok } }).catch(() => {});
       onCommandResult?.(command, result);
       if (result.ok) toast.success(`Comanda ${command} a rulat cu succes`);
       else toast.error(`Comanda ${command} a eșuat: ${result.error ?? `exit ${result.exit_code}`}`);
