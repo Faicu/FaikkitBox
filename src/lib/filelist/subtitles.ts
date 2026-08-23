@@ -2,7 +2,8 @@
 // Asigură subtitrare română corectă la finalul unei descărcări Filelist (film
 // sau, pentru pachete de episoade, fiecare episod din torrent — vezi
 // processSeasonPack). Apelat din pollUntilComplete (download.ts) și din
-// backfillSubtitles, înainte de refreshPlexLibrary.
+// corectSubtitleForMedia (corecție punctuală per titlu), înainte de
+// refreshPlexLibrary.
 //
 // Pentru fiecare fișier media (filmul însuși, sau un episod dintr-un pachet),
 // verificările rulează în ordine, oprindu-se la prima care se potrivește:

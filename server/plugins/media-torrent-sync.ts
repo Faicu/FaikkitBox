@@ -1,9 +1,10 @@
 // ---------------------------------------------------------------------------
-// Plugin: sincronizare periodică media ↔ qBittorrent ↔ subtitrări, pentru
-// TOATĂ biblioteca.
-// Rulează automat, fără acțiune din UI:
-//   1. Completează `media` cu orice titlu din Plex încă neindexat (echivalent
-//      butonului „Completează din TMDB” din Bibliotecă).
+// Plugin: sincronizare periodică media ↔ qBittorrent, pentru TOATĂ biblioteca.
+// Rulează automat, fără acțiune din UI (nu mai există butoane manuale
+// echivalente — Biblioteca adaugă totul prin Wizard/căutarea manuală
+// Filelist; asta rămâne plasa de siguranță pentru cazul rar al unui titlu
+// ajuns în Plex/qBittorrent fără să treacă prin aplicație):
+//   1. Completează `media` cu orice titlu din Plex încă neindexat.
 //   2. Leagă retroactiv torrent_hash pentru rândurile `media` care au deja
 //      plex_rating_key dar nu și torrent — cazul unui torrent adăugat direct
 //      în qBittorrent, în afara aplicației, care altfel rămânea "nu știm ce
@@ -12,28 +13,19 @@
 //       orfane — cazul în care toate episoadele reale s-au legat deja de
 //       Plex înainte ca acest ciclu să mai proceseze ceva nou pentru acel
 //       serial (vezi cleanupOrphanSeasonPackPlaceholders în media.ts).
-//   3. Verifică/corectează subtitrarea RO pentru toate torrentele active din
-//      qBittorrent (echivalent butonului „Verifică subtitrări” din
-//      Bibliotecă) — ca un torrent nou legat la pasul 2 să capete automat și
-//      verificarea subtitrării, nu doar statusul actualizat. Declanșat DOAR
-//      dacă pașii 1-2 chiar au adăugat/legat ceva nou — altfel ar rescana
-//      inutil toate torrentele din qBittorrent la fiecare ciclu, chiar și
-//      când nimic nu s-a schimbat (rate-limit OpenSubtitles, timp irosit).
-// Cele trei rulează secvențial (nu paralel), ca să nu suprapunem cereri grele
-// către Plex/qBittorrent/TMDB.
+// Verificarea de subtitrări NU se mai declanșează automat de aici — userul
+// verifică/corectează punctual, per titlu, din Bibliotecă, când primește
+// notificare că un titlu n-a primit subtitrare RO la descărcare.
 // ---------------------------------------------------------------------------
 
 const FIRST_RUN_DELAY_MS = 2 * 60 * 1000; // 2 min după pornirea serviciului
 const CYCLE_INTERVAL_MS = 2 * 60 * 60 * 1000; // la fiecare 2 ore
 
 async function runCycle(): Promise<void> {
-  let foundSomethingNew = false;
-
   try {
     const { runMediaBackfillIfIdle, linkUnmatchedTorrents } =
       await import("../../src/lib/media/media-backfill");
-    const mediaResult = await runMediaBackfillIfIdle();
-    if (mediaResult?.status === "ok" && mediaResult.added > 0) foundSomethingNew = true;
+    await runMediaBackfillIfIdle();
 
     const { checked, linked } = await linkUnmatchedTorrents();
     if (checked > 0) {
@@ -41,7 +33,6 @@ async function runCycle(): Promise<void> {
         `[media-torrent-sync] Legătură retroactivă: ${linked}/${checked} titluri legate de torrente active`,
       );
     }
-    if (linked > 0) foundSomethingNew = true;
 
     const { cleanupOrphanSeasonPackPlaceholders } = await import("../../src/lib/media/media");
     const cleaned = cleanupOrphanSeasonPackPlaceholders();
@@ -50,15 +41,6 @@ async function runCycle(): Promise<void> {
     }
   } catch (e) {
     console.warn("[media-torrent-sync] Completare/legătură media eșuată:", e);
-  }
-
-  if (!foundSomethingNew) return;
-
-  try {
-    const { runSubtitleBackfillIfIdle } = await import("../../src/lib/filelist/download");
-    await runSubtitleBackfillIfIdle();
-  } catch (e) {
-    console.warn("[media-torrent-sync] Verificare subtitrări eșuată:", e);
   }
 }
 

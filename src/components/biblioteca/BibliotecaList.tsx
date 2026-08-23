@@ -7,12 +7,9 @@ import {
   Film,
   Tv,
   Eye,
-  Captions,
   ChevronDown,
   ChevronRight,
-  Loader2,
   Layers,
-  DatabaseZap,
 } from "lucide-react";
 
 import {
@@ -25,11 +22,8 @@ import {
   AlertDialogCancel,
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
-import { Progress } from "@/components/ui/progress";
-import { plexLibraryBrowseQuery, adminStatusQuery } from "@/lib/queries";
+import { plexLibraryBrowseQuery } from "@/lib/queries";
 import { deleteMediaEntry } from "@/lib/filelist.functions";
-import { startMediaBackfill, getMediaBackfillState } from "@/lib/media/media-backfill";
-import { backfillSubtitles, getBackfillState } from "@/lib/filelist.functions";
 import type { PlexBrowseItem } from "@/lib/services/plex-browse";
 import { StatusBadge } from "./StatusBadge";
 import { TitleDetailDrawer } from "./TitleDetailDrawer";
@@ -40,8 +34,6 @@ const PAGE_SIZE = 20;
 export function BibliotecaList() {
   const queryClient = useQueryClient();
   const browse = useQuery(plexLibraryBrowseQuery);
-  const { data: adminData } = useQuery(adminStatusQuery);
-  const isAdmin = !!adminData?.isAdmin;
   const [query, setQuery] = useState("");
   const [visible, setVisible] = useState(PAGE_SIZE);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
@@ -51,21 +43,7 @@ export function BibliotecaList() {
     title: string;
     isSeasonPack: boolean;
   } | null>(null);
-  const [backfilling, setBackfilling] = useState(false);
-  const [backfillProgress, setBackfillProgress] = useState<{ total: number; done: number } | null>(
-    null,
-  );
-  const [subBackfilling, setSubBackfilling] = useState(false);
-  const [subBackfillProgress, setSubBackfillProgress] = useState<{
-    total: number;
-    done: number;
-  } | null>(null);
-
-  const startBackfillFn = useServerFn(startMediaBackfill);
-  const backfillStateFn = useServerFn(getMediaBackfillState);
   const deleteEntryFn = useServerFn(deleteMediaEntry);
-  const subBackfillFn = useServerFn(backfillSubtitles);
-  const subBackfillStateFn = useServerFn(getBackfillState);
 
   const browseItems = browse.data?.status === "ok" ? browse.data.items : null;
   const allItems = useMemo(() => browseItems ?? [], [browseItems]);
@@ -88,94 +66,6 @@ export function BibliotecaList() {
     queryClient.invalidateQueries({ queryKey: ["plexLibraryBrowse"] });
     if (res.qbitDeleted) toast.success("Titlu șters complet — fișiere + qBittorrent + Plex");
     else toast.warning("Șters din jurnal, dar nu am putut confirma ștergerea din qBittorrent");
-  }
-
-  // Backfill-ul poate dura minute bune pe o bibliotecă mare — pornit în
-  // fundal, urmărit exclusiv prin polling, ca la "Corectează subtitrări"
-  // din Lansări (un singur request ținut deschis atât ar fi tăiat de
-  // proxy/browser înainte de final).
-  async function runMediaBackfill() {
-    setBackfilling(true);
-    setBackfillProgress(null);
-    const toastId = toast.loading("Completez Biblioteca din TMDB pentru titlurile vechi…");
-
-    const startRes = await startBackfillFn({}).catch((e) => ({
-      status: "error" as const,
-      error: e instanceof Error ? e.message : String(e),
-    }));
-    if (startRes.status !== "ok") {
-      toast.error("Eroare la pornirea completării", { id: toastId, description: startRes.error });
-      setBackfilling(false);
-      return;
-    }
-
-    const pollInterval = setInterval(async () => {
-      const state = await backfillStateFn().catch(() => null);
-      if (!state) return;
-      setBackfillProgress(state.progress);
-      if (!state.running) {
-        clearInterval(pollInterval);
-        setBackfilling(false);
-        setBackfillProgress(null);
-        queryClient.invalidateQueries({ queryKey: ["plexLibraryBrowse"] });
-        if (state.lastResult?.status === "ok") {
-          const r = state.lastResult;
-          toast.success("Bibliotecă completată", {
-            id: toastId,
-            description: `${r.processed} procesate, ${r.added} adăugate, ${r.skipped} sărite`,
-            duration: 6000,
-          });
-        } else {
-          toast.error("Eroare la completarea bibliotecii", {
-            id: toastId,
-            description: state.lastResult?.error,
-          });
-        }
-      }
-    }, 1500);
-  }
-
-  // Verifică/corectează subtitrarea RO pentru TOATE torrentele active din
-  // qBittorrent (nu doar cele din `media`) — mutat aici din fosta pagină
-  // Lansări (jurnalul de descărcări a fost absorbit de Bibliotecă).
-  async function runSubtitleBackfill() {
-    setSubBackfilling(true);
-    setSubBackfillProgress(null);
-    const toastId = toast.loading("Verific subtitrările pentru descărcările vechi…");
-
-    const startRes = await subBackfillFn({}).catch((e) => ({
-      status: "error" as const,
-      error: e instanceof Error ? e.message : String(e),
-    }));
-    if (startRes.status !== "ok") {
-      toast.error("Eroare la pornirea verificării", { id: toastId, description: startRes.error });
-      setSubBackfilling(false);
-      return;
-    }
-
-    const pollInterval = setInterval(async () => {
-      const state = await subBackfillStateFn().catch(() => null);
-      if (!state) return;
-      setSubBackfillProgress(state.progress);
-      if (!state.running) {
-        clearInterval(pollInterval);
-        setSubBackfilling(false);
-        setSubBackfillProgress(null);
-        if (state.lastResult?.status === "ok") {
-          const r = state.lastResult;
-          toast.success("Subtitrări verificate", {
-            id: toastId,
-            description: `${r.processed} verificate, ${r.corrected} corectate, ${r.skipped} sărite`,
-            duration: 6000,
-          });
-        } else {
-          toast.error("Eroare la verificarea subtitrărilor", {
-            id: toastId,
-            description: state.lastResult?.error,
-          });
-        }
-      }
-    }, 1500);
   }
 
   if (browse.isLoading) {
@@ -239,71 +129,6 @@ export function BibliotecaList() {
 
   return (
     <div className="space-y-3">
-      {isAdmin && (
-        <div className="flex items-center justify-end gap-1">
-          <button
-            type="button"
-            onClick={runSubtitleBackfill}
-            disabled={subBackfilling}
-            className="flex items-center gap-1 rounded-lg px-1.5 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors disabled:opacity-50"
-            title="Verifică/corectează subtitrarea RO pentru toate torrentele active din qBittorrent"
-          >
-            {subBackfilling ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Captions className="h-3.5 w-3.5" />
-            )}
-            Verifică subtitrări
-          </button>
-          <button
-            type="button"
-            onClick={runMediaBackfill}
-            disabled={backfilling}
-            className="flex items-center gap-1 rounded-lg px-1.5 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors disabled:opacity-50"
-            title="Completează din TMDB titlurile vechi din Plex, adăugate înainte de acest sistem"
-          >
-            {backfilling ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <DatabaseZap className="h-3.5 w-3.5" />
-            )}
-            Completează din TMDB
-          </button>
-        </div>
-      )}
-      {subBackfilling && (
-        <div className="px-1">
-          <Progress
-            value={
-              subBackfillProgress
-                ? (subBackfillProgress.done / Math.max(subBackfillProgress.total, 1)) * 100
-                : 0
-            }
-          />
-          <div className="mt-1 text-[11px] text-muted-foreground">
-            {subBackfillProgress
-              ? `${subBackfillProgress.done}/${subBackfillProgress.total} verificate`
-              : "Pornesc verificarea…"}
-          </div>
-        </div>
-      )}
-      {backfilling && (
-        <div className="px-1">
-          <Progress
-            value={
-              backfillProgress
-                ? (backfillProgress.done / Math.max(backfillProgress.total, 1)) * 100
-                : 0
-            }
-          />
-          <div className="mt-1 text-[11px] text-muted-foreground">
-            {backfillProgress
-              ? `${backfillProgress.done}/${backfillProgress.total} verificate`
-              : "Pornesc completarea…"}
-          </div>
-        </div>
-      )}
-
       <div className="relative">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <input

@@ -25,10 +25,9 @@ export type SubtitleOutcome =
   | "season_already_ok"
   | "season_no_subtitle_found";
 
-// Outcome-uri care au schimbat efectiv ceva pe disk — folosite de
-// backfillSubtitles ca să știe pentru ce categorii (filme/seriale) trebuie
-// declanșat refresh Plex, și de UI (SubtitleFixDrawer) pentru gruparea
-// "corectate" cu iconiță verde.
+// Outcome-uri care au schimbat efectiv ceva pe disk — folosite ca să știe
+// dacă trebuie declanșat refresh Plex, și de UI (SubtitleFixDrawer) pentru
+// gruparea "corectate" cu iconiță verde.
 export const CORRECTED_OUTCOMES: SubtitleOutcome[] = [
   "renamed_srt",
   "reencoded_srt",

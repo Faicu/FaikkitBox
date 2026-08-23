@@ -18,14 +18,8 @@ import {
   parseCategoryId,
   isMovieCategory,
 } from "./categories";
-import { BackgroundJob, type BackgroundJobState } from "../background-job";
-import { qbitLogin, qbitEnsureCookie, resetQbitCookie, qbitGet } from "../qbit-client";
-import {
-  readDownloadLog,
-  readAllDownloadLogEntries,
-  appendDownloadLog,
-  markLogEntryComplete,
-} from "./log";
+import { qbitLogin, qbitEnsureCookie, resetQbitCookie } from "../qbit-client";
+import { readDownloadLog, appendDownloadLog, markLogEntryComplete } from "./log";
 import { CORRECTED_OUTCOMES } from "./subtitle-outcomes";
 import type { SubtitleRunItem, DeleteSubtitleResult } from "./subtitles";
 import { refreshPlexLibrary } from "../plex-refresh";
@@ -36,9 +30,8 @@ import { refreshPlexLibrary } from "../plex-refresh";
 // se poate scurge în bundle-ul browserului.
 
 // Un torrent e considerat complet dacă a ajuns la 100% și starea din
-// qBittorrent indică seeding/pauzat-după-seeding — folosit atât de
-// pollUntilComplete (torrent pornit din aplicație) cât și de backfillSubtitles
-// (orice torrent existent în qBittorrent, indiferent de sursă).
+// qBittorrent indică seeding/pauzat-după-seeding — folosit de
+// pollUntilComplete (torrent pornit din aplicație).
 function isTorrentComplete(progress: number, state: string): boolean {
   return (
     progress >= 1 &&
@@ -830,219 +823,9 @@ export const downloadFilelist = createServerFn({ method: "POST" })
     });
   });
 
-// ---------------------------------------------------------------------------
-// Backfill: aplică ensureRomanianSubtitle retroactiv pe TOATE torrentele
-// active din qBittorrent — nu doar cele descărcate prin site (jurnalul
-// propriu servește doar ca sursă opțională de IMDb id, când torrentul a
-// fost adăugat prin aplicație; pentru torrente adăugate manual în qBit,
-// IMDb id lipsește, deci doar cazurile 2/3 — .srt existent — pot fi
-// corectate, nu și căutarea pe OpenSubtitles). Rulează secvențial (nu
-// paralel), cu o pauză scurtă între torrente, ca să nu bombardăm
-// OpenSubtitles/qBittorrent.
-// ---------------------------------------------------------------------------
-
-export interface BackfillSubtitlesResult {
-  status: "ok" | "error";
-  error?: string;
-  processed: number;
-  skipped: number;
-  corrected: number;
-}
-
-export interface BackfillProgress {
-  total: number;
-  done: number;
-}
-
-interface QbitTorrentListItem {
-  hash: string;
-  name: string;
-  save_path?: string;
-  progress?: number;
-  state?: string;
-}
-
-// Stare la nivel de modul — un singur backfill rulează odată (declanșat
-// manual din UI), nu are rost o soluție persistentă/multi-user. Rularea
-// efectivă (runBackfillWork) e pornită fără await din backfillSubtitles —
-// un backfill pe zeci/sute de torrente poate dura multe minute, iar un
-// singur request HTTP ținut deschis atât de mult a fost tăiat în practică
-// (reverse-proxy/browser), lăsând UI-ul fără răspuns aproape de final deși
-// server-ul chiar termina treaba. Clientul urmărește progresul + rezultatul
-// final exclusiv prin polling pe getBackfillState.
-const backfillJob = new BackgroundJob<BackfillProgress, BackfillSubtitlesResult>();
-
-export const getBackfillState = createServerFn({ method: "GET" }).handler(
-  async (): Promise<BackgroundJobState<BackfillProgress, BackfillSubtitlesResult>> => {
-    const { requireAdmin } = await import("../auth/admin.server");
-    await requireAdmin();
-    return backfillJob.getState();
-  },
-);
-
-async function runBackfillWork(
-  url: string,
-  qbitUser: string,
-  qbitPass: string,
-): Promise<BackfillSubtitlesResult> {
-  try {
-    // Listă completă a torrentelor din qBittorrent — indiferent dacă au fost
-    // adăugate prin site sau manual din WebUI.
-    let qbitTorrents: QbitTorrentListItem[];
-    try {
-      const res = await qbitGet(url, "/api/v2/torrents/info", qbitUser, qbitPass);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      qbitTorrents = (await res.json()) as QbitTorrentListItem[];
-    } catch (e) {
-      return {
-        status: "error",
-        error: `Nu am putut lista torrentele din qBittorrent: ${e instanceof Error ? e.message : e}`,
-        processed: 0,
-        skipped: 0,
-        corrected: 0,
-      };
-    }
-    const completedTorrents = qbitTorrents.filter((t) =>
-      isTorrentComplete(Number(t.progress ?? 0), t.state ?? ""),
-    );
-
-    // Jurnalul propriu — folosit doar ca sursă opțională de IMDb id (pentru
-    // torrentele descărcate prin site) și de categorie (filme/seriale), prin
-    // hash. Pentru restul (adăugate manual), categoria e dedusă din
-    // save_path față de MEDIA_MOVIES_PATH/MEDIA_SERIES_PATH.
-    const ownLog = await readAllDownloadLogEntries();
-    const ownLogByHash = new Map(
-      ownLog.filter((e) => e.torrentHash).map((e) => [e.torrentHash!, e]),
-    );
-    const moviesPath = process.env.MEDIA_MOVIES_PATH ?? "/media/ssd2tb/Filme";
-    const seriesPath = process.env.MEDIA_SERIES_PATH ?? "/media/ssd2tb/Seriale";
-    // Normalizare: fără trailing slash, ca un savePath cu "/" la final (unele
-    // montări/clienți îl adaugă) să nu rateze un `startsWith` altfel corect —
-    // fără asta, subtitrarea se corecta dar Plex nu mai era rescanat pentru
-    // acel titlu (plexType rămânea null).
-    const normalizePath = (p: string): string => p.replace(/\/+$/, "");
-    const normMoviesPath = normalizePath(moviesPath);
-    const normSeriesPath = normalizePath(seriesPath);
-
-    function inferPlexType(hash: string, savePath: string | undefined): "movie" | "show" | null {
-      const known = ownLogByHash.get(hash);
-      if (known) return isMovieCategory(known.category) ? "movie" : "show";
-      const normSavePath = savePath ? normalizePath(savePath) : undefined;
-      if (normSavePath?.startsWith(normMoviesPath)) return "movie";
-      if (normSavePath?.startsWith(normSeriesPath)) return "show";
-      return null;
-    }
-
-    const { ensureRomanianSubtitle, logSubtitleRun } = await import("./subtitles");
-
-    let processed = 0;
-    let skipped = 0;
-    const items: Array<{
-      plexType: "movie" | "show" | null;
-      result: Awaited<ReturnType<typeof ensureRomanianSubtitle>>;
-    }> = [];
-
-    backfillJob.setProgress({ total: completedTorrents.length, done: 0 });
-    let done = 0;
-    for (const torrent of completedTorrents) {
-      const plexType = inferPlexType(torrent.hash, torrent.save_path);
-      try {
-        const result = await ensureRomanianSubtitle({
-          qbitUrl: url,
-          qbitUser,
-          qbitPass,
-          torrentHash: torrent.hash,
-          torrentName: torrent.name,
-          imdbId: ownLogByHash.get(torrent.hash)?.imdb,
-          mediaType: plexType === "movie" ? "movie" : plexType === "show" ? "tv" : undefined,
-        });
-        items.push({ plexType, result });
-        processed++;
-      } catch (e) {
-        console.warn(`[filelist] Backfill subtitrare eșuat pentru "${torrent.name}":`, e);
-        skipped++;
-      }
-      backfillJob.setProgress({ total: completedTorrents.length, done: ++done });
-      await new Promise((r) => setTimeout(r, 2000));
-    }
-
-    const corrected = items.filter((it) => CORRECTED_OUTCOMES.includes(it.result.outcome)).length;
-
-    // Refresh Plex o singură dată per categorie (filme/seriale) distinctă
-    // atinsă efectiv — nu per torrent, ca să nu declanșăm N scanări la un
-    // backfill mare.
-    const touchedCategories = new Set(
-      items
-        .filter((it) => CORRECTED_OUTCOMES.includes(it.result.outcome) && it.plexType)
-        .map((it) => it.plexType!),
-    );
-    for (const plexType of touchedCategories) {
-      await refreshPlexLibrary(plexType).catch(() => {});
-    }
-
-    console.log(
-      `[filelist] Backfill subtitrări: ${processed} procesate, ${skipped} sărite, ${corrected} corectate`,
-    );
-    await logSubtitleRun(
-      items.map((it) => it.result),
-      "backfill",
-    );
-
-    return { status: "ok", processed, skipped, corrected };
-  } catch (e) {
-    console.error("[filelist] Backfill subtitrări — eroare neașteptată:", e);
-    return {
-      status: "error",
-      error: e instanceof Error ? e.message : String(e),
-      processed: 0,
-      skipped: 0,
-      corrected: 0,
-    };
-  }
-}
-
-// Pornește backfill-ul în fundal și răspunde imediat — rularea efectivă
-// (potențial multe minute) se urmărește separat prin getBackfillState.
-export const backfillSubtitles = createServerFn({ method: "POST" }).handler(
-  async (): Promise<{ status: "ok" | "error"; error?: string }> => {
-    const { requireAdmin } = await import("../auth/admin.server");
-    await requireAdmin();
-
-    if (backfillJob.isRunning()) {
-      return { status: "error", error: "Un backfill este deja în curs" };
-    }
-
-    const qbitBase = process.env.QBIT_URL ?? "http://192.168.1.192:25556";
-    const qbitUser = process.env.QBIT_USERNAME;
-    const qbitPass = process.env.QBIT_PASSWORD;
-    if (!qbitUser || !qbitPass) {
-      return { status: "error", error: "QBIT_USERNAME / QBIT_PASSWORD nu sunt configurate" };
-    }
-
-    const url = qbitBase.replace(/\/$/, "");
-    backfillJob.start(() => runBackfillWork(url, qbitUser, qbitPass));
-
-    return { status: "ok" };
-  },
-);
-
-// Echivalentul de mai sus, apelabil direct (fără graniță de server function/
-// requireAdmin) — folosit de plugin-ul periodic de sincronizare
-// (server/plugins/media-torrent-sync.ts), care rulează în fundal după
-// legătura retroactivă torrent↔Plex, ca orice torrent nou detectat să capete
-// automat și verificarea subtitrării, nu doar statusul actualizat.
-export async function runSubtitleBackfillIfIdle(): Promise<void> {
-  const qbitBase = process.env.QBIT_URL ?? "http://192.168.1.192:25556";
-  const qbitUser = process.env.QBIT_USERNAME;
-  const qbitPass = process.env.QBIT_PASSWORD;
-  if (!qbitUser || !qbitPass) return;
-
-  const url = qbitBase.replace(/\/$/, "");
-  await backfillJob.runIfIdle(() => runBackfillWork(url, qbitUser, qbitPass));
-}
 
 // Corectează subtitrarea pentru un singur titlu — folosește exact aceeași
-// logică (ensureRomanianSubtitle) ca backfill-ul global, dar aplicată direct
+// logică (ensureRomanianSubtitle) ca descărcarea normală, dar aplicată direct
 // pe hash-ul torrentului cerut, fără să mai listeze/itereze toate torrentele
 // din qBittorrent.
 export type CorrectSubtitleResult =

@@ -1,15 +1,14 @@
 // ---------------------------------------------------------------------------
-// Backfill: completează tabela `media` pentru tot ce era deja în Plex
-// înainte de acest sistem (deci fără nicio descărcare/torrent asociat(ă) în
-// aplicație) — ca Bibliotecă să citească din DB pentru toată biblioteca, nu
-// doar pentru titlurile descărcate de-acum-încolo. Rulează în fundal
-// (declanșat manual din UI), pe același tipar ca backfillSubtitles
-// (download.ts): stare la nivel de modul, urmărită prin polling, nu printr-un
-// singur request HTTP ținut deschis minute în șir.
+// Backfill: completează tabela `media` pentru orice titlu ajuns în Plex/
+// qBittorrent fără să treacă prin Wizard/căutarea manuală Filelist (cazul
+// rar al unui torrent adăugat direct, în afara aplicației) — ca Bibliotecă
+// să citească din DB pentru toată biblioteca, nu doar pentru ce a trecut
+// prin fluxul normal. Rulează automat, periodic, din plugin-ul de
+// sincronizare (server/plugins/media-torrent-sync.ts) — nu mai există buton
+// manual în UI.
 // ---------------------------------------------------------------------------
 
-import { createServerFn } from "@tanstack/react-start";
-import { BackgroundJob, type BackgroundJobState } from "../background-job";
+import { BackgroundJob } from "../background-job";
 import { fetchJson } from "../services/shared";
 import {
   discoverPlexUrl,
@@ -180,14 +179,6 @@ export interface MediaBackfillResult {
 }
 
 const backfillJob = new BackgroundJob<MediaBackfillProgress, MediaBackfillResult>();
-
-export const getMediaBackfillState = createServerFn({ method: "GET" }).handler(
-  async (): Promise<BackgroundJobState<MediaBackfillProgress, MediaBackfillResult>> => {
-    const { requireAdmin } = await import("../auth/admin.server");
-    await requireAdmin();
-    return backfillJob.getState();
-  },
-);
 
 async function runMediaBackfillWork(): Promise<MediaBackfillResult> {
   try {
@@ -387,32 +378,11 @@ async function runMediaBackfillWork(): Promise<MediaBackfillResult> {
   }
 }
 
-export const startMediaBackfill = createServerFn({ method: "POST" }).handler(
-  async (): Promise<{ status: "ok" | "error"; error?: string }> => {
-    const { requireAdmin } = await import("../auth/admin.server");
-    await requireAdmin();
-
-    if (backfillJob.isRunning()) {
-      return { status: "error", error: "Un backfill este deja în curs" };
-    }
-    if (!process.env.PLEX_TOKEN) {
-      return { status: "error", error: "PLEX_TOKEN nu este configurat" };
-    }
-
-    backfillJob.start(runMediaBackfillWork);
-
-    return { status: "ok" };
-  },
-);
-
-// Echivalentul de mai sus, apelabil direct (fără graniță de server function/
-// requireAdmin) — folosit de plugin-ul periodic de sincronizare
-// (server/plugins/media-torrent-sync.ts), care rulează în fundal, fără
-// sesiune de admin. Așteaptă finalizarea completă și întoarce rezultatul
-// (spre deosebire de startMediaBackfill, care pornește rularea și răspunde
-// imediat, urmărită separat prin polling din UI) — plugin-ul are nevoie de
-// rezultat ca să decidă dacă merită să declanșeze și verificarea
-// subtitrărilor (doar dacă chiar s-a adăugat ceva nou, nu la fiecare ciclu).
+// Singurul punct de declanșare acum — nu mai există buton manual în UI
+// (Bibliotecă adaugă totul prin Wizard/căutarea manuală Filelist); rulează
+// doar din plugin-ul periodic de sincronizare
+// (server/plugins/media-torrent-sync.ts), în fundal, fără sesiune de admin,
+// pentru cazul rar al unui titlu ajuns în Plex fără să treacă prin aplicație.
 export async function runMediaBackfillIfIdle(): Promise<MediaBackfillResult | null> {
   if (!process.env.PLEX_TOKEN) return null;
   return backfillJob.runIfIdle(runMediaBackfillWork);
