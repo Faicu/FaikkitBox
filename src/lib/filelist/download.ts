@@ -159,7 +159,9 @@ async function pollUntilComplete(
           // Scanarea Plex e asincronă — fișierul poate să nu fie încă indexat
           // chiar după refresh. Reîncercăm cu pauze, ca ratingKey/calitatea/
           // durata din `media` să se completeze fără intervenție manuală.
-          for (let attempt = 0; attempt < 5; attempt++) {
+          // Fereastră totală 10 min (30 × 20s) — nu mai există job periodic de
+          // backfill ca plasă de siguranță, deci fereastra asta e singura șansă.
+          for (let attempt = 0; attempt < 30; attempt++) {
             await new Promise((r) => setTimeout(r, 20_000));
 
             const linked = await resolveMediaPlexLinkByTorrentHash(torrentHash).catch(() => false);
