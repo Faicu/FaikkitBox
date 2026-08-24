@@ -59,6 +59,7 @@ export default defineConfig(({ command }) => ({
               "/assets/**": {
                 headers: { "Cache-Control": "public, max-age=31536000, immutable" },
               },
+              "/api/plex-thumb": { headers: { "Cache-Control": "public, max-age=3600" } },
             },
           }),
         ]
