@@ -166,7 +166,7 @@ export function ActivityLogSection() {
                     )}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="text-sm leading-tight">{entry.message}</div>
+                    <div className="text-sm leading-tight break-words">{entry.message}</div>
                   </div>
                   <div className="shrink-0 text-[11px] text-muted-foreground whitespace-nowrap">
                     {relativeTime(entry.timestamp)}
@@ -185,7 +185,7 @@ export function ActivityLogSection() {
                   <GitCommitHorizontal className="h-3.5 w-3.5 text-sky-400" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-sm leading-tight group-hover:text-sky-400 transition-colors">
+                  <div className="text-sm leading-tight break-words group-hover:text-sky-400 transition-colors">
                     {c.message}
                   </div>
                   <div className="mt-0.5 text-[11px] text-muted-foreground">

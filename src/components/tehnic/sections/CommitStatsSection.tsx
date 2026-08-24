@@ -93,8 +93,8 @@ export function CommitStatsSection() {
               className="w-full px-3 py-2 text-xs text-left hover:bg-muted/40 transition-colors"
             >
               <div className="flex items-center gap-2">
-                <span className="font-mono text-muted-foreground">{c.shortSha}</span>
-                <span className="truncate text-foreground">{c.message}</span>
+                <span className="shrink-0 font-mono text-muted-foreground">{c.shortSha}</span>
+                <span className="min-w-0 flex-1 truncate text-foreground">{c.message}</span>
               </div>
               <div className="text-[11px] text-muted-foreground">
                 {c.author} · {new Date(c.date).toLocaleString("ro-RO")}
