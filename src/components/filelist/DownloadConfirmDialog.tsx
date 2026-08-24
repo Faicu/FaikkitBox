@@ -70,6 +70,7 @@ export function DownloadConfirmDialog({
   const [linkResults, setLinkResults] = useState<LibraryTitleMatch[]>([]);
   const [linkSearching, setLinkSearching] = useState(false);
   const [linkedTitle, setLinkedTitle] = useState<LibraryTitleMatch | null>(null);
+  const [linkError, setLinkError] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -77,12 +78,18 @@ export function DownloadConfirmDialog({
     const q = linkQuery.trim();
     if (q.length < 2) {
       setLinkResults([]);
+      setLinkError(null);
       return;
     }
     debounceRef.current = setTimeout(async () => {
       setLinkSearching(true);
+      setLinkError(null);
       try {
         setLinkResults(await searchFn({ data: { query: q } }));
+      } catch (err) {
+        console.error("searchLibraryTitles failed", err);
+        setLinkResults([]);
+        setLinkError(err instanceof Error ? err.message : "Eroare la căutare");
       } finally {
         setLinkSearching(false);
       }
@@ -189,7 +196,12 @@ export function DownloadConfirmDialog({
               {linkSearching && (
                 <Loader2 className="absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-muted-foreground" />
               )}
-              {linkResults.length > 0 && (
+              {linkError && (
+                <div className="absolute z-10 mt-1 w-full rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs text-red-400">
+                  {linkError}
+                </div>
+              )}
+              {!linkError && linkResults.length > 0 && (
                 <div className="absolute z-10 mt-1 max-h-40 w-full overflow-y-auto rounded-xl border border-border bg-card shadow-lg">
                   {linkResults.map((m) => (
                     <button
