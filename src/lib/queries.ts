@@ -12,7 +12,7 @@ import {
   getGitPushStatus,
   getUnpushedCommits,
 } from "./github.functions";
-import { getPlexLibraryBrowse, getRecentWatchesOfMyTitles } from "./services.functions";
+import { getPlexLibraryBrowse, getRecentWatches } from "./services.functions";
 
 // Interval de bază pentru statistici live (Plex/Immich/qBit/Host)
 const REFRESH_MS = 1000;
@@ -162,9 +162,9 @@ export const plexLibraryBrowseQuery = queryOptions({
   },
 });
 
-export const recentWatchesOfMyTitlesQuery = queryOptions({
-  queryKey: ["recentWatchesOfMyTitles"],
-  queryFn: () => getRecentWatchesOfMyTitles(),
+export const recentWatchesQuery = queryOptions({
+  queryKey: ["recentWatches"],
+  queryFn: () => getRecentWatches(),
   staleTime: 60_000,
   refetchInterval: 60_000,
 });

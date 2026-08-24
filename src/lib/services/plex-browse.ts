@@ -501,7 +501,7 @@ export const getPlexTitleDetail = createServerFn({ method: "GET" })
 // fel ca watchedCount din listă — nu ținem evidența "a fost deja arătat".
 // ---------------------------------------------------------------------------
 
-export interface RecentWatchOfMyTitle {
+export interface RecentWatch {
   mediaId: number;
   title: string;
   show: string | null;
@@ -513,34 +513,25 @@ export interface RecentWatchOfMyTitle {
 }
 
 const RECENT_WATCH_WINDOW_SECONDS = 7 * 24 * 60 * 60;
-const MY_TITLES_LIMIT = 200;
+const RECENT_TITLES_LIMIT = 200;
 
-export const getRecentWatchesOfMyTitles = createServerFn({ method: "GET" }).handler(
-  async (): Promise<
-    { status: "ok"; items: RecentWatchOfMyTitle[] } | { status: "error"; error: string }
-  > => {
-    const { requireAuth } = await import("../auth/admin.server");
-    const session = await requireAuth();
+export const getRecentWatches = createServerFn({ method: "GET" }).handler(
+  async (): Promise<{ status: "ok"; items: RecentWatch[] } | { status: "error"; error: string }> => {
+    await (await import("../auth/admin.server")).requireAuth();
     try {
       const { getDb } = await import("../db");
       const db = getDb();
-
-      const me = db
-        .prepare("SELECT plex_username FROM users WHERE id = ?")
-        .get(session.data.userId!) as { plex_username: string | null } | undefined;
-      const myPlexUsername = me?.plex_username ?? null;
 
       const rows = db
         .prepare(
           `SELECT id, plex_rating_key, media_type, title, original_title, season, episode, poster_path
            FROM media
-           WHERE requested_by_user_id = ?
-             AND media_type IN ('movie', 'episode')
+           WHERE media_type IN ('movie', 'episode')
              AND plex_rating_key IS NOT NULL
            ORDER BY added_at DESC
            LIMIT ?`,
         )
-        .all(session.data.userId!, MY_TITLES_LIMIT) as unknown as Array<{
+        .all(RECENT_TITLES_LIMIT) as unknown as Array<{
         id: number;
         plex_rating_key: string | null;
         media_type: string;
@@ -556,12 +547,11 @@ export const getRecentWatchesOfMyTitles = createServerFn({ method: "GET" }).hand
       const allWatchedIndexes = await getAllPlexWatchedIndexes();
       const cutoff = Math.floor(Date.now() / 1000) - RECENT_WATCH_WINDOW_SECONDS;
 
-      const items: RecentWatchOfMyTitle[] = [];
+      const items: RecentWatch[] = [];
       for (const row of rows) {
         const isEpisode = row.media_type === "episode";
         const titleForMatch = row.original_title || row.title;
         for (const [username, index] of Object.entries(allWatchedIndexes)) {
-          if (username === myPlexUsername) continue;
           const viewedAt = getWatchedAt(index, {
             ratingKey: row.plex_rating_key,
             title: titleForMatch,

@@ -26,12 +26,7 @@ import {
 } from "@/components/ui/drawer";
 import { AddMediaWizard } from "@/components/principala/AddMediaWizard";
 import { FilelistSection } from "@/components/filelist/FilelistSection";
-import {
-  plexQuery,
-  plexSessionsQuery,
-  adminStatusQuery,
-  recentWatchesOfMyTitlesQuery,
-} from "@/lib/queries";
+import { plexQuery, plexSessionsQuery, adminStatusQuery, recentWatchesQuery } from "@/lib/queries";
 import { formatDateTime } from "@/components/tehnic/utils";
 
 export const Route = createFileRoute("/")({
@@ -54,7 +49,7 @@ function Overview() {
   const isAuthenticated = !!adminData?.isAuthenticated;
   const isAdmin = !!adminData?.isAdmin;
   const recentWatches = useQuery({
-    ...recentWatchesOfMyTitlesQuery,
+    ...recentWatchesQuery,
     enabled: isAuthenticated,
   });
   const recentWatchItems =
@@ -284,7 +279,7 @@ function Overview() {
             <span className="text-emerald-400">
               <Eye className="h-5 w-5" />
             </span>
-            <span className="font-semibold">Vizionări recente ale titlurilor tale</span>
+            <span className="font-semibold">Vizionări recente</span>
           </div>
           <div className="mt-3 space-y-1.5">
             {recentWatchItems.map((it, i) => (
