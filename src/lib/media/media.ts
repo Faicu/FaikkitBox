@@ -403,14 +403,34 @@ export function markMediaCompleted(torrentHash: string): void {
 // adevăr unică: ce s-a scris deja în `media` la adăugare, vezi
 // upsertMediaEntry) — TMDB live rămâne doar fallback, pentru torrente fără
 // nicio legătură media (autoResolveManualMedia eșuat).
-export function getMediaDisplayByTorrentHash(
-  torrentHash: string,
-): { title: string; posterPath: string | null } | null {
+export function getMediaDisplayByTorrentHash(torrentHash: string): {
+  title: string;
+  posterPath: string | null;
+  season: number | null;
+  episode: number | null;
+  isSeasonPack: boolean;
+} | null {
   const row = getDb()
-    .prepare("SELECT title, poster_path FROM media WHERE torrent_hash = ?")
-    .get(torrentHash) as { title: string; poster_path: string | null } | undefined;
+    .prepare(
+      "SELECT title, poster_path, season, episode, is_season_pack FROM media WHERE torrent_hash = ? LIMIT 1",
+    )
+    .get(torrentHash) as
+    | {
+        title: string;
+        poster_path: string | null;
+        season: number | null;
+        episode: number | null;
+        is_season_pack: number;
+      }
+    | undefined;
   if (!row) return null;
-  return { title: row.title, posterPath: row.poster_path };
+  return {
+    title: row.title,
+    posterPath: row.poster_path,
+    season: row.season,
+    episode: row.episode,
+    isSeasonPack: !!row.is_season_pack,
+  };
 }
 
 // Apelat la "Șterge titlul complet" (Lansări/Bibliotecă) — elimină rândul

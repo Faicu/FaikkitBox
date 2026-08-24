@@ -104,21 +104,49 @@ export function buildPlexWatchStopMessage(user: string, what: string, progress: 
 // altfel am recalcula independent ceva ce riscă să difere de ce arată deja
 // Biblioteca/jurnalul Plex pentru același titlu.
 
+// Poster-ul stocat în `media` (poster_path) e la w342 — suficient pentru
+// carduri mici din UI, dar afișat prea mare (lățime completă) în notificarea
+// push, unde iese neclar. Urcăm la o rezoluție mai mare doar aici, la nivel
+// de URL TMDB, fără să atingem valoarea stocată (folosită și în altă parte).
+function upscalePosterForPush(posterPath: string | null): string | null {
+  if (!posterPath) return null;
+  return posterPath.replace("/t/p/w342/", "/t/p/w780/");
+}
+
+function seasonEpisodeLabel(
+  season: number | null,
+  episode: number | null,
+  isSeasonPack: boolean,
+): string | null {
+  if (season == null) return null;
+  if (isSeasonPack) return `Sezonul ${season}`;
+  if (episode != null) {
+    return `S${String(season).padStart(2, "0")}E${String(episode).padStart(2, "0")}`;
+  }
+  return null;
+}
+
 async function resolveTorrentDisplay(params: {
   torrentName: string;
   imdb?: string | null;
   torrentHash?: string | null;
-}): Promise<{ displayName: string; image: string | null }> {
+}): Promise<{ displayName: string; image: string | null; seasonLabel: string | null }> {
   if (params.torrentHash) {
     const { getMediaDisplayByTorrentHash } = await import("../media/media");
     const known = getMediaDisplayByTorrentHash(params.torrentHash);
-    if (known) return { displayName: known.title, image: known.posterPath };
+    if (known) {
+      return {
+        displayName: known.title,
+        image: upscalePosterForPush(known.posterPath),
+        seasonLabel: seasonEpisodeLabel(known.season, known.episode, known.isSeasonPack),
+      };
+    }
   }
   const [displayName, image] = await Promise.all([
     buildTorrentDisplayName(params.torrentName, params.imdb).catch(() => params.torrentName),
     params.imdb ? lookupPosterUrlByImdbId(params.imdb).catch(() => null) : Promise.resolve(null),
   ]);
-  return { displayName, image };
+  return { displayName, image, seasonLabel: null };
 }
 
 export async function buildTorrentAddedNotification(params: {
@@ -126,11 +154,11 @@ export async function buildTorrentAddedNotification(params: {
   imdb?: string | null;
   torrentHash?: string | null;
 }): Promise<PushNotification> {
-  const { displayName, image } = await resolveTorrentDisplay(params);
+  const { displayName, image, seasonLabel } = await resolveTorrentDisplay(params);
   const quality = detectTorrentQuality(params.torrentName);
   return {
     title: "⬇️ Descărcare Inițiată",
-    body: `${displayName} [${quality}]`,
+    body: `${displayName}${seasonLabel ? ` — ${seasonLabel}` : ""} [${quality}]`,
     image,
     url: "/biblioteca",
   };
@@ -141,11 +169,11 @@ export async function buildTorrentCompleteNotification(params: {
   imdb?: string | null;
   torrentHash?: string | null;
 }): Promise<PushNotification> {
-  const { displayName, image } = await resolveTorrentDisplay(params);
+  const { displayName, image, seasonLabel } = await resolveTorrentDisplay(params);
   const quality = detectTorrentQuality(params.torrentName);
   return {
     title: "✅ Descărcare Completă",
-    body: `${displayName} [${quality}]`,
+    body: `${displayName}${seasonLabel ? ` — ${seasonLabel}` : ""} [${quality}]`,
     image,
     url: "/biblioteca",
   };
