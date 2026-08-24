@@ -667,7 +667,7 @@ export function AddMediaWizard({
 
   return (
     <>
-      <Dialog open={open} onOpenChange={(o) => !o && !busy && handleClose()}>
+      <Dialog modal={false} open={open} onOpenChange={(o) => !o && !busy && handleClose()}>
         <DialogContent className="top-8 flex max-h-[calc(100dvh-4rem)] w-[calc(100%-2rem)] max-w-md translate-y-0 flex-col gap-0 overflow-hidden rounded-2xl p-0 sm:w-full">
           <DialogHeader className="shrink-0 space-y-0 p-4 pb-0 text-left">
             <div className="flex items-center gap-2">
