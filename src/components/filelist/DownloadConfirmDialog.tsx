@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { useServerFn } from "@tanstack/react-start";
 import {
   Download,
@@ -99,17 +99,17 @@ export function DownloadConfirmDialog({
     };
   }, [linkQuery, searchFn]);
 
-  return createPortal(
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
-      style={{ pointerEvents: "auto" }}
-      onClick={onCancel}
-    >
-      <div
-        className="w-full max-w-sm rounded-2xl border border-border bg-card p-5 space-y-4 shadow-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="text-sm font-semibold">Confirmare descărcare</div>
+  return (
+    <DialogPrimitive.Root open onOpenChange={(open) => !open && onCancel()}>
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <DialogPrimitive.Content className="w-full max-w-sm rounded-2xl border border-border bg-card p-5 space-y-4 shadow-xl outline-none">
+            <DialogPrimitive.Title className="text-sm font-semibold">
+              Confirmare descărcare
+            </DialogPrimitive.Title>
+        <DialogPrimitive.Description className="sr-only">
+          Confirmă descărcarea torrentului {torrent.name}
+        </DialogPrimitive.Description>
         <div className="space-y-2 text-xs text-muted-foreground">
           <div className="font-medium text-foreground break-words">{torrent.name}</div>
           <div className="flex flex-wrap gap-x-4 gap-y-1 pt-1">
@@ -251,8 +251,9 @@ export function DownloadConfirmDialog({
             <Download className="h-4 w-4" /> Descarcă
           </button>
         </div>
-      </div>
-    </div>,
-    document.body,
+          </DialogPrimitive.Content>
+        </DialogPrimitive.Overlay>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
   );
 }
