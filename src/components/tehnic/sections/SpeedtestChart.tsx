@@ -25,14 +25,17 @@ export function SpeedtestChart({ history }: { history: SpeedtestHistoryEntry[] }
       <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
         Istoric ({sorted.length} teste)
       </div>
-      <div className="rounded-xl border border-border bg-card p-3">
+      <div className="min-w-0 rounded-xl border border-border bg-card p-3">
         {/* Grafic bare */}
-        <div className="flex items-end gap-1.5" style={{ height: BAR_H }}>
+        <div className="flex min-w-0 items-end gap-1.5" style={{ height: BAR_H }}>
           {sorted.map((h) => {
             const dlH = Math.max(4, Math.round((h.download / maxAll) * BAR_H));
             const upH = Math.max(4, Math.round((h.upload / maxAll) * BAR_H));
             return (
-              <div key={h.id} className="flex-1 flex flex-row items-end gap-px group relative">
+              <div
+                key={h.id}
+                className="group relative flex min-w-0 flex-1 flex-row items-end gap-px"
+              >
                 <div
                   className="flex-1 rounded-t bg-sky-500/70 group-hover:bg-sky-400 transition-colors"
                   style={{ height: dlH }}

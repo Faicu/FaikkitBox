@@ -92,7 +92,7 @@ function TehnicPage() {
           <span className="text-xs text-muted-foreground">›</span>
         </div>
         {speedtest.data ? (
-          <div className="mt-3 grid grid-cols-3 gap-2 text-sm">
+          <div className="mt-3 grid min-w-0 grid-cols-3 gap-2 text-sm">
             <Metric
               icon={<ArrowDown className="h-3.5 w-3.5" />}
               label="Download"
@@ -139,7 +139,7 @@ function TehnicPage() {
           </DrawerHeader>
           <div className="space-y-4 overflow-y-auto px-4 pb-16">
             {speedtest.data && (
-              <div className="grid grid-cols-3 gap-2 text-sm">
+              <div className="grid min-w-0 grid-cols-3 gap-2 text-sm">
                 <Metric
                   icon={<ArrowDown className="h-3.5 w-3.5" />}
                   label="Download"
