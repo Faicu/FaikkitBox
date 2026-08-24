@@ -93,7 +93,7 @@ export function DownloadConfirmDialog({
   }, [linkQuery, searchFn]);
 
   return (
-    <DialogPrimitive.Root modal={false} open onOpenChange={(open) => !open && onCancel()}>
+    <DialogPrimitive.Root open onOpenChange={(open) => !open && onCancel()}>
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <DialogPrimitive.Content className="w-full max-w-sm rounded-2xl border border-border bg-card p-5 space-y-4 shadow-xl outline-none">
