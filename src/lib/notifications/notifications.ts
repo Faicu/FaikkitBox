@@ -104,13 +104,16 @@ export function buildPlexWatchStopMessage(user: string, what: string, progress: 
 // altfel am recalcula independent ceva ce riscă să difere de ce arată deja
 // Biblioteca/jurnalul Plex pentru același titlu.
 
-// Poster-ul stocat în `media` (poster_path) e la w342 — suficient pentru
-// carduri mici din UI, dar afișat prea mare (lățime completă) în notificarea
-// push, unde iese neclar. Urcăm la o rezoluție mai mare doar aici, la nivel
-// de URL TMDB, fără să atingem valoarea stocată (folosită și în altă parte).
+// Poster-ul stocat în `media` (poster_path) vine din surse diferite, cu
+// dimensiuni TMDB diferite (w92 în lista de căutare a wizard-ului, w342 la
+// autoResolveManualMedia etc.) — bune pentru carduri mici din UI, dar afișate
+// prea mare (lățime completă) în notificarea push, unde ies neclare. Urcăm
+// la o rezoluție mare doar aici, la nivel de URL TMDB, indiferent ce
+// dimensiune a fost stocată inițial, fără să atingem valoarea din DB
+// (folosită și în altă parte, la dimensiunea ei originală).
 function upscalePosterForPush(posterPath: string | null): string | null {
   if (!posterPath) return null;
-  return posterPath.replace("/t/p/w342/", "/t/p/w780/");
+  return posterPath.replace(/\/t\/p\/w\d+\//, "/t/p/w780/");
 }
 
 function seasonEpisodeLabel(
