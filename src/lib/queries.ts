@@ -12,7 +12,7 @@ import {
   getGitPushStatus,
   getUnpushedCommits,
 } from "./github.functions";
-import { getPlexLibraryBrowse } from "./services.functions";
+import { getPlexLibraryBrowse, getRecentWatchesOfMyTitles } from "./services.functions";
 
 // Interval de bază pentru statistici live (Plex/Immich/qBit/Host)
 const REFRESH_MS = 1000;
@@ -160,4 +160,11 @@ export const plexLibraryBrowseQuery = queryOptions({
     const items = data?.status === "ok" ? data.items : [];
     return items.some((it) => it.status === "downloading") ? 2500 : false;
   },
+});
+
+export const recentWatchesOfMyTitlesQuery = queryOptions({
+  queryKey: ["recentWatchesOfMyTitles"],
+  queryFn: () => getRecentWatchesOfMyTitles(),
+  staleTime: 60_000,
+  refetchInterval: 60_000,
 });

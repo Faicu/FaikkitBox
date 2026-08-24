@@ -11,6 +11,7 @@ import {
   Music,
   Image as ImageIcon,
   Sparkles,
+  Eye,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -25,7 +26,13 @@ import {
 } from "@/components/ui/drawer";
 import { AddMediaWizard } from "@/components/principala/AddMediaWizard";
 import { FilelistSection } from "@/components/filelist/FilelistSection";
-import { plexQuery, plexSessionsQuery, adminStatusQuery } from "@/lib/queries";
+import {
+  plexQuery,
+  plexSessionsQuery,
+  adminStatusQuery,
+  recentWatchesOfMyTitlesQuery,
+} from "@/lib/queries";
+import { formatDateTime } from "@/components/tehnic/utils";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -46,6 +53,12 @@ function Overview() {
   const { data: adminData } = useQuery(adminStatusQuery);
   const isAuthenticated = !!adminData?.isAuthenticated;
   const isAdmin = !!adminData?.isAdmin;
+  const recentWatches = useQuery({
+    ...recentWatchesOfMyTitlesQuery,
+    enabled: isAuthenticated,
+  });
+  const recentWatchItems =
+    recentWatches.data?.status === "ok" ? recentWatches.data.items : [];
   const sessions =
     plexSessions.data?.status === "ok" ? plexSessions.data.sessions : plex.data?.sessions;
   const [plexDrawer, setPlexDrawer] = useState<"views" | "users" | null>(null);
@@ -264,6 +277,46 @@ function Overview() {
           )}
         </ServiceRow>
       </div>
+
+      {isAuthenticated && recentWatchItems.length > 0 && (
+        <div className="mt-4 rounded-2xl border border-border bg-card p-4">
+          <div className="flex items-center gap-2.5">
+            <span className="text-emerald-400">
+              <Eye className="h-5 w-5" />
+            </span>
+            <span className="font-semibold">Vizionări recente ale titlurilor tale</span>
+          </div>
+          <div className="mt-3 space-y-1.5">
+            {recentWatchItems.map((it, i) => (
+              <div
+                key={`${it.mediaId}-${i}`}
+                className="flex items-center gap-2.5 rounded-lg bg-muted/40 px-2.5 py-2"
+              >
+                {it.thumbUrl ? (
+                  <img
+                    src={it.thumbUrl}
+                    className="h-10 w-10 shrink-0 rounded object-cover bg-muted"
+                    loading="lazy"
+                    alt=""
+                  />
+                ) : (
+                  <Film className="h-4 w-4 shrink-0 text-amber-400" />
+                )}
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-semibold">
+                    {it.show
+                      ? `${it.show}${it.season != null && it.episode != null ? ` — S${String(it.season).padStart(2, "0")}E${String(it.episode).padStart(2, "0")}` : ""}`
+                      : it.title}
+                  </div>
+                  <div className="truncate text-[11px] text-muted-foreground">
+                    {it.username} · {formatDateTime(new Date(it.viewedAt * 1000).toISOString())}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <Drawer open={plexDrawer === "views"} onOpenChange={(o) => !o && setPlexDrawer(null)}>
         <DrawerContent className="max-h-[85vh]">
