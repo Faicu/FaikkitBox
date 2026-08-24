@@ -150,8 +150,11 @@ async function pollUntilComplete(
           } catch (e) {
             console.warn(`[filelist] Eroare subtitrare pentru "${torrentName}":`, e);
           }
-          const { markMediaCompleted, resolveMediaPlexLinkByTorrentHash } =
-            await import("../media/media");
+          const {
+            markMediaCompleted,
+            resolveMediaPlexLinkByTorrentHash,
+            resolveSeasonPackPlexLinks,
+          } = await import("../media/media");
           markMediaCompleted(torrentHash);
           await refreshPlexLibrary(plexType);
           console.log(`[filelist] Plex refresh trimis pentru "${plexType}"`);
@@ -161,11 +164,18 @@ async function pollUntilComplete(
           // durata din `media` să se completeze fără intervenție manuală.
           // Fereastră totală 10 min (30 × 20s) — nu mai există job periodic de
           // backfill ca plasă de siguranță, deci fereastra asta e singura șansă.
+          // resolveMediaPlexLinkByTorrentHash acoperă episod/film individual;
+          // resolveSeasonPackPlexLinks acoperă rândul-pachet (episode NULL) —
+          // încercăm ambele, doar una din ele găsește vreodată un rând pentru
+          // hash-ul curent.
           for (let attempt = 0; attempt < 30; attempt++) {
             await new Promise((r) => setTimeout(r, 20_000));
 
             const linked = await resolveMediaPlexLinkByTorrentHash(torrentHash).catch(() => false);
-            if (linked) break;
+            const linkedPack = linked
+              ? false
+              : await resolveSeasonPackPlexLinks(torrentHash).catch(() => false);
+            if (linked || linkedPack) break;
           }
         } else {
           console.log(`[filelist] "${torrentName}" deja marcat complet de alt loop — skip`);

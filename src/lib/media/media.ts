@@ -460,3 +460,98 @@ export async function resolveMediaPlexLinkByTorrentHash(torrentHash: string): Pr
   ).run(link.ratingKey, link.quality, link.durationMs, link.addedAt, row.id);
   return true;
 }
+
+type MediaRow = Record<string, unknown>;
+
+// Echivalentul lui resolveMediaPlexLinkByTorrentHash, pentru pachete de
+// sezon (rândul are episode NULL, is_season_pack = 1 — vezi upsertMediaEntry,
+// apelat o singură dată per torrent, indiferent dacă e episod sau pachet).
+// Un singur rând `media` nu poate purta N ratingKey-uri, deci rândul-pachet
+// rămânea "downloading" definitiv (resolveMediaPlexLinkByTorrentHash îl sare
+// mereu). Aici desfacem pachetul: pentru fiecare episod găsit deja în Plex,
+// clonăm rândul-pachet într-un rând de episod normal (sau actualizăm unul
+// deja existent, dacă episodul fusese descărcat separat înainte), apoi ștergem
+// placeholder-ul de pachet. Întoarce true dacă a găsit și desfăcut cel puțin
+// un episod, ca apelantul (pollUntilComplete) să oprească reîncercările.
+export async function resolveSeasonPackPlexLinks(torrentHash: string): Promise<boolean> {
+  const db = getDb();
+  const row = db
+    .prepare(
+      `SELECT * FROM media WHERE torrent_hash = ? AND media_type = 'episode'
+       AND episode IS NULL AND is_season_pack = 1`,
+    )
+    .get(torrentHash) as MediaRow | undefined;
+  if (!row || row.season == null) return false;
+
+  const { findPlexSeasonLinks } = await import("../services/plex-library");
+  const links = await findPlexSeasonLinks(row.title as string, row.season as number);
+  if (!links || links.size === 0) return false;
+
+  const insert = db.prepare(
+    `INSERT INTO media (
+      media_type, parent_id, imdb_id, tmdb_id, title, original_title, literal_title,
+      year, season, episode, overview_ro, genres, poster_path, tv_status,
+      plex_rating_key, plex_added_at, torrent_name, torrent_hash, category, category_name,
+      size, freeleech, internal, save_path, is_season_pack, added_via, requested_by_user_id,
+      completed_at, has_romanian_subtitle, has_romanian_audio, subtitle_source,
+      subtitle_detail, subtitle_checked_at, quality, duration_ms
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+  );
+  const updateExisting = db.prepare(
+    `UPDATE media SET plex_rating_key = ?, quality = ?, duration_ms = ?, plex_added_at = ?,
+     updated_at = datetime('now') WHERE id = ?`,
+  );
+  const findExisting = db.prepare(
+    `SELECT id FROM media WHERE parent_id = ? AND season = ? AND episode = ? AND id != ?`,
+  );
+
+  for (const [episodeNum, link] of links) {
+    const existing = findExisting.get(row.parent_id, row.season, episodeNum, row.id) as
+      | { id: number }
+      | undefined;
+    if (existing) {
+      updateExisting.run(link.ratingKey, link.quality, link.durationMs, link.addedAt, existing.id);
+      continue;
+    }
+    insert.run(
+      row.media_type,
+      row.parent_id,
+      row.imdb_id,
+      row.tmdb_id,
+      row.title,
+      row.original_title,
+      row.literal_title,
+      row.year,
+      row.season,
+      episodeNum,
+      row.overview_ro,
+      row.genres,
+      row.poster_path,
+      row.tv_status,
+      link.ratingKey,
+      link.addedAt,
+      row.torrent_name,
+      row.torrent_hash,
+      row.category,
+      row.category_name,
+      row.size,
+      row.freeleech,
+      row.internal,
+      row.save_path,
+      row.is_season_pack,
+      row.added_via,
+      row.requested_by_user_id,
+      row.completed_at,
+      row.has_romanian_subtitle,
+      row.has_romanian_audio,
+      row.subtitle_source,
+      row.subtitle_detail,
+      row.subtitle_checked_at,
+      link.quality,
+      link.durationMs,
+    );
+  }
+
+  db.prepare("DELETE FROM media WHERE id = ?").run(row.id);
+  return true;
+}

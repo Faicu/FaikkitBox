@@ -251,6 +251,39 @@ export async function findPlexEpisodeLink(
   }
 }
 
+// Ca findPlexEpisodeLink, dar pentru un sezon întreg dintr-o singură cerere
+// Plex — folosit la legarea pachetelor de sezon (media.ts), unde un rând
+// unic "pachet" trebuie desfăcut în câte un rând per episod, fiecare cu
+// propriul ratingKey.
+export async function findPlexSeasonLinks(
+  showTitle: string,
+  season: number,
+): Promise<Map<number, PlexItemLink> | null> {
+  const token = process.env.PLEX_TOKEN;
+  const base = process.env.PLEX_URL;
+  if (!token) return null;
+  try {
+    const headers = { Accept: "application/json", "X-Plex-Token": token };
+    const { url } = await discoverPlexUrl(token, base);
+    const episodesMd = await findSeasonEpisodes(url, headers, showTitle, season);
+    if (!episodesMd) return null;
+    const links = new Map<number, PlexItemLink>();
+    for (const e of episodesMd) {
+      const num = Number(e.index);
+      if (!num || !e.ratingKey) continue;
+      links.set(num, {
+        ratingKey: String(e.ratingKey),
+        quality: plexQualityFromMedia(e.Media?.[0]),
+        durationMs: Number(e.duration ?? 0),
+        addedAt: Number(e.addedAt ?? 0),
+      });
+    }
+    return links;
+  } catch {
+    return null;
+  }
+}
+
 export async function checkPlexHasEpisode(
   showTitle: string,
   season: number,
