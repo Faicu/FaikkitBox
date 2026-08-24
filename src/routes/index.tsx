@@ -52,8 +52,7 @@ function Overview() {
     ...recentWatchesQuery,
     enabled: isAuthenticated,
   });
-  const recentWatchItems =
-    recentWatches.data?.status === "ok" ? recentWatches.data.items : [];
+  const recentWatchItems = recentWatches.data?.status === "ok" ? recentWatches.data.items : [];
   const sessions =
     plexSessions.data?.status === "ok" ? plexSessions.data.sessions : plex.data?.sessions;
   const [plexDrawer, setPlexDrawer] = useState<"views" | "users" | null>(null);

@@ -481,7 +481,40 @@ export async function resolveMediaPlexLinkByTorrentHash(torrentHash: string): Pr
   return true;
 }
 
-type MediaRow = Record<string, unknown>;
+interface SeasonPackMediaRow {
+  id: number;
+  media_type: string;
+  parent_id: number | null;
+  imdb_id: string | null;
+  tmdb_id: number | null;
+  title: string;
+  original_title: string | null;
+  literal_title: string | null;
+  year: number | null;
+  season: number | null;
+  episode: number | null;
+  overview_ro: string | null;
+  genres: string;
+  poster_path: string | null;
+  tv_status: string | null;
+  torrent_name: string | null;
+  torrent_hash: string | null;
+  category: number | null;
+  category_name: string | null;
+  size: number;
+  freeleech: number;
+  internal: number;
+  save_path: string | null;
+  is_season_pack: number;
+  added_via: string;
+  requested_by_user_id: number | null;
+  completed_at: string | null;
+  has_romanian_subtitle: number;
+  has_romanian_audio: number;
+  subtitle_source: string | null;
+  subtitle_detail: string | null;
+  subtitle_checked_at: string | null;
+}
 
 // Echivalentul lui resolveMediaPlexLinkByTorrentHash, pentru pachete de
 // sezon (rândul are episode NULL, is_season_pack = 1 — vezi upsertMediaEntry,
@@ -500,11 +533,11 @@ export async function resolveSeasonPackPlexLinks(torrentHash: string): Promise<b
       `SELECT * FROM media WHERE torrent_hash = ? AND media_type = 'episode'
        AND episode IS NULL AND is_season_pack = 1`,
     )
-    .get(torrentHash) as MediaRow | undefined;
+    .get(torrentHash) as SeasonPackMediaRow | undefined;
   if (!row || row.season == null) return false;
 
   const { findPlexSeasonLinks } = await import("../services/plex-library");
-  const links = await findPlexSeasonLinks(row.title as string, row.season as number);
+  const links = await findPlexSeasonLinks(row.title, row.season);
   if (!links || links.size === 0) return false;
 
   const insert = db.prepare(
@@ -527,8 +560,7 @@ export async function resolveSeasonPackPlexLinks(torrentHash: string): Promise<b
 
   for (const [episodeNum, link] of links) {
     const existing = findExisting.get(row.parent_id, row.season, episodeNum, row.id) as
-      | { id: number }
-      | undefined;
+      { id: number } | undefined;
     if (existing) {
       updateExisting.run(link.ratingKey, link.quality, link.durationMs, link.addedAt, existing.id);
       continue;

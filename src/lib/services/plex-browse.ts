@@ -65,12 +65,7 @@ async function fetchQbitProgress(hashes: string[]): Promise<Map<string, QbitProg
   try {
     const { qbitGet } = await import("../qbit-client");
     const url = base.replace(/\/$/, "");
-    const res = await qbitGet(
-      url,
-      `/api/v2/torrents/info?hashes=${hashes.join("|")}`,
-      user,
-      pass,
-    );
+    const res = await qbitGet(url, `/api/v2/torrents/info?hashes=${hashes.join("|")}`, user, pass);
     if (!res.ok) return result;
     const list = (await res.json()) as Array<{
       hash: string;
@@ -179,7 +174,9 @@ export const getPlexLibraryBrowse = createServerFn({ method: "GET" }).handler(
       // Progres live: un singur request către qBit cu toate hash-urile
       // titlurilor încă în descărcare, nu unul per titlu.
       const hashByMediaId = new Map(
-        rows.filter((r) => !r.plex_rating_key && r.torrent_hash).map((r) => [r.id, r.torrent_hash!]),
+        rows
+          .filter((r) => !r.plex_rating_key && r.torrent_hash)
+          .map((r) => [r.id, r.torrent_hash!]),
       );
       if (hashByMediaId.size > 0) {
         const progressByHash = await fetchQbitProgress([...new Set(hashByMediaId.values())]);
@@ -227,7 +224,9 @@ export const getPlexLibraryBrowse = createServerFn({ method: "GET" }).handler(
 
       const ownerViewedAt = await getOwnerViewedAtByRatingKey(
         myPlexUsername,
-        withWatched.filter((it) => !it.watchedByMe && it.ratingKey).map((it) => it.ratingKey as string),
+        withWatched
+          .filter((it) => !it.watchedByMe && it.ratingKey)
+          .map((it) => it.ratingKey as string),
       );
       for (const it of withWatched) {
         if (it.ratingKey && ownerViewedAt.has(it.ratingKey) && !it.watchedByMe) {
@@ -516,7 +515,9 @@ const RECENT_WATCH_WINDOW_SECONDS = 7 * 24 * 60 * 60;
 const RECENT_TITLES_LIMIT = 200;
 
 export const getRecentWatches = createServerFn({ method: "GET" }).handler(
-  async (): Promise<{ status: "ok"; items: RecentWatch[] } | { status: "error"; error: string }> => {
+  async (): Promise<
+    { status: "ok"; items: RecentWatch[] } | { status: "error"; error: string }
+  > => {
     await (await import("../auth/admin.server")).requireAuth();
     try {
       const { getDb } = await import("../db");

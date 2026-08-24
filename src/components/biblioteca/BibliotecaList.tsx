@@ -60,7 +60,11 @@ export function BibliotecaList() {
   const browseItems = browse.data?.status === "ok" ? browse.data.items : null;
   const allItems = useMemo(() => browseItems ?? [], [browseItems]);
   const filtered = useMemo(
-    () => sortItems(allItems.filter((it) => matchesQuery(it, query)), sortMode),
+    () =>
+      sortItems(
+        allItems.filter((it) => matchesQuery(it, query)),
+        sortMode,
+      ),
     [allItems, query, sortMode],
   );
   const rows = useMemo(() => groupConsecutiveEpisodes(filtered), [filtered]);

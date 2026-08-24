@@ -600,7 +600,6 @@ export const downloadFilelist = createServerFn({ method: "POST" })
     });
   });
 
-
 // Corectează subtitrarea pentru un singur titlu — folosește exact aceeași
 // logică (ensureRomanianSubtitle) ca descărcarea normală, dar aplicată direct
 // pe hash-ul torrentului cerut, fără să mai listeze/itereze toate torrentele
