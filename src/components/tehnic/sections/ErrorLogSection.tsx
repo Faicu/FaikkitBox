@@ -120,7 +120,7 @@ export function ErrorLogSection() {
               contor de apariții.
             </DrawerDescription>
           </DrawerHeader>
-          <div className="space-y-2 overflow-y-auto px-4 pb-16">
+          <div className="space-y-2 overflow-y-auto overscroll-contain px-4 pb-16">
             <div className="sticky top-0 z-10 -mx-4 space-y-2 bg-background px-4 pb-2">
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />

@@ -321,7 +321,7 @@ function Overview() {
               {plex.data?.status === "ok" ? `${plex.data.todayViews?.length ?? 0} vizionări` : ""}
             </DrawerDescription>
           </DrawerHeader>
-          <div className="overflow-y-auto px-4 pb-6">
+          <div className="overflow-y-auto overscroll-contain px-4 pb-6">
             {plex.data?.status === "ok" && (plex.data.todayViews?.length ?? 0) > 0 ? (
               <ul className="rounded-2xl border border-border bg-card divide-y divide-border">
                 {plex.data.todayViews!.map((e, i) => {
@@ -364,7 +364,7 @@ function Overview() {
                 : ""}
             </DrawerDescription>
           </DrawerHeader>
-          <div className="overflow-y-auto px-4 pb-6">
+          <div className="overflow-y-auto overscroll-contain px-4 pb-6">
             {plex.data?.status === "ok" && (plex.data.activeUsersTodayList?.length ?? 0) > 0 ? (
               <ul className="rounded-2xl border border-border bg-card divide-y divide-border">
                 {plex.data.activeUsersTodayList!.map((u, i) => (

@@ -76,7 +76,7 @@ export function SubtitleFixDrawer({
           </DrawerDescription>
         </DrawerHeader>
 
-        <div className="px-4 pb-6 space-y-4 overflow-y-auto max-h-[60vh]">
+        <div className="px-4 pb-6 space-y-4 overflow-y-auto overscroll-contain max-h-[60vh]">
           <div className="text-xs text-muted-foreground">{fmtDate(entry.timestamp)}</div>
 
           <div className="flex flex-wrap items-center gap-2 text-xs">

@@ -172,7 +172,7 @@ export function TitleDetailDrawer({
           </div>
         </DrawerHeader>
 
-        <div className="px-4 pb-6 space-y-3 overflow-y-auto max-h-[65vh]">
+        <div className="px-4 pb-6 space-y-3 overflow-y-auto overscroll-contain max-h-[65vh]">
           {detail.isLoading && (
             <div className="text-xs text-muted-foreground">Se încarcă detaliile…</div>
           )}

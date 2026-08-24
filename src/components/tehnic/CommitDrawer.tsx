@@ -68,7 +68,7 @@ export function CommitDrawer({
           </DrawerDescription>
         </DrawerHeader>
 
-        <div className="px-4 pb-6 space-y-4 overflow-y-auto max-h-[60vh]">
+        <div className="px-4 pb-6 space-y-4 overflow-y-auto overscroll-contain max-h-[60vh]">
           <div className="text-xs text-muted-foreground">
             {commit.author} · {commit.date ? fmtDate(commit.date) : ""}
           </div>

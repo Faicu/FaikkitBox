@@ -64,7 +64,7 @@ export function UserDetailDrawer({ userId, onClose }: { userId: number; onClose:
           <DrawerDescription>Detalii cont, fixări și istoric autentificări</DrawerDescription>
         </DrawerHeader>
 
-        <div className="space-y-4 overflow-y-auto px-4 pb-6">
+        <div className="space-y-4 overflow-y-auto overscroll-contain px-4 pb-6">
           {isLoading || !user ? (
             <div className="py-8 text-center text-sm text-muted-foreground">Se încarcă...</div>
           ) : (

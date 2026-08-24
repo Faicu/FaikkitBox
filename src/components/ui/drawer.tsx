@@ -5,25 +5,10 @@ import { cn } from "@/lib/utils";
 
 const Drawer = ({
   shouldScaleBackground = true,
-  open,
   ...props
-}: React.ComponentProps<typeof DrawerPrimitive.Root>) => {
-  // vaul blochează scroll-ul fundalului doar pe Safari și îl sare explicit în
-  // modul PWA standalone (vezi usePositionFixed în vaul/dist/index.mjs) — pe
-  // Android Chrome ca PWA instalată, fundalul rămâne complet scrollabil sub
-  // drawer, lăsând utilizatorul să deruleze la nesfârșit în gol. Blocăm noi
-  // scroll-ul pe body cât timp orice drawer e deschis.
-  React.useEffect(() => {
-    if (!open) return;
-    const { overflow } = document.body.style;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = overflow;
-    };
-  }, [open]);
-
-  return <DrawerPrimitive.Root shouldScaleBackground={shouldScaleBackground} open={open} {...props} />;
-};
+}: React.ComponentProps<typeof DrawerPrimitive.Root>) => (
+  <DrawerPrimitive.Root shouldScaleBackground={shouldScaleBackground} {...props} />
+);
 Drawer.displayName = "Drawer";
 
 const DrawerPortal = DrawerPrimitive.Portal;
