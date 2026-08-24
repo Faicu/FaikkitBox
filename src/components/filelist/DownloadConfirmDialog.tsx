@@ -8,7 +8,6 @@ import {
   HardDrive,
   ShieldCheck,
   ExternalLink,
-  Info,
   Link2,
   Loader2,
   X,
@@ -18,20 +17,6 @@ import type { FilelistTorrent } from "@/lib/filelist.functions";
 import { formatBytes } from "@/lib/format";
 import { searchLibraryTitles, type LibraryTitleMatch } from "@/lib/media/media";
 import type { DownloadMediaContext } from "./use-download";
-
-// ---------------------------------------------------------------------------
-// Explicație text pentru criteriul care a găsit torrentul — vezi
-// checkFilelistForItemInternal (src/lib/filelist/download.ts): căutarea se
-// face exclusiv după ID IMDB.
-// ---------------------------------------------------------------------------
-
-function matchInfoText(torrent: FilelistTorrent): string | null {
-  if (!torrent.matchedByImdb) return null;
-  return (
-    `Găsit pe Filelist prin IMDB ID${torrent.imdb ? `: "${torrent.imdb}"` : ""}.` +
-    " Cel mai fiabil criteriu — potrivire exactă pe ID-ul IMDB, indiferent cum e denumită lansarea."
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Dialog confirmare download
@@ -62,9 +47,6 @@ export function DownloadConfirmDialog({
   onConfirm: (mediaContext?: DownloadMediaContext) => void;
   onCancel: () => void;
 }) {
-  const [showInfo, setShowInfo] = useState(false);
-  const infoText = matchInfoText(torrent);
-
   const searchFn = useServerFn(searchLibraryTitles);
   const [linkQuery, setLinkQuery] = useState("");
   const [linkResults, setLinkResults] = useState<LibraryTitleMatch[]>([]);
@@ -138,23 +120,6 @@ export function DownloadConfirmDialog({
             )}
           </div>
         </div>
-
-        {infoText && (
-          <div className="space-y-2">
-            <button
-              type="button"
-              onClick={() => setShowInfo((v) => !v)}
-              className="flex items-center gap-1.5 text-xs font-medium text-blue-400 hover:text-blue-300"
-            >
-              <Info className="h-3.5 w-3.5" /> Info Căutare
-            </button>
-            {showInfo && (
-              <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-3 text-xs text-muted-foreground">
-                {infoText}
-              </div>
-            )}
-          </div>
-        )}
 
         <div className="space-y-1.5">
           <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
