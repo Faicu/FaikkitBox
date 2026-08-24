@@ -66,3 +66,23 @@ export function matchesQuery(item: PlexBrowseItem, q: string): boolean {
   const n = norm(q);
   return norm(item.title).includes(n) || (!!item.show && norm(item.show).includes(n));
 }
+
+const STALE_UNWATCHED_SECONDS = 90 * 24 * 60 * 60; // 3 luni
+
+// Semnal de curățenie: nimeni nu l-a vizionat de la adăugare, iar adăugarea
+// nu e recentă (deci nu e doar "încă n-a apucat nimeni să-l vadă").
+export function isStaleUnwatched(item: PlexBrowseItem, nowSec = Date.now() / 1000): boolean {
+  return item.watchedCount === 0 && nowSec - item.addedAt > STALE_UNWATCHED_SECONDS;
+}
+
+export type SortMode = "recent" | "mostWatched" | "unwatched";
+
+export function sortItems(items: PlexBrowseItem[], mode: SortMode): PlexBrowseItem[] {
+  if (mode === "mostWatched") {
+    return [...items].sort((a, b) => b.watchedCount - a.watchedCount || b.addedAt - a.addedAt);
+  }
+  if (mode === "unwatched") {
+    return items.filter((it) => it.watchedCount === 0).sort((a, b) => b.addedAt - a.addedAt);
+  }
+  return items;
+}

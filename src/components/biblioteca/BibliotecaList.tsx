@@ -11,6 +11,7 @@ import {
   ChevronDown,
   ChevronRight,
   Layers,
+  AlertTriangle,
 } from "lucide-react";
 
 import {
@@ -28,7 +29,16 @@ import { deleteMediaEntry } from "@/lib/filelist.functions";
 import type { PlexBrowseItem } from "@/lib/services/plex-browse";
 import { StatusBadge } from "./StatusBadge";
 import { TitleDetailDrawer } from "./TitleDetailDrawer";
-import { episodeCode, addedDate, itemLabel, groupConsecutiveEpisodes, matchesQuery } from "./utils";
+import {
+  episodeCode,
+  addedDate,
+  itemLabel,
+  groupConsecutiveEpisodes,
+  matchesQuery,
+  isStaleUnwatched,
+  sortItems,
+  type SortMode,
+} from "./utils";
 
 const PAGE_SIZE = 20;
 
@@ -36,6 +46,7 @@ export function BibliotecaList() {
   const queryClient = useQueryClient();
   const browse = useQuery(plexLibraryBrowseQuery);
   const [query, setQuery] = useState("");
+  const [sortMode, setSortMode] = useState<SortMode>("recent");
   const [visible, setVisible] = useState(PAGE_SIZE);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [selectedMediaId, setSelectedMediaId] = useState<number | null>(null);
@@ -49,8 +60,8 @@ export function BibliotecaList() {
   const browseItems = browse.data?.status === "ok" ? browse.data.items : null;
   const allItems = useMemo(() => browseItems ?? [], [browseItems]);
   const filtered = useMemo(
-    () => allItems.filter((it) => matchesQuery(it, query)),
-    [allItems, query],
+    () => sortItems(allItems.filter((it) => matchesQuery(it, query)), sortMode),
+    [allItems, query, sortMode],
   );
   const rows = useMemo(() => groupConsecutiveEpisodes(filtered), [filtered]);
 
@@ -127,6 +138,14 @@ export function BibliotecaList() {
             {item.watchedCount}
           </span>
         )}
+        {isStaleUnwatched(item) && (
+          <span
+            title="Nimeni nu l-a vizionat de peste 3 luni"
+            className="flex shrink-0 items-center gap-0.5 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-400"
+          >
+            <AlertTriangle className="h-2.5 w-2.5" />
+          </span>
+        )}
         {item.watchedByMe && <Eye className="h-3 w-3 shrink-0 text-emerald-400" />}
       </button>
     );
@@ -136,17 +155,31 @@ export function BibliotecaList() {
 
   return (
     <div className="space-y-3">
-      <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <input
-          value={query}
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setVisible(PAGE_SIZE);
+            }}
+            placeholder="Caută film sau serial…"
+            className="w-full rounded-xl border border-border bg-card py-2.5 pl-9 pr-3 text-sm outline-none focus:ring-1 focus:ring-primary"
+          />
+        </div>
+        <select
+          value={sortMode}
           onChange={(e) => {
-            setQuery(e.target.value);
+            setSortMode(e.target.value as SortMode);
             setVisible(PAGE_SIZE);
           }}
-          placeholder="Caută film sau serial…"
-          className="w-full rounded-xl border border-border bg-card py-2.5 pl-9 pr-3 text-sm outline-none focus:ring-1 focus:ring-primary"
-        />
+          className="shrink-0 rounded-xl border border-border bg-card px-2 text-xs outline-none focus:ring-1 focus:ring-primary"
+        >
+          <option value="recent">Recent adăugate</option>
+          <option value="mostWatched">Cei mai vizionați</option>
+          <option value="unwatched">Nevăzute de nimeni</option>
+        </select>
       </div>
 
       {rows.length === 0 ? (
