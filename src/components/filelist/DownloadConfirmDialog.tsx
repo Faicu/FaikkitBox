@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { useServerFn } from "@tanstack/react-start";
 import {
@@ -204,9 +205,22 @@ export function DownloadConfirmDialog({
   );
 
   if (inline) {
-    return (
+    // Portal direct în body — randat inline (ca simplu div, nu Dialog Radix
+    // imbricat, vezi motivul mai sus), dar fără portal ancestorii cu
+    // transform (ex. animația stagger-in din PageShell) devin containing
+    // block pentru "fixed", iar overlay-ul ajunge decupat/în spatele
+    // wizardului în loc să acopere tot ecranul — bloca efectiv click-ul pe
+    // "Descarcă". z-[70] (nu z-[60] ca Dialog-ul de bază) — la z egal,
+    // ordinea DOM decide care overlay câștigă clic-urile, nu z-index-ul, și
+    // asta lăsa uneori Dialog-ul wizard-ului deasupra confirmării.
+    // pointer-events-auto e obligatoriu: Radix pune pointer-events:none pe
+    // <body> cât timp Dialog-ul de bază e deschis (ca să blocheze clic-urile
+    // din afara lui) și re-activează explicit doar propriul Content — un
+    // portal simplu ca al nostru moștenește none-ul de la body și devine
+    // total neclicabil, deși vizual pare deasupra.
+    return createPortal(
       <div
-        className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+        className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm pointer-events-auto"
         onClick={onCancel}
       >
         <div
@@ -218,7 +232,8 @@ export function DownloadConfirmDialog({
           <div className="text-sm font-semibold">Confirmare descărcare</div>
           {content}
         </div>
-      </div>
+      </div>,
+      document.body,
     );
   }
 

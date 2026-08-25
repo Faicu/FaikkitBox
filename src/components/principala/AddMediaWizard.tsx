@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Loader2, CheckCircle2, Download, ArrowLeft, Check, Info } from "lucide-react";
@@ -898,50 +899,55 @@ export function AddMediaWizard({
 
       {/* Overlay simplu (fără Drawer/vaul) — un al doilea overlay cu focus-trap
           propriu peste Dialog-ul wizard-ului (deja deschis) a înghețat ecranul
-          complet, vezi commit c76ce30. */}
-      {torrentChoice && (
-        <div
-          className="fixed inset-0 z-[60] flex items-end justify-center bg-black/80"
-          onClick={() => setTorrentChoice(null)}
-        >
+          complet, vezi commit c76ce30. Portalat direct în body — fără portal,
+          ancestorii cu transform (animația stagger-in din PageShell) devin
+          containing block pentru "fixed" și overlay-ul apare decupat/în
+          spatele conținutului în loc să acopere tot ecranul. */}
+      {torrentChoice &&
+        createPortal(
           <div
-            role="dialog"
-            aria-label={`Alege torrentul — ${torrentChoice.label}`}
-            onClick={(e) => e.stopPropagation()}
-            className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-t-[10px] border bg-background"
+            className="fixed inset-0 z-[70] flex items-end justify-center bg-black/80 pointer-events-auto"
+            onClick={() => setTorrentChoice(null)}
           >
-            <div className="mx-auto mt-4 h-2 w-[100px] rounded-full bg-muted" />
-            <div className="p-4 text-left text-lg font-semibold leading-none tracking-tight">
-              Alege torrentul — {torrentChoice.label}
+            <div
+              role="dialog"
+              aria-label={`Alege torrentul — ${torrentChoice.label}`}
+              onClick={(e) => e.stopPropagation()}
+              className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-t-[10px] border bg-background"
+            >
+              <div className="mx-auto mt-4 h-2 w-[100px] rounded-full bg-muted" />
+              <div className="p-4 text-left text-lg font-semibold leading-none tracking-tight">
+                Alege torrentul — {torrentChoice.label}
+              </div>
+              <div className="space-y-3 overflow-y-auto px-4 pb-6">
+                <TorrentPicker
+                  matches={torrentChoice.candidates}
+                  selectedId={pickedTorrentId ?? torrentChoice.candidates[0].id}
+                  onSelect={setPickedTorrentId}
+                />
+                <ActionButton
+                  busy={false}
+                  icon={<Download className="h-4 w-4" />}
+                  label="Continuă"
+                  onClick={() => {
+                    const chosen =
+                      torrentChoice.candidates.find((t) => t.id === pickedTorrentId) ??
+                      bestOf(torrentChoice.candidates)!;
+                    setConfirmTorrent({
+                      torrent: chosen,
+                      label: torrentChoice.label,
+                      season: torrentChoice.season,
+                      episode: torrentChoice.episode,
+                      isSeasonPack: torrentChoice.isSeasonPack,
+                    });
+                    setTorrentChoice(null);
+                  }}
+                />
+              </div>
             </div>
-            <div className="space-y-3 overflow-y-auto px-4 pb-6">
-              <TorrentPicker
-                matches={torrentChoice.candidates}
-                selectedId={pickedTorrentId ?? torrentChoice.candidates[0].id}
-                onSelect={setPickedTorrentId}
-              />
-              <ActionButton
-                busy={false}
-                icon={<Download className="h-4 w-4" />}
-                label="Continuă"
-                onClick={() => {
-                  const chosen =
-                    torrentChoice.candidates.find((t) => t.id === pickedTorrentId) ??
-                    bestOf(torrentChoice.candidates)!;
-                  setConfirmTorrent({
-                    torrent: chosen,
-                    label: torrentChoice.label,
-                    season: torrentChoice.season,
-                    episode: torrentChoice.episode,
-                    isSeasonPack: torrentChoice.isSeasonPack,
-                  });
-                  setTorrentChoice(null);
-                }}
-              />
-            </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
 
       {confirmTorrent && (
         <DownloadConfirmDialog

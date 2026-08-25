@@ -1,4 +1,5 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, dehydrate, HydrationBoundary } from "@tanstack/react-query";
+import type { DehydratedState } from "@tanstack/react-query";
 import {
   Outlet,
   Link,
@@ -21,6 +22,7 @@ import {
   withoutClientCapture,
 } from "../lib/errors/client-error-capture";
 import { toast } from "sonner";
+import { adminStatusQuery } from "../lib/queries";
 
 function NotFoundComponent() {
   return (
@@ -81,6 +83,15 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
 }
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
+  // Precompletează statusul de admin pe server și îl transportă către client
+  // prin dehydrate/HydrationBoundary — fără asta, BottomNav randează pe
+  // server lista de admin (3-4 iteme), iar clientul pornește cu cache gol
+  // și randează inițial doar "Acasă", mismatch de hidratare pe orice rută
+  // (eroarea React #418 vedea pe toate paginile, nu doar Descoperă).
+  loader: async ({ context }) => {
+    await context.queryClient.ensureQueryData(adminStatusQuery);
+    return { dehydratedState: dehydrate(context.queryClient) };
+  },
   head: () => ({
     meta: [
       { charSet: "utf-8" },
@@ -150,13 +161,16 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const { dehydratedState } = Route.useLoaderData() as { dehydratedState: DehydratedState };
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AutoReloadWatcher />
-      <Outlet />
-      <BottomNav />
-      <Toaster richColors closeButton position="top-center" />
+      <HydrationBoundary state={dehydratedState}>
+        <AutoReloadWatcher />
+        <Outlet />
+        <BottomNav />
+        <Toaster richColors closeButton position="top-center" />
+      </HydrationBoundary>
     </QueryClientProvider>
   );
 }
