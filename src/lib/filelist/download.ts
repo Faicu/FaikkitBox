@@ -33,11 +33,16 @@ function isTorrentComplete(progress: number, state: string): boolean {
 // câteva minute — de-asta creștem limit-ul și reîncercăm cu pauză, în loc
 // de un singur `sleep + fetch` (a cauzat cazuri reale de hash nedisponibil,
 // vezi jurnalul de erori: Hellraiser II 2026-08-08).
+// 10 încercări × 2s = 20s — fereastra de 10s de dinainte (5×2s) era prea
+// scurtă la două descărcări pornite aproape simultan din Descoperă (2026-08-25,
+// "Orașul Motor" a rămas fără hash cât timp Pinocchio se procesa în paralel);
+// limit crescut la 50 din același motiv — nu doar timpul, ci și poziția în
+// listă contează când sunt mai multe torrente adăugate recent.
 async function findTorrentHashByName(
   qbitUrl: string,
   cookie: string,
   torrentName: string,
-  attempts = 5,
+  attempts = 10,
   delayMs = 2000,
 ): Promise<string | null> {
   const needle = String(torrentName)
@@ -47,7 +52,7 @@ async function findTorrentHashByName(
     await new Promise((r) => setTimeout(r, delayMs));
     try {
       const listRes = await fetch(
-        `${qbitUrl}/api/v2/torrents/info?sort=added_on&reverse=true&limit=20`,
+        `${qbitUrl}/api/v2/torrents/info?sort=added_on&reverse=true&limit=50`,
         { headers: { Cookie: cookie }, signal: AbortSignal.timeout(10_000) },
       );
       if (listRes.ok) {
@@ -226,7 +231,7 @@ async function resumeOrphanedPolls(): Promise<void> {
       const plexType = isMovieCategory(entry.category) ? "movie" : "show";
       const hash = entry.torrentHash
         ? entry.torrentHash
-        : await findTorrentHashByName(url, cookie, entry.name, 1, 0);
+        : await findTorrentHashByName(url, cookie, entry.name, 5, 2000);
       if (!hash) {
         console.warn(`[filelist] Resume: hash tot indisponibil pentru "${entry.name}"`);
         continue;
