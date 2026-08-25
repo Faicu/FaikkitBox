@@ -32,6 +32,7 @@ interface TmdbApiMovie {
   title?: string;
   original_title?: string;
   overview?: string | null;
+  release_date?: string | null;
   external_ids?: { imdb_id?: string | null };
   imdb_id?: string | null;
   alternative_titles?: { titles?: TmdbApiAlternativeTitle[] };
@@ -50,6 +51,7 @@ interface TmdbApiTvShow {
   original_name?: string;
   overview?: string | null;
   external_ids?: { imdb_id?: string | null };
+  first_air_date?: string | null;
   status?: string | null;
   in_production?: boolean;
   next_episode_to_air?: {
@@ -163,6 +165,9 @@ export interface TmdbDetails {
   // (frecvent pentru titluri deja în alfabet latin).
   literalTitle: string | null;
   imdbId: string | null;
+  // Data lansării (film) / a primului episod difuzat (serial) — format ISO
+  // "YYYY-MM-DD", null dacă TMDB n-o are încă anunțată.
+  releaseDate: string | null;
   // doar pentru tv:
   tvStatus: string | null;
   // Următorul episod anunțat de TMDB (dacă există dată de lansare) — separat
@@ -210,6 +215,7 @@ export async function getTmdbDetailsInternal(
         originalTitle: movie.original_title ?? movie.title ?? "",
         literalTitle: findLiteralTitle(movie.alternative_titles?.titles),
         imdbId: movie.external_ids?.imdb_id ?? movie.imdb_id ?? null,
+        releaseDate: movie.release_date || null,
         tvStatus: null,
         nextEpisode: null,
         seasons: [],
@@ -245,6 +251,7 @@ export async function getTmdbDetailsInternal(
         originalTitle: show.original_name ?? show.name ?? "",
         literalTitle: findLiteralTitle(show.alternative_titles?.results),
         imdbId: show.external_ids?.imdb_id ?? null,
+        releaseDate: show.first_air_date || null,
         tvStatus: show.status ?? null,
         nextEpisode:
           show.next_episode_to_air?.air_date &&
@@ -270,6 +277,7 @@ export async function getTmdbDetailsInternal(
       originalTitle: "",
       literalTitle: null,
       imdbId: null,
+      releaseDate: null,
       tvStatus: null,
       nextEpisode: null,
       seasons: [],

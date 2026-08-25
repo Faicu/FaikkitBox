@@ -27,6 +27,14 @@ export function SceneViewer({ item, onClose }: { item: DiscoverTitle; onClose: (
   const videos = videosQuery.data ?? [];
   const current = videos[videoIndex] ?? null;
   const imdbId = detailsQuery.data?.imdbId ?? null;
+  const releaseDate = detailsQuery.data?.releaseDate ?? null;
+  const releaseDateLabel = releaseDate
+    ? new Date(releaseDate).toLocaleDateString("ro-RO", {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      })
+    : null;
 
   const otherVideosCount = useMemo(() => Math.max(0, videos.length - 1), [videos]);
 
@@ -41,6 +49,9 @@ export function SceneViewer({ item, onClose }: { item: DiscoverTitle; onClose: (
         <DrawerContent className="max-h-[90vh]">
           <DrawerHeader className="text-left pb-0">
             <DrawerTitle>{item.title}</DrawerTitle>
+            {releaseDateLabel && (
+              <p className="text-xs text-muted-foreground">{releaseDateLabel}</p>
+            )}
           </DrawerHeader>
           <div className="space-y-3 overflow-y-auto px-4 pb-6 pt-3">
             {videosQuery.isLoading ? (

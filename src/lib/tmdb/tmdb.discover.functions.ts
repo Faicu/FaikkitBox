@@ -46,15 +46,15 @@ async function fetchDiscoverPage(
 ): Promise<DiscoverTitle[]> {
   let path: string;
   if (sort === "trending") {
-    path = `/trending/${mediaType}/week?page=${page}`;
+    path = `/trending/${mediaType}/week?page=${page}&language=ro-RO`;
   } else if (sort === "newest") {
     const dateField = mediaType === "movie" ? "primary_release_date" : "first_air_date";
     const today = new Date().toISOString().slice(0, 10);
     path =
-      `/discover/${mediaType}?sort_by=${dateField}.desc&page=${page}` +
+      `/discover/${mediaType}?sort_by=${dateField}.desc&page=${page}&language=ro-RO` +
       `&${dateField}.lte=${today}&vote_count.gte=5`;
   } else {
-    path = `/discover/${mediaType}?sort_by=popularity.desc&page=${page}&vote_count.gte=200`;
+    path = `/discover/${mediaType}?sort_by=popularity.desc&page=${page}&language=ro-RO&vote_count.gte=200`;
   }
   const json = await tmdbFetch<TmdbApiDiscoverResponse>(path);
   return (json.results ?? []).filter((r) => r.poster_path).map((r) => mapItem(mediaType, r));
