@@ -32,24 +32,39 @@ function resolveCategoryIds(category: FilelistCategory): readonly number[] {
       : ALL_CATEGORIES;
 }
 
+// Disc Blu-ray brut (folder BDMV, nu fișier video) — convenția de nume pe
+// tracker e "Blu-ray.AVC"/"VC-1"/"MPEG-2" (codecul discului, fără encodare),
+// spre deosebire de "BluRay.x264"/"x265"/"REMUX" care sunt fișiere .mkv
+// normale. qBittorrent/Plex nu pot gestiona un disc brut ca pe un film (vezi
+// "Pinocchio: Unstrung" 2026-08-25 — descărcat, dar nefolosibil, a trebuit
+// șters manual). Exclus peste tot, inclusiv din căutarea manuală — un disc
+// brut nu e niciodată o alegere validă în acest proiect.
+const RAW_DISC_PATTERN = /blu-?ray\.(avc|vc-?1|mpeg-?2)/i;
+
+function isRawDiscRelease(name: string): boolean {
+  return RAW_DISC_PATTERN.test(name);
+}
+
 // Mapează răspunsul brut al API-ului Filelist.io la forma internă
 // FilelistTorrent — folosit atât de căutarea internă cât și de server
 // function-ul public, ca să nu diverge maparea între ele.
 function mapApiTorrents(raw: FilelistApiTorrent[]): FilelistTorrent[] {
-  return raw.map((t) => ({
-    id: Number(t.id),
-    name: String(t.name ?? ""),
-    size: Number(t.size ?? 0),
-    seeders: Number(t.seeders ?? 0),
-    leechers: Number(t.leechers ?? 0),
-    times_completed: Number(t.times_completed ?? 0),
-    category: parseCategoryId(t.category),
-    categoryName: CATEGORY_NAMES[parseCategoryId(t.category)] ?? `Cat ${t.category}`,
-    freeleech: !!Number(t.freeleech),
-    internal: !!Number(t.internal),
-    upload_date: String(t.upload_date ?? ""),
-    imdb: t.imdb || undefined,
-  }));
+  return raw
+    .map((t) => ({
+      id: Number(t.id),
+      name: String(t.name ?? ""),
+      size: Number(t.size ?? 0),
+      seeders: Number(t.seeders ?? 0),
+      leechers: Number(t.leechers ?? 0),
+      times_completed: Number(t.times_completed ?? 0),
+      category: parseCategoryId(t.category),
+      categoryName: CATEGORY_NAMES[parseCategoryId(t.category)] ?? `Cat ${t.category}`,
+      freeleech: !!Number(t.freeleech),
+      internal: !!Number(t.internal),
+      upload_date: String(t.upload_date ?? ""),
+      imdb: t.imdb || undefined,
+    }))
+    .filter((t) => !isRawDiscRelease(t.name));
 }
 
 export async function searchFilelistRaw(
