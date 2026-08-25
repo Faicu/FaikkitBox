@@ -6,16 +6,6 @@ import { toast } from "sonner";
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
-import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogCancel,
-  AlertDialogAction,
-} from "@/components/ui/alert-dialog";
 import { DownloadConfirmDialog } from "@/components/filelist/DownloadConfirmDialog";
 import { adminStatusQuery } from "@/lib/queries";
 import { searchTmdb, getTmdbDetails, getTmdbAllSeasons } from "@/lib/tmdb/tmdb.functions";
@@ -786,14 +776,56 @@ export function AddMediaWizard({
 
                     <QualitySelector quality={quality} onChange={setQuality} isAdmin={isAdmin} />
 
-                    {bulkPlan.length > 0 && (
-                      <ActionButton
-                        busy={busy}
-                        icon={<Download className="h-4 w-4" />}
-                        label={`Descarcă tot ce lipsește (${bulkPlan.length})`}
-                        onClick={() => setConfirmBulk(bulkPlan)}
-                      />
-                    )}
+                    {bulkPlan.length > 0 &&
+                      (confirmBulk ? (
+                        <div className="space-y-2 rounded-xl border border-border bg-card p-3">
+                          <div className="text-sm text-foreground">
+                            Pornești {confirmBulk.length} descărcări — tot ce lipsește și e
+                            disponibil pe Filelist, la calitatea {quality}?
+                          </div>
+                          <div className="max-h-40 space-y-1 overflow-y-auto">
+                            {confirmBulk.map((item) => (
+                              <div
+                                key={`${item.season}-${item.episode ?? "pack"}`}
+                                className="text-xs"
+                              >
+                                <span className="font-medium text-foreground">{item.label}</span>{" "}
+                                <span className="break-all text-muted-foreground">
+                                  — {item.torrent.name}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() => setConfirmBulk(null)}
+                              className="flex-1 rounded-lg border border-border py-2 text-sm font-medium text-muted-foreground hover:bg-muted/60 disabled:opacity-50"
+                            >
+                              Anulează
+                            </button>
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() => {
+                                downloadBulk(confirmBulk);
+                                setConfirmBulk(null);
+                              }}
+                              className="flex-1 rounded-lg bg-primary py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
+                            >
+                              Descarcă
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <ActionButton
+                          busy={busy}
+                          icon={<Download className="h-4 w-4" />}
+                          label={`Descarcă tot ce lipsește (${bulkPlan.length})`}
+                          onClick={() => setConfirmBulk(bulkPlan)}
+                        />
+                      ))}
 
                     <div>
                       <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -915,37 +947,6 @@ export function AddMediaWizard({
           }}
         />
       )}
-
-      <AlertDialog open={!!confirmBulk} onOpenChange={(o) => !o && setConfirmBulk(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Confirmare descărcare</AlertDialogTitle>
-            <AlertDialogDescription>
-              Pornești {confirmBulk?.length} descărcări — tot ce lipsește și e disponibil pe
-              Filelist, la calitatea {quality}?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="max-h-56 space-y-1 overflow-y-auto">
-            {confirmBulk?.map((item) => (
-              <div key={`${item.season}-${item.episode ?? "pack"}`} className="text-xs">
-                <span className="font-medium text-foreground">{item.label}</span>{" "}
-                <span className="break-all text-muted-foreground">— {item.torrent.name}</span>
-              </div>
-            ))}
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Anulează</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                if (confirmBulk) downloadBulk(confirmBulk);
-                setConfirmBulk(null);
-              }}
-            >
-              Descarcă
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
   );
 }
