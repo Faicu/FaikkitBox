@@ -8,6 +8,11 @@ export interface DiscoverTitle {
   id: number;
   mediaType: DiscoverMediaType;
   title: string;
+  // Titlul original (nu neapărat englez) — afișat în grilă/feed, unde
+  // titlul RO abia deschis (SceneViewer/FeedCard) rămâne pe `title`, ca
+  // înainte. Nu afectează ce se salvează în `media` la descărcare (wizard-ul
+  // continuă să primească `title`, RO).
+  originalTitle: string;
   year: string | null;
   posterUrl: string | null;
   voteAverage: number | null;
@@ -18,6 +23,8 @@ interface TmdbApiDiscoverItem {
   media_type?: string;
   title?: string;
   name?: string;
+  original_title?: string;
+  original_name?: string;
   release_date?: string;
   first_air_date?: string;
   poster_path?: string | null;
@@ -33,6 +40,10 @@ function mapItem(mediaType: DiscoverMediaType, r: TmdbApiDiscoverItem): Discover
     id: r.id,
     mediaType,
     title: mediaType === "movie" ? (r.title ?? r.name ?? "") : (r.name ?? r.title ?? ""),
+    originalTitle:
+      mediaType === "movie"
+        ? (r.original_title ?? r.original_name ?? r.title ?? "")
+        : (r.original_name ?? r.original_title ?? r.name ?? ""),
     year: (mediaType === "movie" ? r.release_date : r.first_air_date)?.slice(0, 4) || null,
     posterUrl: r.poster_path ? `https://image.tmdb.org/t/p/w342${r.poster_path}` : null,
     voteAverage: typeof r.vote_average === "number" ? r.vote_average : null,

@@ -64,11 +64,18 @@ async function findTorrentHashByName(
         // putea confunda două descărcări cu nume aproape identice pornite în
         // aceeași fereastră (ex. episoade consecutive ale aceluiași serial),
         // legând hash-ul greșit de rândul `media` greșit.
+        //
+        // Torrentele cu un singur fișier apar în qBittorrent cu extensia
+        // fișierului la coadă (ex. "...playWEB.mkv"), pe care numele de la
+        // Filelist n-o are — exact-match strict eșua mereu în cazul ăsta
+        // ("Lanterns" S01E02, 2026-08-25). Comparăm și varianta cu o
+        // extensie video obișnuită tăiată de la coadă.
         const exactMatch = list.find((t) => {
-          const hay = String(t.name ?? "")
-            .toLowerCase()
-            .replace(/[^a-z0-9]/g, "");
-          return hay === needle;
+          const rawName = String(t.name ?? "").toLowerCase();
+          const hay = rawName.replace(/[^a-z0-9]/g, "");
+          if (hay === needle) return true;
+          const withoutExt = rawName.replace(/\.(mkv|mp4|avi|ts|m4v)$/, "");
+          return withoutExt.replace(/[^a-z0-9]/g, "") === needle;
         });
         if (exactMatch?.hash) return exactMatch.hash;
       }

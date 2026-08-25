@@ -40,7 +40,9 @@ function FeedCard({ clip, isActive }: { clip: FeedClip; isActive: boolean }) {
       <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent p-4 pt-16">
         <div className="pointer-events-auto flex items-end justify-between gap-3">
           <div className="min-w-0">
-            <div className="truncate text-base font-semibold text-white">{clip.title}</div>
+            <div className="truncate text-base font-semibold text-white">
+              {clip.originalTitle}
+            </div>
             <div className="text-xs text-white/70">
               {clip.mediaType === "movie" ? "Film" : "Serial"}
               {clip.year && ` · ${clip.year}`}

@@ -124,7 +124,7 @@ export function DiscoverGrid({
                 )}
                 <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent p-2 pt-6">
                   <div className="line-clamp-2 text-[11px] font-medium leading-tight text-white">
-                    {item.title}
+                    {item.originalTitle}
                   </div>
                   <div className="mt-0.5 flex items-center gap-1.5 text-[10px] text-white/70">
                     {item.year && <span>{item.year}</span>}
