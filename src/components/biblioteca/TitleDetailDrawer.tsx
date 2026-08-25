@@ -39,9 +39,10 @@ import { episodeCode, addedDate } from "./utils";
 // Drawer-ul de detalii al unui titlu din Bibliotecă — complet independent de
 // listă: primește doar mediaId, își gestionează singur toată starea (query
 // de detalii, corectare/ștergere subtitrare). Cere listei doar două lucruri,
-// prin callback-uri: să deschidă confirmarea de ștergere completă (dialogul
-// rămâne la nivel de listă, ca să rămână deasupra drawer-ului) și să știe
-// când s-a șters efectiv titlul, ca să închidă drawer-ul și să
+// prin callback-uri: să deschidă confirmarea de ștergere completă (rândurile
+// rămân la nivel de listă, ca overlay simplu peste drawer — nu un
+// AlertDialog Radix imbricat, care ar îngheța ecranul, vezi commit c76ce30)
+// și să știe când s-a șters efectiv titlul, ca să închidă drawer-ul și să
 // reîmprospăteze lista.
 export function TitleDetailDrawer({
   mediaId,

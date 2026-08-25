@@ -14,16 +14,6 @@ import {
   AlertTriangle,
 } from "lucide-react";
 
-import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogCancel,
-  AlertDialogAction,
-} from "@/components/ui/alert-dialog";
 import { plexLibraryBrowseQuery } from "@/lib/queries";
 import { deleteMediaEntry } from "@/lib/filelist.functions";
 import type { PlexBrowseItem } from "@/lib/services/plex-browse";
@@ -248,25 +238,45 @@ export function BibliotecaList() {
         onRequestDelete={(info) => setConfirmDeleteTitle(info)}
       />
 
-      <AlertDialog
-        open={!!confirmDeleteTitle}
-        onOpenChange={(open) => !open && setConfirmDeleteTitle(null)}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Ștergere completă</AlertDialogTitle>
-            <AlertDialogDescription>
-              {confirmDeleteTitle?.isSeasonPack
-                ? `Acest episod face parte dintr-un pachet de sezon — ștergerea elimină TOT pachetul (toate episoadele lui), din jurnal, din qBittorrent și de pe disk, apoi rescanează Plex.\n\n${confirmDeleteTitle?.title}`
-                : `Ștergi titlul din jurnal, din qBittorrent și fișierele de pe disk, apoi rescanezi Plex?\n\n${confirmDeleteTitle?.title}`}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Anulează</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDeleteTitleAction}>Șterge</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Overlay simplu (fără AlertDialog/focus-trap Radix) — peste
+          TitleDetailDrawer (deja deschis) a fost un risc de îngheț identic
+          cu bug-ul reparat în AddMediaWizard, vezi commit c76ce30. */}
+      {confirmDeleteTitle && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80"
+          onClick={() => setConfirmDeleteTitle(null)}
+        >
+          <div
+            role="dialog"
+            aria-label="Ștergere completă"
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm space-y-4 rounded-2xl border border-border bg-card p-5 shadow-xl"
+          >
+            <div className="text-sm font-semibold">Ștergere completă</div>
+            <p className="whitespace-pre-line text-sm text-muted-foreground">
+              {confirmDeleteTitle.isSeasonPack
+                ? `Acest episod face parte dintr-un pachet de sezon — ștergerea elimină TOT pachetul (toate episoadele lui), din jurnal, din qBittorrent și de pe disk, apoi rescanează Plex.\n\n${confirmDeleteTitle.title}`
+                : `Ștergi titlul din jurnal, din qBittorrent și fișierele de pe disk, apoi rescanezi Plex?\n\n${confirmDeleteTitle.title}`}
+            </p>
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:space-x-2">
+              <button
+                type="button"
+                onClick={() => setConfirmDeleteTitle(null)}
+                className="rounded-lg border border-border px-4 py-2 text-sm text-muted-foreground hover:bg-muted/60"
+              >
+                Anulează
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteTitleAction}
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+              >
+                Șterge
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

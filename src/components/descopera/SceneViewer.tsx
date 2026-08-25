@@ -40,10 +40,13 @@ export function SceneViewer({ item, onClose }: { item: DiscoverTitle; onClose: (
 
   return (
     <>
+      {/* Ascuns (nu demontat) cât timp wizard-ul e deschis — două overlay-uri
+          (Drawer + Dialog) simultan deschise au înghețat ecranul, vezi
+          commit c76ce30. Rămâne montat ca să-și păstreze starea query-urilor. */}
       <Drawer
-        open
+        open={!wizardOpen}
         onOpenChange={(open) => {
-          if (!open) onClose();
+          if (!open && !wizardOpen) onClose();
         }}
       >
         <DrawerContent className="max-h-[90vh]">

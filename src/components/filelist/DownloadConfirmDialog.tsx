@@ -41,11 +41,18 @@ export function DownloadConfirmDialog({
   label,
   onConfirm,
   onCancel,
+  inline = false,
 }: {
   torrent: FilelistTorrent;
   label: string;
   onConfirm: (mediaContext?: DownloadMediaContext) => void;
   onCancel: () => void;
+  // Randează fără Portal/focus-trap Radix propriu — pentru folosirea din
+  // interiorul unui alt overlay deja deschis (ex. AddMediaWizard, care e el
+  // însuși un Dialog). Un al doilea Dialog Radix imbricat peste unul deschis
+  // a înghețat ecranul complet (vezi commit c76ce30) — motiv de focus-trap/
+  // scroll-lock care se luptă între ele, fără nicio eroare aruncată.
+  inline?: boolean;
 }) {
   const searchFn = useServerFn(searchLibraryTitles);
   const [linkQuery, setLinkQuery] = useState("");
@@ -74,6 +81,147 @@ export function DownloadConfirmDialog({
     };
   }, [linkQuery, searchFn]);
 
+  const content = (
+    <>
+      <div className="space-y-2 text-xs text-muted-foreground">
+        <div className="font-medium text-foreground break-words">{torrent.name}</div>
+        <div className="flex flex-wrap gap-x-4 gap-y-1 pt-1">
+          <span className="flex items-center gap-1">
+            <HardDrive className="h-3 w-3" /> {formatBytes(torrent.size)}
+          </span>
+          <span className="flex items-center gap-1 text-emerald-400">
+            <Users className="h-3 w-3" /> {torrent.seeders} seederi
+          </span>
+          <span className="flex items-center gap-1 text-orange-400">
+            <Users className="h-3 w-3" /> {torrent.leechers} leecheri
+          </span>
+          {torrent.freeleech && (
+            <span className="flex items-center gap-1 text-yellow-400">
+              <Zap className="h-3 w-3" /> Freeleech
+            </span>
+          )}
+          {torrent.internal && (
+            <span className="flex items-center gap-1 text-purple-400">
+              <ShieldCheck className="h-3 w-3" /> Internal
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5 pt-1">
+          <span className="rounded bg-muted px-1.5 py-0.5 font-medium">{torrent.categoryName}</span>
+          <span className="rounded bg-blue-500/15 px-1.5 py-0.5 font-medium text-blue-400">
+            {label}
+          </span>
+          {torrent.upload_date && (
+            <span>{new Date(torrent.upload_date).toLocaleDateString("ro-RO")}</span>
+          )}
+        </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+          <Link2 className="h-3.5 w-3.5" /> Leagă de un titlu existent (opțional)
+        </div>
+        {linkedTitle ? (
+          <div className="flex items-center justify-between gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300">
+            <span className="truncate">
+              {linkedTitle.title}
+              {linkedTitle.year ? ` (${linkedTitle.year})` : ""}
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setLinkedTitle(null);
+                setLinkQuery("");
+              }}
+              className="shrink-0 text-emerald-300/80 hover:text-emerald-200"
+              title="Anulează legarea"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ) : (
+          <div className="relative">
+            <input
+              value={linkQuery}
+              onChange={(e) => setLinkQuery(e.target.value)}
+              placeholder="Caută în bibliotecă…"
+              className="w-full rounded-xl border border-border bg-background py-1.5 px-3 text-xs outline-none focus:ring-1 focus:ring-primary"
+            />
+            {linkSearching && (
+              <Loader2 className="absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-muted-foreground" />
+            )}
+            {linkResults.length > 0 && (
+              <div className="absolute z-10 mt-1 max-h-40 w-full overflow-y-auto rounded-xl border border-border bg-card shadow-lg">
+                {linkResults.map((m) => (
+                  <button
+                    key={`${m.mediaType}-${m.mediaId}`}
+                    type="button"
+                    onClick={() => {
+                      setLinkedTitle(m);
+                      setLinkResults([]);
+                    }}
+                    className="block w-full truncate px-3 py-1.5 text-left text-xs hover:bg-muted"
+                  >
+                    {m.title}
+                    {m.year ? ` (${m.year})` : ""}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+        <p className="text-[11px] text-muted-foreground">
+          Fără legare, titlul e dedus automat după IMDb ID-ul torrentului — poate greși pentru
+          spinoff-uri/reunion-uri indexate pe Filelist sub ID-ul altei producții din franciză.
+        </p>
+      </div>
+
+      <div className="flex gap-2 pt-1">
+        <a
+          href={`https://filelist.io/details.php?id=${torrent.id}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="flex items-center justify-center rounded-xl border border-border px-3 py-2 text-sm text-muted-foreground hover:bg-muted transition-colors"
+          title="Vezi pe filelist.io"
+        >
+          <ExternalLink className="h-4 w-4" />
+        </a>
+        <button
+          onClick={onCancel}
+          className="flex-1 rounded-xl border border-border py-2 text-sm text-muted-foreground hover:bg-muted transition-colors"
+        >
+          Anulează
+        </button>
+        <button
+          onClick={() => onConfirm(linkedTitle ? matchToContext(linkedTitle) : undefined)}
+          className="flex-1 rounded-xl bg-blue-500/20 border border-blue-500/30 py-2 text-sm font-medium text-blue-400 hover:bg-blue-500/30 transition-colors flex items-center justify-center gap-1.5"
+        >
+          <Download className="h-4 w-4" /> Descarcă
+        </button>
+      </div>
+    </>
+  );
+
+  if (inline) {
+    return (
+      <div
+        className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+        onClick={onCancel}
+      >
+        <div
+          role="dialog"
+          aria-label="Confirmare descărcare"
+          onClick={(e) => e.stopPropagation()}
+          className="w-full max-w-sm rounded-2xl border border-border bg-card p-5 space-y-4 shadow-xl outline-none"
+        >
+          <div className="text-sm font-semibold">Confirmare descărcare</div>
+          {content}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <DialogPrimitive.Root open onOpenChange={(open) => !open && onCancel()}>
       <DialogPrimitive.Portal>
@@ -85,125 +233,7 @@ export function DownloadConfirmDialog({
             <DialogPrimitive.Description className="sr-only">
               Confirmă descărcarea torrentului {torrent.name}
             </DialogPrimitive.Description>
-            <div className="space-y-2 text-xs text-muted-foreground">
-              <div className="font-medium text-foreground break-words">{torrent.name}</div>
-              <div className="flex flex-wrap gap-x-4 gap-y-1 pt-1">
-                <span className="flex items-center gap-1">
-                  <HardDrive className="h-3 w-3" /> {formatBytes(torrent.size)}
-                </span>
-                <span className="flex items-center gap-1 text-emerald-400">
-                  <Users className="h-3 w-3" /> {torrent.seeders} seederi
-                </span>
-                <span className="flex items-center gap-1 text-orange-400">
-                  <Users className="h-3 w-3" /> {torrent.leechers} leecheri
-                </span>
-                {torrent.freeleech && (
-                  <span className="flex items-center gap-1 text-yellow-400">
-                    <Zap className="h-3 w-3" /> Freeleech
-                  </span>
-                )}
-                {torrent.internal && (
-                  <span className="flex items-center gap-1 text-purple-400">
-                    <ShieldCheck className="h-3 w-3" /> Internal
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-1.5 pt-1">
-                <span className="rounded bg-muted px-1.5 py-0.5 font-medium">
-                  {torrent.categoryName}
-                </span>
-                <span className="rounded bg-blue-500/15 px-1.5 py-0.5 font-medium text-blue-400">
-                  {label}
-                </span>
-                {torrent.upload_date && (
-                  <span>{new Date(torrent.upload_date).toLocaleDateString("ro-RO")}</span>
-                )}
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                <Link2 className="h-3.5 w-3.5" /> Leagă de un titlu existent (opțional)
-              </div>
-              {linkedTitle ? (
-                <div className="flex items-center justify-between gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300">
-                  <span className="truncate">
-                    {linkedTitle.title}
-                    {linkedTitle.year ? ` (${linkedTitle.year})` : ""}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLinkedTitle(null);
-                      setLinkQuery("");
-                    }}
-                    className="shrink-0 text-emerald-300/80 hover:text-emerald-200"
-                    title="Anulează legarea"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              ) : (
-                <div className="relative">
-                  <input
-                    value={linkQuery}
-                    onChange={(e) => setLinkQuery(e.target.value)}
-                    placeholder="Caută în bibliotecă…"
-                    className="w-full rounded-xl border border-border bg-background py-1.5 px-3 text-xs outline-none focus:ring-1 focus:ring-primary"
-                  />
-                  {linkSearching && (
-                    <Loader2 className="absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-muted-foreground" />
-                  )}
-                  {linkResults.length > 0 && (
-                    <div className="absolute z-10 mt-1 max-h-40 w-full overflow-y-auto rounded-xl border border-border bg-card shadow-lg">
-                      {linkResults.map((m) => (
-                        <button
-                          key={`${m.mediaType}-${m.mediaId}`}
-                          type="button"
-                          onClick={() => {
-                            setLinkedTitle(m);
-                            setLinkResults([]);
-                          }}
-                          className="block w-full truncate px-3 py-1.5 text-left text-xs hover:bg-muted"
-                        >
-                          {m.title}
-                          {m.year ? ` (${m.year})` : ""}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-              <p className="text-[11px] text-muted-foreground">
-                Fără legare, titlul e dedus automat după IMDb ID-ul torrentului — poate greși pentru
-                spinoff-uri/reunion-uri indexate pe Filelist sub ID-ul altei producții din franciză.
-              </p>
-            </div>
-
-            <div className="flex gap-2 pt-1">
-              <a
-                href={`https://filelist.io/details.php?id=${torrent.id}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                className="flex items-center justify-center rounded-xl border border-border px-3 py-2 text-sm text-muted-foreground hover:bg-muted transition-colors"
-                title="Vezi pe filelist.io"
-              >
-                <ExternalLink className="h-4 w-4" />
-              </a>
-              <button
-                onClick={onCancel}
-                className="flex-1 rounded-xl border border-border py-2 text-sm text-muted-foreground hover:bg-muted transition-colors"
-              >
-                Anulează
-              </button>
-              <button
-                onClick={() => onConfirm(linkedTitle ? matchToContext(linkedTitle) : undefined)}
-                className="flex-1 rounded-xl bg-blue-500/20 border border-blue-500/30 py-2 text-sm font-medium text-blue-400 hover:bg-blue-500/30 transition-colors flex items-center justify-center gap-1.5"
-              >
-                <Download className="h-4 w-4" /> Descarcă
-              </button>
-            </div>
+            {content}
           </DialogPrimitive.Content>
         </DialogPrimitive.Overlay>
       </DialogPrimitive.Portal>

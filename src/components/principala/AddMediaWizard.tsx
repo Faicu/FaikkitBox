@@ -5,7 +5,6 @@ import { Loader2, CheckCircle2, Download, ArrowLeft, Check, Info } from "lucide-
 import { toast } from "sonner";
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
 import { DownloadConfirmDialog } from "@/components/filelist/DownloadConfirmDialog";
 import { adminStatusQuery } from "@/lib/queries";
 import { searchTmdb, getTmdbDetails, getTmdbAllSeasons } from "@/lib/tmdb/tmdb.functions";
@@ -897,12 +896,24 @@ export function AddMediaWizard({
         </DialogContent>
       </Dialog>
 
+      {/* Overlay simplu (fără Drawer/vaul) — un al doilea overlay cu focus-trap
+          propriu peste Dialog-ul wizard-ului (deja deschis) a înghețat ecranul
+          complet, vezi commit c76ce30. */}
       {torrentChoice && (
-        <Drawer open onOpenChange={(o) => !o && setTorrentChoice(null)}>
-          <DrawerContent className="max-h-[85vh]">
-            <DrawerHeader className="text-left">
-              <DrawerTitle>Alege torrentul — {torrentChoice.label}</DrawerTitle>
-            </DrawerHeader>
+        <div
+          className="fixed inset-0 z-[60] flex items-end justify-center bg-black/80"
+          onClick={() => setTorrentChoice(null)}
+        >
+          <div
+            role="dialog"
+            aria-label={`Alege torrentul — ${torrentChoice.label}`}
+            onClick={(e) => e.stopPropagation()}
+            className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-t-[10px] border bg-background"
+          >
+            <div className="mx-auto mt-4 h-2 w-[100px] rounded-full bg-muted" />
+            <div className="p-4 text-left text-lg font-semibold leading-none tracking-tight">
+              Alege torrentul — {torrentChoice.label}
+            </div>
             <div className="space-y-3 overflow-y-auto px-4 pb-6">
               <TorrentPicker
                 matches={torrentChoice.candidates}
@@ -928,12 +939,13 @@ export function AddMediaWizard({
                 }}
               />
             </div>
-          </DrawerContent>
-        </Drawer>
+          </div>
+        </div>
       )}
 
       {confirmTorrent && (
         <DownloadConfirmDialog
+          inline
           torrent={confirmTorrent.torrent}
           label={confirmTorrent.label}
           onCancel={() => setConfirmTorrent(null)}
