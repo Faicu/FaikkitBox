@@ -61,6 +61,25 @@ export function groupConsecutiveEpisodes(items: PlexBrowseItem[]): BrowseRow[] {
   return rows;
 }
 
+// Împarte episoadele unui grup (deja în ordine cronologică) în segmente
+// consecutive cu același sezon, pentru subtitluri "Sezonul N" — dacă
+// sezonul sare înainte-înapoi cronologic, apar mai multe segmente separate
+// pentru același sezon, ca ordinea cronologică să rămână corectă.
+export type SeasonSegment = { season: number | null; items: PlexBrowseItem[] };
+
+export function groupBySeasonConsecutive(items: PlexBrowseItem[]): SeasonSegment[] {
+  const segments: SeasonSegment[] = [];
+  for (const item of items) {
+    const last = segments[segments.length - 1];
+    if (last && last.season === item.season) {
+      last.items.push(item);
+    } else {
+      segments.push({ season: item.season, items: [item] });
+    }
+  }
+  return segments;
+}
+
 export function matchesQuery(item: PlexBrowseItem, q: string): boolean {
   if (!q) return true;
   const n = norm(q);

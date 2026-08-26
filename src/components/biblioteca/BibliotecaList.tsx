@@ -25,6 +25,7 @@ import {
   addedDate,
   itemLabel,
   groupConsecutiveEpisodes,
+  groupBySeasonConsecutive,
   matchesQuery,
   isStaleUnwatched,
   sortItems,
@@ -214,7 +215,18 @@ export function BibliotecaList() {
                   </button>
                   {expandedGroups.has(row.key) && (
                     <div className="mt-1 space-y-1">
-                      {row.items.map((it) => renderRow(it, true))}
+                      {groupBySeasonConsecutive(row.items).map((seg, idx) => (
+                        <div key={`${row.key}-s${seg.season ?? "x"}-${idx}`}>
+                          {seg.season != null && (
+                            <div className="ml-4 pb-1 pt-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                              Sezonul {seg.season}
+                            </div>
+                          )}
+                          <div className="space-y-1">
+                            {seg.items.map((it) => renderRow(it, true))}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
