@@ -109,10 +109,14 @@ function TehnicPage() {
               value={`${speedtest.data.ping.latency.toFixed(0)} ms`}
             />
           </div>
+        ) : speedtest.isLoading ? (
+          <div className="mt-3 grid min-w-0 grid-cols-3 gap-2">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="h-10 animate-pulse rounded-lg bg-muted/50" />
+            ))}
+          </div>
         ) : (
-          <p className="mt-2 text-xs text-muted-foreground">
-            {speedtest.isLoading ? "Se încarcă..." : "Niciun test efectuat încă."}
-          </p>
+          <p className="mt-2 text-xs text-muted-foreground">Niciun test efectuat încă.</p>
         )}
         {speedtest.data && (
           <p className="mt-2 text-[11px] text-muted-foreground">
@@ -188,7 +192,7 @@ function TehnicPage() {
               type="button"
               onClick={() => speedtestMutation.mutate()}
               disabled={speedtestMutation.isPending}
-              className="w-full rounded-xl border border-rose-500/30 bg-rose-500/15 px-3 py-2.5 text-sm font-medium text-rose-400 hover:bg-rose-500/25 disabled:opacity-50"
+              className="w-full rounded-xl border border-rose-500/30 bg-rose-500/15 px-3 py-2.5 text-sm font-medium text-rose-400 transition-transform hover:bg-rose-500/25 active:scale-[0.98] disabled:opacity-50"
             >
               {speedtestMutation.isPending
                 ? "Se rulează testul... (poate dura 30-60s)"

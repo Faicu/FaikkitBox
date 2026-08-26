@@ -89,7 +89,7 @@ export function SceneViewer({ item, onClose }: { item: DiscoverTitle; onClose: (
                 <button
                   type="button"
                   onClick={() => setVideoIndex((i) => (i + 1) % videos.length)}
-                  className="flex items-center gap-1.5 rounded-lg border border-border bg-muted/40 px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted/60"
+                  className="flex items-center gap-1.5 rounded-lg border border-border bg-muted/40 px-3 py-1.5 text-xs font-medium text-foreground transition-transform hover:bg-muted/60 active:scale-[0.97]"
                 >
                   <Shuffle className="h-3.5 w-3.5" /> Alt clip ({otherVideosCount} altele)
                 </button>

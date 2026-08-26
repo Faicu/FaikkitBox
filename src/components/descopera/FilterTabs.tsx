@@ -17,7 +17,7 @@ function Tab({ label, active, onClick }: { label: string; active: boolean; onCli
     <button
       type="button"
       onClick={onClick}
-      className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+      className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-all active:scale-95 ${
         active
           ? "bg-primary text-primary-foreground"
           : "bg-muted/60 text-muted-foreground hover:text-foreground"

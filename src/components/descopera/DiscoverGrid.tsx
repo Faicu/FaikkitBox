@@ -98,13 +98,13 @@ export function DiscoverGrid({
               Serviciul TMDB este parțial indisponibil — rezultatele pot fi incomplete.
             </div>
           )}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-3 gap-3 stagger-in">
             {items.map((item) => (
               <button
                 key={`${item.mediaType}-${item.id}`}
                 type="button"
                 onClick={() => setSelected(item)}
-                className="group relative aspect-[2/3] overflow-hidden rounded-xl border border-border bg-muted/40 text-left"
+                className="group relative aspect-[2/3] overflow-hidden rounded-xl border border-border bg-muted/40 text-left transition-colors hover:border-primary/40"
               >
                 {item.posterUrl ? (
                   <img
@@ -145,7 +145,7 @@ export function DiscoverGrid({
               type="button"
               onClick={fetchMore}
               disabled={isFetchingNextPage}
-              className="w-full rounded-xl bg-muted/50 py-2 text-xs font-medium text-muted-foreground hover:bg-muted/80 hover:text-foreground transition-colors disabled:opacity-50"
+              className="w-full rounded-xl bg-muted/50 py-2 text-xs font-medium text-muted-foreground transition-all hover:bg-muted/80 hover:text-foreground active:scale-[0.98] disabled:opacity-50"
             >
               {isFetchingNextPage ? "Se încarcă..." : "Încarcă mai multe"}
             </button>

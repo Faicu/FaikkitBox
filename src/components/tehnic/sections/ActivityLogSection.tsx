@@ -123,7 +123,7 @@ export function ActivityLogSection() {
             <button
               key={g.key}
               onClick={() => setFilter(g.key)}
-              className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+              className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-all active:scale-95 ${
                 filter === g.key
                   ? "bg-primary text-primary-foreground"
                   : "bg-muted text-muted-foreground hover:text-foreground"
@@ -135,7 +135,11 @@ export function ActivityLogSection() {
         </div>
         <div className="rounded-2xl border border-border bg-card divide-y divide-border/50">
           {isLoading && (
-            <div className="px-3 py-4 text-xs text-muted-foreground text-center">Se încarcă...</div>
+            <div className="space-y-1.5 p-3">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="h-8 animate-pulse rounded-lg bg-muted/50" />
+              ))}
+            </div>
           )}
           {!isLoading && filtered.length === 0 && (
             <div className="px-3 py-4 text-xs text-muted-foreground text-center">

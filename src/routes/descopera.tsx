@@ -28,7 +28,7 @@ function DescoperaPage() {
         <button
           type="button"
           onClick={() => setMode("grid")}
-          className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+          className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all active:scale-95 ${
             mode === "grid"
               ? "bg-primary text-primary-foreground"
               : "bg-muted/60 text-muted-foreground hover:text-foreground"
@@ -39,7 +39,7 @@ function DescoperaPage() {
         <button
           type="button"
           onClick={() => setMode("feed")}
-          className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+          className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all active:scale-95 ${
             mode === "feed"
               ? "bg-primary text-primary-foreground"
               : "bg-muted/60 text-muted-foreground hover:text-foreground"

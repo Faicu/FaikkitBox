@@ -61,7 +61,11 @@ export function CommitStatsSection() {
       </h2>
       <div className="rounded-2xl border border-border bg-card">
         {isLoading ? (
-          <div className="px-3 py-4 text-xs text-muted-foreground text-center">Se încarcă...</div>
+          <div className="grid grid-cols-3 divide-x divide-border/50 p-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="h-8 animate-pulse rounded-md bg-muted/50 mx-1" />
+            ))}
+          </div>
         ) : (
           <div className="grid grid-cols-3 divide-x divide-border/50">
             <StatCell
@@ -90,7 +94,7 @@ export function CommitStatsSection() {
               key={c.sha}
               type="button"
               onClick={() => setSelectedUnpushed(c)}
-              className="w-full px-3 py-2 text-xs text-left hover:bg-muted/40 transition-colors"
+              className="w-full px-3 py-2 text-xs text-left transition-colors hover:bg-muted/40 active:bg-muted/60"
             >
               <div className="flex items-center gap-2">
                 <span className="shrink-0 font-mono text-muted-foreground">{c.shortSha}</span>
@@ -108,7 +112,7 @@ export function CommitStatsSection() {
         type="button"
         onClick={() => pushMutation.mutate()}
         disabled={pushMutation.isPending || ahead === 0}
-        className="flex w-full items-center justify-center gap-2 rounded-xl border border-sky-500/30 bg-sky-500/15 px-3 py-2.5 text-sm font-medium text-sky-400 hover:bg-sky-500/25 disabled:opacity-50"
+        className="flex w-full items-center justify-center gap-2 rounded-xl border border-sky-500/30 bg-sky-500/15 px-3 py-2.5 text-sm font-medium text-sky-400 transition-transform hover:bg-sky-500/25 active:scale-[0.98] disabled:opacity-50"
       >
         <UploadCloud className="h-4 w-4" />
         {pushMutation.isPending

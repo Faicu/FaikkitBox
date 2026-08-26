@@ -51,7 +51,7 @@ function FeedCard({ clip, isActive }: { clip: FeedClip; isActive: boolean }) {
               <button
                 type="button"
                 onClick={() => setWizardOpen(true)}
-                className="flex shrink-0 items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground hover:bg-primary/90"
+                className="flex shrink-0 items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground transition-transform hover:bg-primary/90 active:scale-[0.96]"
               >
                 <Plus className="h-3.5 w-3.5" /> Adaugă
               </button>
@@ -62,7 +62,7 @@ function FeedCard({ clip, isActive }: { clip: FeedClip; isActive: boolean }) {
               href={`https://www.imdb.com/title/${imdbId}/`}
               target="_blank"
               rel="noreferrer"
-              className="flex shrink-0 items-center gap-1 rounded-lg bg-white/15 px-3 py-2 text-xs font-medium text-white backdrop-blur hover:bg-white/25"
+              className="flex shrink-0 items-center gap-1 rounded-lg bg-white/15 px-3 py-2 text-xs font-medium text-white backdrop-blur transition-transform hover:bg-white/25 active:scale-[0.96]"
             >
               IMDb <ExternalLink className="h-3.5 w-3.5" />
             </a>
