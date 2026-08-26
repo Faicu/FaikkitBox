@@ -39,8 +39,10 @@ function UsersPage() {
       <TehnicSubNav />
 
       {isLoading ? (
-        <div className="rounded-2xl border border-border bg-card px-3 py-4 text-center text-xs text-muted-foreground">
-          Se încarcă...
+        <div className="space-y-2">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="h-14 animate-pulse rounded-2xl bg-muted/60" />
+          ))}
         </div>
       ) : (
         <>
@@ -116,12 +118,12 @@ function PendingSection({
       <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-amber-400 flex items-center gap-1.5">
         <Clock className="h-3.5 w-3.5" /> Cereri de aprobare ({pending.length})
       </h2>
-      <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 divide-y divide-amber-500/15">
+      <div className="glass-card rounded-2xl divide-y divide-amber-500/15 stagger-in">
         {pending.map((u) => (
           <div
             key={u.id}
             onClick={() => onSelect(u.id)}
-            className="flex items-start justify-between gap-2 px-3 py-3 cursor-pointer hover:bg-amber-500/10 transition-colors"
+            className="flex items-start justify-between gap-2 px-3 py-3 cursor-pointer transition-colors hover:bg-amber-500/10 active:bg-amber-500/15"
           >
             <div className="min-w-0">
               <div className="truncate text-sm font-medium">{u.username}</div>
@@ -137,7 +139,7 @@ function PendingSection({
                 }}
                 disabled={approveMutation.isPending || rejectMutation.isPending}
                 title="Aprobă"
-                className="rounded-md border border-emerald-500/30 bg-emerald-500/10 p-1.5 text-emerald-400 hover:bg-emerald-500/20 transition disabled:opacity-30"
+                className="rounded-md border border-emerald-500/30 bg-emerald-500/10 p-1.5 text-emerald-400 transition-transform hover:bg-emerald-500/20 active:scale-90 disabled:opacity-30"
               >
                 <UserCheck className="h-3.5 w-3.5" />
               </button>
@@ -151,7 +153,7 @@ function PendingSection({
                 }}
                 disabled={approveMutation.isPending || rejectMutation.isPending}
                 title="Respinge"
-                className="rounded-md border border-red-500/30 bg-red-500/10 p-1.5 text-red-400 hover:bg-red-500/20 transition disabled:opacity-30"
+                className="rounded-md border border-red-500/30 bg-red-500/10 p-1.5 text-red-400 transition-transform hover:bg-red-500/20 active:scale-90 disabled:opacity-30"
               >
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
@@ -188,7 +190,7 @@ function ApprovedUsersSection({
       <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
         <Users className="h-3.5 w-3.5" /> Utilizatori ({users.length})
       </h2>
-      <div className="rounded-2xl border border-border bg-card divide-y divide-border/50">
+      <div className="glass-card rounded-2xl divide-y divide-border/50 stagger-in">
         {users.length === 0 ? (
           <div className="px-3 py-4 text-xs text-muted-foreground text-center">
             Niciun utilizator aprobat.
@@ -198,7 +200,7 @@ function ApprovedUsersSection({
             <div
               key={u.id}
               onClick={() => onSelect(u.id)}
-              className="flex items-start justify-between gap-2 px-3 py-2.5 cursor-pointer hover:bg-muted/40 transition-colors"
+              className="flex items-start justify-between gap-2 px-3 py-2.5 cursor-pointer transition-colors hover:bg-muted/40 active:bg-muted/50"
             >
               <div className="min-w-0">
                 <div className="truncate text-sm font-medium">{u.username}</div>
@@ -213,7 +215,7 @@ function ApprovedUsersSection({
                 }}
                 disabled={deleteMutation.isPending}
                 title="Revocă accesul"
-                className="shrink-0 rounded-md border border-red-500/30 bg-red-500/10 p-1.5 text-red-400 hover:bg-red-500/20 transition disabled:opacity-30"
+                className="shrink-0 rounded-md border border-red-500/30 bg-red-500/10 p-1.5 text-red-400 transition-transform hover:bg-red-500/20 active:scale-90 disabled:opacity-30"
               >
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
@@ -274,7 +276,7 @@ function AdminSection({
         <ShieldCheck className="h-3.5 w-3.5" /> Conturi Admin
       </h2>
 
-      <div className="rounded-2xl border border-border bg-card divide-y divide-border/50">
+      <div className="glass-card rounded-2xl divide-y divide-border/50 stagger-in">
         {admins.length === 0 ? (
           <div className="px-3 py-4 text-xs text-muted-foreground text-center">Niciun cont.</div>
         ) : (
@@ -282,7 +284,7 @@ function AdminSection({
             <div
               key={u.id}
               onClick={() => onSelect(u.id)}
-              className="flex items-center justify-between gap-2 px-3 py-2.5 cursor-pointer hover:bg-muted/40 transition-colors"
+              className="flex items-center justify-between gap-2 px-3 py-2.5 cursor-pointer transition-colors hover:bg-muted/40 active:bg-muted/50"
             >
               <div className="min-w-0">
                 <div className="truncate text-sm font-medium">{u.username}</div>
@@ -298,7 +300,7 @@ function AdminSection({
                 }}
                 disabled={deleteMutation.isPending || admins.length <= 1}
                 title={admins.length <= 1 ? "Nu poți șterge singurul cont" : "Șterge contul"}
-                className="shrink-0 rounded-md border border-red-500/30 bg-red-500/10 p-1.5 text-red-400 hover:bg-red-500/20 transition disabled:opacity-30"
+                className="shrink-0 rounded-md border border-red-500/30 bg-red-500/10 p-1.5 text-red-400 transition-transform hover:bg-red-500/20 active:scale-90 disabled:opacity-30"
               >
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
@@ -337,7 +339,7 @@ function AdminSection({
         <button
           type="submit"
           disabled={addMutation.isPending || !username || password.length < 8}
-          className="w-full rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+          className="w-full rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-transform hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50"
         >
           {addMutation.isPending ? "Se adaugă..." : "Adaugă cont"}
         </button>

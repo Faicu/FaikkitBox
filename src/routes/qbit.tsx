@@ -126,6 +126,21 @@ function QbitPage() {
 
       {lastCmd && <CommandOutput command={lastCmd.command} result={lastCmd.result} />}
 
+      {isLoading && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-2">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="h-20 animate-pulse rounded-2xl bg-muted/60" />
+            ))}
+          </div>
+          <div className="space-y-2">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="h-16 animate-pulse rounded-2xl bg-muted/60" />
+            ))}
+          </div>
+        </div>
+      )}
+
       {data?.status === "error" &&
         (recovering ? (
           <div className="rounded-2xl border border-sky-500/30 bg-sky-500/10 p-3 text-sm text-sky-300">
@@ -144,14 +159,14 @@ function QbitPage() {
             <button
               onClick={() => mutation.mutate({ hashes: "all", action: "resume" })}
               disabled={pendingAll}
-              className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/15 px-3 py-2 text-sm font-medium text-emerald-400 hover:bg-emerald-500/25 disabled:opacity-50"
+              className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/15 px-3 py-2 text-sm font-medium text-emerald-400 transition-transform hover:bg-emerald-500/25 active:scale-[0.97] disabled:opacity-50"
             >
               <Play className="h-4 w-4" /> Reia toate
             </button>
             <button
               onClick={() => mutation.mutate({ hashes: "all", action: "pause" })}
               disabled={pendingAll}
-              className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-amber-500/30 bg-amber-500/15 px-3 py-2 text-sm font-medium text-amber-400 hover:bg-amber-500/25 disabled:opacity-50"
+              className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-amber-500/30 bg-amber-500/15 px-3 py-2 text-sm font-medium text-amber-400 transition-transform hover:bg-amber-500/25 active:scale-[0.97] disabled:opacity-50"
             >
               <Pause className="h-4 w-4" /> Oprește toate
             </button>
@@ -360,14 +375,17 @@ function QbitPage() {
                   Niciun rezultat pentru „{torrentSearch}".
                 </div>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-2 stagger-in">
                   {filteredTorrents.map((t) => {
                     const b = stateBadge(t.state);
                     const isPaused = /paus|stop/i.test(t.state);
                     const busy = pendingHash === t.hash;
                     const tone = stateTone(t.state);
                     return (
-                      <div key={t.hash} className="rounded-2xl border border-border bg-card p-3">
+                      <div
+                        key={t.hash}
+                        className="glass-card glass-card-hover rounded-2xl p-3"
+                      >
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
                             <div className="truncate text-sm font-medium">{t.name}</div>
@@ -392,7 +410,7 @@ function QbitPage() {
                               }
                               disabled={busy}
                               title={isPaused ? "Reia" : "Oprește"}
-                              className={`rounded-md border p-1 transition disabled:opacity-50 ${
+                              className={`rounded-md border p-1 transition-transform hover:transition-colors active:scale-[0.93] disabled:opacity-50 ${
                                 isPaused
                                   ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"
                                   : "border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20"
@@ -414,7 +432,7 @@ function QbitPage() {
                               }}
                               disabled={busy}
                               title="Șterge torrent + fișiere"
-                              className="rounded-md border border-red-500/30 bg-red-500/10 p-1 text-red-400 hover:bg-red-500/20 transition disabled:opacity-50"
+                              className="rounded-md border border-red-500/30 bg-red-500/10 p-1 text-red-400 transition-transform hover:bg-red-500/20 active:scale-[0.93] disabled:opacity-50"
                             >
                               <Trash2 className="h-3.5 w-3.5" />
                             </button>

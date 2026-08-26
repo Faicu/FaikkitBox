@@ -78,7 +78,16 @@ export function BibliotecaList() {
   }
 
   if (browse.isLoading) {
-    return <div className="text-sm text-muted-foreground px-1">Se încarcă biblioteca…</div>;
+    return (
+      <div className="space-y-3">
+        <div className="h-10 animate-pulse rounded-xl bg-muted/60" />
+        <div className="space-y-1.5 rounded-2xl border border-border bg-card p-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="h-9 animate-pulse rounded-lg bg-muted/50" />
+          ))}
+        </div>
+      </div>
+    );
   }
   if (browse.data?.status === "error") {
     return <div className="text-sm text-red-400 px-1">{browse.data.error}</div>;
@@ -115,7 +124,7 @@ export function BibliotecaList() {
           e.stopPropagation();
           setSelectedMediaId(item.mediaId);
         }}
-        className={`flex w-full items-center gap-2 rounded-lg bg-muted/40 px-2 py-1.5 text-left transition-colors hover:bg-muted/60 active:bg-muted ${indent ? "ml-4" : ""}`}
+        className={`flex w-full items-center gap-2 rounded-lg bg-muted/40 px-2 py-1.5 text-left transition-all hover:bg-muted/60 active:scale-[0.99] active:bg-muted ${indent ? "ml-4" : ""}`}
       >
         {item.thumbUrl ? (
           <img
@@ -191,8 +200,8 @@ export function BibliotecaList() {
       {rows.length === 0 ? (
         <div className="text-sm text-muted-foreground px-1">Niciun rezultat.</div>
       ) : (
-        <div className="rounded-2xl border border-border bg-card p-3">
-          <div className="space-y-1">
+        <div className="glass-card rounded-2xl p-3">
+          <div key={`${query}-${sortMode}`} className="space-y-1 stagger-in">
             {visibleRows.map((row) =>
               row.kind === "single" ? (
                 renderRow(row.item)
@@ -201,7 +210,7 @@ export function BibliotecaList() {
                   <button
                     type="button"
                     onClick={() => toggleGroup(row.key)}
-                    className="flex w-full items-center gap-2 rounded-lg bg-muted/40 px-2 py-1.5 text-left transition-colors hover:bg-muted/60 active:bg-muted"
+                    className="flex w-full items-center gap-2 rounded-lg bg-muted/40 px-2 py-1.5 text-left transition-all hover:bg-muted/60 active:scale-[0.99] active:bg-muted"
                   >
                     {row.items[0].thumbUrl ? (
                       <img
@@ -239,7 +248,7 @@ export function BibliotecaList() {
                             <button
                               type="button"
                               onClick={() => toggleSeason(seasonKey)}
-                              className="ml-4 flex w-[calc(100%-1rem)] items-center gap-2 rounded-lg bg-muted/30 px-2 py-1.5 text-left transition-colors hover:bg-muted/50 active:bg-muted"
+                              className="ml-4 flex w-[calc(100%-1rem)] items-center gap-2 rounded-lg bg-muted/30 px-2 py-1.5 text-left transition-all hover:bg-muted/50 active:scale-[0.99] active:bg-muted"
                             >
                               <span className="min-w-0 flex-1 truncate text-xs font-medium">
                                 Sezonul {seg.season}
@@ -271,7 +280,7 @@ export function BibliotecaList() {
             <button
               type="button"
               onClick={() => setVisible((v) => v + PAGE_SIZE)}
-              className="mt-1.5 w-full rounded-lg bg-muted/50 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground"
+              className="mt-1.5 w-full rounded-lg bg-muted/50 py-1.5 text-xs font-medium text-muted-foreground transition-all hover:bg-muted/80 hover:text-foreground active:scale-[0.98]"
             >
               Afișează mai mult
             </button>
