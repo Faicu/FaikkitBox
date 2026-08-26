@@ -41,6 +41,7 @@ export function BibliotecaList() {
   const [sortMode, setSortMode] = useState<SortMode>("recent");
   const [visible, setVisible] = useState(PAGE_SIZE);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [expandedSeasons, setExpandedSeasons] = useState<Set<string>>(new Set());
   const [selectedMediaId, setSelectedMediaId] = useState<number | null>(null);
   const [confirmDeleteTitle, setConfirmDeleteTitle] = useState<{
     mediaId: number;
@@ -88,6 +89,15 @@ export function BibliotecaList() {
 
   function toggleGroup(key: string) {
     setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  function toggleSeason(key: string) {
+    setExpandedSeasons((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
@@ -215,18 +225,42 @@ export function BibliotecaList() {
                   </button>
                   {expandedGroups.has(row.key) && (
                     <div className="mt-1 space-y-1">
-                      {groupBySeasonConsecutive(row.items).map((seg, idx) => (
-                        <div key={`${row.key}-s${seg.season ?? "x"}-${idx}`}>
-                          {seg.season != null && (
-                            <div className="ml-4 pb-1 pt-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                              Sezonul {seg.season}
+                      {groupBySeasonConsecutive(row.items).map((seg, idx) => {
+                        const seasonKey = `${row.key}-s${seg.season ?? "x"}-${idx}`;
+                        if (seg.season == null) {
+                          return (
+                            <div key={seasonKey} className="space-y-1">
+                              {seg.items.map((it) => renderRow(it, true))}
                             </div>
-                          )}
-                          <div className="space-y-1">
-                            {seg.items.map((it) => renderRow(it, true))}
+                          );
+                        }
+                        return (
+                          <div key={seasonKey}>
+                            <button
+                              type="button"
+                              onClick={() => toggleSeason(seasonKey)}
+                              className="ml-4 flex w-[calc(100%-1rem)] items-center gap-2 rounded-lg bg-muted/30 px-2 py-1.5 text-left transition-colors hover:bg-muted/50 active:bg-muted"
+                            >
+                              <span className="min-w-0 flex-1 truncate text-xs font-medium">
+                                Sezonul {seg.season}
+                              </span>
+                              <span className="flex shrink-0 items-center gap-1 rounded-full bg-blue-500/15 px-1.5 py-0.5 text-[10px] font-medium text-blue-400">
+                                <Layers className="h-2.5 w-2.5" /> {seg.items.length} episoade
+                              </span>
+                              {expandedSeasons.has(seasonKey) ? (
+                                <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                              ) : (
+                                <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                              )}
+                            </button>
+                            {expandedSeasons.has(seasonKey) && (
+                              <div className="mt-1 space-y-1">
+                                {seg.items.map((it) => renderRow(it, true))}
+                              </div>
+                            )}
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
