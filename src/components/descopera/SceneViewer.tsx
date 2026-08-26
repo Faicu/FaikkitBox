@@ -112,7 +112,7 @@ export function SceneViewer({ item, onClose }: { item: DiscoverTitle; onClose: (
               <button
                 type="button"
                 onClick={() => setWizardOpen(true)}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-primary py-3 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/20 transition-transform hover:bg-primary/90 active:scale-[0.99]"
+                className="border-flow flex w-full items-center justify-center gap-2 rounded-2xl bg-primary py-3 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/20 transition-transform hover:bg-primary/90 active:scale-[0.99]"
               >
                 <Plus className="h-4 w-4" /> Adaugă film/serial
               </button>

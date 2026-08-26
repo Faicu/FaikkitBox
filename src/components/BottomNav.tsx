@@ -26,12 +26,23 @@ export function BottomNav() {
     : admin.data?.isAuthenticated
       ? authItems
       : publicItems;
+  const activeIndex = items.findIndex((item) => item.to === pathname);
   return (
     <nav
       className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/60 bg-card/70 backdrop-blur-xl"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
-      <ul className="mx-auto flex max-w-2xl items-stretch justify-around">
+      <ul className="relative mx-auto flex max-w-2xl items-stretch justify-around">
+        {activeIndex !== -1 && (
+          <span
+            className="pointer-events-none absolute top-0 h-[2px] rounded-full bg-primary transition-[left] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+            style={{
+              left: `calc(${(activeIndex * 100) / items.length}% + 0.75rem)`,
+              width: `calc(${100 / items.length}% - 1.5rem)`,
+              boxShadow: "0 0 10px color-mix(in oklab, var(--primary) 80%, transparent)",
+            }}
+          />
+        )}
         {items.map((item) => {
           const active = pathname === item.to;
           const Icon = item.icon;
@@ -43,14 +54,6 @@ export function BottomNav() {
                   active ? "text-primary" : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                {active && (
-                  <span
-                    className="pointer-events-none absolute inset-x-3 top-0 h-[2px] rounded-full bg-primary"
-                    style={{
-                      boxShadow: "0 0 10px color-mix(in oklab, var(--primary) 80%, transparent)",
-                    }}
-                  />
-                )}
                 <Icon
                   className={`h-5 w-5 transition-all duration-300 ${active ? "scale-110" : "opacity-80"}`}
                   style={

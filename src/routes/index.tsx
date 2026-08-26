@@ -70,7 +70,7 @@ function Overview() {
         <button
           type="button"
           onClick={() => setWizardOpen(true)}
-          className="mb-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-border bg-card py-3 text-sm font-semibold text-foreground transition-colors hover:bg-muted/60 active:scale-[0.99]"
+          className="border-flow mb-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-border/60 bg-card py-3 text-sm font-semibold text-foreground transition-colors hover:bg-muted/60 active:scale-[0.99]"
         >
           <Plus className="h-4 w-4" /> Adaugă film/serial
         </button>
