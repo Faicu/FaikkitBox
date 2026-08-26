@@ -108,6 +108,14 @@ function HostPage() {
 
       <PushNotificationsCard push={push} />
 
+      {isLoading && (
+        <div className="grid grid-cols-2 gap-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="h-20 animate-pulse rounded-2xl bg-muted/60" />
+          ))}
+        </div>
+      )}
+
       {data?.status === "error" && (
         <ErrorCard title="Metrici indisponibile" message={data.error ?? "Eroare necunoscută"} />
       )}
