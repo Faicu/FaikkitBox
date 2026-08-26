@@ -23,10 +23,11 @@ function UsersPage() {
   const qc = useQueryClient();
   const [selectedId, setSelectedId] = useState<number | null>(null);
 
-  const { data: users = [], isLoading } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ["users"],
     queryFn: () => listFn(),
   });
+  const users = Array.isArray(data) ? data : [];
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["users"] });
 
