@@ -43,11 +43,11 @@ export const Route = createFileRoute("/")({
 });
 
 function Overview() {
-  const plex = useQuery(plexQuery);
-  const plexSessions = useQuery(plexSessionsQuery);
   const { data: adminData } = useQuery(adminStatusQuery);
   const isAuthenticated = !!adminData?.isAuthenticated;
   const isAdmin = !!adminData?.isAdmin;
+  const plex = useQuery({ ...plexQuery, enabled: isAuthenticated });
+  const plexSessions = useQuery({ ...plexSessionsQuery, enabled: isAuthenticated });
   const recentWatches = useQuery({
     ...recentWatchesQuery,
     enabled: isAuthenticated,
@@ -106,6 +106,7 @@ function Overview() {
         </div>
       )}
 
+      {isAuthenticated && (
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <ServiceRow
           className="sm:col-span-2"
@@ -271,6 +272,7 @@ function Overview() {
           )}
         </ServiceRow>
       </div>
+      )}
 
       {isAuthenticated && recentWatchItems.length > 0 && (
         <div className="mt-4 rounded-2xl border border-border bg-card p-4">
