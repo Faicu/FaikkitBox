@@ -30,7 +30,7 @@ import { SeasonAccordion } from "./wizard/SeasonAccordion";
 import type { EpisodeAvailability, SeasonRowData } from "./wizard/SeasonAccordion";
 
 type Quality = "720p" | "1080p" | "4K" | "4K HDR";
-type Step = "search" | "checking" | "result" | "confirm" | "done";
+type Step = "search" | "checking" | "result" | "pick" | "confirm" | "done";
 
 interface CheckResult {
   imdbId: string | null;
@@ -599,7 +599,7 @@ export function AddMediaWizard({
     }
     setPickedTorrentId(bestOf(candidates)!.id);
     setTorrentChoice({ ...ctx, candidates });
-    setStep("confirm");
+    setStep("pick");
   }
 
   function handleDownloadPack(season: SeasonRowData, torrents: FilelistTorrent[]) {
@@ -628,15 +628,12 @@ export function AddMediaWizard({
   // Descoperă), nu există pas de căutare la care să te întorci — înapoi
   // închide direct.
   function goBack() {
-    // Pasul "confirm" are două sub-ecrane (alegere torrent, apoi
-    // confirmare) — înapoi trece prin ele unul câte unul, revenind la
-    // "result" doar când niciunul nu mai e activ.
     if (step === "confirm") {
-      if (confirmTorrent) {
-        setConfirmTorrent(null);
-        if (!torrentChoice) setStep("result");
-        return;
-      }
+      setConfirmTorrent(null);
+      setStep(torrentChoice ? "pick" : "result");
+      return;
+    }
+    if (step === "pick") {
       setTorrentChoice(null);
       setStep("result");
       return;
@@ -660,11 +657,14 @@ export function AddMediaWizard({
   }
 
   // Pașii afișați în indicatorul de progres — sărim peste "Căutare" când
-  // wizard-ul a fost deschis prefill.
+  // wizard-ul a fost deschis prefill, la fel cum sărim peste "Alege torrent"
+  // când nu există de fapt o alegere de făcut (utilizator obișnuit, sau
+  // admin cu un singur candidat) — apare doar când chiar se ajunge acolo.
   const stepperSteps: Array<{ key: Step; label: string }> = [
     ...(initialItem ? [] : [{ key: "search" as Step, label: "Căutare" }]),
     { key: "checking", label: "Verificare" },
     { key: "result", label: "Rezultat" },
+    ...(torrentChoice || step === "pick" ? [{ key: "pick" as Step, label: "Alege torrent" }] : []),
     { key: "confirm", label: "Confirmare" },
   ];
   const effectiveStep = step === "search" && initialItem ? "checking" : step;
@@ -676,7 +676,7 @@ export function AddMediaWizard({
         <DialogContent className="top-8 flex max-h-[calc(100dvh-4rem)] w-[calc(100%-2rem)] max-w-md translate-y-0 flex-col gap-0 overflow-hidden rounded-2xl p-0 sm:w-full">
           <DialogHeader className="shrink-0 space-y-0 p-4 pb-0 text-left">
             <div className="flex items-center gap-2">
-              {(step === "result" || step === "confirm") && (
+              {(step === "result" || step === "pick" || step === "confirm") && (
                 <button
                   type="button"
                   disabled={busy}
@@ -907,60 +907,57 @@ export function AddMediaWizard({
               </div>
             )}
 
-            {step === "confirm" && (
+            {step === "pick" && torrentChoice && (
               <div className="animate-in fade-in slide-in-from-right-2 duration-200 space-y-4">
-                {torrentChoice && !confirmTorrent ? (
-                  <>
-                    <div className="text-sm font-semibold">
-                      Alege torrentul — {torrentChoice.label}
-                    </div>
-                    <TorrentPicker
-                      matches={torrentChoice.candidates}
-                      selectedId={pickedTorrentId ?? torrentChoice.candidates[0].id}
-                      onSelect={setPickedTorrentId}
-                    />
-                    <ActionButton
-                      busy={false}
-                      icon={<Download className="h-4 w-4" />}
-                      label="Continuă"
-                      onClick={() => {
-                        const chosen =
-                          torrentChoice.candidates.find((t) => t.id === pickedTorrentId) ??
-                          bestOf(torrentChoice.candidates)!;
-                        setConfirmTorrent({
-                          torrent: chosen,
-                          label: torrentChoice.label,
-                          season: torrentChoice.season,
-                          episode: torrentChoice.episode,
-                          isSeasonPack: torrentChoice.isSeasonPack,
-                        });
-                      }}
-                    />
-                  </>
-                ) : (
-                  confirmTorrent && (
-                    <>
-                      <div className="text-sm font-semibold">Confirmare descărcare</div>
-                      <DownloadConfirmFields
-                        torrent={confirmTorrent.torrent}
-                        label={confirmTorrent.label}
-                        onCancel={() => {
-                          setConfirmTorrent(null);
-                          if (!torrentChoice) setStep("result");
-                        }}
-                        onConfirm={() => {
-                          downloadOne(confirmTorrent.torrent, {
-                            season: confirmTorrent.season ?? null,
-                            episode: confirmTorrent.episode ?? null,
-                            isSeasonPack: confirmTorrent.isSeasonPack ?? false,
-                          });
-                          setConfirmTorrent(null);
-                          setTorrentChoice(null);
-                        }}
-                      />
-                    </>
-                  )
-                )}
+                <div className="text-sm font-semibold">
+                  Alege torrentul — {torrentChoice.label}
+                </div>
+                <TorrentPicker
+                  matches={torrentChoice.candidates}
+                  selectedId={pickedTorrentId ?? torrentChoice.candidates[0].id}
+                  onSelect={setPickedTorrentId}
+                />
+                <ActionButton
+                  busy={false}
+                  icon={<Download className="h-4 w-4" />}
+                  label="Continuă"
+                  onClick={() => {
+                    const chosen =
+                      torrentChoice.candidates.find((t) => t.id === pickedTorrentId) ??
+                      bestOf(torrentChoice.candidates)!;
+                    setConfirmTorrent({
+                      torrent: chosen,
+                      label: torrentChoice.label,
+                      season: torrentChoice.season,
+                      episode: torrentChoice.episode,
+                      isSeasonPack: torrentChoice.isSeasonPack,
+                    });
+                    setStep("confirm");
+                  }}
+                />
+              </div>
+            )}
+
+            {step === "confirm" && confirmTorrent && (
+              <div className="animate-in fade-in slide-in-from-right-2 duration-200 space-y-4">
+                <div className="text-sm font-semibold">Confirmare descărcare</div>
+                <DownloadConfirmFields
+                  torrent={confirmTorrent.torrent}
+                  label={confirmTorrent.label}
+                  onCancel={() => {
+                    setConfirmTorrent(null);
+                    setStep(torrentChoice ? "pick" : "result");
+                  }}
+                  onConfirm={() => {
+                    downloadOne(confirmTorrent.torrent, {
+                      season: confirmTorrent.season ?? null,
+                      episode: confirmTorrent.episode ?? null,
+                      isSeasonPack: confirmTorrent.isSeasonPack ?? false,
+                    });
+                    setConfirmTorrent(null);
+                    setTorrentChoice(null);
+                  }}
+                />
               </div>
             )}
 
