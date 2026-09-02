@@ -657,7 +657,19 @@ export function AddMediaWizard({
 
   return (
     <>
-      <Dialog open={open} onOpenChange={(o) => !o && !busy && handleClose()}>
+      <Dialog
+        open={open}
+        onOpenChange={(o) => !o && !busy && handleClose()}
+        // Radix face trap de focus pe DialogContent chiar și când elementul
+        // focusat trăiește într-un alt portal din body (ex. overlay-ul
+        // inline al DownloadConfirmDialog) — orice click în inputul de
+        // căutare din acel overlay era refocusat instant înapoi în
+        // DialogContent, ceea ce făcea imposibilă scrierea în câmp (butoanele
+        // tot funcționau, fiindcă acelea au nevoie doar de un singur click,
+        // nu de focus susținut). Dezactivăm modal-ul cât timp propriul nostru
+        // overlay (cu backdrop opac deja desenat manual) e deschis.
+        modal={!confirmTorrent && !torrentChoice}
+      >
         <DialogContent className="top-8 flex max-h-[calc(100dvh-4rem)] w-[calc(100%-2rem)] max-w-md translate-y-0 flex-col gap-0 overflow-hidden rounded-2xl p-0 sm:w-full">
           <DialogHeader className="shrink-0 space-y-0 p-4 pb-0 text-left">
             <div className="flex items-center gap-2">
