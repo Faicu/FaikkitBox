@@ -29,11 +29,12 @@ function isTorrentComplete(progress: number, state: string): boolean {
 
 // Calculează infohash-ul unui .torrent local, direct din bytes, fără să
 // întrebe qBittorrent — infohash-ul e definit ca SHA1 peste dicționarul
-// bencode "info" din fișier, deci e determinist și disponibil imediat, spre
-// deosebire de findTorrentHashByName (mai jos), care caută prin listă după
-// nume și poate eșua dacă numele intern din .torrent diferă de titlul
-// afișat pe Filelist (ex. uploader care redenumește fișierul după listare —
-// "Ok.The.Crown.S02..." în loc de "The.Crown.S02...DTS...", 2026-09-02).
+// bencode "info" din fișier, deci e determinist și disponibil imediat.
+// Înlocuiește o variantă veche care căuta hash-ul prin lista qBittorrent
+// după nume normalizat, care eșua când numele intern din .torrent diferea
+// de titlul afișat pe Filelist (ex. uploader care redenumește fișierul
+// după listare — "Ok.The.Crown.S02..." în loc de "The.Crown.S02...DTS...",
+// 2026-09-02).
 function bencodeStringAt(buf: Buffer, start: number): { value: string; end: number } {
   const colon = buf.indexOf(0x3a, start);
   const len = parseInt(buf.toString("ascii", start, colon), 10);
@@ -86,66 +87,6 @@ function computeTorrentInfoHash(torrentBuffer: ArrayBuffer): string | null {
     console.warn("[filelist] Nu am putut calcula infohash local din .torrent:", e);
     return null;
   }
-}
-
-// Caută hash-ul unui torrent proaspăt adăugat, după nume — cu reîncercări.
-// La un singur apel imediat după upload, torrentul poate lipsi încă din
-// lista celor mai recente (metadata neînregistrată complet în qBittorrent),
-// sau poate fi "ascuns" de alte torrente adăugate în aceeași fereastră de
-// câteva minute — de-asta creștem limit-ul și reîncercăm cu pauză, în loc
-// de un singur `sleep + fetch` (a cauzat cazuri reale de hash nedisponibil,
-// vezi jurnalul de erori: Hellraiser II 2026-08-08).
-// 10 încercări × 2s = 20s — fereastra de 10s de dinainte (5×2s) era prea
-// scurtă la două descărcări pornite aproape simultan din Descoperă (2026-08-25,
-// "Orașul Motor" a rămas fără hash cât timp Pinocchio se procesa în paralel);
-// limit crescut la 50 din același motiv — nu doar timpul, ci și poziția în
-// listă contează când sunt mai multe torrente adăugate recent.
-async function findTorrentHashByName(
-  qbitUrl: string,
-  cookie: string,
-  torrentName: string,
-  attempts = 10,
-  delayMs = 2000,
-): Promise<string | null> {
-  const needle = String(torrentName)
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "");
-  for (let i = 0; i < attempts; i++) {
-    await new Promise((r) => setTimeout(r, delayMs));
-    try {
-      const listRes = await fetch(
-        `${qbitUrl}/api/v2/torrents/info?sort=added_on&reverse=true&limit=50`,
-        { headers: { Cookie: cookie }, signal: AbortSignal.timeout(10_000) },
-      );
-      if (listRes.ok) {
-        const list: QbitTorrentInfo[] = await listRes.json();
-        // Potrivire exactă pe numele normalizat — numele torrentului în
-        // qBittorrent vine direct din .torrent-ul descărcat de la Filelist,
-        // deci ar trebui să fie identic cu `torrentName` primit. O potrivire
-        // prin `includes()` pe doar primele 30 de caractere (varianta veche)
-        // putea confunda două descărcări cu nume aproape identice pornite în
-        // aceeași fereastră (ex. episoade consecutive ale aceluiași serial),
-        // legând hash-ul greșit de rândul `media` greșit.
-        //
-        // Torrentele cu un singur fișier apar în qBittorrent cu extensia
-        // fișierului la coadă (ex. "...playWEB.mkv"), pe care numele de la
-        // Filelist n-o are — exact-match strict eșua mereu în cazul ăsta
-        // ("Lanterns" S01E02, 2026-08-25). Comparăm și varianta cu o
-        // extensie video obișnuită tăiată de la coadă.
-        const exactMatch = list.find((t) => {
-          const rawName = String(t.name ?? "").toLowerCase();
-          const hay = rawName.replace(/[^a-z0-9]/g, "");
-          if (hay === needle) return true;
-          const withoutExt = rawName.replace(/\.(mkv|mp4|avi|ts|m4v)$/, "");
-          return withoutExt.replace(/[^a-z0-9]/g, "") === needle;
-        });
-        if (exactMatch?.hash) return exactMatch.hash;
-      }
-    } catch (e) {
-      console.warn("[filelist] Nu am putut obține hash-ul torrentului:", e);
-    }
-  }
-  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -298,17 +239,14 @@ async function resumeOrphanedPolls(): Promise<void> {
     );
     for (const entry of orphaned) {
       const plexType = isMovieCategory(entry.category) ? "movie" : "show";
-      const hash = entry.torrentHash
-        ? entry.torrentHash
-        : await findTorrentHashByName(url, cookie, entry.name, 5, 2000);
-      if (!hash) {
-        console.warn(`[filelist] Resume: hash tot indisponibil pentru "${entry.name}"`);
+      if (!entry.torrentHash) {
+        console.warn(`[filelist] Resume: hash indisponibil pentru "${entry.name}" — skip`);
         continue;
       }
       pollUntilComplete(
         url,
         cookie,
-        hash,
+        entry.torrentHash,
         plexType,
         entry.name,
         entry.id,
@@ -514,12 +452,9 @@ async function downloadFilelistCore(
       console.warn("qBit upload răspuns neașteptat:", uploadText);
     }
 
-    // 5-7. Restul (găsire hash, jurnalizare, notificare, scriere media,
-    // pornire polling) rulează în fundal, fără să blocheze răspunsul —
-    // findTorrentHashByName poate aștepta până la 10s (reîncercări) până
-    // torrentul apare în lista qBittorrent, iar clientul n-are nevoie de
-    // hash ca să știe că upload-ul a reușit (apăsarea "Descarcă" nu mai
-    // pare blocată câteva secunde bune).
+    // 5-7. Restul (jurnalizare, notificare, scriere media, pornire polling)
+    // rulează în fundal, fără să blocheze răspunsul — clientul n-are nevoie
+    // de hash ca să știe că upload-ul a reușit.
     const catName = params.categoryName || CATEGORY_NAMES[catId] || `Cat ${catId}`;
     finishFilelistDownload({
       params,
@@ -531,7 +466,7 @@ async function downloadFilelistCore(
       cookie,
       qbitUser,
       qbitPass,
-      localHash: computeTorrentInfoHash(torrentBuffer),
+      torrentHash: computeTorrentInfoHash(torrentBuffer),
     }).catch((e) => console.error("[filelist] Eroare la finalizarea descărcării în fundal:", e));
 
     return { status: "ok", torrentName: params.torrentName, savePath };
@@ -553,15 +488,10 @@ async function finishFilelistDownload(ctx: {
   cookie: string;
   qbitUser: string;
   qbitPass: string;
-  localHash: string | null;
+  torrentHash: string | null;
 }): Promise<void> {
-  const { params, catId, catName, savePath, isMovie, url, cookie, qbitUser, qbitPass, localHash } =
+  const { params, catId, catName, savePath, isMovie, url, cookie, qbitUser, qbitPass, torrentHash } =
     ctx;
-
-  // 5. Hash-ul torrentului — calculat local din .torrent (determinist,
-  // instant) dacă e disponibil; căutarea după nume în qBittorrent rămâne
-  // doar fallback pentru cazul rar în care parsarea bencode locală eșuează.
-  const torrentHash = localHash ?? (await findTorrentHashByName(url, cookie, params.torrentName));
 
   // 6. Scrie în `media` ÎNAINTE de notificare — sursă unică pentru titlu/
   // poster, ca notificarea (mai jos) să le citească de-acolo, nu să le
