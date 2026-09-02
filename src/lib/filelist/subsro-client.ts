@@ -52,13 +52,10 @@ export async function searchSubsRo(imdbId: string): Promise<SubsRoItem[]> {
   }
 
   try {
-    const res = await fetch(
-      `${API_BASE}/search/imdbid/${encodeURIComponent(ttImdbId)}`,
-      {
-        headers: { "X-Subs-Api-Key": key, Accept: "application/json" },
-        signal: AbortSignal.timeout(15_000),
-      },
-    );
+    const res = await fetch(`${API_BASE}/search/imdbid/${encodeURIComponent(ttImdbId)}`, {
+      headers: { "X-Subs-Api-Key": key, Accept: "application/json" },
+      signal: AbortSignal.timeout(15_000),
+    });
     if (!res.ok) {
       console.warn(`[subsro] căutare ${ttImdbId} eșuată — HTTP ${res.status} ${res.statusText}`);
       return [];
@@ -111,7 +108,9 @@ export async function downloadSubsRoZip(id: number): Promise<Buffer | null> {
       signal: AbortSignal.timeout(20_000),
     });
     if (!res.ok) {
-      console.warn(`[subsro] descărcare arhivă ${id} eșuată — HTTP ${res.status} ${res.statusText}`);
+      console.warn(
+        `[subsro] descărcare arhivă ${id} eșuată — HTTP ${res.status} ${res.statusText}`,
+      );
       return null;
     }
     return Buffer.from(await res.arrayBuffer());
@@ -194,7 +193,9 @@ async function extractSrtEntriesFromRar(buf: Buffer): Promise<SubsRoSrtEntry[]> 
 // dintr-un .rar tratat ca .zip era indistinguibil de „0 fișiere .srt").
 export async function extractSrtEntries(buf: Buffer): Promise<SubsRoSrtEntry[]> {
   try {
-    const entries = isRarArchive(buf) ? await extractSrtEntriesFromRar(buf) : extractSrtEntriesFromZip(buf);
+    const entries = isRarArchive(buf)
+      ? await extractSrtEntriesFromRar(buf)
+      : extractSrtEntriesFromZip(buf);
     if (entries.length === 0) {
       console.warn(
         `[subsro] arhivă (${isRarArchive(buf) ? "rar" : "zip"}, ${buf.length} bytes) — 0 fișiere .srt extrase`,

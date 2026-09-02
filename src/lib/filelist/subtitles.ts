@@ -102,7 +102,10 @@ export async function ensureRomanianSubtitle(
   const { qbitUrl, qbitUser, qbitPass, torrentHash, torrentName } = params;
 
   const [files, savePath, imdbLookup] = await Promise.all([
-    qbitListFiles(qbitUrl, torrentHash, qbitUser, qbitPass),
+    // Eroare la listare (ex. hash care nu mai există în qBittorrent — torrent
+    // șters manual chiar înainte de un backfill) nu trebuie să arunce
+    // necapturat; tratăm la fel ca o listă goală, mai jos (no_media_file).
+    qbitListFiles(qbitUrl, torrentHash, qbitUser, qbitPass).catch(() => []),
     getTorrentSavePath(qbitUrl, torrentHash, qbitUser, qbitPass),
     // Dacă avem deja IMDb id (torrent descărcat prin site), luăm doar
     // titlul. Dacă nu (torrent adăugat manual în qBittorrent), încercăm să
@@ -220,7 +223,7 @@ export async function deleteRomanianSubtitle(params: {
 }): Promise<DeleteSubtitleResult> {
   const { qbitUrl, qbitUser, qbitPass, torrentHash } = params;
   const [files, savePath] = await Promise.all([
-    qbitListFiles(qbitUrl, torrentHash, qbitUser, qbitPass),
+    qbitListFiles(qbitUrl, torrentHash, qbitUser, qbitPass).catch(() => []),
     getTorrentSavePath(qbitUrl, torrentHash, qbitUser, qbitPass),
   ]);
   if (!files.length || !savePath) {

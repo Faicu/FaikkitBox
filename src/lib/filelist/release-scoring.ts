@@ -128,9 +128,13 @@ export function pickBestByRelease<T>(
   if (!candidates.length) return null;
 
   const target = extractTags(targetName);
-  const maxCriteria = [target.resolution, target.acquisition, target.platform, target.codec, target.group].filter(
-    (t) => t !== null,
-  ).length;
+  const maxCriteria = [
+    target.resolution,
+    target.acquisition,
+    target.platform,
+    target.codec,
+    target.group,
+  ].filter((t) => t !== null).length;
 
   let best: T | null = null;
   let bestScore = -1;
