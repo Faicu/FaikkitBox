@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { writeFile, unlink, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createHash } from "node:crypto";
 import type { FilelistDownloadResult, QbitTorrentInfo } from "./types";
 import { CATEGORY_NAMES, parseCategoryId, isMovieCategory } from "./categories";
 import { downloadTorrentFile } from "./filelist-client";
@@ -24,6 +25,67 @@ function isTorrentComplete(progress: number, state: string): boolean {
     progress >= 1 &&
     (state.includes("UP") || state === "uploading" || state === "pausedUP" || state === "stalledUP")
   );
+}
+
+// Calculează infohash-ul unui .torrent local, direct din bytes, fără să
+// întrebe qBittorrent — infohash-ul e definit ca SHA1 peste dicționarul
+// bencode "info" din fișier, deci e determinist și disponibil imediat, spre
+// deosebire de findTorrentHashByName (mai jos), care caută prin listă după
+// nume și poate eșua dacă numele intern din .torrent diferă de titlul
+// afișat pe Filelist (ex. uploader care redenumește fișierul după listare —
+// "Ok.The.Crown.S02..." în loc de "The.Crown.S02...DTS...", 2026-09-02).
+function bencodeStringAt(buf: Buffer, start: number): { value: string; end: number } {
+  const colon = buf.indexOf(0x3a, start);
+  const len = parseInt(buf.toString("ascii", start, colon), 10);
+  const strStart = colon + 1;
+  const strEnd = strStart + len;
+  return { value: buf.toString("latin1", strStart, strEnd), end: strEnd };
+}
+
+function bencodeSkip(buf: Buffer, start: number): number {
+  const c = buf[start];
+  if (c === 0x69 /* 'i' */) {
+    const end = buf.indexOf(0x65, start);
+    return end + 1;
+  }
+  if (c >= 0x30 && c <= 0x39 /* '0'-'9' -> string */) {
+    return bencodeStringAt(buf, start).end;
+  }
+  if (c === 0x6c /* 'l' */) {
+    let pos = start + 1;
+    while (buf[pos] !== 0x65) pos = bencodeSkip(buf, pos);
+    return pos + 1;
+  }
+  if (c === 0x64 /* 'd' */) {
+    let pos = start + 1;
+    while (buf[pos] !== 0x65) {
+      pos = bencodeSkip(buf, pos); // cheie
+      pos = bencodeSkip(buf, pos); // valoare
+    }
+    return pos + 1;
+  }
+  throw new Error(`bencode invalid la offset ${start}`);
+}
+
+function computeTorrentInfoHash(torrentBuffer: ArrayBuffer): string | null {
+  try {
+    const buf = Buffer.from(torrentBuffer);
+    if (buf[0] !== 0x64 /* 'd' */) return null;
+    let pos = 1;
+    while (buf[pos] !== 0x65) {
+      const key = bencodeStringAt(buf, pos);
+      pos = key.end;
+      if (key.value === "info") {
+        const valueEnd = bencodeSkip(buf, pos);
+        return createHash("sha1").update(buf.subarray(pos, valueEnd)).digest("hex");
+      }
+      pos = bencodeSkip(buf, pos);
+    }
+    return null;
+  } catch (e) {
+    console.warn("[filelist] Nu am putut calcula infohash local din .torrent:", e);
+    return null;
+  }
 }
 
 // Caută hash-ul unui torrent proaspăt adăugat, după nume — cu reîncercări.
@@ -469,6 +531,7 @@ async function downloadFilelistCore(
       cookie,
       qbitUser,
       qbitPass,
+      localHash: computeTorrentInfoHash(torrentBuffer),
     }).catch((e) => console.error("[filelist] Eroare la finalizarea descărcării în fundal:", e));
 
     return { status: "ok", torrentName: params.torrentName, savePath };
@@ -490,11 +553,15 @@ async function finishFilelistDownload(ctx: {
   cookie: string;
   qbitUser: string;
   qbitPass: string;
+  localHash: string | null;
 }): Promise<void> {
-  const { params, catId, catName, savePath, isMovie, url, cookie, qbitUser, qbitPass } = ctx;
+  const { params, catId, catName, savePath, isMovie, url, cookie, qbitUser, qbitPass, localHash } =
+    ctx;
 
-  // 5. Găsește hash-ul torrentului proaspăt adăugat (cu reîncercări)
-  const torrentHash = await findTorrentHashByName(url, cookie, params.torrentName);
+  // 5. Hash-ul torrentului — calculat local din .torrent (determinist,
+  // instant) dacă e disponibil; căutarea după nume în qBittorrent rămâne
+  // doar fallback pentru cazul rar în care parsarea bencode locală eșuează.
+  const torrentHash = localHash ?? (await findTorrentHashByName(url, cookie, params.torrentName));
 
   // 6. Scrie în `media` ÎNAINTE de notificare — sursă unică pentru titlu/
   // poster, ca notificarea (mai jos) să le citească de-acolo, nu să le
