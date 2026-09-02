@@ -506,9 +506,56 @@ export interface RecentWatch {
   show: string | null;
   season: number | null;
   episode: number | null;
+  episodeEnd: number | null;
   thumbUrl: string | null;
   username: string;
   viewedAt: number;
+}
+
+// Unește episoade consecutive din același serial/sezon/user într-un singur
+// card (ex. S02E03-E05), ca "Vizionări recente" să nu se umple cu rânduri
+// separate pentru un maraton de episoade — grupare pur pe array-ul deja
+// calculat, fără nicio schimbare de schemă.
+function mergeConsecutiveEpisodes(items: RecentWatch[]): RecentWatch[] {
+  const episodeGroups = new Map<string, RecentWatch[]>();
+  const rest: RecentWatch[] = [];
+
+  for (const item of items) {
+    if (item.show == null || item.season == null || item.episode == null) {
+      rest.push(item);
+      continue;
+    }
+    const key = `${item.username}|${item.show}|${item.season}`;
+    const group = episodeGroups.get(key);
+    if (group) group.push(item);
+    else episodeGroups.set(key, [item]);
+  }
+
+  const merged: RecentWatch[] = [...rest];
+  for (const group of episodeGroups.values()) {
+    group.sort((a, b) => (a.episode ?? 0) - (b.episode ?? 0));
+    let run: RecentWatch[] = [];
+    const flush = () => {
+      if (run.length === 0) return;
+      const latest = run.reduce((a, b) => (b.viewedAt > a.viewedAt ? b : a));
+      merged.push({
+        ...latest,
+        episode: run[0].episode,
+        episodeEnd: run.length > 1 ? run[run.length - 1].episode : null,
+      });
+      run = [];
+    };
+    for (const item of group) {
+      const last = run[run.length - 1];
+      if (last && item.episode === (last.episode ?? 0) + 1) run.push(item);
+      else {
+        flush();
+        run = [item];
+      }
+    }
+    flush();
+  }
+  return merged;
 }
 
 const RECENT_WATCH_WINDOW_SECONDS = 7 * 24 * 60 * 60;
@@ -567,14 +614,16 @@ export const getRecentWatches = createServerFn({ method: "GET" }).handler(
             show: isEpisode ? row.title : null,
             season: row.season,
             episode: row.episode,
+            episodeEnd: null,
             thumbUrl: row.poster_path,
             username,
             viewedAt,
           });
         }
       }
-      items.sort((a, b) => b.viewedAt - a.viewedAt);
-      return { status: "ok", items: items.slice(0, 8) };
+      const merged = mergeConsecutiveEpisodes(items);
+      merged.sort((a, b) => b.viewedAt - a.viewedAt);
+      return { status: "ok", items: merged.slice(0, 8) };
     } catch (e) {
       return { status: "error", error: e instanceof Error ? e.message : String(e) };
     }

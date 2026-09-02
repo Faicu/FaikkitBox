@@ -301,7 +301,11 @@ function Overview() {
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-semibold">
                     {it.show
-                      ? `${it.show}${it.season != null && it.episode != null ? ` — S${String(it.season).padStart(2, "0")}E${String(it.episode).padStart(2, "0")}` : ""}`
+                      ? `${it.show}${
+                          it.season != null && it.episode != null
+                            ? ` — S${String(it.season).padStart(2, "0")}E${String(it.episode).padStart(2, "0")}${it.episodeEnd != null ? `-E${String(it.episodeEnd).padStart(2, "0")}` : ""}`
+                            : ""
+                        }`
                       : it.title}
                   </div>
                   <div className="truncate text-[11px] text-muted-foreground">
