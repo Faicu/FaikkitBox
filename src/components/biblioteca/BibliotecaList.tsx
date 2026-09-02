@@ -47,6 +47,7 @@ export function BibliotecaList() {
     mediaId: number;
     title: string;
     isSeasonPack: boolean;
+    isCancel: boolean;
   } | null>(null);
   const deleteEntryFn = useServerFn(deleteMediaEntry);
 
@@ -64,17 +65,24 @@ export function BibliotecaList() {
 
   async function confirmDeleteTitleAction() {
     if (!confirmDeleteTitle) return;
-    const { mediaId } = confirmDeleteTitle;
+    const { mediaId, isCancel } = confirmDeleteTitle;
     const res = await deleteEntryFn({ data: { mediaId } });
     setConfirmDeleteTitle(null);
     if (!res.ok) {
-      toast.error("Nu am putut șterge titlul", { description: res.error });
+      toast.error(isCancel ? "Nu am putut anula descărcarea" : "Nu am putut șterge titlul", {
+        description: res.error,
+      });
       return;
     }
     setSelectedMediaId(null);
     queryClient.invalidateQueries({ queryKey: ["plexLibraryBrowse"] });
-    if (res.qbitDeleted) toast.success("Titlu șters complet — fișiere + qBittorrent + Plex");
-    else toast.warning("Șters din jurnal, dar nu am putut confirma ștergerea din qBittorrent");
+    if (res.qbitDeleted) {
+      toast.success(
+        isCancel ? "Descărcare anulată — fișiere + qBittorrent" : "Titlu șters complet — fișiere + qBittorrent + Plex",
+      );
+    } else {
+      toast.warning("Șters din jurnal, dar nu am putut confirma ștergerea din qBittorrent");
+    }
   }
 
   if (browse.isLoading) {
@@ -313,11 +321,17 @@ export function BibliotecaList() {
               onClick={(e) => e.stopPropagation()}
               className="w-full max-w-sm space-y-4 rounded-2xl border border-border bg-card p-5 shadow-xl"
             >
-              <div className="text-sm font-semibold">Ștergere completă</div>
+              <div className="text-sm font-semibold">
+                {confirmDeleteTitle.isCancel ? "Anulare descărcare" : "Ștergere completă"}
+              </div>
               <p className="whitespace-pre-line text-sm text-muted-foreground">
-                {confirmDeleteTitle.isSeasonPack
-                  ? `Acest episod face parte dintr-un pachet de sezon — ștergerea elimină TOT pachetul (toate episoadele lui), din jurnal, din qBittorrent și de pe disk, apoi rescanează Plex.\n\n${confirmDeleteTitle.title}`
-                  : `Ștergi titlul din jurnal, din qBittorrent și fișierele de pe disk, apoi rescanezi Plex?\n\n${confirmDeleteTitle.title}`}
+                {confirmDeleteTitle.isCancel
+                  ? confirmDeleteTitle.isSeasonPack
+                    ? `Acest episod face parte dintr-un pachet de sezon — anularea elimină TOT pachetul (toate episoadele lui), din jurnal, din qBittorrent și fișierele descărcate parțial de pe disk.\n\n${confirmDeleteTitle.title}`
+                    : `Anulezi descărcarea titlului? Torrentul și fișierele descărcate parțial vor fi șterse din qBittorrent și de pe disk.\n\n${confirmDeleteTitle.title}`
+                  : confirmDeleteTitle.isSeasonPack
+                    ? `Acest episod face parte dintr-un pachet de sezon — ștergerea elimină TOT pachetul (toate episoadele lui), din jurnal, din qBittorrent și de pe disk, apoi rescanează Plex.\n\n${confirmDeleteTitle.title}`
+                    : `Ștergi titlul din jurnal, din qBittorrent și fișierele de pe disk, apoi rescanezi Plex?\n\n${confirmDeleteTitle.title}`}
               </p>
               <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:space-x-2">
                 <button
@@ -325,14 +339,14 @@ export function BibliotecaList() {
                   onClick={() => setConfirmDeleteTitle(null)}
                   className="rounded-lg border border-border px-4 py-2 text-sm text-muted-foreground hover:bg-muted/60"
                 >
-                  Anulează
+                  Renunță
                 </button>
                 <button
                   type="button"
                   onClick={confirmDeleteTitleAction}
                   className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
                 >
-                  Șterge
+                  {confirmDeleteTitle.isCancel ? "Anulează descărcarea" : "Șterge"}
                 </button>
               </div>
             </div>
