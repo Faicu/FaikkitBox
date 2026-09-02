@@ -876,21 +876,48 @@ async function processSeasonPack(params: ProcessSeasonPackParams): Promise<Subti
       (f) => f.name.toLowerCase().endsWith(".srt") && extractEpisodeKey(f.name) === episodeKey,
     );
 
+    // La fel ca la film — verificăm ÎNTÂI conținutul, nu presupunem că
+    // fiindcă e singurul .srt al episodului, e automat română (lansările pot
+    // avea subtitrare engleză bundle-uită per episod).
     if (episodeSrtFiles.length === 1) {
-      const { outcome, detail } = await handleTrackedSrt(
-        episodeSrtFiles[0],
-        targetSrtRelPath,
-        mediaFile.piece_range,
-        {
-          qbitUrl,
-          torrentHash,
-          qbitUser,
-          qbitPass,
-          savePath,
-        },
-      );
-      episodeResults.push({ episodeKey, outcome, detail });
-      continue;
+      const existingAbsPath = join(savePath, episodeSrtFiles[0].name);
+      const existingBuf = await readFile(existingAbsPath).catch(() => null);
+      const existingText = existingBuf ? decodeToUtf8Text(existingBuf).text : "";
+
+      if (existingBuf && looksRomanian(existingText)) {
+        const { outcome, detail } = await handleTrackedSrt(
+          episodeSrtFiles[0],
+          targetSrtRelPath,
+          mediaFile.piece_range,
+          {
+            qbitUrl,
+            torrentHash,
+            qbitUser,
+            qbitPass,
+            savePath,
+          },
+        );
+        episodeResults.push({ episodeKey, outcome, detail });
+        continue;
+      }
+
+      // Nu pare română — redenumim ca .en (evită preluarea greșită de Plex ca
+      // subtitrare implicită) și continuăm mai jos să căutăm o subtitrare
+      // română reală, fără să atingem targetSrtRelPath.
+      if (existingBuf) {
+        const nonRoTarget =
+          mediaDir === "." ? `${mediaBaseName}.en.srt` : `${mediaDir}/${mediaBaseName}.en.srt`;
+        if (episodeSrtFiles[0].name !== nonRoTarget) {
+          await qbitRenameFile(
+            qbitUrl,
+            torrentHash,
+            episodeSrtFiles[0].name,
+            nonRoTarget,
+            qbitUser,
+            qbitPass,
+          ).catch((e) => console.warn(`[subtitles] redenumire .srt non-RO eșuată:`, e));
+        }
+      }
     }
 
     if (episodeSrtFiles.length > 1) {
