@@ -510,6 +510,9 @@ export interface RecentWatch {
   thumbUrl: string | null;
   username: string;
   viewedAt: number;
+  completed: boolean;
+  progressMinutes: number | null;
+  durationMinutes: number | null;
 }
 
 // Unește episoade consecutive din același serial/sezon/user într-un singur
@@ -600,12 +603,16 @@ export const getRecentWatches = createServerFn({ method: "GET" }).handler(
         const { getAllPlexWatchedIndexes, getWatchedAt } = await import("./plex");
         const allWatchedIndexes = await getAllPlexWatchedIndexes();
         const upsert = db.prepare(
-          `INSERT INTO recent_watch_cache (plex_rating_key, username, title, show, season, episode, poster_path, viewed_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          `INSERT INTO recent_watch_cache
+             (plex_rating_key, username, title, show, season, episode, poster_path, viewed_at, view_offset_ms, duration_ms, completed)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, 1)
            ON CONFLICT (plex_rating_key, username) DO UPDATE SET
              title = excluded.title, show = excluded.show, season = excluded.season,
-             episode = excluded.episode, poster_path = excluded.poster_path, viewed_at = excluded.viewed_at
-           WHERE excluded.viewed_at > recent_watch_cache.viewed_at`,
+             episode = excluded.episode, poster_path = excluded.poster_path, viewed_at = excluded.viewed_at,
+             view_offset_ms = excluded.view_offset_ms, duration_ms = excluded.duration_ms,
+             completed = excluded.completed
+           WHERE excluded.viewed_at > recent_watch_cache.viewed_at
+              OR (excluded.viewed_at = recent_watch_cache.viewed_at AND excluded.completed >= recent_watch_cache.completed)`,
         );
         for (const row of rows) {
           const isEpisode = row.media_type === "episode";
@@ -636,7 +643,8 @@ export const getRecentWatches = createServerFn({ method: "GET" }).handler(
       db.prepare("DELETE FROM recent_watch_cache WHERE viewed_at < ?").run(cutoff);
       const cached = db
         .prepare(
-          `SELECT plex_rating_key, username, title, show, season, episode, poster_path, viewed_at
+          `SELECT plex_rating_key, username, title, show, season, episode, poster_path, viewed_at,
+                  view_offset_ms, duration_ms, completed
            FROM recent_watch_cache
            WHERE viewed_at >= ?
            ORDER BY viewed_at DESC
@@ -651,6 +659,9 @@ export const getRecentWatches = createServerFn({ method: "GET" }).handler(
         episode: number | null;
         poster_path: string | null;
         viewed_at: number;
+        view_offset_ms: number | null;
+        duration_ms: number | null;
+        completed: number;
       }>;
 
       const items: RecentWatch[] = cached.map((row) => ({
@@ -660,6 +671,11 @@ export const getRecentWatches = createServerFn({ method: "GET" }).handler(
         season: row.season,
         episode: row.episode,
         episodeEnd: null,
+        completed: !!row.completed,
+        progressMinutes:
+          !row.completed && row.view_offset_ms != null ? Math.round(row.view_offset_ms / 60_000) : null,
+        durationMinutes:
+          !row.completed && row.duration_ms != null ? Math.round(row.duration_ms / 60_000) : null,
         thumbUrl: row.poster_path,
         username: row.username,
         viewedAt: row.viewed_at,

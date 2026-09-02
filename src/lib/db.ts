@@ -89,7 +89,8 @@ export function getDb(): DatabaseSync {
       duration_ms INTEGER NOT NULL DEFAULT 0,
       user TEXT NOT NULL,
       title TEXT NOT NULL,
-      grandparent_title TEXT
+      grandparent_title TEXT,
+      rating_key TEXT
     );
 
     CREATE TABLE IF NOT EXISTS error_log (
@@ -185,6 +186,9 @@ export function getDb(): DatabaseSync {
       episode INTEGER,
       poster_path TEXT,
       viewed_at INTEGER NOT NULL,
+      view_offset_ms INTEGER,
+      duration_ms INTEGER,
+      completed INTEGER NOT NULL DEFAULT 1,
       PRIMARY KEY (plex_rating_key, username)
     );
     CREATE INDEX IF NOT EXISTS idx_recent_watch_cache_viewed_at ON recent_watch_cache(viewed_at DESC);
@@ -506,6 +510,25 @@ function runCleanups(database: DatabaseSync): void {
         // coloana există deja dintr-o rulare anterioară
       }
       database.exec("PRAGMA user_version = 15");
+    }
+
+    if (version < 16) {
+      // v16: recent_watch_cache capătă progres (view_offset_ms/duration_ms +
+      // completed), ca vizionările neterminate să apară în "Vizionări
+      // recente" cu minute vizionate, nu doar cele confirmate de istoricul
+      // Plex (care nu înregistrează sub pragul lui de completare).
+      try {
+        database.exec("ALTER TABLE recent_watch_cache ADD COLUMN view_offset_ms INTEGER");
+        database.exec("ALTER TABLE recent_watch_cache ADD COLUMN duration_ms INTEGER");
+        database.exec(
+          "ALTER TABLE recent_watch_cache ADD COLUMN completed INTEGER NOT NULL DEFAULT 1",
+        );
+        database.exec("ALTER TABLE plex_active_sessions ADD COLUMN rating_key TEXT");
+        console.log("[db] Migrare v16: adăugat progres pe recent_watch_cache");
+      } catch {
+        // coloanele există deja dintr-o rulare anterioară
+      }
+      database.exec("PRAGMA user_version = 16");
     }
   } catch (e) {
     console.warn("[db] Curățare eșuată:", e);

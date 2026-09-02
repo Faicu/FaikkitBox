@@ -310,6 +310,9 @@ function Overview() {
                   )}
                   <div className="truncate text-[11px] text-muted-foreground">
                     {it.username} · {formatDateTime(new Date(it.viewedAt * 1000).toISOString())}
+                    {!it.completed && it.progressMinutes != null && it.durationMinutes != null && (
+                      <> · {it.progressMinutes}/{it.durationMinutes} min</>
+                    )}
                   </div>
                 </div>
               </div>

@@ -177,6 +177,7 @@ export async function trackPlexSessions(
     user: string;
     title: string;
     grandparent_title: string | null;
+    rating_key: string | null;
   }>;
   const storedMap = new Map(stored.map((r) => [r.key, r]));
 
@@ -196,6 +197,7 @@ export async function trackPlexSessions(
 
   // STOPs înainte de STARTs — astfel rowid-ul stop < rowid start,
   // iar cu ORDER BY timestamp DESC, rowid DESC starts apar deasupra stops în UI
+  const MIN_PROGRESS_MS = 60_000;
   for (const [key, row] of storedMap.entries()) {
     if (!currentKeys.has(key)) {
       db.prepare("DELETE FROM plex_active_sessions WHERE key = ?").run(key);
@@ -206,6 +208,47 @@ export async function trackPlexSessions(
         title: row.title,
         grandparentTitle: row.grandparent_title || undefined,
       });
+
+      // Vizionare oprită/întreruptă înainte ca Plex să o marcheze "văzută" în
+      // istoric (sub pragul lui de completare) — o ținem minte aici, cu
+      // progresul exact, ca să apară totuși în "Vizionări recente" (nu doar
+      // titlurile terminate complet). Vezi getRecentWatches din plex-browse.ts,
+      // care poate ulterior să suprascrie cu completed=1 dacă istoricul Plex
+      // confirmă vizionarea completă.
+      if (row.rating_key && row.last_view_offset_ms >= MIN_PROGRESS_MS && row.duration_ms > 0) {
+        try {
+          const mediaRow = db
+            .prepare("SELECT season, episode, poster_path FROM media WHERE plex_rating_key = ?")
+            .get(row.rating_key) as
+            | { season: number | null; episode: number | null; poster_path: string | null }
+            | undefined;
+          db.prepare(
+            `INSERT INTO recent_watch_cache
+               (plex_rating_key, username, title, show, season, episode, poster_path, viewed_at, view_offset_ms, duration_ms, completed)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+             ON CONFLICT (plex_rating_key, username) DO UPDATE SET
+               title = excluded.title, show = excluded.show, season = excluded.season,
+               episode = excluded.episode, poster_path = excluded.poster_path,
+               viewed_at = excluded.viewed_at, view_offset_ms = excluded.view_offset_ms,
+               duration_ms = excluded.duration_ms, completed = excluded.completed
+             WHERE excluded.viewed_at > recent_watch_cache.viewed_at
+                OR (excluded.viewed_at = recent_watch_cache.viewed_at AND excluded.completed >= recent_watch_cache.completed)`,
+          ).run(
+            row.rating_key,
+            row.user,
+            row.grandparent_title ? "" : row.title,
+            row.grandparent_title || null,
+            mediaRow?.season ?? null,
+            mediaRow?.episode ?? null,
+            mediaRow?.poster_path ?? null,
+            Math.floor(Date.now() / 1000),
+            row.last_view_offset_ms,
+            row.duration_ms,
+          );
+        } catch (e) {
+          console.warn("[activity-log] Eroare la upsert recent_watch_cache:", e);
+        }
+      }
     }
   }
 
@@ -224,8 +267,8 @@ export async function trackPlexSessions(
       // Sesiune nouă — inserăm în DB și logăm start
       db.prepare(
         `INSERT OR REPLACE INTO plex_active_sessions
-         (key, started_at, last_view_offset_ms, duration_ms, user, title, grandparent_title)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+         (key, started_at, last_view_offset_ms, duration_ms, user, title, grandparent_title, rating_key)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         key,
         new Date().toISOString(),
@@ -234,6 +277,7 @@ export async function trackPlexSessions(
         s.user,
         displayTitle,
         displayGrandparentTitle ?? null,
+        s.ratingKey ?? null,
       );
 
       const what = displayGrandparentTitle ? `${displayGrandparentTitle} — ${displayTitle}` : displayTitle;
