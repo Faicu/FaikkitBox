@@ -363,6 +363,7 @@ export function updateMediaSubtitleStatus(
   getDb()
     .prepare(
       `UPDATE media SET has_romanian_subtitle = ?, subtitle_source = ?, subtitle_detail = ?,
+       has_romanian_audio = CASE WHEN ? = 1 THEN 1 ELSE has_romanian_audio END,
        subtitle_checked_at = datetime('now'), updated_at = datetime('now')
        WHERE torrent_hash = ?`,
     )
@@ -370,6 +371,7 @@ export function updateMediaSubtitleStatus(
       HAS_ROMANIAN_OUTCOMES.has(outcome) ? 1 : 0,
       SUBTITLE_SOURCE_BY_OUTCOME[outcome] ?? null,
       detail,
+      outcome === "audio_already_romanian" ? 1 : 0,
       torrentHash,
     );
 }
