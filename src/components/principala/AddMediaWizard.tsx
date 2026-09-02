@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Loader2, CheckCircle2, Download, ArrowLeft, Check, Info } from "lucide-react";
 import { toast } from "sonner";
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { DownloadConfirmDialog } from "@/components/filelist/DownloadConfirmDialog";
+import { DownloadConfirmFields } from "@/components/filelist/DownloadConfirmDialog";
 import { adminStatusQuery } from "@/lib/queries";
 import { searchTmdb, getTmdbDetails, getTmdbAllSeasons } from "@/lib/tmdb/tmdb.functions";
 import type { TmdbDetails, TmdbSeasonSchema } from "@/lib/tmdb/tmdb.functions";
@@ -31,7 +30,7 @@ import { SeasonAccordion } from "./wizard/SeasonAccordion";
 import type { EpisodeAvailability, SeasonRowData } from "./wizard/SeasonAccordion";
 
 type Quality = "720p" | "1080p" | "4K" | "4K HDR";
-type Step = "search" | "checking" | "result" | "done";
+type Step = "search" | "checking" | "result" | "confirm" | "done";
 
 interface CheckResult {
   imdbId: string | null;
@@ -595,10 +594,12 @@ export function AddMediaWizard({
       const torrent = bestOf(candidates);
       if (!torrent) return;
       setConfirmTorrent({ torrent, ...ctx });
+      setStep("confirm");
       return;
     }
     setPickedTorrentId(bestOf(candidates)!.id);
     setTorrentChoice({ ...ctx, candidates });
+    setStep("confirm");
   }
 
   function handleDownloadPack(season: SeasonRowData, torrents: FilelistTorrent[]) {
@@ -627,6 +628,19 @@ export function AddMediaWizard({
   // Descoperă), nu există pas de căutare la care să te întorci — înapoi
   // închide direct.
   function goBack() {
+    // Pasul "confirm" are două sub-ecrane (alegere torrent, apoi
+    // confirmare) — înapoi trece prin ele unul câte unul, revenind la
+    // "result" doar când niciunul nu mai e activ.
+    if (step === "confirm") {
+      if (confirmTorrent) {
+        setConfirmTorrent(null);
+        if (!torrentChoice) setStep("result");
+        return;
+      }
+      setTorrentChoice(null);
+      setStep("result");
+      return;
+    }
     if (initialItem) {
       handleClose();
       return;
@@ -651,29 +665,18 @@ export function AddMediaWizard({
     ...(initialItem ? [] : [{ key: "search" as Step, label: "Căutare" }]),
     { key: "checking", label: "Verificare" },
     { key: "result", label: "Rezultat" },
+    { key: "confirm", label: "Confirmare" },
   ];
   const effectiveStep = step === "search" && initialItem ? "checking" : step;
   const stepperIndex = stepperSteps.findIndex((s) => s.key === effectiveStep);
 
   return (
     <>
-      <Dialog
-        open={open}
-        onOpenChange={(o) => !o && !busy && handleClose()}
-        // Radix face trap de focus pe DialogContent chiar și când elementul
-        // focusat trăiește într-un alt portal din body (ex. overlay-ul
-        // inline al DownloadConfirmDialog) — orice click în inputul de
-        // căutare din acel overlay era refocusat instant înapoi în
-        // DialogContent, ceea ce făcea imposibilă scrierea în câmp (butoanele
-        // tot funcționau, fiindcă acelea au nevoie doar de un singur click,
-        // nu de focus susținut). Dezactivăm modal-ul cât timp propriul nostru
-        // overlay (cu backdrop opac deja desenat manual) e deschis.
-        modal={!confirmTorrent && !torrentChoice}
-      >
+      <Dialog open={open} onOpenChange={(o) => !o && !busy && handleClose()}>
         <DialogContent className="top-8 flex max-h-[calc(100dvh-4rem)] w-[calc(100%-2rem)] max-w-md translate-y-0 flex-col gap-0 overflow-hidden rounded-2xl p-0 sm:w-full">
           <DialogHeader className="shrink-0 space-y-0 p-4 pb-0 text-left">
             <div className="flex items-center gap-2">
-              {step === "result" && (
+              {(step === "result" || step === "confirm") && (
                 <button
                   type="button"
                   disabled={busy}
@@ -904,79 +907,67 @@ export function AddMediaWizard({
               </div>
             )}
 
+            {step === "confirm" && (
+              <div className="animate-in fade-in slide-in-from-right-2 duration-200 space-y-4">
+                {torrentChoice && !confirmTorrent ? (
+                  <>
+                    <div className="text-sm font-semibold">
+                      Alege torrentul — {torrentChoice.label}
+                    </div>
+                    <TorrentPicker
+                      matches={torrentChoice.candidates}
+                      selectedId={pickedTorrentId ?? torrentChoice.candidates[0].id}
+                      onSelect={setPickedTorrentId}
+                    />
+                    <ActionButton
+                      busy={false}
+                      icon={<Download className="h-4 w-4" />}
+                      label="Continuă"
+                      onClick={() => {
+                        const chosen =
+                          torrentChoice.candidates.find((t) => t.id === pickedTorrentId) ??
+                          bestOf(torrentChoice.candidates)!;
+                        setConfirmTorrent({
+                          torrent: chosen,
+                          label: torrentChoice.label,
+                          season: torrentChoice.season,
+                          episode: torrentChoice.episode,
+                          isSeasonPack: torrentChoice.isSeasonPack,
+                        });
+                      }}
+                    />
+                  </>
+                ) : (
+                  confirmTorrent && (
+                    <>
+                      <div className="text-sm font-semibold">Confirmare descărcare</div>
+                      <DownloadConfirmFields
+                        torrent={confirmTorrent.torrent}
+                        label={confirmTorrent.label}
+                        onCancel={() => {
+                          setConfirmTorrent(null);
+                          if (!torrentChoice) setStep("result");
+                        }}
+                        onConfirm={() => {
+                          downloadOne(confirmTorrent.torrent, {
+                            season: confirmTorrent.season ?? null,
+                            episode: confirmTorrent.episode ?? null,
+                            isSeasonPack: confirmTorrent.isSeasonPack ?? false,
+                          });
+                          setConfirmTorrent(null);
+                          setTorrentChoice(null);
+                        }}
+                      />
+                    </>
+                  )
+                )}
+              </div>
+            )}
+
             {step === "done" && <DoneStep doneMessage={doneMessage} onClose={handleClose} />}
           </div>
         </DialogContent>
       </Dialog>
-
-      {/* Overlay simplu (fără Drawer/vaul) — un al doilea overlay cu focus-trap
-          propriu peste Dialog-ul wizard-ului (deja deschis) a înghețat ecranul
-          complet, vezi commit c76ce30. Portalat direct în body — fără portal,
-          ancestorii cu transform (animația stagger-in din PageShell) devin
-          containing block pentru "fixed" și overlay-ul apare decupat/în
-          spatele conținutului în loc să acopere tot ecranul. */}
-      {torrentChoice &&
-        createPortal(
-          <div
-            className="fixed inset-0 z-[70] flex items-end justify-center bg-black/80 pointer-events-auto"
-            onClick={() => setTorrentChoice(null)}
-          >
-            <div
-              role="dialog"
-              aria-label={`Alege torrentul — ${torrentChoice.label}`}
-              onClick={(e) => e.stopPropagation()}
-              className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-t-[10px] border bg-background"
-            >
-              <div className="mx-auto mt-4 h-2 w-[100px] rounded-full bg-muted" />
-              <div className="p-4 text-left text-lg font-semibold leading-none tracking-tight">
-                Alege torrentul — {torrentChoice.label}
-              </div>
-              <div className="space-y-3 overflow-y-auto px-4 pb-6">
-                <TorrentPicker
-                  matches={torrentChoice.candidates}
-                  selectedId={pickedTorrentId ?? torrentChoice.candidates[0].id}
-                  onSelect={setPickedTorrentId}
-                />
-                <ActionButton
-                  busy={false}
-                  icon={<Download className="h-4 w-4" />}
-                  label="Continuă"
-                  onClick={() => {
-                    const chosen =
-                      torrentChoice.candidates.find((t) => t.id === pickedTorrentId) ??
-                      bestOf(torrentChoice.candidates)!;
-                    setConfirmTorrent({
-                      torrent: chosen,
-                      label: torrentChoice.label,
-                      season: torrentChoice.season,
-                      episode: torrentChoice.episode,
-                      isSeasonPack: torrentChoice.isSeasonPack,
-                    });
-                    setTorrentChoice(null);
-                  }}
-                />
-              </div>
-            </div>
-          </div>,
-          document.body,
-        )}
-
-      {confirmTorrent && (
-        <DownloadConfirmDialog
-          inline
-          torrent={confirmTorrent.torrent}
-          label={confirmTorrent.label}
-          onCancel={() => setConfirmTorrent(null)}
-          onConfirm={() => {
-            downloadOne(confirmTorrent.torrent, {
-              season: confirmTorrent.season ?? null,
-              episode: confirmTorrent.episode ?? null,
-              isSeasonPack: confirmTorrent.isSeasonPack ?? false,
-            });
-            setConfirmTorrent(null);
-          }}
-        />
-      )}
     </>
   );
 }

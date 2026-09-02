@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { useServerFn } from "@tanstack/react-start";
 import {
@@ -20,7 +19,10 @@ import { searchLibraryTitles, type LibraryTitleMatch } from "@/lib/media/media";
 import type { DownloadMediaContext } from "./use-download";
 
 // ---------------------------------------------------------------------------
-// Dialog confirmare download
+// Câmpurile confirmării de descărcare — fără propriul Dialog/overlay, ca să
+// poată fi randate direct în interiorul unui Dialog deja deschis (pasul
+// "Confirmare" din AddMediaWizard), fără să imbrice un al doilea focus-trap.
+// Vezi și DownloadConfirmDialog mai jos, pentru folosirea standalone.
 // ---------------------------------------------------------------------------
 
 function matchToContext(match: LibraryTitleMatch): DownloadMediaContext {
@@ -37,23 +39,16 @@ function matchToContext(match: LibraryTitleMatch): DownloadMediaContext {
   };
 }
 
-export function DownloadConfirmDialog({
+export function DownloadConfirmFields({
   torrent,
   label,
   onConfirm,
   onCancel,
-  inline = false,
 }: {
   torrent: FilelistTorrent;
   label: string;
   onConfirm: (mediaContext?: DownloadMediaContext) => void;
   onCancel: () => void;
-  // Randează fără Portal/focus-trap Radix propriu — pentru folosirea din
-  // interiorul unui alt overlay deja deschis (ex. AddMediaWizard, care e el
-  // însuși un Dialog). Un al doilea Dialog Radix imbricat peste unul deschis
-  // a înghețat ecranul complet (vezi commit c76ce30) — motiv de focus-trap/
-  // scroll-lock care se luptă între ele, fără nicio eroare aruncată.
-  inline?: boolean;
 }) {
   const searchFn = useServerFn(searchLibraryTitles);
   const [linkQuery, setLinkQuery] = useState("");
@@ -82,7 +77,7 @@ export function DownloadConfirmDialog({
     };
   }, [linkQuery, searchFn]);
 
-  const content = (
+  return (
     <>
       <div className="space-y-2 text-xs text-muted-foreground">
         <div className="font-medium text-foreground break-words">{torrent.name}</div>
@@ -203,40 +198,21 @@ export function DownloadConfirmDialog({
       </div>
     </>
   );
+}
 
-  if (inline) {
-    // Portal direct în body — randat inline (ca simplu div, nu Dialog Radix
-    // imbricat, vezi motivul mai sus), dar fără portal ancestorii cu
-    // transform (ex. animația stagger-in din PageShell) devin containing
-    // block pentru "fixed", iar overlay-ul ajunge decupat/în spatele
-    // wizardului în loc să acopere tot ecranul — bloca efectiv click-ul pe
-    // "Descarcă". z-[70] (nu z-[60] ca Dialog-ul de bază) — la z egal,
-    // ordinea DOM decide care overlay câștigă clic-urile, nu z-index-ul, și
-    // asta lăsa uneori Dialog-ul wizard-ului deasupra confirmării.
-    // pointer-events-auto e obligatoriu: Radix pune pointer-events:none pe
-    // <body> cât timp Dialog-ul de bază e deschis (ca să blocheze clic-urile
-    // din afara lui) și re-activează explicit doar propriul Content — un
-    // portal simplu ca al nostru moștenește none-ul de la body și devine
-    // total neclicabil, deși vizual pare deasupra.
-    return createPortal(
-      <div
-        className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm pointer-events-auto"
-        onClick={onCancel}
-      >
-        <div
-          role="dialog"
-          aria-label="Confirmare descărcare"
-          onClick={(e) => e.stopPropagation()}
-          className="w-full max-w-sm rounded-2xl border border-border bg-card p-5 space-y-4 shadow-xl outline-none"
-        >
-          <div className="text-sm font-semibold">Confirmare descărcare</div>
-          {content}
-        </div>
-      </div>,
-      document.body,
-    );
-  }
-
+// Folosire standalone (ex. FilelistSection, căutarea manuală admin) — acolo
+// nu există niciun alt Dialog deschis, deci un Dialog Radix propriu e sigur.
+export function DownloadConfirmDialog({
+  torrent,
+  label,
+  onConfirm,
+  onCancel,
+}: {
+  torrent: FilelistTorrent;
+  label: string;
+  onConfirm: (mediaContext?: DownloadMediaContext) => void;
+  onCancel: () => void;
+}) {
   return (
     <DialogPrimitive.Root open onOpenChange={(open) => !open && onCancel()}>
       <DialogPrimitive.Portal>
@@ -248,7 +224,12 @@ export function DownloadConfirmDialog({
             <DialogPrimitive.Description className="sr-only">
               Confirmă descărcarea torrentului {torrent.name}
             </DialogPrimitive.Description>
-            {content}
+            <DownloadConfirmFields
+              torrent={torrent}
+              label={label}
+              onConfirm={onConfirm}
+              onCancel={onCancel}
+            />
           </DialogPrimitive.Content>
         </DialogPrimitive.Overlay>
       </DialogPrimitive.Portal>
