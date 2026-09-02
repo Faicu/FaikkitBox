@@ -285,7 +285,7 @@ function Overview() {
           <div className="mt-3 space-y-1.5">
             {recentWatchItems.map((it, i) => (
               <div
-                key={`${it.mediaId}-${i}`}
+                key={`${it.ratingKey}-${it.username}-${i}`}
                 className="flex items-center gap-2.5 rounded-lg bg-muted/40 px-2.5 py-2"
               >
                 {it.thumbUrl ? (
@@ -299,15 +299,15 @@ function Overview() {
                   <Film className="h-4 w-4 shrink-0 text-amber-400" />
                 )}
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-semibold">
-                    {it.show
-                      ? `${it.show}${
-                          it.season != null && it.episode != null
-                            ? ` — S${String(it.season).padStart(2, "0")}E${String(it.episode).padStart(2, "0")}${it.episodeEnd != null ? `-E${String(it.episodeEnd).padStart(2, "0")}` : ""}`
-                            : ""
-                        }`
-                      : it.title}
+                  <div className="text-sm font-semibold leading-snug line-clamp-2">
+                    {it.show ?? it.title}
                   </div>
+                  {it.season != null && it.episode != null && (
+                    <div className="text-[11px] text-muted-foreground">
+                      S{String(it.season).padStart(2, "0")}E{String(it.episode).padStart(2, "0")}
+                      {it.episodeEnd != null ? `-E${String(it.episodeEnd).padStart(2, "0")}` : ""}
+                    </div>
+                  )}
                   <div className="truncate text-[11px] text-muted-foreground">
                     {it.username} · {formatDateTime(new Date(it.viewedAt * 1000).toISOString())}
                   </div>

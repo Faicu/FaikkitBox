@@ -175,6 +175,19 @@ export function getDb(): DatabaseSync {
     CREATE INDEX IF NOT EXISTS idx_media_parent ON media(parent_id);
     CREATE INDEX IF NOT EXISTS idx_media_torrent_hash ON media(torrent_hash) WHERE torrent_hash IS NOT NULL;
     CREATE UNIQUE INDEX IF NOT EXISTS idx_media_plex_key ON media(plex_rating_key) WHERE plex_rating_key IS NOT NULL;
+
+    CREATE TABLE IF NOT EXISTS recent_watch_cache (
+      plex_rating_key TEXT NOT NULL,
+      username TEXT NOT NULL,
+      title TEXT NOT NULL,
+      show TEXT,
+      season INTEGER,
+      episode INTEGER,
+      poster_path TEXT,
+      viewed_at INTEGER NOT NULL,
+      PRIMARY KEY (plex_rating_key, username)
+    );
+    CREATE INDEX IF NOT EXISTS idx_recent_watch_cache_viewed_at ON recent_watch_cache(viewed_at DESC);
   `);
 
   // Curățări one-time, versionate cu PRAGMA user_version

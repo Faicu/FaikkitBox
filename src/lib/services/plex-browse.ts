@@ -501,7 +501,7 @@ export const getPlexTitleDetail = createServerFn({ method: "GET" })
 // ---------------------------------------------------------------------------
 
 export interface RecentWatch {
-  mediaId: number;
+  ratingKey: string;
   title: string;
   show: string | null;
   season: number | null;
@@ -589,38 +589,81 @@ export const getRecentWatches = createServerFn({ method: "GET" }).handler(
         episode: number | null;
         poster_path: string | null;
       }>;
-      if (rows.length === 0) return { status: "ok", items: [] };
 
-      const { getAllPlexWatchedIndexes, getWatchedAt } = await import("./plex");
-      const allWatchedIndexes = await getAllPlexWatchedIndexes();
       const cutoff = Math.floor(Date.now() / 1000) - RECENT_WATCH_WINDOW_SECONDS;
 
-      const items: RecentWatch[] = [];
-      for (const row of rows) {
-        const isEpisode = row.media_type === "episode";
-        const titleForMatch = row.original_title || row.title;
-        for (const [username, index] of Object.entries(allWatchedIndexes)) {
-          const viewedAt = getWatchedAt(index, {
-            ratingKey: row.plex_rating_key,
-            title: titleForMatch,
-            show: isEpisode ? titleForMatch : null,
-            season: row.season,
-            episode: row.episode,
-          });
-          if (viewedAt == null || viewedAt < cutoff) continue;
-          items.push({
-            mediaId: row.id,
-            title: isEpisode ? "" : row.title,
-            show: isEpisode ? row.title : null,
-            season: row.season,
-            episode: row.episode,
-            episodeEnd: null,
-            thumbUrl: row.poster_path,
-            username,
-            viewedAt,
-          });
+      // Recalculează live doar cât timp titlul mai există în `media` — pentru
+      // ce mai găsește, ține-o minte în `recent_watch_cache`, ca titlul să
+      // rămână vizibil aici și după ce e șters din Bibliotecă (torrent +
+      // rândul `media`), nu doar cât există local.
+      if (rows.length > 0) {
+        const { getAllPlexWatchedIndexes, getWatchedAt } = await import("./plex");
+        const allWatchedIndexes = await getAllPlexWatchedIndexes();
+        const upsert = db.prepare(
+          `INSERT INTO recent_watch_cache (plex_rating_key, username, title, show, season, episode, poster_path, viewed_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT (plex_rating_key, username) DO UPDATE SET
+             title = excluded.title, show = excluded.show, season = excluded.season,
+             episode = excluded.episode, poster_path = excluded.poster_path, viewed_at = excluded.viewed_at
+           WHERE excluded.viewed_at > recent_watch_cache.viewed_at`,
+        );
+        for (const row of rows) {
+          const isEpisode = row.media_type === "episode";
+          const titleForMatch = row.original_title || row.title;
+          for (const [username, index] of Object.entries(allWatchedIndexes)) {
+            const viewedAt = getWatchedAt(index, {
+              ratingKey: row.plex_rating_key,
+              title: titleForMatch,
+              show: isEpisode ? titleForMatch : null,
+              season: row.season,
+              episode: row.episode,
+            });
+            if (viewedAt == null || viewedAt < cutoff) continue;
+            upsert.run(
+              row.plex_rating_key,
+              username,
+              isEpisode ? row.title : row.title,
+              isEpisode ? row.title : null,
+              row.season,
+              row.episode,
+              row.poster_path,
+              viewedAt,
+            );
+          }
         }
       }
+
+      db.prepare("DELETE FROM recent_watch_cache WHERE viewed_at < ?").run(cutoff);
+      const cached = db
+        .prepare(
+          `SELECT plex_rating_key, username, title, show, season, episode, poster_path, viewed_at
+           FROM recent_watch_cache
+           WHERE viewed_at >= ?
+           ORDER BY viewed_at DESC
+           LIMIT 100`,
+        )
+        .all(cutoff) as unknown as Array<{
+        plex_rating_key: string;
+        username: string;
+        title: string;
+        show: string | null;
+        season: number | null;
+        episode: number | null;
+        poster_path: string | null;
+        viewed_at: number;
+      }>;
+
+      const items: RecentWatch[] = cached.map((row) => ({
+        ratingKey: row.plex_rating_key,
+        title: row.show ? "" : row.title,
+        show: row.show,
+        season: row.season,
+        episode: row.episode,
+        episodeEnd: null,
+        thumbUrl: row.poster_path,
+        username: row.username,
+        viewedAt: row.viewed_at,
+      }));
       const merged = mergeConsecutiveEpisodes(items);
       merged.sort((a, b) => b.viewedAt - a.viewedAt);
       return { status: "ok", items: merged.slice(0, 8) };
