@@ -519,13 +519,16 @@ export interface RecentWatch {
 // Unește episoade consecutive din același serial/sezon/user într-un singur
 // card (ex. S02E03-E05), ca "Vizionări recente" să nu se umple cu rânduri
 // separate pentru un maraton de episoade — grupare pur pe array-ul deja
-// calculat, fără nicio schimbare de schemă.
+// calculat, fără nicio schimbare de schemă. Doar episoadele terminate
+// complet se unesc — un episod neterminat rămâne pe rândul lui, altfel
+// minutele afișate ("34/41 min") ar părea să se refere la tot intervalul
+// unit, nu la ultimul episod din el.
 function mergeConsecutiveEpisodes(items: RecentWatch[]): RecentWatch[] {
   const episodeGroups = new Map<string, RecentWatch[]>();
   const rest: RecentWatch[] = [];
 
   for (const item of items) {
-    if (item.show == null || item.season == null || item.episode == null) {
+    if (item.show == null || item.season == null || item.episode == null || !item.completed) {
       rest.push(item);
       continue;
     }
