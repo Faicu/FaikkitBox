@@ -885,15 +885,16 @@ export function AddMediaWizard({
                             busy={busy}
                             icon={<Download className="h-4 w-4" />}
                             label="Descarcă acum"
-                            onClick={() =>
+                            onClick={() => {
                               setConfirmTorrent({
                                 torrent: movieMatch,
                                 label: "Film",
                                 season: undefined,
                                 episode: undefined,
                                 isSeasonPack: false,
-                              })
-                            }
+                              });
+                              setStep("confirm");
+                            }}
                           />
                         </>
                       ) : (
