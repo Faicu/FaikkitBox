@@ -495,7 +495,7 @@ export const getPlexTitleDetail = createServerFn({ method: "GET" })
 
 // ---------------------------------------------------------------------------
 // "Vizionări recente ale titlurilor tale" — card pe Acasă. Doar titluri
-// adăugate de userul curent, vizionate de altcineva în ultimele 7 zile.
+// adăugate de userul curent, vizionate de altcineva în ultima lună.
 // Fără nicio stocare persistentă: recalculat live din PlexWatchedIndex, la
 // fel ca watchedCount din listă — nu ținem evidența "a fost deja arătat".
 // ---------------------------------------------------------------------------
@@ -558,7 +558,7 @@ function mergeConsecutiveEpisodes(items: RecentWatch[]): RecentWatch[] {
   return merged;
 }
 
-const RECENT_WATCH_WINDOW_SECONDS = 7 * 24 * 60 * 60;
+const RECENT_WATCH_WINDOW_SECONDS = 30 * 24 * 60 * 60;
 const RECENT_TITLES_LIMIT = 200;
 
 export const getRecentWatches = createServerFn({ method: "GET" }).handler(
