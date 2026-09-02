@@ -1,7 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
 import type { FilelistLogEntry, DownloadLogRow } from "./types";
 import { qbitLogin } from "../qbit-client";
-import { refreshPlexLibraryForCategoryAndEmptyTrash } from "../plex-refresh";
+import {
+  refreshPlexLibraryForCategoryAndEmptyTrash,
+  refreshPlexLibraryAndEmptyTrash,
+  refreshPlexLibrariesAndEmptyTrash,
+} from "../plex-refresh";
 import { deleteMediaByTorrentHash } from "../media/media";
 
 // ---------------------------------------------------------------------------
@@ -104,11 +108,15 @@ export const deleteMediaEntry = createServerFn({ method: "POST" })
       const db = getDb();
 
       const row = db
-        .prepare("SELECT torrent_hash, category, requested_by_user_id FROM media WHERE id = ?")
+        .prepare(
+          "SELECT torrent_hash, category, media_type, imdb_id, requested_by_user_id FROM media WHERE id = ?",
+        )
         .get(data.mediaId) as
         | {
             torrent_hash: string | null;
             category: number | null;
+            media_type: string | null;
+            imdb_id: string | null;
             requested_by_user_id: number | null;
           }
         | undefined;
@@ -186,12 +194,34 @@ export const deleteMediaEntry = createServerFn({ method: "POST" })
       deleteMediaByTorrentHash(row.torrent_hash);
       db.prepare("DELETE FROM downloads WHERE torrent_hash = ?").run(row.torrent_hash);
 
-      if (row.category !== null) {
-        try {
+      // Rânduri "fantomă" pentru același titlu (același imdb_id), fără
+      // torrent_hash — create de exemplu de un backfill dintr-un scan Plex
+      // vechi, nelegat niciodată de un download real. Invizibile pentru
+      // ștergerea de mai sus (care lucrează strict după torrent_hash), deci
+      // rămân orfane la nesfârșit dacă nu le curățăm explicit aici (găsit la
+      // "Pompeii: Out of Time with Tom Hiddleston", 2026-09-02).
+      if (row.imdb_id) {
+        db.prepare("DELETE FROM media WHERE imdb_id = ? AND torrent_hash IS NULL").run(row.imdb_id);
+      }
+
+      // Refresh Plex necondiționat — categoria Filelist (numerică) poate
+      // lipsi (titluri fără flux standard de descărcare), dar tot știm
+      // sigur film vs. serial din media_type, care e mereu populat. Fără
+      // niciuna din ele, refresh la ambele biblioteci ca fallback sigur —
+      // la fel ca la ștergerea din pagina qBittorrent (qbittorrent.ts),
+      // în loc să renunțăm silențios (găsit la "Avatar: Foc și cenușă",
+      // 2026-09-02 — titlul șters din DB/disk, dar rămas fantomă în Plex).
+      try {
+        if (row.category !== null) {
           await refreshPlexLibraryForCategoryAndEmptyTrash(row.category);
-        } catch (e) {
-          console.error("[filelist] Eroare la refresh Plex după ștergere:", e);
+        } else if (row.media_type) {
+          const plexType = row.media_type === "movie" ? "movie" : "show";
+          await refreshPlexLibraryAndEmptyTrash(plexType);
+        } else {
+          await refreshPlexLibrariesAndEmptyTrash();
         }
+      } catch (e) {
+        console.error("[filelist] Eroare la refresh Plex după ștergere:", e);
       }
 
       return { ok: true, qbitDeleted };
