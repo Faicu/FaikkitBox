@@ -494,10 +494,11 @@ export const getPlexTitleDetail = createServerFn({ method: "GET" })
   );
 
 // ---------------------------------------------------------------------------
-// "Vizionări recente ale titlurilor tale" — card pe Acasă. Doar titluri
-// adăugate de userul curent, vizionate de altcineva în ultima lună.
-// Fără nicio stocare persistentă: recalculat live din PlexWatchedIndex, la
-// fel ca watchedCount din listă — nu ținem evidența "a fost deja arătat".
+// "Vizionări recente" — card pe Acasă. Sursa afișată e `recent_watch_cache`
+// (supraviețuiește ștergerii titlului din `media`, vezi recent-watch-cache.ts);
+// aici doar recalculăm live din PlexWatchedIndex ce s-a schimbat față de
+// ultima citire și scriem diferența în cache, cât timp titlul mai există în
+// `media` — nu putem detecta vizionări noi pentru un titlu deja șters.
 // ---------------------------------------------------------------------------
 
 export interface RecentWatch {
@@ -575,7 +576,7 @@ export const getRecentWatches = createServerFn({ method: "GET" }).handler(
 
       const rows = db
         .prepare(
-          `SELECT id, plex_rating_key, media_type, title, original_title, season, episode, poster_path
+          `SELECT plex_rating_key, media_type, title, original_title, season, episode, poster_path
            FROM media
            WHERE media_type IN ('movie', 'episode')
              AND plex_rating_key IS NOT NULL
@@ -583,7 +584,6 @@ export const getRecentWatches = createServerFn({ method: "GET" }).handler(
            LIMIT ?`,
         )
         .all(RECENT_TITLES_LIMIT) as unknown as Array<{
-        id: number;
         plex_rating_key: string | null;
         media_type: string;
         title: string;
@@ -601,19 +601,9 @@ export const getRecentWatches = createServerFn({ method: "GET" }).handler(
       // rândul `media`), nu doar cât există local.
       if (rows.length > 0) {
         const { getAllPlexWatchedIndexes, getWatchedAt } = await import("./plex");
+        const { createRecentWatchUpserter } = await import("./recent-watch-cache");
         const allWatchedIndexes = await getAllPlexWatchedIndexes();
-        const upsert = db.prepare(
-          `INSERT INTO recent_watch_cache
-             (plex_rating_key, username, title, show, season, episode, poster_path, viewed_at, view_offset_ms, duration_ms, completed)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, 1)
-           ON CONFLICT (plex_rating_key, username) DO UPDATE SET
-             title = excluded.title, show = excluded.show, season = excluded.season,
-             episode = excluded.episode, poster_path = excluded.poster_path, viewed_at = excluded.viewed_at,
-             view_offset_ms = excluded.view_offset_ms, duration_ms = excluded.duration_ms,
-             completed = excluded.completed
-           WHERE excluded.viewed_at > recent_watch_cache.viewed_at
-              OR (excluded.viewed_at = recent_watch_cache.viewed_at AND excluded.completed >= recent_watch_cache.completed)`,
-        );
+        const upsert = createRecentWatchUpserter(db);
         for (const row of rows) {
           const isEpisode = row.media_type === "episode";
           const titleForMatch = row.original_title || row.title;
@@ -626,16 +616,19 @@ export const getRecentWatches = createServerFn({ method: "GET" }).handler(
               episode: row.episode,
             });
             if (viewedAt == null || viewedAt < cutoff) continue;
-            upsert.run(
-              row.plex_rating_key,
+            upsert({
+              ratingKey: row.plex_rating_key!,
               username,
-              isEpisode ? row.title : row.title,
-              isEpisode ? row.title : null,
-              row.season,
-              row.episode,
-              row.poster_path,
+              title: isEpisode ? "" : row.title,
+              show: isEpisode ? row.title : null,
+              season: row.season,
+              episode: row.episode,
+              posterPath: row.poster_path,
               viewedAt,
-            );
+              viewOffsetMs: null,
+              durationMs: null,
+              completed: true,
+            });
           }
         }
       }

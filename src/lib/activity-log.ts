@@ -222,29 +222,20 @@ export async function trackPlexSessions(
             .get(row.rating_key) as
             | { season: number | null; episode: number | null; poster_path: string | null }
             | undefined;
-          db.prepare(
-            `INSERT INTO recent_watch_cache
-               (plex_rating_key, username, title, show, season, episode, poster_path, viewed_at, view_offset_ms, duration_ms, completed)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
-             ON CONFLICT (plex_rating_key, username) DO UPDATE SET
-               title = excluded.title, show = excluded.show, season = excluded.season,
-               episode = excluded.episode, poster_path = excluded.poster_path,
-               viewed_at = excluded.viewed_at, view_offset_ms = excluded.view_offset_ms,
-               duration_ms = excluded.duration_ms, completed = excluded.completed
-             WHERE excluded.viewed_at > recent_watch_cache.viewed_at
-                OR (excluded.viewed_at = recent_watch_cache.viewed_at AND excluded.completed >= recent_watch_cache.completed)`,
-          ).run(
-            row.rating_key,
-            row.user,
-            row.grandparent_title ? "" : row.title,
-            row.grandparent_title || null,
-            mediaRow?.season ?? null,
-            mediaRow?.episode ?? null,
-            mediaRow?.poster_path ?? null,
-            Math.floor(Date.now() / 1000),
-            row.last_view_offset_ms,
-            row.duration_ms,
-          );
+          const { createRecentWatchUpserter } = await import("./services/recent-watch-cache");
+          createRecentWatchUpserter(db)({
+            ratingKey: row.rating_key,
+            username: row.user,
+            title: row.grandparent_title ? "" : row.title,
+            show: row.grandparent_title || null,
+            season: mediaRow?.season ?? null,
+            episode: mediaRow?.episode ?? null,
+            posterPath: mediaRow?.poster_path ?? null,
+            viewedAt: Math.floor(Date.now() / 1000),
+            viewOffsetMs: row.last_view_offset_ms,
+            durationMs: row.duration_ms,
+            completed: false,
+          });
         } catch (e) {
           console.warn("[activity-log] Eroare la upsert recent_watch_cache:", e);
         }
