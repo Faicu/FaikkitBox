@@ -10,7 +10,7 @@ import AdmZip from "adm-zip";
 import { execFile } from "node:child_process";
 import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
@@ -136,13 +136,27 @@ function isRarArchive(buf: Buffer): boolean {
   return buf.length >= 6 && buf.subarray(0, 6).toString("hex") === "526172211a07";
 }
 
+// Numele de release relevant (rezoluție/sursă/grup) e adesea în folderul
+// părinte din arhivă, nu în numele fișierului — arhivele cu mai multe
+// variante grupează fișierele pe subfolder cu numele exact al release-ului
+// (ex. "The.Crown.S02.1080p.BluRay.DTS.x264-CiNEFiLE/Episode.rum.srt", unde
+// fișierul în sine se numește doar "Episode.rum.srt"). Ignorând folderul,
+// scoring-ul din pickBestByRelease nu vedea niciun tag pe acest candidat și
+// nu-l alegea niciodată, chiar când era o potrivire perfectă (The Crown S02,
+// 2026-09-02) — de-asta combinăm folder + nume fișier.
+function releaseFromEntryPath(entryPath: string): string {
+  const fileName = (entryPath.split("/").pop() ?? entryPath).replace(/\.srt$/i, "");
+  const dirName = entryPath.includes("/") ? entryPath.slice(0, entryPath.lastIndexOf("/")) : "";
+  return dirName ? `${dirName} ${fileName}` : fileName;
+}
+
 function extractSrtEntriesFromZip(buf: Buffer): SubsRoSrtEntry[] {
   const zip = new AdmZip(buf);
   return zip
     .getEntries()
     .filter((e) => !e.isDirectory && e.entryName.toLowerCase().endsWith(".srt"))
     .map((e) => ({
-      release: (e.entryName.split("/").pop() ?? e.entryName).replace(/\.srt$/i, ""),
+      release: releaseFromEntryPath(e.entryName),
       content: e.getData(),
     }));
 }
@@ -158,12 +172,12 @@ async function extractSrtEntriesFromRar(buf: Buffer): Promise<SubsRoSrtEntry[]> 
     await execFileAsync("unrar", ["x", "-y", "-inul", rarPath, dir + "/"], {
       timeout: 15_000,
     });
-    const names = await readdir(dir);
+    const names = await readdir(dir, { recursive: true });
     const entries: SubsRoSrtEntry[] = [];
     for (const name of names) {
       if (!name.toLowerCase().endsWith(".srt")) continue;
       entries.push({
-        release: name.replace(/\.srt$/i, ""),
+        release: releaseFromEntryPath(name.split(sep).join("/")),
         content: await readFile(join(dir, name)),
       });
     }
