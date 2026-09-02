@@ -124,11 +124,30 @@ export const deleteMediaEntry = createServerFn({ method: "POST" })
       }
 
       let qbitDeleted = false;
+      let contentPath: string | null = null;
       try {
         const qbitUrl = (process.env.QBIT_URL ?? "http://192.168.1.192:25556").replace(/\/$/, "");
         const user = process.env.QBIT_USERNAME ?? "";
         const pass = process.env.QBIT_PASSWORD ?? "";
         const cookie = await qbitLogin(qbitUrl, user, pass);
+
+        // Reținem calea reală a conținutului dinaintea ștergerii — numele
+        // torrentului salvat în DB poate diferi de numele folderului de pe
+        // disk (qBittorrent normalizează unele nume), deci e singura sursă
+        // de adevăr pentru fallback-ul de mai jos.
+        try {
+          const infoRes = await fetch(
+            `${qbitUrl}/api/v2/torrents/info?hashes=${row.torrent_hash}`,
+            { headers: { Cookie: cookie } },
+          );
+          if (infoRes.ok) {
+            const info = (await infoRes.json()) as Array<{ content_path?: string }>;
+            contentPath = info[0]?.content_path ?? null;
+          }
+        } catch (e) {
+          console.warn("[filelist] Nu am putut citi content_path din qBit:", e);
+        }
+
         const form = new URLSearchParams({ hashes: row.torrent_hash, deleteFiles: "true" });
         const res = await fetch(`${qbitUrl}/api/v2/torrents/delete`, {
           method: "POST",
@@ -140,6 +159,25 @@ export const deleteMediaEntry = createServerFn({ method: "POST" })
         console.warn("[filelist] Nu am putut șterge din qBit:", e);
       }
 
+      // qBittorrent șterge doar fișierele pe care le-a descărcat el — dacă
+      // pipeline-ul de subtitrări a scris .srt-uri direct în folderul
+      // torrentului (cazul obișnuit pentru un titlu deja complet), qBit dă
+      // "Directory not empty" la ștergere și lasă folderul (cu doar
+      // subtitrările) orfan pe disk, invizibil în DB/qBit (vezi reziduul
+      // The Crown S02, 2026-09-02). La acest punct fișierele video sunt deja
+      // confirmate șterse de qBittorrent, deci orice mai rămâne e propriul
+      // nostru reziduu — sigur de șters forțat.
+      if (contentPath) {
+        try {
+          const { existsSync, rmSync } = await import("node:fs");
+          if (existsSync(contentPath)) {
+            rmSync(contentPath, { recursive: true, force: true });
+          }
+        } catch (e) {
+          console.warn("[filelist] Nu am putut curăța reziduul de pe disk:", e);
+        }
+      }
+
       // Toate rândurile media care împart același torrent_hash (episoadele
       // unui pachet de sezon) — nu doar cel apăsat — altfel restul rămân
       // orfane, cu un hash care nu mai există în qBittorrent, și apar
@@ -149,7 +187,11 @@ export const deleteMediaEntry = createServerFn({ method: "POST" })
       db.prepare("DELETE FROM downloads WHERE torrent_hash = ?").run(row.torrent_hash);
 
       if (row.category !== null) {
-        refreshPlexLibraryForCategoryAndEmptyTrash(row.category).catch(() => {});
+        try {
+          await refreshPlexLibraryForCategoryAndEmptyTrash(row.category);
+        } catch (e) {
+          console.error("[filelist] Eroare la refresh Plex după ștergere:", e);
+        }
       }
 
       return { ok: true, qbitDeleted };

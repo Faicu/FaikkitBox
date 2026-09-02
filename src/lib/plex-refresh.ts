@@ -36,6 +36,40 @@ async function plexFindLibraryKey(type: PlexLibraryType): Promise<string | null>
   }
 }
 
+// GET /refresh doar pune scanarea în coadă pe server, nu așteaptă să se
+// termine — dacă apelantul face emptyTrash imediat după, Plex n-a apucat
+// încă să marcheze fișierele lipsă ca indisponibile, deci emptyTrash n-are
+// ce curăța și un titlu șters rămâne "fantomă" în index (vezi reziduul
+// Season 6 din The Crown, 2026-09-02). De-aia interoghează secțiunea la
+// interval scurt și așteaptă ca flag-ul "scanning" să revină la false,
+// cu un plafon de timp cât să nu blocheze la nesfârșit dacă Plex nu
+// răspunde niciodată cu scanning:false (scan foarte mare/agățat).
+async function plexWaitForScanIdle(sectionKey: string, timeoutMs = 20_000): Promise<void> {
+  const base = process.env.PLEX_URL ?? "http://127.0.0.1:32400";
+  const token = process.env.PLEX_TOKEN;
+  if (!token) return;
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(`${base}/library/sections`, {
+        headers: { "X-Plex-Token": token, Accept: "application/json" },
+      });
+      if (res.ok) {
+        const data = (await res.json()) as {
+          MediaContainer?: { Directory?: Array<{ key?: string; scanning?: boolean }> };
+        };
+        const dir = data?.MediaContainer?.Directory?.find((d) => String(d.key) === sectionKey);
+        if (!dir?.scanning) return;
+      }
+    } catch (e) {
+      console.warn(`[plex-refresh] Eroare la verificarea stării scanării:`, e);
+      return;
+    }
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+  console.warn(`[plex-refresh] Scanarea secțiunii ${sectionKey} nu s-a terminat în ${timeoutMs}ms`);
+}
+
 async function plexRefreshLibraryBySection(sectionKey: string): Promise<void> {
   const base = process.env.PLEX_URL ?? "http://127.0.0.1:32400";
   const token = process.env.PLEX_TOKEN;
@@ -47,7 +81,11 @@ async function plexRefreshLibraryBySection(sectionKey: string): Promise<void> {
     });
     if (!res.ok) {
       console.warn(`[plex-refresh] Plex refresh HTTP ${res.status} pentru secțiunea ${sectionKey}`);
+      return;
     }
+    // Lasă scanarea o clipă să pornească efectiv înainte de a începe polling-ul.
+    await new Promise((r) => setTimeout(r, 500));
+    await plexWaitForScanIdle(sectionKey);
   } catch (e) {
     console.warn(`[plex-refresh] Eroare Plex refresh:`, e);
   }
