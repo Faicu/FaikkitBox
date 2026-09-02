@@ -185,7 +185,9 @@ function SeasonRow({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const badge = seasonBadge(season);
-  const hasPack = season.packTorrents.length > 0;
+  const allInPlex =
+    season.episodes.length > 0 && season.episodes.every((e) => e.availability.kind === "in_plex");
+  const hasPack = season.packTorrents.length > 0 && !allInPlex;
   const isDownloadingPack =
     season.packDownloading || season.packTorrents.some((t) => t.id === downloadingTorrentId);
 
