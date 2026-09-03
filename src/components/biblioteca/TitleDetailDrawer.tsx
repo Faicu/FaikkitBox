@@ -71,11 +71,15 @@ export function TitleDetailDrawer({
     queryKey: ["plexTitleDetail", mediaId],
     queryFn: () => getPlexTitleDetail({ data: { mediaId: mediaId! } }),
     enabled: !!mediaId,
-    // Progres live cât timp titlul e în descărcare — se oprește automat
-    // când trece la "in_library" (vezi și plexLibraryBrowseQuery).
+    // Progres live cât timp titlul e în descărcare sau în așteptarea
+    // indexării Plex — se oprește automat când trece la "in_library" (vezi
+    // și plexLibraryBrowseQuery).
     refetchInterval: (query) => {
       const d = query.state.data;
-      return d?.status === "ok" && d.detail.status === "downloading" ? 2500 : false;
+      return d?.status === "ok" &&
+        (d.detail.status === "downloading" || d.detail.status === "processing")
+        ? 2500
+        : false;
     },
   });
   const d = detail.data?.status === "ok" ? detail.data.detail : null;
@@ -243,6 +247,12 @@ export function TitleDetailDrawer({
                       {d.eta != null && ` · rămas ${formatEta(d.eta)}`}
                     </span>
                   </div>
+                </div>
+              )}
+
+              {d.status === "processing" && (
+                <div className="text-[11px] text-muted-foreground">
+                  Fișierul e descărcat complet — aștept ca Plex să îl indexeze.
                 </div>
               )}
 

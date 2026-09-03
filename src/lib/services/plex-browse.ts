@@ -32,9 +32,11 @@ export interface PlexBrowseItem {
   // Câți utilizatori distincți (din conturile Plex mapate la conturi
   // FaikkitBox) au vizionat titlul — afișat ca badge separat în listă.
   watchedCount: number;
-  // "downloading" — are torrent, dar Plex nu l-a indexat încă; "in_library"
+  // "downloading" — are torrent, dar Plex nu l-a indexat încă; "processing"
+  // — torrentul s-a terminat (completed_at setat), se așteaptă doar
+  // legarea la Plex (vezi fereastra de retry din download.ts); "in_library"
   // — normal, deja în Plex.
-  status: "in_library" | "downloading";
+  status: "in_library" | "downloading" | "processing";
   // Progres live din qBittorrent — populate doar pentru status "downloading"
   // cu torrent_hash cunoscut; null dacă torrentul nu mai e găsit acolo
   // (ex. șters manual) sau qBit nu e configurat/disponibil.
@@ -113,6 +115,7 @@ interface MediaBrowseRow {
   plex_added_at: number | null;
   added_at: string;
   torrent_hash: string | null;
+  completed_at: string | null;
 }
 
 export const getPlexLibraryBrowse = createServerFn({ method: "GET" }).handler(
@@ -132,7 +135,7 @@ export const getPlexLibraryBrowse = createServerFn({ method: "GET" }).handler(
       const rows = db
         .prepare(
           `SELECT m.id, m.plex_rating_key, m.media_type, m.title, m.original_title, m.season, m.episode,
-                  m.poster_path, m.plex_added_at, m.added_at, m.torrent_hash
+                  m.poster_path, m.plex_added_at, m.added_at, m.torrent_hash, m.completed_at
            FROM media m
            WHERE m.media_type IN ('movie', 'episode')
              AND (m.torrent_hash IS NOT NULL OR m.plex_rating_key IS NOT NULL)
@@ -164,7 +167,11 @@ export const getPlexLibraryBrowse = createServerFn({ method: "GET" }).handler(
             Math.floor(new Date(`${r.added_at.replace(" ", "T")}Z`).getTime() / 1000),
           watchedByMe: false,
           watchedCount: 0,
-          status: r.plex_rating_key ? "in_library" : "downloading",
+          status: r.plex_rating_key
+            ? "in_library"
+            : r.completed_at
+              ? "processing"
+              : "downloading",
           progress: null,
           dlspeed: null,
           eta: null,
@@ -267,7 +274,7 @@ export interface PlexTitleDetail {
   watchedByMeAt: number | null;
   watchedByOthers: Array<{ username: string; viewedAt: number }>;
   addedByUsername: string | null;
-  status: "in_library" | "downloading";
+  status: "in_library" | "downloading" | "processing";
   // Progres live din qBittorrent — vezi PlexBrowseItem.
   progress: number | null;
   dlspeed: number | null;
@@ -436,7 +443,11 @@ async function buildDetailFromMediaRow(
     watchedByMeAt,
     watchedByOthers,
     addedByUsername,
-    status: row.plex_rating_key ? "in_library" : "downloading",
+    status: row.plex_rating_key
+      ? "in_library"
+      : row.completed_at
+        ? "processing"
+        : "downloading",
     progress,
     dlspeed,
     eta,
