@@ -494,11 +494,20 @@ export function AddMediaWizard({
               (e) => e.season === s.seasonNumber && e.episode === epNum && !e.isSeasonPack,
             );
 
+            const epCandidates = matchesForQuality(
+              pickFromSet(group?.episodes.get(epNum) ?? emptyQualitySet(), quality),
+              quality,
+            );
+
             let availability: EpisodeAvailability;
             if (plexEp) {
               availability = { kind: "in_plex", quality: plexEp.quality };
             } else if (packDownloadingEntry || episodeDownloading) {
               availability = { kind: "downloading" };
+            } else if (epCandidates.length > 0) {
+              availability = { kind: "episode_torrent", torrents: epCandidates };
+            } else if (packCandidates.length > 0) {
+              availability = { kind: "pack_only" };
             } else if (tmdbEp && !tmdbEp.aired) {
               availability = {
                 kind: "upcoming",
@@ -512,14 +521,7 @@ export function AddMediaWizard({
                 airStamp: airstampMap.get(epNum) ?? null,
               };
             } else {
-              const epCandidates = matchesForQuality(
-                pickFromSet(group?.episodes.get(epNum) ?? emptyQualitySet(), quality),
-                quality,
-              );
-              if (epCandidates.length > 0)
-                availability = { kind: "episode_torrent", torrents: epCandidates };
-              else if (packCandidates.length > 0) availability = { kind: "pack_only" };
-              else availability = { kind: "unavailable" };
+              availability = { kind: "unavailable" };
             }
             return { episodeNum: epNum, title, availability };
           });
