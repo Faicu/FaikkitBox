@@ -176,9 +176,24 @@
   box-shadow: 0 0 8px oklch(0.72 0.19 155 / 0.9);
   animation: live-blink 1.6s ease-in-out infinite;
 }
-/* Halo pulsat — pentru elemente în lucru (descărcare activă, sincronizare) */
+/* Halo pulsat — pentru elemente în lucru (descărcare activă, sincronizare).
+ *
+ * Haloul stă pe ::after, NU pe element. Motivul: aceste carduri sunt adesea
+ * copii direcți ai unui `stagger-in`, care le pune `opacity: 0` + o animație
+ * de intrare. Dacă am seta `animation` direct pe element, shorthand-ul ar
+ * înlocui animația de stagger (aceeași specificitate, regula asta e mai jos
+ * în fișier), iar cardul ar rămâne invizibil pentru totdeauna. Pe pseudo-
+ * element, slotul `animation` al cardului rămâne liber. */
 @utility pulse-glow {
-  animation: pulse-glow 2.4s ease-in-out infinite;
+  position: relative;
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    animation: pulse-glow 2.4s ease-in-out infinite;
+  }
 }
 
 /* Glass surface — translucent card with blur & subtle border */
@@ -279,7 +294,14 @@
   }
 }
 
-/* Stagger children — set --stagger via inline style if desired */
+/* Stagger children — set --stagger via inline style if desired
+ *
+ * ATENȚIE: copiii primesc `opacity: 0` și revin la 1 doar prin animația de
+ * intrare. Nu pune pe un copil direct o clasă care setează `animation` pe
+ * element (pulse-glow, live-dot, tick-flash, text-gradient-primary,
+ * progress-flow) — shorthand-ul ar înlocui animația de aici și copilul ar
+ * rămâne invizibil, ocupând spațiu gol. Pentru efecte decorative pe astfel de
+ * copii, animează un ::before/::after, ca la `pulse-glow`. */
 @utility stagger-in {
   & > * {
     opacity: 0;
@@ -400,8 +422,17 @@
   0%, 100% { box-shadow: 0 0 0 0 oklch(0.72 0.19 155 / 0.45); }
   50%      { box-shadow: 0 0 0 6px oklch(0.72 0.19 155 / 0); }
 }
+/* Vezi nota de la `pulse-glow` — și aici haloul e pe ::after, din același motiv. */
 @utility pulse-glow-up {
-  animation: pulse-glow-up 2.8s ease-in-out infinite;
+  position: relative;
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    animation: pulse-glow-up 2.8s ease-in-out infinite;
+  }
 }
 
 /* ---- Skeleton cu sweep, alternativă la animate-pulse ---- */
