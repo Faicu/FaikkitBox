@@ -12,7 +12,7 @@ import {
   DrawerDescription,
 } from "@/components/ui/drawer";
 import { errorLogQuery } from "@/lib/queries";
-import { clearErrorLogs } from "@/lib/errors/error-log";
+import { clearErrorLogs } from "@/lib/errors/error-log.functions";
 import { relativeTime } from "../utils";
 
 const SOURCE_LABEL: Record<string, string> = {

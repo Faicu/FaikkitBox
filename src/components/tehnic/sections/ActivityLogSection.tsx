@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 
 import { activityLogQuery, recentCommitsQuery, commitsFromDbQuery } from "@/lib/queries";
-import type { ActivityEntry } from "@/lib/activity-log";
+import type { ActivityEntry } from "@/lib/activity-log.functions";
 import type { GitHubCommit } from "@/lib/github.functions";
 import { CommitDrawer } from "../CommitDrawer";
 import { SubtitleFixDrawer } from "../SubtitleFixDrawer";

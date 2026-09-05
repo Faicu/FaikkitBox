@@ -16,7 +16,7 @@ import { BottomNav } from "../components/BottomNav";
 import { Toaster } from "../components/ui/sonner";
 import { useAutoReload } from "../hooks/use-auto-reload";
 import { onUpdateDetected } from "../lib/system/update-signal";
-import { logClientError } from "../lib/errors/error-log";
+import { logClientError } from "../lib/errors/error-log.functions";
 import {
   installClientErrorCapture,
   withoutClientCapture,

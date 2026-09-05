@@ -9,4 +9,4 @@ export * from "./filelist/categories";
 export * from "./filelist/log";
 export * from "./qbit-client";
 export * from "./filelist/filelist-client";
-export * from "./filelist/download";
+export * from "./filelist/download.functions";

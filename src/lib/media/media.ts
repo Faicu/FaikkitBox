@@ -169,12 +169,8 @@ export interface LibraryTitleMatch {
 // loc să lase rezolvarea automată (autoResolveManualMedia) să ghicească după
 // IMDb ID-ul torrentului — greșit pentru titluri indexate pe Filelist sub
 // ID-ul altei producții din aceeași franciză (vezi spinoff-uri/reunion-uri).
-export const searchLibraryTitles = createServerFn({ method: "GET" })
-  .validator((data: { query: string }) => data)
-  .handler(async ({ data }): Promise<LibraryTitleMatch[]> => {
-    const { requireAdmin } = await import("../auth/admin.server");
-    await requireAdmin();
-    const q = data.query.trim();
+export async function searchLibraryTitlesCore(query: string): Promise<LibraryTitleMatch[]> {
+    const q = query.trim();
     if (q.length < 2) return [];
     const db = getDb();
     const rows = db
@@ -208,7 +204,7 @@ export const searchLibraryTitles = createServerFn({ method: "GET" })
       posterPath: r.poster_path,
       tvStatus: r.tv_status,
     }));
-  });
+}
 
 export interface DownloadingMediaEntry {
   season: number | null;
@@ -221,19 +217,18 @@ export interface DownloadingMediaEntry {
 // neindexat de Plex) — folosit de wizard ca să blocheze orice acțiune nouă
 // pe un sezon/episod/film deja pornit, în loc să lase userul să-l pornească
 // din nou din greșeală (torrent_hash e cunoscut, plex_rating_key încă nu).
-export const getDownloadingMediaForTmdbId = createServerFn({ method: "GET" })
-  .validator((data: { tmdbId: number; mediaType: "movie" | "tv" }) => data)
-  .handler(async ({ data }): Promise<DownloadingMediaEntry[]> => {
-    const { requireAuth } = await import("../auth/admin.server");
-    await requireAuth();
+export async function getDownloadingMediaForTmdbIdCore(
+  tmdbId: number,
+  mediaType: "movie" | "tv",
+): Promise<DownloadingMediaEntry[]> {
     const db = getDb();
-    const dbMediaType = data.mediaType === "movie" ? "movie" : "episode";
+    const dbMediaType = mediaType === "movie" ? "movie" : "episode";
     const rows = db
       .prepare(
         `SELECT season, episode, is_season_pack, torrent_name FROM media
          WHERE tmdb_id = ? AND media_type = ? AND torrent_hash IS NOT NULL AND plex_rating_key IS NULL`,
       )
-      .all(data.tmdbId, dbMediaType) as Array<{
+      .all(tmdbId, dbMediaType) as Array<{
       season: number | null;
       episode: number | null;
       is_season_pack: number;
@@ -245,7 +240,7 @@ export const getDownloadingMediaForTmdbId = createServerFn({ method: "GET" })
       isSeasonPack: !!r.is_season_pack,
       torrentName: r.torrent_name,
     }));
-  });
+}
 
 // Un rând deja existent pentru EXACT același torrent (hash + sezon/episod) —
 // posibil dacă două cereri de descărcare pornesc aproape simultan pentru

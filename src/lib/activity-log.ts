@@ -92,37 +92,36 @@ export async function logActivity(
 // Server function: citire log pentru UI
 // ---------------------------------------------------------------------------
 
-export const getActivityLog = createServerFn({ method: "GET" }).handler(
-  async (): Promise<ActivityEntry[]> => {
-    const { requireAdmin } = await import("./auth/admin.server");
-    await requireAdmin();
-    try {
-      const { getDb } = await import("./db");
-      const db = getDb();
-      const rows = db
-        .prepare(
-          "SELECT id, timestamp, type, message, meta FROM activity ORDER BY timestamp DESC, rowid DESC LIMIT 500",
-        )
-        .all() as Array<{
-        id: string;
-        timestamp: string;
-        type: string;
-        message: string;
-        meta: string | null;
-      }>;
-      return rows.map((r) => ({
-        id: r.id,
-        timestamp: r.timestamp,
-        type: r.type as ActivityType,
-        message: r.message,
-        ...(r.meta ? { meta: JSON.parse(r.meta) } : {}),
-      }));
-    } catch (e) {
-      console.warn("[activity-log] Eroare la citire:", e);
-      return [];
-    }
-  },
-);
+// getActivityLog trăiește acum în activity-log.functions.ts — vezi comentariul
+// de acolo: modulul ăsta are importuri server statice (node:crypto) și e
+// rădăcina care târa db.ts în bundle-ul de client.
+
+export async function readActivityLog(): Promise<ActivityEntry[]> {
+  try {
+    const { getDb } = await import("./db");
+    const rows = getDb()
+      .prepare(
+        "SELECT id, timestamp, type, message, meta FROM activity ORDER BY timestamp DESC, rowid DESC LIMIT 500",
+      )
+      .all() as Array<{
+      id: string;
+      timestamp: string;
+      type: string;
+      message: string;
+      meta: string | null;
+    }>;
+    return rows.map((r) => ({
+      id: r.id,
+      timestamp: r.timestamp,
+      type: r.type as ActivityType,
+      message: r.message,
+      ...(r.meta ? { meta: JSON.parse(r.meta) } : {}),
+    }));
+  } catch (e) {
+    console.warn("[activity-log] Eroare la citire:", e);
+    return [];
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Tracking sesiuni Plex active (persistat în SQLite, supraviețuiește restarturilor)

@@ -13,8 +13,8 @@ import type { TmdbSearchResult } from "@/lib/tmdb/tmdb.functions";
 import { checkPlexHasTitle, getPlexEpisodesInSeason } from "@/lib/services.functions";
 import { checkFilelistForItem, downloadFilelist } from "@/lib/filelist.functions";
 import type { FilelistTorrent } from "@/lib/filelist.functions";
-import { getDownloadingMediaForTmdbId } from "@/lib/media/media";
-import type { DownloadingMediaEntry } from "@/lib/media/media";
+import { getDownloadingMediaForTmdbId } from "@/lib/media/media.functions";
+import type { DownloadingMediaEntry } from "@/lib/media/media.functions";
 import { getTvmazeAirstamps } from "@/lib/tvmaze/tvmaze.functions";
 import type { TvmazeAirstamp } from "@/lib/tvmaze/tvmaze.functions";
 import {

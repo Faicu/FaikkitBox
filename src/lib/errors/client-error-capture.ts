@@ -5,7 +5,7 @@
 // window.onerror/unhandledrejection din __root.tsx (acelea prind doar
 // excepțiile neprinse, nu erorile tratate explicit cu try/catch).
 
-import { logClientError, type ErrorLevel } from "./error-log";
+import { logClientError, type ErrorLevel } from "./error-log.functions";
 
 let installed = false;
 let suppressDepth = 0;

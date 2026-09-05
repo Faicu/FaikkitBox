@@ -15,7 +15,7 @@ import {
 
 import type { FilelistTorrent } from "@/lib/filelist.functions";
 import { formatBytes } from "@/lib/format";
-import { searchLibraryTitles, type LibraryTitleMatch } from "@/lib/media/media";
+import { searchLibraryTitles, type LibraryTitleMatch } from "@/lib/media/media.functions";
 import type { DownloadMediaContext } from "./use-download";
 
 // ---------------------------------------------------------------------------

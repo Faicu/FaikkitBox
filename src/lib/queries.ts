@@ -3,8 +3,8 @@ import { getPlex, getPlexSessions, getImmich, getQbit, getHost } from "./service
 import { getAdminStatus } from "./auth/admin.functions";
 import { getVersions } from "./system/versions.functions";
 import { getLastSpeedtest, getSpeedtestHistory } from "./system/speedtest.functions";
-import { getActivityLog } from "./activity-log";
-import { getErrorLogs } from "./errors/error-log";
+import { getActivityLog } from "./activity-log.functions";
+import { getErrorLogs } from "./errors/error-log.functions";
 import {
   getRecentCommits,
   getCommitsFromDb,

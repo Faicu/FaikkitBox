@@ -7,7 +7,7 @@ import {
   DrawerTitle,
   DrawerDescription,
 } from "@/components/ui/drawer";
-import type { ActivityEntry } from "@/lib/activity-log";
+import type { ActivityEntry } from "@/lib/activity-log.functions";
 import {
   CORRECTED_OUTCOMES as CORRECTED_OUTCOMES_LIST,
   OK_OUTCOMES as OK_OUTCOMES_LIST,

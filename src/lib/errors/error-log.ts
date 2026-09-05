@@ -176,27 +176,26 @@ function rowToEntry(r: {
   };
 }
 
-export const getErrorLogs = createServerFn({ method: "GET" }).handler(
-  async (): Promise<ErrorLogEntry[]> => {
-    const { requireAdmin } = await import("../auth/admin.server");
-    await requireAdmin();
-    const { getDb } = await import("../db");
-    const rows = getDb()
-      .prepare(
-        `SELECT id, timestamp, last_seen, source, level, message, stack, count
-         FROM error_log ORDER BY last_seen DESC LIMIT 500`,
-      )
-      .all() as unknown as Parameters<typeof rowToEntry>[0][];
-    return rows.map(rowToEntry);
-  },
-);
+// Server functions au fost mutate în error-log.functions.ts — modulul ăsta are
+// importuri server statice (node:crypto, node:sqlite) și era una dintre
+// rădăcinile care târau cod server în bundle-ul public. Aici rămân doar
+// funcțiile simple pe care le apelează acele handlere.
 
-export const clearErrorLogs = createServerFn({ method: "POST" }).handler(async () => {
-  const { requireAdmin } = await import("../auth/admin.server");
-  await requireAdmin();
+export async function readErrorLogs(): Promise<ErrorLogEntry[]> {
+  const { getDb } = await import("../db");
+  const rows = getDb()
+    .prepare(
+      `SELECT id, timestamp, last_seen, source, level, message, stack, count
+       FROM error_log ORDER BY last_seen DESC LIMIT 500`,
+    )
+    .all() as unknown as Parameters<typeof rowToEntry>[0][];
+  return rows.map(rowToEntry);
+}
+
+export async function clearErrorLogsCore(): Promise<void> {
   const { getDb } = await import("../db");
   getDb().exec("DELETE FROM error_log");
-});
+}
 
 // Limitare per-IP: max 20 rapoarte de eroare client pe minut, indiferent de mesaj
 // — logError are deja o dedublare per (sursă+mesaj), dar aceea poate fi ocolită
@@ -205,21 +204,22 @@ const clientErrorHits = new Map<string, { count: number; windowStart: number }>(
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 20;
 
-export const logClientError = createServerFn({ method: "POST" })
-  .validator((data: { message: string; stack?: string; level?: ErrorLevel }) => data)
-  .handler(async ({ data }) => {
-    const { getRequestIP } = await import("@tanstack/react-start/server");
-    const ip = getRequestIP() ?? "unknown";
-    const now = Date.now();
-    const hit = clientErrorHits.get(ip);
-    if (!hit || now - hit.windowStart > RATE_LIMIT_WINDOW_MS) {
-      clientErrorHits.set(ip, { count: 1, windowStart: now });
-    } else {
-      hit.count++;
-      if (hit.count > RATE_LIMIT_MAX) return;
-    }
+export function recordClientError(
+  ip: string,
+  message: string,
+  stack: string | undefined,
+  level: ErrorLevel,
+): void {
+  const now = Date.now();
+  const hit = clientErrorHits.get(ip);
+  if (!hit || now - hit.windowStart > RATE_LIMIT_WINDOW_MS) {
+    clientErrorHits.set(ip, { count: 1, windowStart: now });
+  } else {
+    hit.count++;
+    if (hit.count > RATE_LIMIT_MAX) return;
+  }
 
-    const err = new Error(data.message.slice(0, MAX_MESSAGE_LEN));
-    if (data.stack) err.stack = data.stack.slice(0, MAX_STACK_LEN);
-    logError("client", err, data.level ?? "error");
-  });
+  const err = new Error(message.slice(0, MAX_MESSAGE_LEN));
+  if (stack) err.stack = stack.slice(0, MAX_STACK_LEN);
+  logError("client", err, level);
+}

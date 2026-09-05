@@ -278,7 +278,7 @@ if (typeof process !== "undefined" && process.env) {
 // Server function: descarcă torrent și trimite la qBittorrent
 // ---------------------------------------------------------------------------
 
-interface DownloadFilelistParams {
+export interface DownloadFilelistParams {
   torrentId: number;
   torrentName: string;
   categoryId: number;
@@ -362,7 +362,7 @@ async function autoResolveManualMedia(
 
 // Implementare comună pentru descărcare + upload la qBittorrent, folosită de
 // server function-ul public (downloadFilelist).
-async function downloadFilelistCore(
+export async function downloadFilelistCore(
   params: DownloadFilelistParams,
 ): Promise<FilelistDownloadResult> {
   const username = process.env.FILELIST_USERNAME;
@@ -597,34 +597,6 @@ async function finishFilelistDownload(ctx: {
   }
 }
 
-export const downloadFilelist = createServerFn({ method: "POST" })
-  .validator(
-    (data: {
-      torrentId: number;
-      torrentName: string;
-      categoryId: number;
-      categoryName?: string;
-      size?: number;
-      freeleech?: boolean;
-      internal?: boolean;
-      imdb?: string | null;
-      media?: DownloadFilelistParams["media"];
-    }) => ({
-      ...data,
-      torrentId: Number(data.torrentId),
-      categoryId: Number(data.categoryId),
-      size: data.size !== undefined ? Number(data.size) : undefined,
-    }),
-  )
-  .handler(async ({ data }): Promise<FilelistDownloadResult> => {
-    const { requireAuth } = await import("../auth/admin.server");
-    const session = await requireAuth();
-    return downloadFilelistCore({
-      ...data,
-      requestedByUserId: session.data.userId ?? null,
-    });
-  });
-
 // Corectează subtitrarea pentru un singur titlu — folosește exact aceeași
 // logică (ensureRomanianSubtitle) ca descărcarea normală, dar aplicată direct
 // pe hash-ul torrentului cerut, fără să mai listeze/itereze toate torrentele
@@ -646,12 +618,12 @@ interface MediaActionRow {
   requested_by_user_id: number | null;
 }
 
-export const correctSubtitleForMedia = createServerFn({ method: "POST" })
-  .validator((data: { mediaId: number }) => data)
-  .handler(async ({ data }): Promise<CorrectSubtitleResult> => {
-    const { requireAuth, isAdminOrOwner } = await import("../auth/admin.server");
-    const session = await requireAuth();
-
+export async function correctSubtitleForMediaCore(
+  session: { data: { admin?: boolean; userId?: number } },
+  data: { mediaId: number },
+): Promise<CorrectSubtitleResult> {
+  {
+    const { isAdminOrOwner } = await import("../auth/admin.server");
     const { getDb } = await import("../db");
     const row = getDb()
       .prepare(
@@ -704,14 +676,15 @@ export const correctSubtitleForMedia = createServerFn({ method: "POST" })
     }
 
     return { status: "ok", ...result };
-  });
+  }
+}
 
-export const deleteSubtitleForMedia = createServerFn({ method: "POST" })
-  .validator((data: { mediaId: number }) => data)
-  .handler(async ({ data }): Promise<DeleteSubtitleResult> => {
-    const { requireAuth, isAdminOrOwner } = await import("../auth/admin.server");
-    const session = await requireAuth();
-
+export async function deleteSubtitleForMediaCore(
+  session: { data: { admin?: boolean; userId?: number } },
+  data: { mediaId: number },
+): Promise<DeleteSubtitleResult> {
+  {
+    const { isAdminOrOwner } = await import("../auth/admin.server");
     const { getDb } = await import("../db");
     const row = getDb()
       .prepare(
@@ -767,4 +740,5 @@ export const deleteSubtitleForMedia = createServerFn({ method: "POST" })
     }
 
     return result;
-  });
+  }
+}
