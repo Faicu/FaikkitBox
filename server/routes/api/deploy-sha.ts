@@ -11,13 +11,31 @@ export default defineEventHandler((event) => {
   setHeader(event, "Connection", "keep-alive");
   setHeader(event, "X-Accel-Buffering", "no");
 
+  // Curățarea intervalului se leagă de semnalul cererii și de `cancel` al
+  // stream-ului, nu de `event.node.req` — `event.node` e opțional în h3 v2
+  // (există doar pe runtime-ul Node), deci accesul direct nici nu trecea de
+  // type-check odată ce server/ a intrat în tsconfig.
+  let id: ReturnType<typeof setInterval> | undefined;
+  const stop = () => {
+    if (id !== undefined) clearInterval(id);
+    id = undefined;
+  };
+
   const body = new ReadableStream({
     start(controller) {
-      const send = () => controller.enqueue(`data: ${serverStartToken}\n\n`);
+      const send = () => {
+        try {
+          controller.enqueue(`data: ${serverStartToken}\n\n`);
+        } catch {
+          // clientul a închis între timp — oprim heartbeat-ul
+          stop();
+        }
+      };
       send();
-      const id = setInterval(send, 25_000);
-      event.node.req.on("close", () => clearInterval(id));
+      id = setInterval(send, 25_000);
+      event.req.signal?.addEventListener("abort", stop);
     },
+    cancel: stop,
   });
 
   return new Response(body);

@@ -8,7 +8,8 @@
   },
   "scripts": {
     "dev": "vite dev",
-    "build": "vite build && node -e \"require('node:fs').writeFileSync('data/.deploy-marker', new Date().toISOString())\"",
+    "build": "tsc --noEmit && vite build && node -e \"require('node:fs').writeFileSync('data/.deploy-marker', new Date().toISOString())\"",
+    "typecheck": "tsc --noEmit",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
