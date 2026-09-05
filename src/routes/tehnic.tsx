@@ -24,6 +24,7 @@ import { CommitStatsSection } from "@/components/tehnic/sections/CommitStatsSect
 import { ActivityLogSection } from "@/components/tehnic/sections/ActivityLogSection";
 import { ErrorLogSection } from "@/components/tehnic/sections/ErrorLogSection";
 import { SpeedtestChart } from "@/components/tehnic/sections/SpeedtestChart";
+import { NetworkLinkCard } from "@/components/tehnic/sections/NetworkLinkCard";
 import { TehnicSubNav } from "@/components/tehnic/TehnicSubNav";
 
 export const Route = createFileRoute("/tehnic")({
@@ -183,6 +184,8 @@ function TehnicPage() {
                 )}
               </div>
             )}
+
+            <NetworkLinkCard />
 
             {(speedtestHistory.data?.length ?? 0) > 0 && (
               <SpeedtestChart history={speedtestHistory.data!} />

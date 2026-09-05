@@ -14,6 +14,7 @@ import {
 } from "./github.functions";
 import { getPlexLibraryBrowse, getRecentWatches } from "./services.functions";
 import { getRefreshMs, getFastRefreshMs, REFRESH_DEFAULT_MS } from "./refresh-rate";
+import { getNetworkLink } from "./system/network-link.functions";
 
 // Ritmul statisticilor live e reglabil din pagina Sistem — vezi
 // lib/refresh-rate.ts. `refetchInterval` primește o funcție, evaluată la
@@ -201,4 +202,15 @@ export const recentWatchesQuery = queryOptions({
   queryFn: () => getRecentWatches(),
   staleTime: 60_000,
   refetchInterval: 60_000,
+});
+
+// Viteza negociată a legăturii Ethernet — se schimbă doar la evenimente fizice
+// (cablu atins, switch repornit), deci un ritm lent e suficient. Componenta
+// invalidează manual query-ul cât timp urmărește revenirea după renegociere.
+export const networkLinkQuery = queryOptions({
+  queryKey: ["networkLink"],
+  queryFn: () => getNetworkLink(),
+  staleTime: 30_000,
+  refetchInterval: 60_000,
+  refetchOnWindowFocus: true,
 });
