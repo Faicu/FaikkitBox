@@ -1,4 +1,3 @@
-import { createServerFn } from "@tanstack/react-start";
 import { randomUUID } from "node:crypto";
 import {
   PUSH_TITLES,
@@ -54,7 +53,17 @@ export async function logActivity(
   type: ActivityType,
   message: string,
   meta?: Record<string, ActivityMetaValue>,
-  options?: { skipPush?: boolean; image?: string | null; url?: string; title?: string },
+  options?: {
+    skipPush?: boolean;
+    image?: string | null;
+    url?: string;
+    title?: string;
+    // Momentul real al evenimentului, când diferă de "acum" — folosit pentru
+    // opririle detectate retroactiv la pornirea următoare (SIGKILL, pană de
+    // curent). Fără el, o oprire de acum două zile ar apărea în jurnal ca
+    // fiind de adineauri.
+    timestamp?: string;
+  },
 ): Promise<void> {
   try {
     const { getDb } = await import("./db");
@@ -63,7 +72,7 @@ export async function logActivity(
       "INSERT INTO activity (id, timestamp, type, message, meta) VALUES (?, ?, ?, ?, ?)",
     ).run(
       randomUUID(),
-      new Date().toISOString(),
+      options?.timestamp ?? new Date().toISOString(),
       type,
       message,
       meta ? JSON.stringify(meta) : null,
@@ -355,25 +364,38 @@ export async function trackImmichUploads(
 }
 
 // ---------------------------------------------------------------------------
-// Log pornire + oprire server
+// Ciclul de viață al serverului: pornire, oprire, cauză
+//
+// Proiectat în jurul unei singure idei: procesul NU poate loga întotdeauna
+// propria oprire. Un SIGKILL (systemd după TimeoutStopSec), un OOM kill sau o
+// pană de curent nu rulează niciun cod al nostru. Versiunea anterioară se baza
+// exclusiv pe handlere de semnal, deci acele opriri lipseau pur și simplu din
+// jurnal, iar pornirea următoare apărea nemotivat, fără pereche.
+//
+// Soluția: un rând de stare în DB (`server_runtime`) cu un heartbeat periodic.
+// La oprirea curată îl marcăm `clean_shutdown = 1`. Dacă la pornire găsim un
+// rând rămas cu 0, știm că rularea anterioară s-a terminat brutal — și logăm
+// RETROACTIV oprirea, datată la ultimul heartbeat (adică ±30s de momentul
+// real). Jurnalul devine astfel complet în toate scenariile, nu doar în cele
+// în care apucăm să ne executăm codul.
 // ---------------------------------------------------------------------------
 
 // Referință pre-încărcată la DB pentru shutdown handler (ESM nu are require sincron)
 let dbModuleRef: typeof import("./db") | null = null;
 let cryptoRef: typeof import("node:crypto") | null = null;
 
+const HEARTBEAT_MS = 30_000;
+
 // Marcaj scris de `npm run build` (vezi package.json) și consumat o singură
-// dată, la prima pornire de după. Înlocuiește vechea euristică pe mtime-ul lui
-// .output/server/index.mjs, care era greșită prin construcție: workflow-ul e
-// stop → build → start, deci la momentul opririi build-ul încă nu se făcuse
-// (mtime vechi → oprirea se loga), iar la pornire era proaspăt (→ pornirea se
-// suprima). Fiecare deploy producea astfel o oprire fără pereche, și jurnalul
-// arăta serverul ca oprit de zile întregi.
+// dată, la prima pornire de după. Înlocuiește o euristică veche pe mtime-ul
+// lui .output/server/index.mjs, care era greșită prin construcție: workflow-ul
+// e stop → build → start, deci la oprire mtime-ul era vechi (oprirea se loga)
+// iar la pornire proaspăt (pornirea se suprima) — fiecare deploy lăsa o oprire
+// fără pereche.
 function deployMarkerPath(): string {
   return process.env.FAIKKITBOX_DEPLOY_MARKER ?? "/opt/faikkitbox/data/.deploy-marker";
 }
 
-// Consumă marcajul (îl șterge) și spune dacă pornirea curentă e un deploy.
 function consumeDeployMarker(): boolean {
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -387,15 +409,53 @@ function consumeDeployMarker(): boolean {
   }
 }
 
-function nowHM(): string {
-  return new Date().toLocaleTimeString("ro-RO", {
+function nowHM(iso?: string): string {
+  return (iso ? new Date(iso) : new Date()).toLocaleTimeString("ro-RO", {
     hour: "2-digit",
     minute: "2-digit",
     timeZone: "Europe/Bucharest",
   });
 }
 
-async function logServerStartOnce(): Promise<void> {
+// Setat de handlerele uncaughtException/unhandledRejection — singura cauză de
+// oprire pe care o putem numi exact în momentul în care se întâmplă.
+let crashCause: string | null = null;
+
+// ---------------------------------------------------------------------------
+// Starea de rulare (o singură linie, id = 1)
+// ---------------------------------------------------------------------------
+
+interface RuntimeRow {
+  started_at: string;
+  last_heartbeat: string;
+  clean_shutdown: number;
+  pid: number;
+}
+
+function readPreviousRuntime(db: import("node:sqlite").DatabaseSync): RuntimeRow | null {
+  const row = db.prepare("SELECT * FROM server_runtime WHERE id = 1").get() as
+    RuntimeRow | undefined;
+  return row ?? null;
+}
+
+function writeRuntimeStart(db: import("node:sqlite").DatabaseSync): void {
+  const now = new Date().toISOString();
+  db.prepare(
+    `INSERT INTO server_runtime (id, started_at, last_heartbeat, clean_shutdown, pid)
+     VALUES (1, ?, ?, 0, ?)
+     ON CONFLICT(id) DO UPDATE SET
+       started_at = excluded.started_at,
+       last_heartbeat = excluded.last_heartbeat,
+       clean_shutdown = 0,
+       pid = excluded.pid`,
+  ).run(now, now, process.pid);
+}
+
+// ---------------------------------------------------------------------------
+// Pornire
+// ---------------------------------------------------------------------------
+
+async function logServerStart(): Promise<void> {
   try {
     const dbModule = await import("./db");
     dbModuleRef = dbModule;
@@ -403,45 +463,62 @@ async function logServerStartOnce(): Promise<void> {
     // Deschide conexiunea (și rulează migrările) acum, la pornire — la oprire
     // avem doar ~300ms până la ieșirea forțată din fast-shutdown.ts, prea
     // puțin ca să deschidem DB-ul de la zero acolo.
-    dbModule.getDb();
-    // Nu mai există deduplicare pe fereastră de 30s: exista fiindcă modulul
-    // putea fi încărcat din mai multe chunk-uri de build, dar acum init-ul e
-    // apelat o singură dată, explicit, din server/plugins/activity-boot.ts,
-    // iar garda globalThis de mai jos acoperă dublul-init în același proces.
-    // Fereastra ascundea în schimb exact restarturile rapide — adică un
-    // crash-loop systemd, când jurnalul e cel mai util (verificat: două
-    // reporniri la 17s distanță produceau oprire fără pornire).
+    const db = dbModule.getDb();
 
-    // Deploy-urile se loghează, dar fără push — altfel primești două
-    // notificări la fiecare `npm run build`. Înainte erau suprimate complet,
-    // ceea ce lăsa găuri în jurnal (opriri fără pornire corespunzătoare).
+    // 1. Rularea anterioară s-a încheiat brutal? Logăm oprirea ei ÎNAINTE de
+    //    pornirea curentă, ca jurnalul să rămână în ordine cronologică.
+    const prev = readPreviousRuntime(db);
+    if (prev && prev.clean_shutdown === 0) {
+      await logActivity(
+        "server_stop",
+        buildServerStopMessage(
+          "oprire necurată (proces terminat forțat, fără shutdown)",
+          nowHM(prev.last_heartbeat),
+        ),
+        { unclean: true, detectedAt: "next_boot", previousPid: prev.pid },
+        // Datat la ultimul heartbeat, nu la momentul detectării: dacă serverul
+        // a stat picat două zile, oprirea trebuie să apară în jurnal acolo
+        // unde s-a întâmplat, nu acum.
+        // Fără push: notificarea ar sosi acum, pentru ceva petrecut înainte.
+        // Pornirea de mai jos anunță oricum că serverul e din nou sus.
+        { skipPush: true, timestamp: prev.last_heartbeat },
+      );
+      console.warn(
+        `[activity-log] Rularea anterioară (pid ${prev.pid}) s-a terminat necurat — ultimul semn de viață: ${prev.last_heartbeat}`,
+      );
+    }
+
+    // 2. Cauza pornirii curente.
     const isDeploy = consumeDeployMarker();
-
-    // Cauza: sistemul repornit de curând (uptime OS mic) vs doar serviciul
-    // (systemctl start), cu sistemul deja pornit de mai mult timp. Se
-    // evaluează la boot — înainte, modulul se încărca abia la prima cerere
-    // HTTP, deci `os.uptime()` era deja mare și un reboot real apărea ca
-    // "pornire manuală".
     const os = await import("node:os");
     const cause = isDeploy
       ? "actualizare de cod (deploy)"
       : os.uptime() < 120
         ? "după repornirea sistemului"
         : "pornire manuală a serviciului";
+
+    writeRuntimeStart(db);
+
+    // Deploy-urile se loghează, dar fără push — altfel primești o notificare
+    // la fiecare `npm run build`. Înainte erau suprimate complet, ceea ce
+    // lăsa găuri în jurnal.
     await logActivity(
       "server_start",
       buildServerStartMessage(cause, nowHM()),
-      { deploy: isDeploy },
+      {
+        deploy: isDeploy,
+        pid: process.pid,
+      },
       { skipPush: isDeploy },
     );
-  } catch {
-    // logare best-effort — nu blocăm pornirea serverului
+  } catch (e) {
+    console.warn("[activity-log] Logarea pornirii a eșuat:", e);
   }
 }
 
-// Setat de handler-ele uncaughtException/unhandledRejection de mai jos —
-// singura sursă de "cauză" pe care o putem distinge realist la oprire.
-let crashCause: string | null = null;
+// ---------------------------------------------------------------------------
+// Oprire (sincron — rulează din handlere de semnal / "exit")
+// ---------------------------------------------------------------------------
 
 function logServerStopSync(): void {
   try {
@@ -451,17 +528,28 @@ function logServerStopSync(): void {
     const message = buildServerStopMessage(cause, nowHM());
     db.prepare(
       "INSERT INTO activity (id, timestamp, type, message, meta) VALUES (?, ?, ?, ?, ?)",
-    ).run(cryptoRef.randomUUID(), new Date().toISOString(), "server_stop", message, null);
-    // Push best-effort, fără await — la oprire avem doar 300ms (fast-shutdown.ts)
-    // înainte de ieșirea forțată, insuficient garantat pentru un round-trip
-    // web-push, dar merită încercat când apucă.
+    ).run(
+      cryptoRef.randomUUID(),
+      new Date().toISOString(),
+      "server_stop",
+      message,
+      JSON.stringify({ crash: crashCause != null, pid: process.pid }),
+    );
+    // Marcăm oprirea ca fiind curată — altfel pornirea următoare ar raporta
+    // retroactiv un kill care nu s-a întâmplat.
+    db.prepare("UPDATE server_runtime SET clean_shutdown = 1 WHERE id = 1").run();
+
+    // Push best-effort, fără await — la oprire avem doar ~300ms
+    // (fast-shutdown.ts) înainte de ieșirea forțată, insuficient garantat
+    // pentru un round-trip web-push, dar merită încercat când apucă.
     import("./notifications/push")
       .then(({ sendPushToAll }) =>
         sendPushToAll(PUSH_TITLES.server_stop, message, { url: PUSH_URLS.server_stop }),
       )
       .catch(() => {});
-  } catch {
-    // logare best-effort — nu blocăm oprirea serverului
+  } catch (e) {
+    // Nu blocăm oprirea serverului pentru o problemă de logare.
+    console.warn("[activity-log] Logarea opririi a eșuat:", e);
   }
 }
 
@@ -470,47 +558,68 @@ declare global {
 }
 
 // Rulează doar când modulul e încărcat din build-ul real (.output/server/...),
-// nu din sursă (ex. `npx tsx src/lib/*.ts` pentru un script de test) — altfel
-// un script efemer ajunge să logheze fals "Serverul FaikkitBox a pornit/s-a
-// oprit" în Jurnalul de Activitate la fiecare rulare; asta a poluat jurnalul
-// în timpul testării manuale a acestui fișier.
+// nu din sursă (ex. un script ad-hoc peste src/lib/*.ts) — altfel un script
+// efemer ar loga fals "Serverul a pornit / s-a oprit" la fiecare rulare; asta
+// a poluat jurnalul în timpul testării manuale a acestui fișier.
 const isRealServerBuild = import.meta.url.includes("/.output/");
 
-// Apelată explicit din server/plugins/activity-boot.ts, la pornirea Nitro.
+// Apelată explicit (și AȘTEPTATĂ) din server/plugins/activity-boot.ts.
 //
-// Înainte, blocul ăsta rula ca side-effect la încărcarea modulului — dar
-// nimic nu importa activity-log la boot, deci se executa abia la PRIMA CERERE
-// HTTP. Consecințe măsurate: ora pornirii era ora primei cereri (nu a
-// pornirii), `os.uptime()` era deja mare deci un reboot real apărea ca
-// "pornire manuală", iar dacă serverul era oprit înainte să vină vreo cerere,
-// handler-ele de shutdown nici nu existau — oprirea nu se loga deloc.
-export function initServerLifecycleLogging(): void {
+// Înainte, blocul rula ca side-effect la încărcarea modulului — dar nimic nu
+// importa activity-log la boot, deci se executa abia la PRIMA CERERE HTTP.
+// Măsurat: după `systemctl restart`, jurnalul rămânea gol până când cineva
+// deschidea aplicația; un singur curl declanșa imediat "Serverul a pornit", cu
+// ora cererii în loc de ora pornirii, și cu `os.uptime()` deja mare, deci un
+// reboot real apărea ca "pornire manuală".
+export async function initServerLifecycleLogging(): Promise<void> {
   if (!isRealServerBuild || typeof process === "undefined" || !process.env) return;
   if (globalThis.__faikkitboxActivityInit) return;
   globalThis.__faikkitboxActivityInit = true;
 
-  logServerStartOnce();
-  // "exit" rulează la orice ieșire normală — doar cod sincron (node:sqlite poate).
+  // Așteptat, nu fire-and-forget: handlerele de mai jos au nevoie de
+  // dbModuleRef populat, iar un SIGTERM sosit între timp ar găsi altfel
+  // shutdown-ul nelogabil.
+  await logServerStart();
+
+  // Heartbeat: cât timp procesul trăiește, își actualizează ora. Dacă e
+  // omorât brutal, ultimul heartbeat rămâne cea mai bună aproximare a
+  // momentului morții (±30s), folosită de logServerStart la pornirea
+  // următoare.
+  const beat = setInterval(() => {
+    try {
+      dbModuleRef
+        ?.getDb()
+        .prepare("UPDATE server_runtime SET last_heartbeat = ? WHERE id = 1")
+        .run(new Date().toISOString());
+    } catch {
+      // O bătaie pierdută nu contează — următoarea corectează ora.
+    }
+  }, HEARTBEAT_MS);
+  // Nu ține procesul în viață doar pentru heartbeat.
+  beat.unref?.();
+
   let stopLogged = false;
   const logOnce = () => {
-    if (!stopLogged) {
-      stopLogged = true;
-      logServerStopSync();
-    }
+    if (stopLogged) return;
+    stopLogged = true;
+    clearInterval(beat);
+    logServerStopSync();
   };
+
+  // "exit" rulează la orice ieșire normală — doar cod sincron (node:sqlite
+  // e sincron, deci merge).
   process.on("exit", logOnce);
-  // Backup: dacă SIGTERM nu duce la exit normal (proces omorât direct),
-  // logăm imediat la semnal. NU facem process.exit() — lăsăm Nitro să-și
-  // termine graceful shutdown-ul.
+  // Backup: dacă SIGTERM nu duce la un exit normal, logăm direct la semnal.
+  // NU apelăm process.exit() aici — lăsăm Nitro (și fast-shutdown.ts) să-și
+  // termine treaba.
   process.on("SIGTERM", logOnce);
   process.on("SIGINT", logOnce);
-  // Singura sursă realistă de "cauză" la oprire: dacă procesul moare din cauza
-  // unei erori neprinse, marcăm asta înainte de exit. A avea un listener pe
-  // uncaughtException/unhandledRejection dezactivează crash-ul implicit al
-  // Node — trebuie să ieșim noi explicit, altfel procesul rămâne agățat în
-  // loc să pice curat (și systemd să-l repornească). console-capture.ts
-  // prinde deja console.error pentru Jurnalul de erori, deci logăm eroarea o
-  // singură dată aici, nu duplicat.
+
+  // Un listener pe uncaughtException/unhandledRejection dezactivează crash-ul
+  // implicit al Node, deci trebuie să ieșim noi explicit — altfel procesul
+  // rămâne agățat în loc să pice curat (și systemd să-l repornească).
+  // console-capture.ts prinde deja console.error pentru Jurnalul de erori,
+  // deci eroarea se loghează o singură dată aici, nu duplicat.
   process.on("uncaughtException", (e) => {
     crashCause = `eroare neașteptată (${e.message})`;
     console.error("[activity-log] uncaughtException:", e);

@@ -1,4 +1,3 @@
-import { createServerFn } from "@tanstack/react-start";
 import { writeFile, unlink, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -470,7 +469,6 @@ export async function downloadFilelistCore(
       savePath,
       isMovie,
       url,
-      cookie,
       qbitUser,
       qbitPass,
       torrentHash: computeTorrentInfoHash(torrentBuffer),
@@ -492,23 +490,11 @@ async function finishFilelistDownload(ctx: {
   savePath: string;
   isMovie: boolean;
   url: string;
-  cookie: string;
   qbitUser: string;
   qbitPass: string;
   torrentHash: string | null;
 }): Promise<void> {
-  const {
-    params,
-    catId,
-    catName,
-    savePath,
-    isMovie,
-    url,
-    cookie,
-    qbitUser,
-    qbitPass,
-    torrentHash,
-  } = ctx;
+  const { params, catId, catName, savePath, isMovie, url, qbitUser, qbitPass, torrentHash } = ctx;
 
   // 6. Scrie în `media` ÎNAINTE de notificare — sursă unică pentru titlu/
   // poster, ca notificarea (mai jos) să le citească de-acolo, nu să le

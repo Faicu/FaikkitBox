@@ -16,8 +16,14 @@
 // garantat la pornire.
 // ---------------------------------------------------------------------------
 
-export default function () {
-  import("../../src/lib/activity-log")
-    .then(({ initServerLifecycleLogging }) => initServerLifecycleLogging())
-    .catch((e) => console.warn("[activity-boot] init eșuat:", e));
+// Async și AȘTEPTAT de Nitro: dacă am face fire-and-forget, handler-ele de
+// shutdown s-ar înregistra abia după ce se rezolvă importul dinamic, iar un
+// SIGTERM sosit în fereastra aceea ar găsi oprirea nelogabilă.
+export default async function () {
+  try {
+    const { initServerLifecycleLogging } = await import("../../src/lib/activity-log");
+    await initServerLifecycleLogging();
+  } catch (e) {
+    console.warn("[activity-boot] init eșuat:", e);
+  }
 }

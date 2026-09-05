@@ -4,7 +4,6 @@
 // Filelist cu rezolvare TMDB best-effort) — vezi upsertMediaEntry.
 // ---------------------------------------------------------------------------
 
-import { createServerFn } from "@tanstack/react-start";
 import { getDb } from "../db";
 
 export type AddedVia = "wizard" | "manual" | "backfill";

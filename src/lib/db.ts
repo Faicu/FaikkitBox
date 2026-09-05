@@ -192,6 +192,19 @@ export function getDb(): DatabaseSync {
       PRIMARY KEY (plex_rating_key, username)
     );
     CREATE INDEX IF NOT EXISTS idx_recent_watch_cache_viewed_at ON recent_watch_cache(viewed_at DESC);
+
+    -- Starea rulării curente (o singură linie, id = 1). Există ca să putem
+    -- detecta opririle pe care procesul NU apucă să le logheze el însuși:
+    -- SIGKILL de la systemd, OOM kill, pană de curent. La oprirea curată
+    -- punem clean_shutdown = 1; dacă la pornire găsim 0, rularea anterioară
+    -- s-a terminat brutal, iar last_heartbeat ne dă momentul aproximativ.
+    CREATE TABLE IF NOT EXISTS server_runtime (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      started_at TEXT NOT NULL,
+      last_heartbeat TEXT NOT NULL,
+      clean_shutdown INTEGER NOT NULL DEFAULT 0,
+      pid INTEGER
+    );
   `);
 
   // Curățări one-time, versionate cu PRAGMA user_version
