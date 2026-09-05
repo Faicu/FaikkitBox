@@ -29,6 +29,7 @@ import type { AgentCommand, AgentResult } from "@/lib/system/agent.functions";
 import { hostQuery } from "@/lib/queries";
 import { requireAdminBeforeLoad } from "@/lib/auth/admin-route-guard";
 import { RefreshRateCard } from "@/components/sistem/RefreshRateCard";
+import { useLiveCounter } from "@/hooks/use-live-counter";
 
 import { formatBytes, formatSpeed, formatDurationHMS } from "@/lib/format";
 
@@ -41,6 +42,9 @@ export const Route = createFileRoute("/sistem")({
 function HostPage() {
   const { data, isLoading } = useQuery(hostQuery);
   const status = isLoading ? "loading" : (data?.status ?? "error");
+  // Uptime-ul e un contor care doar curge — îl facem să avanseze la secundă
+  // local, între răspunsurile serverului. Vezi use-live-counter.ts.
+  const liveUptime = useLiveCounter(data?.uptimeSec);
   const push = usePushNotifications();
 
   const runCmd = useServerFn(runAgentCommand);
@@ -152,7 +156,7 @@ function HostPage() {
             />
             <StatCard
               label="Timp funcționare"
-              value={formatDurationHMS(data.uptimeSec ?? 0)}
+              value={formatDurationHMS(liveUptime)}
               icon={<Cpu className="h-4 w-4" />}
               accent="text-emerald-400"
             />
