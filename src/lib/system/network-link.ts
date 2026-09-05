@@ -1,14 +1,26 @@
 // ---------------------------------------------------------------------------
 // Starea legăturii Ethernet a serverului + renegociere.
 //
-// Problemă reală, recurentă: la atingerea fizică a cablului, auto-negocierea
-// se reașază pe 100 Mb/s și rămâne acolo, deși ambele capete suportă 1000.
-// Diagnosticat pe 2026-09-05 exact în starea asta:
+// Problemă reală, recurentă: auto-negocierea se reașază pe 100 Mb/s și rămâne
+// acolo, deși ambele capete suportă 1000. Diagnosticat pe 2026-09-05 exact în
+// starea asta:
 //   interfața suportă  2500baseT/Full
 //   routerul anunță    1000baseT/Full
 //   negociat           100 Mb/s
 // Leacul e `ethtool -r`, care repornește doar auto-negocierea, fără să atingă
 // configurația interfeței.
+//
+// CAUZA, găsită abia pe 2026-09-06: cablul Ethernet era defect, nu "atins din
+// greșeală", cum presupusesem inițial aici. Semnătura în dmesg era clară —
+// linkul revenea ca `100Mbps/Full (downshifted)`, adică perechile deteriorate
+// nu reușeau să antreneze gigabit — plus 84 de căderi de link în 24h. După
+// înlocuirea cablului: 1Gbps/Full stabil, fără flap-uri.
+//
+// Butonul rămâne, ca diagnostic și ca leac dacă negocierea se mai împotmolește
+// vreodată, dar în funcționare normală n-ar trebui să mai fie nevoie de el. Un
+// `degraded: true` persistent înseamnă acum, cel mai probabil, tot un cablu
+// (sau un port) stricat — verifică `dmesg | grep downshifted` înainte de a da
+// pe renegociere la nesfârșit.
 //
 // Fișierul e server-only (node:fs, node:child_process). Server functions stau
 // în network-link.functions.ts — vezi comentariul de acolo.
