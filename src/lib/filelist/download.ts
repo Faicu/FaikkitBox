@@ -6,7 +6,7 @@ import { createHash } from "node:crypto";
 import type { FilelistDownloadResult, QbitTorrentInfo } from "./types";
 import { CATEGORY_NAMES, parseCategoryId, isMovieCategory } from "./categories";
 import { downloadTorrentFile } from "./filelist-client";
-import { qbitLogin, qbitEnsureCookie, resetQbitCookie } from "../qbit-client";
+import { qbitGet, qbitLogin, qbitEnsureCookie, resetQbitCookie } from "../qbit-client";
 import { readDownloadLog, appendDownloadLog, markLogEntryComplete } from "./log";
 import { CORRECTED_OUTCOMES } from "./subtitle-outcomes";
 import type { SubtitleRunItem, DeleteSubtitleResult } from "./subtitles";
@@ -95,7 +95,6 @@ function computeTorrentInfoHash(torrentBuffer: ArrayBuffer): string | null {
 
 async function pollUntilComplete(
   qbitUrl: string,
-  cookie: string,
   torrentHash: string,
   plexType: "movie" | "show",
   torrentName: string,
@@ -114,11 +113,24 @@ async function pollUntilComplete(
     await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
 
     try {
-      const res = await fetch(`${qbitUrl}/api/v2/torrents/info?hashes=${torrentHash}`, {
-        headers: { Cookie: cookie },
-        signal: AbortSignal.timeout(10_000),
-      });
-      if (!res.ok) continue;
+      // qbitGet (nu fetch brut cu un cookie înghețat) — SID-ul WebUI expiră
+      // implicit după o oră, iar bucla asta poate rula până la 48h. Înainte,
+      // orice descărcare mai lungă de o oră primea 403 la fiecare poll, iar
+      // `if (!res.ok) continue` trata asta identic cu "încă nu e gata": fără
+      // subtitrare, fără completed_at, fără notificare, fără legare Plex —
+      // și complet tăcut. qbitGet reautentifică singur la 401/403.
+      const res = await qbitGet(
+        qbitUrl,
+        `/api/v2/torrents/info?hashes=${torrentHash}`,
+        qbitUser,
+        qbitPass,
+      );
+      if (!res.ok) {
+        console.warn(
+          `[filelist] Poll qBit pentru "${torrentName}": HTTP ${res.status} — reîncerc peste ${POLL_INTERVAL_MS / 1000}s`,
+        );
+        continue;
+      }
 
       const list: QbitTorrentInfo[] = await res.json();
       if (!list.length) continue;
@@ -226,13 +238,9 @@ async function resumeOrphanedPolls(): Promise<void> {
     if (!qbitBase || !qbitUser || !qbitPass) return;
 
     const url = qbitBase.replace(/\/$/, "");
-    let cookie: string;
-    try {
-      cookie = await qbitLogin(url, qbitUser, qbitPass);
-    } catch (e) {
-      console.warn("[filelist] Resume: login qBit eșuat:", e);
-      return;
-    }
+    // Nu mai facem login aici: pollUntilComplete folosește qbitGet, care
+    // gestionează singur cookie-ul (și reautentifică la expirare). Un login
+    // eșuat la pornire nu mai trebuie să anuleze reluarea tuturor polling-urilor.
 
     console.log(
       `[filelist] Reiau polling pentru ${orphaned.length} descărcări întrerupte de restart`,
@@ -245,7 +253,6 @@ async function resumeOrphanedPolls(): Promise<void> {
       }
       pollUntilComplete(
         url,
-        cookie,
         entry.torrentHash,
         plexType,
         entry.name,
@@ -577,7 +584,6 @@ async function finishFilelistDownload(ctx: {
   if (torrentHash) {
     pollUntilComplete(
       url,
-      cookie,
       torrentHash,
       plexType,
       params.torrentName,
