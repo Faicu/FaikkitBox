@@ -13,7 +13,7 @@ import {
   getUnpushedCommits,
 } from "./github.functions";
 import { getPlexLibraryBrowse, getRecentWatches } from "./services.functions";
-import { getRefreshMs, getFastRefreshMs } from "./refresh-rate";
+import { getRefreshMs, getFastRefreshMs, REFRESH_DEFAULT_MS } from "./refresh-rate";
 
 // Ritmul statisticilor live e reglabil din pagina Sistem — vezi
 // lib/refresh-rate.ts. `refetchInterval` primește o funcție, evaluată la
@@ -30,6 +30,10 @@ import { getRefreshMs, getFastRefreshMs } from "./refresh-rate";
 // nici nu trebuie să rămână blocate pe o valoare fixă când userul cere
 // explicit un ritm mai lent (ex. economie de baterie pe telefon).
 const slower = (factor: number) => () => getRefreshMs() * factor;
+
+// Pulsul de fond al Bibliotecii, ca multiplu al ritmului ales: 30s la
+// implicitul de 3s, 5 min dacă userul cere 30s (economie de baterie).
+const LIBRARY_IDLE_FACTOR = 10;
 
 // Păstrează datele vechi afișate în timp ce se încarcă cele noi (fără flicker)
 const keepPrev = { placeholderData: <T>(prev: T) => prev };
@@ -167,15 +171,29 @@ export const speedtestHistoryQuery = queryOptions({
 export const plexLibraryBrowseQuery = queryOptions({
   queryKey: ["plexLibraryBrowse"],
   queryFn: () => getPlexLibraryBrowse(),
-  staleTime: 60_000,
-  // Refresh rapid cât timp există titluri în descărcare (progres live din
-  // qBittorrent), altfel se oprește — nicio cerere extra când totul e deja
-  // în bibliotecă.
+  // Cât timp o descărcare e în curs: ritmul ales, pentru progresul live din
+  // qBittorrent. Altfel un puls lent de fond (30s implicit), ca un titlu
+  // adăugat de pe alt dispozitiv — sau de alt utilizator — să apară singur,
+  // fără refresh manual. Înainte era `false`, adică lista rămânea înghețată
+  // pe ce era la deschiderea paginii.
+  //
+  // Costul e mic și mărginit: query-ul e folosit DOAR de pagina Bibliotecă
+  // (BibliotecaList), iar refetchInterval rulează doar cât timp query-ul e
+  // montat — deci pulsul există doar cât ai efectiv pagina deschisă. Cererea
+  // se servește din `media`, fără să atingă Plex sau TMDB.
   refetchInterval: (query) => {
     const data = query.state.data;
     const items = data?.status === "ok" ? data.items : [];
-    return items.some((it) => it.status === "downloading") ? getRefreshMs() : false;
+    return items.some((it) => it.status === "downloading")
+      ? getRefreshMs()
+      : slower(LIBRARY_IDLE_FACTOR)();
   },
+  // staleTime aliniat la pulsul de fond: revenind pe pagină nu vezi date mai
+  // vechi decât un ciclu. Era 60s, adică dublu față de puls.
+  staleTime: LIBRARY_IDLE_FACTOR * REFRESH_DEFAULT_MS,
+  // Revenind din altă aplicație / alt tab, reîmprospătează imediat, fără să
+  // aștepți următorul puls.
+  refetchOnWindowFocus: true,
 });
 
 export const recentWatchesQuery = queryOptions({
