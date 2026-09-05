@@ -14,6 +14,8 @@ Construit cu [TanStack Start](https://tanstack.com/start) (React 19 + TanStack R
 - [Autentificare și conturi](#autentificare-și-conturi)
 - [Adăugare și urmărire titluri](#adăugare-și-urmărire-titluri)
 - [Sistemul de erori și observabilitate](#sistemul-de-erori-și-observabilitate)
+- [Securitate](#securitate)
+- [Performanță și date live](#performanță-și-date-live)
 - [Stack tehnic](#stack-tehnic)
 - [Structură proiect](#structură-proiect)
 - [Configurare](#configurare)
@@ -32,8 +34,8 @@ Construit cu [TanStack Start](https://tanstack.com/start) (React 19 + TanStack R
 | **Bibliotecă** (`/biblioteca`) | Cont aprobat | Tot ce e descărcat prin aplicație sau deja existent în Plex (backfill) — căutare, grupare pe serial, detalii per titlu (calitate, subtitrare RO, cine a văzut), corectare/ștergere subtitrare, ștergere completă (admin/cel care a adăugat). |
 | **qBittorrent** (`/qbit`) | Cont aprobat | Viteze download/upload, torrente active/total, filtre pe stări, căutare în listă, pauză/reluare (global sau individual), ștergere torrent + fișiere. |
 | **Immich** | Admin | Număr fișiere, spațiu ocupat, coadă de joburi active. |
-| **Sistem** | Admin | CPU, memorie, swap, uptime, discuri (viteze read/write), rețea, senzori temperatură, top procese și top I/O disc, aplicații monitorizate, mentenanță (update Ubuntu, restart servicii). |
-| **Tehnic** | Admin | Control serviciu Plex (restart/actualizare), speedtest (test nou + istoric grafic), status plugin-uri server, statistici commit-uri, jurnal de activitate, **widget Erori aplicație** (vezi mai jos), push manual către GitHub. |
+| **Sistem** | Admin | CPU, memorie, swap, uptime, discuri (viteze read/write), rețea, senzori temperatură, top procese și top I/O disc, aplicații monitorizate, mentenanță (update Ubuntu, restart servicii), reglaj pentru ritmul statisticilor live (1s…30s, per dispozitiv). |
+| **Tehnic** | Admin | Control serviciu Plex (restart/actualizare), speedtest (test nou + istoric grafic, plus starea legăturii Ethernet cu buton de renegociere), status plugin-uri server, statistici commit-uri, jurnal de activitate, **widget Erori aplicație** (vezi mai jos), push manual către GitHub. |
 | **Utilizatori** (`/users`) | Admin | Cereri de aprobare cont, listă conturi (admin + obișnuite), click pe orice cont deschide detalii complete (contact, legătură Plex, descărcări inițiate, activitate Plex, istoric autentificări). |
 
 Alte capabilități transversale:
@@ -59,7 +61,7 @@ Sistem cu două roluri, o singură tabelă `users` (nu conturi separate pentru a
 
 **Login unificat** (`/login`) — aceeași pagină și logică pentru admin și utilizatori obișnuiți; `adminLogin` verifică username+parolă în `users` fără filtrare pe rol, respinge conturile `pending`. Fiecare login reușit scrie un rând în `user_logins` (dată, IP, user-agent) + actualizează `users.last_login_at` — istoric vizibil în pagina de detalii a contului.
 
-**Doi guarzi de rută**, exportați din `src/lib/admin-route-guard.ts`:
+**Doi guarzi de rută**, exportați din `src/lib/auth/admin-route-guard.ts`:
 
 ```ts
 requireAdminBeforeLoad   // doar admin — qBit (parțial), Immich, Sistem, Tehnic, Utilizatori
@@ -101,13 +103,18 @@ La finalul fiecărei descărcări (înainte de refresh-ul Plex), `ensureRomanian
 2. **Există un `.srt` în torrent, dar cu denumire greșită pentru Plex?** — Plex identifică limba unei subtitrări externe după numele fișierului (`<nume-media>.ro.srt`), nu după conținut. Dacă torrentul conține exact un `.srt`, conținutul e verificat întâi (diacritice ă/â/î/ș/ț ca semnal principal, cuvinte uzuale RO ca rezervă) — **nu se presupune** că e automat română doar pentru că e singurul fișier `.srt` din torrent (unele lansări vin cu subtitrare engleză bundle-uită). Dacă pare română, e **redenumit prin API-ul qBittorrent** (`torrents/renameFile`) — obligatoriu prin API, nu direct pe disk, altfel qBittorrent pierde evidența fișierului. Dacă nu pare română, e redenumit `.en.srt` (nu rămâne ambiguă pentru Plex) și se continuă la pasul 3, ca și cum n-ar fi existat niciun `.srt`.
 3. **Nicio subtitrare deloc?** — se caută pe **OpenSubtitles** (`OPENSUBTITLES_API_KEY` în `.env`) după IMDb id, limba română. Din rezultate se alege cel al cărui `release` se potrivește cel mai bine cu sursa/rezoluția torrentului (ex. WEB-DL/AMZN 1080p vs BluRay 2160p) — o subtitrare pentru altă sursă desincronizează timpii de afișare. Dacă OpenSubtitles nu are o potrivire clară (sursă+rezoluție), se caută și pe **subs.ro** (`SUBSRO_API_KEY` în `.env`) — arhivele de acolo conțin adesea mai multe variante (una per sursă/rezoluție), extrase și scorate la fel; câștigă oricare din cele două surse cu potrivirea mai bună. Dacă nici așa nu există o potrivire clară, se salvează totuși cel mai apropiat rezultat, dar cu un avertisment în log ("verifică sincronizarea").
 
-**Backfill**: butonul „Verifică subtitrări" din Bibliotecă (admin) rulează aceeași verificare retroactiv pe toate torrentele active din qBittorrent, nu doar cele din jurnalul aplicației. Backfill-ul de completare din Plex (`media-backfill.ts`) rulează cu 4 workeri concurenți, nu strict secvențial — o bibliotecă mare (mii de episoade neindexate) nu mai durează ore la primul backfill. Pornirea/urmărirea unui job de fundal (running/progress/lastResult) e unificată în `src/lib/background-job.ts` (`BackgroundJob`), folosit atât aici cât și de backfill-ul de subtitrări.
+**Corectare ulterioară**: din drawer-ul unui titlu din Bibliotecă, aceeași verificare (`ensureRomanianSubtitle`) poate fi rulată din nou pe hash-ul torrentului — util când subtitrarea aleasă automat s-a dovedit desincronizată. Permis adminului sau contului care a adăugat titlul (`isAdminOrOwner`).
 
 Descărcarea de pe Filelist răspunde imediat după ce upload-ul la qBittorrent e confirmat — găsirea hash-ului torrentului (poate dura până la 10s), jurnalizarea, scrierea în `media` și pornirea polling-ului rulează în fundal, nu mai blochează cererea HTTP a clientului.
 
-### Sincronizare de fundal (`server/plugins/media-torrent-sync.ts`)
+### Continuitate după restart (`server/plugins/`)
 
-Rulează periodic, fără acțiune din UI: completează `media` cu orice titlu din Plex încă neindexat (echivalent backfill-ului manual), leagă retroactiv torrente existente din qBittorrent de rândurile `media` corespunzătoare, și verifică subtitrările pentru descărcările vechi.
+O descărcare pornită din aplicație e urmărită de o buclă de polling care trăiește în procesul serverului. Un restart o omoară — iar workflow-ul de deploy repornește serviciul la fiecare modificare de cod. Două plugin-uri acoperă golul:
+
+- **`filelist-resume.ts`** (la +15s de la pornire) reia polling-ul pentru descărcările nefinalizate. Fără el, un torrent care se termină după restart nu e observat niciodată: fără subtitrare RO, fără `completed_at`, fără notificare, fără legare Plex.
+- **`plex-link-reconciler.ts`** (la +45s, apoi la 10 min) acoperă cazul complementar — descărcare terminată, dar legarea la Plex întreruptă de un restart în fereastra ei de 30 de minute. Reîncearcă pentru tot ce e complet și fără `plex_rating_key` în ultimele 72h.
+
+Ambele sunt plugin-uri explicite, nu efecte secundare la nivel de modul: un `setTimeout` scris în corpul unui modul rulează doar dacă cineva importă modulul, iar asta depinde de grafuri de import care se schimbă la refactorizări.
 
 Conținutul (titlu + text) notificărilor de torrent adăugat/complet trăiește în `src/lib/notifications/notifications.ts` — sursă unică, nu recalculat inline la fiecare loc care trimite o notificare.
 
@@ -121,7 +128,8 @@ Toate `console.warn`/`console.error` din **toată aplicația** — server functi
 |---|---|
 | `src/lib/errors/console-capture.ts` | Suprascrie `console.error`/`console.warn` server-side, trimite spre `logError()`. Instalată idempotent din `server.ts` și fiecare plugin de fundal. |
 | `src/lib/errors/client-error-capture.ts` | Echivalentul pentru browser, trimite spre `logClientError()` (server function, cu rate-limit per IP). Instalat din `__root.tsx`, alături de listenere `window.onerror`/`unhandledrejection`. |
-| `src/lib/errors/error-log.ts` | Nucleul: grupare, rate-limit, retenție, notificare. |
+| `src/lib/errors/error-log.ts` | Nucleul: grupare, rate-limit, retenție, notificare. Server-only. |
+| `src/lib/errors/error-log.functions.ts` | Server functions (`getErrorLogs`, `clearErrorLogs`, `logClientError`) — fișierul subțire pe care îl importă clientul. |
 
 **Grupare** — erori identice (sursă + nivel + mesaj) incrementează un contor (`×N`) pe același rând, în loc să umple jurnalul cu duplicate.
 
@@ -134,6 +142,35 @@ Toate `console.warn`/`console.error` din **toată aplicația** — server functi
 **UI** (`ErrorLogSection.tsx`) — nivel warn/error colorat distinct, căutare text, filtru pe sursă (Server/SSR/Browser), contor de erori necitite pe buton (persistat în `localStorage`).
 
 Avertismentele proprii ale Node.js (`ExperimentalWarning` etc.) sunt filtrate din captare — nu sunt erori ale aplicației.
+
+---
+
+## Securitate
+
+- **Toate server function-urile cer autentificare**, cu două excepții intenționate: `getAdminStatus` (clientul trebuie să poată afla că *nu* e logat) și `getVapidPublicKey` (cheie publică prin definiție). Gardul e `requireAuth()` (orice cont aprobat) sau `requireAdmin()`, ca primă instrucțiune din handler — nu în client, unde poate fi ocolit.
+- **Rate limiting** pe autentificare (15 încercări/IP și 8/utilizator la 15 min, contorul se stinge la login reușit) și pe înregistrare (6/IP pe oră). Înregistrarea interoghează lista de prieteni Plex, deci fără limită ar fi și un oracol de enumerare.
+- **`/api/plex-thumb`** acceptă o singură formă de cale, pe **listă albă** (`/library/metadata/<id>/<tip>/<ts>`), nu o filtrare de `..`. `fetch()` normalizează `/library/../x` la `/x` înainte de a emite cererea, deci un `startsWith("/library/")` era ocolibil și transforma ruta într-un proxy autentificat către întreg API-ul Plex. Blacklist-urile de path traversal se ocolesc; forma nu.
+- **Codul server nu ajunge în bundle-ul public.** Vezi regula `*.functions.ts` de mai jos. Verificare după orice refactor:
+
+  ```bash
+  grep -l "__vite-browser-external" .output/public/assets/*.js   # trebuie să nu întoarcă nimic
+  ```
+
+- **Secretele nu ajung niciodată în bundle** — build-ul înlocuiește `process.env` cu `{}` în codul de client. Verificare: caută valorile din `.env` în `.output/public/`.
+
+---
+
+## Performanță și date live
+
+**Cache partajat pe server** (`cachedAsync`, `src/lib/services/shared.ts`) — statisticile live sunt cerute des, iar fără cache fiecare tab deschis producea propriul set de apeluri. Acum N clienți costă cât unul. Cererile concurente pe aceeași cheie primesc aceeași promisiune; eșecurile nu se cachează.
+
+Pentru datele scumpe și lent-schimbătoare (`si.processes()`, statistici Docker) se folosește `staleWhileRevalidate`: la expirare se servește imediat valoarea veche și se reîmprospătează în fundal, ca nicio cerere de utilizator să nu plătească recalcularea.
+
+**Ritm reglabil** — `src/lib/refresh-rate.ts`, cu widget în pagina Sistem (1s…30s, salvat per dispozitiv în `localStorage`). În `queries.ts`, `refetchInterval` e o **funcție**, evaluată la fiecare tick, deci schimbarea are efect imediat, fără reîncărcare.
+
+**Ce curge, curge local.** Un ceas nu trebuie cerut de la server ca să fie corect: uptime-ul (`use-live-counter.ts`) și poziția de redare a sesiunilor Plex (`useLiveViewOffsets.ts`) sunt interpolate în client — reținem valoarea primită plus momentul primirii, adăugăm timpul scurs, ne resincronizăm la fiecare răspuns. Zero cereri în plus, ceas care avansează la secundă indiferent de cadența sursei (Plex raportează progresul în trepte de ~10s).
+
+**Plex se contactează pe LAN.** `discoverPlexUrl` preferă `PLEX_URL` din `.env` (prioritate `-1`), nu adresele `https://…plex.direct` de la plex.tv. Măsurat pe `/status/sessions`: ~0.4ms direct pe LAN vs ~539ms prin `plex.direct` (rezolvare DNS + handshake TLS la fiecare cerere). Rămâne o preferință, nu o obligație — fiecare candidat e validat înainte de a fi acceptat, deci dacă adresa e greșită se cade automat pe descoperire.
 
 ---
 
@@ -159,7 +196,8 @@ src/
     principala/         wizard-ul de adăugare titlu (deschis din Acasă/Descoperă)
     filelist/           căutare manuală Filelist + piese partajate cu wizard-ul
     descopera/          componente pagina Descoperă
-    tehnic/             componente paginile Sistem/Tehnic/Utilizatori
+    tehnic/             componente paginile Tehnic/Utilizatori
+    sistem/             componente pagina Sistem (reglaj ritm reîmprospătare)
     ui/                 componente shadcn/ui
   hooks/              hook-uri React custom
   lib/                funcții server, organizate pe domeniu
@@ -170,13 +208,15 @@ src/
     services/           Plex, Immich, qBittorrent, Host — agregare status dashboard
     filelist/           căutare unificată, download+upload qBittorrent, jurnal,
                         subtitrări, scoring de release (release-scoring.ts)
-    background-job.ts    stare job de fundal (running/progress/lastResult),
-                        folosit de backfill-urile din media/ și filelist/
-    *.functions.ts      server functions TanStack (admin, github, push, tmdb...)
+    system/             metrici host, agent de comenzi, legătură Ethernet
+    refresh-rate.ts     ritmul statisticilor live, reglabil per dispozitiv
+    *.functions.ts      server functions TanStack — fișiere SUBȚIRI, fără
+                        importuri server statice (vezi nota de mai jos)
   routes/             pagini: index, descopera, biblioteca, immich, qbit, sistem,
                       tehnic, users, login, register
 server/
-  plugins/            plugin-uri Nitro (fundal): media-torrent-sync, plex-session-tracker,
+  plugins/            plugin-uri Nitro (fundal): activity-boot, filelist-resume,
+                      plex-link-reconciler, plex-session-tracker,
                       github-commit-tracker, fast-shutdown
   routes/             rute API: GitHub webhook, SSE auto-reload, proxy thumbnail-uri Plex
 public/               assets statice, Service Worker
@@ -246,12 +286,14 @@ node .output/server/index.mjs
 
 ```bash
 sudo systemctl stop faikkitbox   # 1. oprește serviciul ÎNAINTE de build
-npm run build                    # 2. verifică că build-ul trece fără erori
+npm run build                    # 2. rulează tsc --noEmit, apoi vite build
 git add <fișiere> && git commit  # 3.
 sudo systemctl start faikkitbox  # 4. repornește cu build-ul nou
 ```
 
 **Push-ul către GitHub NU e automat** — commit-urile locale rămân nepublicate până când utilizatorul apasă butonul dedicat din pagina Tehnic (`pushToGitHub`, `src/lib/github.functions.ts`). E intenționat, nu o eroare de urmărit sau reparat — vezi `CLAUDE.md`.
+
+`npm run build` = `tsc --noEmit && vite build && <marcaj de deploy>`. Verificarea de tipuri acoperă și `server/` (inclusiv plugin-urile și rutele API), care înainte nu erau în `tsconfig.json` deloc. Marcajul scris la final e consumat la prima pornire de după, ca deploy-urile să apară în Jurnalul de Activitate cu cauza corectă, fără push.
 
 **De ce oprire înainte de build, nu doar la final:** `npm run build` scrie direct peste `.output/server/`, folosit de procesul live pentru chunk-uri SSR încărcate dinamic. Dacă serviciul rulează în timpul build-ului, o cerere poate nimeri exact în fereastra în care fișierele vechi au fost deja șterse/redenumite, dând `ERR_MODULE_NOT_FOUND` — a apărut recurent în istoric înainte de acest fix.
 
@@ -302,6 +344,9 @@ Vezi [`STRUCTURE.md`](./STRUCTURE.md) pentru lista completă, fișier cu fișier
 - **Erori aplicație** — nu adăuga apeluri `logError()` manuale lângă un `console.warn`/`console.error` — captarea globală le prinde deja automat; ar produce intrări duplicate.
 - **TMDB** — `getTmdbDetails` întoarce și `literalTitle` (din `alternative_titles`, `type: "literal title"`) — folosește-l pentru orice căutare externă (Filelist), nu `originalTitle` brut, care rămâne în scriptul nativ pentru producții non-latine. TMDB cache-uiește răspunsuri per URL exact — cererile pentru episoade au cache-bust explicit, altfel un episod difuzat recent poate rămâne cu placeholder generic ore bune după ce TMDB are deja titlul real.
 - **`media` (db.ts)** — conține STRICT conținut real (descărcat sau backfill din Plex); un titlu doar căutat, fără nimic descărcat, nu are niciun rând acolo. Nu adăuga un flux nou care creează rânduri `media` doar pentru intenție/monitorizare — a fost sursa unei clase întregi de bug-uri într-o versiune anterioară (fixare/urmărire, eliminată complet).
+- **`*.functions.ts` — fără importuri server statice.** Corpul unui handler `createServerFn` e eliminat din bundle-ul de client, deci un `await import("./x")` din interiorul lui rămâne pe server; un import static la vârful fișierului trage tot graful în bundle-ul public. De aceea logica stă în `media.ts` / `activity-log.ts` / `error-log.ts` / `filelist/download.ts` / `system/network-link.ts`, iar definițiile de server functions în perechile lor `*.functions.ts`. Nerespectarea regulii a servit public schema SQLite completă și a produs eroarea `(0 , n.dirname) is not a function`, rămasă luni de zile neexplicată.
+- **Munca de la pornirea serverului se declanșează din `server/plugins/`**, nu dintr-un `setTimeout` la nivel de modul. Un efect de modul rulează doar dacă cineva importă modulul, iar asta depinde de grafuri de import care se schimbă la refactorizări — două bug-uri identice au fost cauzate exact de asta (logarea pornirii/opririi rula abia la prima cerere HTTP; reluarea polling-urilor a încetat complet să mai ruleze după un refactor de bundle).
+- **Migrările sunt tranzacționale și fatale la eșec** — `runCleanups` rulează în `BEGIN`/`COMMIT`, iar o eroare oprește pornirea. Înainte, un `catch` cu `console.warn` lăsa aplicația să pornească cu schemă parțială. O migrare nouă trebuie să fie idempotentă și să verifice că tabela sursă chiar există (v9 nu o făcea și lăsa o tabelă orfană pe orice instalare nouă).
 - **DB** — SQLite nativ (`node:sqlite`), un singur fișier la `/opt/faikkitbox/data/faikkitbox.db` (override cu `FAIKKITBOX_DB_PATH`). Fără ORM/migrations tool — schema se creează cu `CREATE TABLE IF NOT EXISTS`, migrările incrementale via `PRAGMA user_version` (`runCleanups` în `db.ts`); orice schimbare de schemă se adaugă acolo, niciodată prin modificarea unei migrări deja aplicate.
 
 ### Puncte de refolosit în componente
