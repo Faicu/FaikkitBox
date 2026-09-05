@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { errMsg, stripSlash, type ServiceStatus } from "./shared";
+import { cachedAsync, errMsg, stripSlash, type ServiceStatus } from "./shared";
 import { qbitGet, qbitPostForm, resetQbitCookie } from "../qbit-client";
 
 export interface QbitTorrent {
@@ -121,9 +121,16 @@ export const qbitAction = createServerFn({ method: "POST" })
     }
   });
 
+// Cache partajat între toți clienții — vezi cachedAsync din ./shared.
+const QBIT_TTL_MS = 2_500;
+
 export const getQbit = createServerFn({ method: "GET" }).handler(async (): Promise<QbitData> => {
   const { requireAdmin } = await import("../auth/admin.server");
   await requireAdmin();
+  return cachedAsync("qbit", QBIT_TTL_MS, collectQbitData);
+});
+
+async function collectQbitData(): Promise<QbitData> {
   const base = process.env.QBIT_URL;
   const user = process.env.QBIT_USERNAME;
   const pass = process.env.QBIT_PASSWORD;
@@ -289,4 +296,4 @@ export const getQbit = createServerFn({ method: "GET" }).handler(async (): Promi
       sessionUp: 0,
     };
   }
-});
+}

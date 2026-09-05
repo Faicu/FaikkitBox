@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { fetchJson, errMsg, type ServiceStatus } from "./shared";
+import { cachedAsync, fetchJson, errMsg, type ServiceStatus } from "./shared";
 import {
   discoverPlexUrl,
   type PlexApiResponse,
@@ -437,6 +437,19 @@ function mapPlexSessions(sessionsMd: PlexMetadataItem[]): PlexSession[] {
 export const getPlexSessions = createServerFn({ method: "GET" }).handler(
   async (): Promise<{ status: ServiceStatus; error?: string; sessions: PlexSession[] }> => {
     await (await import("../auth/admin.server")).requireAuth();
+    // Cache scurt, partajat: clientul cere la 1s (progresul de vizionare merită
+    // fluiditate), dar zece tab-uri deschise nu trebuie să însemne zece cereri
+    // pe secundă către Plex.
+    return cachedAsync("plexSessions", 900, collectPlexSessions);
+  },
+);
+
+async function collectPlexSessions(): Promise<{
+  status: ServiceStatus;
+  error?: string;
+  sessions: PlexSession[];
+}> {
+  {
     const token = process.env.PLEX_TOKEN;
     if (!token) {
       return { status: "error", error: "PLEX_TOKEN not configured", sessions: [] };
@@ -450,8 +463,8 @@ export const getPlexSessions = createServerFn({ method: "GET" }).handler(
     } catch (e) {
       return { status: "error", error: errMsg(e), sessions: [] };
     }
-  },
-);
+  }
+}
 
 // ---------- Status live (sesiuni, biblioteci, recent added) ----------
 

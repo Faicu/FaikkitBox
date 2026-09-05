@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { fetchJson, stripSlash, errMsg, type ServiceStatus } from "./shared";
+import { cachedAsync, fetchJson, stripSlash, errMsg, type ServiceStatus } from "./shared";
 
 export interface ImmichData {
   status: ServiceStatus;
@@ -30,10 +30,19 @@ let immichUploadsCache: {
   expiresAt: number;
 } | null = null;
 
+// Cache partajat între toți clienții — vezi cachedAsync din ./shared.
+const IMMICH_TTL_MS = 2_500;
+
 export const getImmich = createServerFn({ method: "GET" }).handler(
   async (): Promise<ImmichData> => {
     const { requireAdmin } = await import("../auth/admin.server");
     await requireAdmin();
+    return cachedAsync("immich", IMMICH_TTL_MS, collectImmichData);
+  },
+);
+
+async function collectImmichData(): Promise<ImmichData> {
+  {
     const base = process.env.IMMICH_URL;
     const key = process.env.IMMICH_API_KEY;
     if (!base || !key)
@@ -217,5 +226,5 @@ export const getImmich = createServerFn({ method: "GET" }).handler(
     } catch (e) {
       return { status: "error", error: errMsg(e) };
     }
-  },
-);
+  }
+}

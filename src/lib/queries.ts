@@ -14,8 +14,18 @@ import {
 } from "./github.functions";
 import { getPlexLibraryBrowse, getRecentWatches } from "./services.functions";
 
-// Interval de bază pentru statistici live (Plex/Immich/qBit/Host)
-const REFRESH_MS = 1000;
+// Interval de bază pentru statistici live (Immich/qBit/Host).
+//
+// A fost 1000ms, ceea ce însemna, PER TAB DESCHIS, un set complet de apeluri
+// pe secundă: si.processes() (parcurge tot /proc), si.dockerContainers() +
+// dockerContainerStats per container, lista completă de torrente din
+// qBittorrent și statisticile Immich. Monitorul de sistem ajunsese principalul
+// consumator de CPU al sistemului monitorizat.
+//
+// Acum serverul cachează rezultatele (vezi cachedAsync din services/shared.ts),
+// deci N tab-uri costă cât unul; 3s e sub pragul la care ochiul percepe
+// diferența pentru cifre care oricum se mișcă lent.
+const REFRESH_MS = 3000;
 
 // Păstrează datele vechi afișate în timp ce se încarcă cele noi (fără flicker)
 const keepPrev = { placeholderData: <T>(prev: T) => prev };
@@ -59,7 +69,9 @@ export const hostQuery = queryOptions({
   queryKey: ["host"],
   queryFn: () => getHost(),
   refetchInterval: REFRESH_MS,
-  refetchIntervalInBackground: true,
+  // Era `true`: statisticile de sistem continuau să fie cerute la fiecare
+  // secundă și cu tabul minimizat, la nesfârșit. Nimeni nu le vede atunci.
+  refetchIntervalInBackground: false,
   staleTime: 0,
   ...keepPrev,
 });

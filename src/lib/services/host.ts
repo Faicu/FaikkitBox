@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import type { Systeminformation } from "systeminformation";
-import { errMsg, type ServiceStatus } from "./shared";
+import { cachedAsync, errMsg, type ServiceStatus } from "./shared";
 
 export interface HostData {
   status: ServiceStatus;
@@ -77,6 +77,21 @@ async function readProcDiskstats(
 export const getHost = createServerFn({ method: "GET" }).handler(async (): Promise<HostData> => {
   const { requireAdmin } = await import("../auth/admin.server");
   await requireAdmin();
+  // Cache partajat: N tab-uri deschise costă cât unul. Vezi cachedAsync.
+  return cachedAsync("host", HOST_TTL_MS, collectHostData);
+});
+
+// TTL puțin sub intervalul de refresh al clientului (3s) — datele rămân
+// percepute ca live, dar tab-urile multiple nu se multiplică în muncă reală.
+const HOST_TTL_MS = 2_500;
+
+// Apelurile cele mai scumpe din tot setul: si.processes() parcurge întreg
+// /proc la fiecare invocare, iar si.dockerContainers() lovește socket-ul
+// Docker. Rulau o dată pe secundă, per client. Nu se schimbă semnificativ de
+// la o secundă la alta, deci au cache propriu, mult mai lung.
+const HEAVY_TTL_MS = 15_000;
+
+async function collectHostData(): Promise<HostData> {
   try {
     const si = await import("systeminformation");
     const os = await import("node:os");
@@ -96,8 +111,10 @@ export const getHost = createServerFn({ method: "GET" }).handler(async (): Promi
         si.fsSize(),
         si.networkStats(),
         si.cpuTemperature().catch(() => null),
-        si.processes(),
-        si.dockerContainers().catch(() => [] as Awaited<ReturnType<typeof si.dockerContainers>>),
+        cachedAsync("host:processes", HEAVY_TTL_MS, () => si.processes()),
+        cachedAsync("host:docker", HEAVY_TTL_MS, () =>
+          si.dockerContainers().catch(() => [] as Awaited<ReturnType<typeof si.dockerContainers>>),
+        ),
         readProcDiskstats(["nvme0n1", "nvme1n1", "sda"]),
       ]);
 
@@ -237,4 +254,4 @@ export const getHost = createServerFn({ method: "GET" }).handler(async (): Promi
   } catch (e) {
     return { status: "error", configured: true, error: errMsg(e) };
   }
-});
+}

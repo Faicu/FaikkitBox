@@ -38,6 +38,39 @@ export async function fetchJson<T>(url: string, init?: RequestInit, timeoutMs = 
   return (await res.json()) as T;
 }
 
+// ---------------------------------------------------------------------------
+// Cache in-process, partajat între toți clienții.
+//
+// Paginile de statistici cer datele la interval scurt, iar fiecare tab deschis
+// producea un set complet de apeluri proprii: 3 telefoane cu Sistem deschis =
+// 3× si.processes() + 3× docker + 3× qBittorrent, în fiecare secundă. Cache-ul
+// e pe server, deci N clienți costă cât unul singur.
+//
+// Cererile concurente pe aceeași cheie primesc aceeași promisiune (nu pornesc
+// fiecare propriul fetch), iar la eroare intrarea nu se cachează.
+// ---------------------------------------------------------------------------
+
+interface CacheEntry<T> {
+  value: Promise<T>;
+  expiresAt: number;
+}
+
+const asyncCache = new Map<string, CacheEntry<unknown>>();
+
+export function cachedAsync<T>(key: string, ttlMs: number, produce: () => Promise<T>): Promise<T> {
+  const now = Date.now();
+  const hit = asyncCache.get(key) as CacheEntry<T> | undefined;
+  if (hit && hit.expiresAt > now) return hit.value;
+
+  const value = produce().catch((e) => {
+    // Nu păstrăm eșecuri în cache — următorul apelant reîncearcă imediat.
+    asyncCache.delete(key);
+    throw e;
+  });
+  asyncCache.set(key, { value, expiresAt: now + ttlMs });
+  return value;
+}
+
 export function errMsg(e: unknown): string {
   if (!e) return "unknown error";
   if (e instanceof Error) {
