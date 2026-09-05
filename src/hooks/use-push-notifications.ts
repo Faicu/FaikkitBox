@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import {
   subscribePush,
@@ -42,13 +42,29 @@ export function usePushNotifications() {
   const getKey = useServerFn(getVapidPublicKey);
   const checkRegistered = useServerFn(isPushEndpointRegistered);
 
+  // `useServerFn` întoarce o funcție nouă la fiecare randare, deci nu poate sta
+  // în lista de dependențe: efectul ar rula la fiecare randare, iar
+  // reconcilierea (care poate chema `unsubscribe()`) s-ar suprapune peste
+  // `pushManager.subscribe()` declanșat de buton. Două operații concurente pe
+  // aceeași înregistrare fac Chrome să arunce
+  // "Registration failed - push service error". O ținem într-un ref și rulăm
+  // efectul o singură dată.
+  const checkRef = useRef(checkRegistered);
+  checkRef.current = checkRegistered;
+  // Cât timp utilizatorul are o acțiune în curs, reconcilierea nu are voie să
+  // atingă abonamentul.
+  const busyRef = useRef(false);
+
   useEffect(() => {
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
       setState("unsupported");
       return;
     }
+    let cancelled = false;
     navigator.serviceWorker.ready.then(async (reg) => {
+      if (cancelled || busyRef.current) return;
       const sub = await reg.pushManager.getSubscription();
+      if (cancelled || busyRef.current) return;
       if (!sub) {
         setState(Notification.permission === "denied" ? "denied" : "unsubscribed");
         return;
@@ -58,23 +74,28 @@ export function usePushNotifications() {
       // "activat" pentru un abonament la care nu mai putea ajunge nimic.
       let registered = true;
       try {
-        ({ registered } = await checkRegistered({ data: { endpoint: sub.endpoint } }));
+        ({ registered } = await checkRef.current({ data: { endpoint: sub.endpoint } }));
       } catch {
         // server indisponibil — nu presupunem că e dezabonat, lăsăm starea locală
-        setState("subscribed");
+        if (!cancelled) setState("subscribed");
         return;
       }
+      if (cancelled || busyRef.current) return;
       if (registered) {
         setState("subscribed");
         return;
       }
       // Curățăm și local, ca butonul de activare să poată crea un abonament nou.
       await sub.unsubscribe().catch(() => {});
-      setState(Notification.permission === "denied" ? "denied" : "unsubscribed");
+      if (!cancelled) setState(Notification.permission === "denied" ? "denied" : "unsubscribed");
     });
-  }, [checkRegistered]);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function subscribe() {
+    busyRef.current = true;
     setState("loading");
     setError(null);
     try {
@@ -102,10 +123,13 @@ export function usePushNotifications() {
       console.error("[push] Eroare la abonare:", msg, e);
       setError(msg);
       setState(Notification.permission === "denied" ? "denied" : "unsubscribed");
+    } finally {
+      busyRef.current = false;
     }
   }
 
   async function unsubscribe() {
+    busyRef.current = true;
     setState("loading");
     try {
       const reg = await navigator.serviceWorker.ready;
@@ -117,6 +141,8 @@ export function usePushNotifications() {
       setState("unsubscribed");
     } catch {
       setState("subscribed");
+    } finally {
+      busyRef.current = false;
     }
   }
 
