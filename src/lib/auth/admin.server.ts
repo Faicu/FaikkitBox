@@ -7,7 +7,11 @@ export type AdminSession = {
   role?: "admin" | "user";
 };
 
-function sessionConfig() {
+// Exportată pentru rutele Nitro brute (server/routes/api/*), care rulează în
+// afara AsyncLocalStorage-ului TanStack Start și nu pot folosi getSession() de
+// mai jos — au nevoie de aceeași configurație de cookie ca să citească exact
+// aceeași sesiune, nu de una duplicată care s-ar putea desincroniza.
+export function sessionConfig() {
   const password = process.env.SESSION_SECRET;
   if (!password || password.length < 32) {
     throw new Error("SESSION_SECRET nu este configurat (minim 32 caractere).");

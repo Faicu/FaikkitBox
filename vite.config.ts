@@ -59,7 +59,10 @@ export default defineConfig(({ command }) => ({
               "/assets/**": {
                 headers: { "Cache-Control": "public, max-age=31536000, immutable" },
               },
-              "/api/plex-thumb": { headers: { "Cache-Control": "public, max-age=3600" } },
+              // "private": posterele vin dintr-o bibliotecă Plex privată și
+              // ruta e autentificată — doar cache-ul browserului care le-a
+              // cerut le poate păstra, nu un proxy comun (nginx/Cloudflare).
+              "/api/plex-thumb": { headers: { "Cache-Control": "private, max-age=3600" } },
             },
           }),
         ]
