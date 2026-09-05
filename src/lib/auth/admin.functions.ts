@@ -1,11 +1,36 @@
 import { createServerFn } from "@tanstack/react-start";
 
+// Ferestre de limitare pentru login (vezi auth/rate-limit.ts). Generoase cât
+// să nu deranjeze pe cineva care greșește parola de câteva ori, dar suficient
+// de strânse cât să facă ghicirea prin forță brută nepractică.
+const LOGIN_WINDOW_MS = 15 * 60_000;
+const LOGIN_MAX_PER_IP = 15;
+const LOGIN_MAX_PER_USER = 8;
+
 export const adminLogin = createServerFn({ method: "POST" })
   .validator((data: { user: string; pass: string }) => data)
   .handler(async ({ data }) => {
     const { getSession } = await import("./admin.server");
     const { getDb } = await import("../db");
     const { verifyPassword } = await import("./password");
+    const { hitRateLimit, resetRateLimit, formatRetryAfter } = await import("./rate-limit");
+    const { getRequestIP } = await import("@tanstack/react-start/server");
+
+    // Două limite complementare: una per IP (oprește o rafală de pe o singură
+    // sursă, indiferent ce conturi încearcă) și una per utilizator (oprește un
+    // atac distribuit concentrat pe un singur cont). Fără ele, ghicirea parolei
+    // era complet nelimitată.
+    const ip = getRequestIP() ?? "unknown";
+    const username = data.user.trim().toLowerCase();
+    const perIp = hitRateLimit(`login:ip:${ip}`, LOGIN_MAX_PER_IP, LOGIN_WINDOW_MS);
+    const perUser = hitRateLimit(`login:user:${username}`, LOGIN_MAX_PER_USER, LOGIN_WINDOW_MS);
+    if (!perIp.allowed || !perUser.allowed) {
+      const wait = Math.max(perIp.retryAfterSec, perUser.retryAfterSec);
+      return {
+        ok: false as const,
+        error: `Prea multe încercări. Reîncearcă peste ${formatRetryAfter(wait)}.`,
+      };
+    }
 
     const db = getDb();
     const row = db
@@ -32,13 +57,19 @@ export const adminLogin = createServerFn({ method: "POST" })
       role: row.role as "admin" | "user",
     });
 
-    const { getRequestIP, getRequestHeader } = await import("@tanstack/react-start/server");
-    const ip = getRequestIP() ?? null;
+    // Autentificare reușită — contorul de încercări se stinge, ca un login
+    // corect după câteva greșeli să nu lase userul limitat degeaba.
+    resetRateLimit(`login:ip:${ip}`);
+    resetRateLimit(`login:user:${username}`);
+
+    const { getRequestHeader } = await import("@tanstack/react-start/server");
     const userAgent = getRequestHeader("user-agent") ?? null;
     db.prepare("UPDATE users SET last_login_at = datetime('now') WHERE id = ?").run(row.id);
     db.prepare("INSERT INTO user_logins (user_id, ip, user_agent) VALUES (?, ?, ?)").run(
       row.id,
-      ip,
+      // "unknown" e doar santinela pentru cheia de rate limit — în istoricul
+      // de autentificări păstrăm NULL, ca înainte.
+      ip === "unknown" ? null : ip,
       userAgent,
     );
 

@@ -1,8 +1,28 @@
 import { createServerFn } from "@tanstack/react-start";
 
+// Înregistrarea e o acțiune rară și deliberată — o limită strânsă nu deranjează
+// pe nimeni real, dar taie sondarea automată a listei de conturi Plex.
+const REGISTER_WINDOW_MS = 60 * 60_000;
+const REGISTER_MAX_PER_IP = 6;
+
 export const registerUser = createServerFn({ method: "POST" })
   .validator((data: { username: string; password: string; email: string; phone: string }) => data)
   .handler(async ({ data }): Promise<{ ok: boolean; error?: string }> => {
+    // Limitare per IP: înregistrarea interoghează lista de prieteni Plex
+    // (matchPlexAccount), deci fără limită era și un oracol de enumerare —
+    // se putea afla, cerere cu cerere, ce username/email are acces la
+    // bibliotecă, fără niciun cont.
+    const { hitRateLimit, formatRetryAfter } = await import("./rate-limit");
+    const { getRequestIP } = await import("@tanstack/react-start/server");
+    const ip = getRequestIP() ?? "unknown";
+    const limit = hitRateLimit(`register:ip:${ip}`, REGISTER_MAX_PER_IP, REGISTER_WINDOW_MS);
+    if (!limit.allowed) {
+      return {
+        ok: false,
+        error: `Prea multe încercări de înregistrare. Reîncearcă peste ${formatRetryAfter(limit.retryAfterSec)}.`,
+      };
+    }
+
     const username = data.username.trim();
     const email = data.email.trim();
     const phone = data.phone.trim();
