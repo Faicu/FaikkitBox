@@ -278,22 +278,14 @@ async function collectQbitData(): Promise<QbitData> {
       perCategory,
     };
   } catch (e) {
+    // Aruncăm, nu întoarcem un răspuns "ok"-shaped cu status:"error": un eșec
+    // tranzitoriu (ex. flap scurt de link Ethernet — vezi network-link.ts)
+    // altfel se comportă ca un răspuns valid pentru react-query, care golește
+    // `data` (torrente, progres) chiar dacă acum o clipă mai devreme totul
+    // mergea. Aruncând, query-ul intră în eroare dar `data` din ultimul
+    // fetch reușit rămâne afișat (`keepPrev` din queries.ts) — pagina qBit
+    // nu mai clipește la "Eroare necunoscută" pentru câteva secunde de rețea.
     resetQbitCookie();
-    return {
-      status: "error",
-      error: errMsg(e),
-      dlSpeed: 0,
-      upSpeed: 0,
-      dlSpeedLimit: 0,
-      upSpeedLimit: 0,
-      totalDl: 0,
-      totalUp: 0,
-      freeSpaceOnDisk: 0,
-      globalRatio: 0,
-      torrents: [],
-      counts: { downloading: 0, seeding: 0, paused: 0, total: 0 },
-      sessionDl: 0,
-      sessionUp: 0,
-    };
+    throw new Error(errMsg(e));
   }
 }
