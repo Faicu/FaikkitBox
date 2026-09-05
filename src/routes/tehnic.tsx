@@ -19,6 +19,7 @@ import { runSpeedtest } from "@/lib/system/speedtest.functions";
 import { formatSpeed } from "@/lib/format";
 import { Metric } from "@/components/tehnic/Metric";
 import { PluginStatusSection } from "@/components/tehnic/sections/PluginStatusSection";
+import { PushSubscriptionsSection } from "@/components/tehnic/sections/PushSubscriptionsSection";
 import { PlexServiceCard } from "@/components/tehnic/sections/PlexServiceCard";
 import { CommitStatsSection } from "@/components/tehnic/sections/CommitStatsSection";
 import { ActivityLogSection } from "@/components/tehnic/sections/ActivityLogSection";
@@ -73,6 +74,9 @@ function TehnicPage() {
 
       {/* Plugin-uri active */}
       <PluginStatusSection />
+
+      {/* Dispozitive abonate la notificări push */}
+      <PushSubscriptionsSection />
 
       {/* Statistici commit-uri */}
       <CommitStatsSection />

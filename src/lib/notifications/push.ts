@@ -35,6 +35,7 @@ export async function sendPushToAll(
       url: opts?.url ?? "/",
     });
     const dead: string[] = [];
+    const alive: string[] = [];
 
     await Promise.allSettled(
       subs.map(async (sub) => {
@@ -43,6 +44,7 @@ export async function sendPushToAll(
             { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
             payload,
           );
+          alive.push(sub.id);
         } catch (err) {
           const statusCode = (err as { statusCode?: number })?.statusCode;
           if (statusCode === 410 || statusCode === 404) {
@@ -58,6 +60,15 @@ export async function sendPushToAll(
 
     for (const id of dead) {
       db.prepare("DELETE FROM push_subscriptions WHERE id = ?").run(id);
+    }
+    // Atenție la interpretare: serviciul de push (FCM) acceptă mesajul înainte
+    // să-l livreze, deci `last_seen_at` înseamnă "acceptat spre livrare", nu
+    // "chiar a ajuns pe dispozitiv". Un abonament abandonat poate rămâne
+    // acceptat săptămâni, până când FCM îl marchează expirat (410).
+    if (alive.length > 0) {
+      const now = new Date().toISOString();
+      const stmt = db.prepare("UPDATE push_subscriptions SET last_seen_at = ? WHERE id = ?");
+      for (const id of alive) stmt.run(now, id);
     }
   } catch (err) {
     console.warn("[push] sendPushToAll a eșuat:", err);

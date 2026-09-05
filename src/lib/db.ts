@@ -577,5 +577,23 @@ function applyCleanups(database: DatabaseSync): void {
       database.exec("DROP TABLE IF EXISTS pinned_items_new");
       database.exec("PRAGMA user_version = 17");
     }
+
+    if (version < 18) {
+      // v18: push_subscriptions capătă identitate. Până acum reținea doar
+      // endpoint + chei, deci un abonament mort nu putea fi deosebit de unul
+      // viu decât trimițând notificări de test și întrebând utilizatorul unde
+      // au apărut. `display_mode` e singurul semnal care separă PWA-ul instalat
+      // de browser — pe Android WebAPK-ul trimite exact același user-agent ca
+      // Chrome, deci UA-ul singur nu ajunge.
+      try {
+        database.exec("ALTER TABLE push_subscriptions ADD COLUMN user_agent TEXT");
+        database.exec("ALTER TABLE push_subscriptions ADD COLUMN display_mode TEXT");
+        database.exec("ALTER TABLE push_subscriptions ADD COLUMN last_seen_at TEXT");
+        console.log("[db] Migrare v18: push_subscriptions capătă user_agent/display_mode");
+      } catch {
+        // coloanele există deja dintr-o rulare anterioară
+      }
+      database.exec("PRAGMA user_version = 18");
+    }
   }
 }

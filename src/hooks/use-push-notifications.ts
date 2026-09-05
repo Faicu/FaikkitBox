@@ -15,6 +15,21 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
   return bytes;
 }
 
+/**
+ * Contextul în care rulează pagina în momentul abonării. Pe Android, PWA-ul
+ * instalat (WebAPK) trimite exact același user-agent ca Chrome, deci UA-ul nu
+ * poate deosebi cele două — `display-mode` e singurul semnal de încredere.
+ */
+function currentDisplayMode(): string {
+  if (typeof window === "undefined" || !window.matchMedia) return "unknown";
+  for (const mode of ["standalone", "fullscreen", "minimal-ui"]) {
+    if (window.matchMedia(`(display-mode: ${mode})`).matches) return mode;
+  }
+  // iOS Safari nu suportă display-mode; expune în schimb navigator.standalone
+  if ((window.navigator as { standalone?: boolean }).standalone) return "standalone";
+  return "browser";
+}
+
 export type PushState = "unsupported" | "denied" | "subscribed" | "unsubscribed" | "loading";
 export type PushError = string | null;
 
@@ -61,6 +76,7 @@ export function usePushNotifications() {
           endpoint: sub.endpoint,
           p256dh: json.keys?.p256dh ?? "",
           auth: json.keys?.auth ?? "",
+          displayMode: currentDisplayMode(),
         },
       });
       setState("subscribed");
