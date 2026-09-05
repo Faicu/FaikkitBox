@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Gauge, ArrowDown, ArrowUp, Activity } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 
 import { PageShell } from "@/components/PageShell";
@@ -13,9 +13,9 @@ import {
   DrawerTitle,
   DrawerDescription,
 } from "@/components/ui/drawer";
-import { lastSpeedtestQuery, speedtestHistoryQuery } from "@/lib/queries";
+import { lastSpeedtestQuery, speedtestHistoryQuery, speedtestStateQuery } from "@/lib/queries";
 import { requireAdminBeforeLoad } from "@/lib/auth/admin-route-guard";
-import { runSpeedtest } from "@/lib/system/speedtest.functions";
+import { startSpeedtest } from "@/lib/system/speedtest.functions";
 import { formatSpeed } from "@/lib/format";
 import { Metric } from "@/components/tehnic/Metric";
 import { PluginStatusSection } from "@/components/tehnic/sections/PluginStatusSection";
@@ -42,28 +42,57 @@ function TehnicPage() {
   const [speedtestDrawer, setSpeedtestDrawer] = useState(false);
 
   const qc = useQueryClient();
-  const runSpeedtestFn = useServerFn(runSpeedtest);
+  const startSpeedtestFn = useServerFn(startSpeedtest);
   const [speedtestError, setSpeedtestError] = useState<string | null>(null);
+
+  // Testul rulează pe server, decuplat de conexiune (vezi startSpeedtestRun).
+  // Aici doar îl pornim și apoi urmărim starea — de aceea mutația nu mai
+  // raportează rezultatul: ea se încheie în milisecunde, cu mult înaintea lui.
+  const speedtestState = useQuery(speedtestStateQuery);
+  const speedtestRunning = speedtestState.data?.running ?? false;
+
   const speedtestMutation = useMutation({
     mutationFn: () => {
       setSpeedtestError(null);
-      return runSpeedtestFn();
+      return startSpeedtestFn();
     },
     onSuccess: (res) => {
-      if (res.ok) {
-        qc.setQueryData(["speedtest"], res);
-        qc.invalidateQueries({ queryKey: ["speedtestHistory"] });
-        toast.success("Test de viteză finalizat");
-      } else {
-        setSpeedtestError(res.error);
-        toast.error(`Testul a eșuat: ${res.error}`);
-      }
+      if (!res.started) toast.info("Un test este deja în curs");
+      qc.invalidateQueries({ queryKey: ["speedtestState"] });
     },
     onError: (e) => {
       setSpeedtestError((e as Error).message);
       toast.error((e as Error).message);
     },
   });
+
+  // Raportăm o rulare DOAR când se încheie una nouă. `finishedAt` e cheia:
+  // la prima citire îl memorăm fără să anunțăm nimic (altfel am da un toast
+  // pentru un test terminat demult, la fiecare deschidere a paginii).
+  const lastReported = useRef<{ seen: boolean; finishedAt: string | null }>({
+    seen: false,
+    finishedAt: null,
+  });
+  useEffect(() => {
+    const s = speedtestState.data;
+    if (!s) return;
+    if (!lastReported.current.seen) {
+      lastReported.current = { seen: true, finishedAt: s.finishedAt };
+      return;
+    }
+    if (s.running || s.finishedAt === lastReported.current.finishedAt) return;
+    lastReported.current.finishedAt = s.finishedAt;
+
+    if (s.result) {
+      qc.setQueryData(["speedtest"], s.result);
+      qc.invalidateQueries({ queryKey: ["speedtestHistory"] });
+      setSpeedtestError(null);
+      toast.success("Test de viteză finalizat");
+    } else if (s.error) {
+      setSpeedtestError(s.error);
+      toast.error(`Testul a eșuat: ${s.error}`);
+    }
+  }, [speedtestState.data, qc]);
 
   return (
     <PageShell title="Tehnic" subtitle="Plugin-uri, statistici și diagnostice">
@@ -198,13 +227,19 @@ function TehnicPage() {
             <button
               type="button"
               onClick={() => speedtestMutation.mutate()}
-              disabled={speedtestMutation.isPending}
+              disabled={speedtestRunning || speedtestMutation.isPending}
               className="w-full rounded-xl border border-rose-500/30 bg-rose-500/15 px-3 py-2.5 text-sm font-medium text-rose-400 transition-transform hover:bg-rose-500/25 active:scale-[0.98] disabled:opacity-50"
             >
-              {speedtestMutation.isPending
+              {speedtestRunning || speedtestMutation.isPending
                 ? "Se rulează testul... (poate dura 30-60s)"
                 : "Rulează test nou"}
             </button>
+
+            {speedtestRunning && (
+              <p className="text-center text-[11px] text-muted-foreground">
+                Poți închide aplicația — testul rulează pe server și rezultatul se salvează oricum.
+              </p>
+            )}
 
             {speedtestError && (
               <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-400">

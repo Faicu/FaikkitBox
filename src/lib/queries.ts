@@ -2,7 +2,11 @@ import { queryOptions } from "@tanstack/react-query";
 import { getPlex, getPlexSessions, getImmich, getQbit, getHost } from "./services.functions";
 import { getAdminStatus } from "./auth/admin.functions";
 import { getVersions } from "./system/versions.functions";
-import { getLastSpeedtest, getSpeedtestHistory } from "./system/speedtest.functions";
+import {
+  getLastSpeedtest,
+  getSpeedtestHistory,
+  getSpeedtestState,
+} from "./system/speedtest.functions";
 import { getActivityLog } from "./activity-log.functions";
 import { getErrorLogs } from "./errors/error-log.functions";
 import {
@@ -167,6 +171,17 @@ export const speedtestHistoryQuery = queryOptions({
   queryKey: ["speedtestHistory"],
   queryFn: () => getSpeedtestHistory(),
   staleTime: 60_000,
+});
+
+// Starea rulării de speedtest, ținută pe server. Interogăm des DOAR cât timp
+// chiar rulează un test; altfel query-ul stă liniștit. Așa butonul arată "se
+// rulează" corect chiar dacă ai redeschis aplicația la mijlocul testului.
+export const speedtestStateQuery = queryOptions({
+  queryKey: ["speedtestState"],
+  queryFn: () => getSpeedtestState(),
+  refetchInterval: (query) => (query.state.data?.running ? 2_000 : false),
+  refetchOnWindowFocus: true,
+  staleTime: 0,
 });
 
 export const plexLibraryBrowseQuery = queryOptions({
