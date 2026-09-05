@@ -81,9 +81,11 @@ export const getHost = createServerFn({ method: "GET" }).handler(async (): Promi
   return cachedAsync("host", HOST_TTL_MS, collectHostData);
 });
 
-// TTL puțin sub intervalul de refresh al clientului (3s) — datele rămân
-// percepute ca live, dar tab-urile multiple nu se multiplică în muncă reală.
-const HOST_TTL_MS = 2_500;
+// Sub cel mai rapid ritm pe care îl poate cere clientul (1s), ca TTL-ul să nu
+// devină el plafonul: la 2500ms, o pagină setată pe 1s primea de două ori din
+// trei exact aceleași date. Colectarea costă ~7ms acum (partea scumpă e
+// cachată separat, cu HEAVY_TTL_MS), deci nu e nimic de economisit aici.
+const HOST_TTL_MS = 800;
 
 // Apelurile cele mai scumpe din tot setul: si.processes() parcurge întreg
 // /proc la fiecare invocare, iar si.dockerContainers() lovește socket-ul

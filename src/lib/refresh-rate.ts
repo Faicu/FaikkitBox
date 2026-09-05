@@ -14,7 +14,11 @@ const STORAGE_KEY = "faikkitbox:refreshMs";
 
 export const REFRESH_MIN_MS = 1000;
 export const REFRESH_MAX_MS = 30_000;
-export const REFRESH_DEFAULT_MS = 3000;
+// 2s implicit. A fost 3s cât timp o colectare costa secunde întregi; după ce
+// discovery-ul Plex a fost pus pe LAN (~5ms în loc de ~539ms) și partea scumpă
+// din statisticile de sistem a trecut pe stale-while-revalidate (~7ms în loc
+// de ~2400ms), până și 1s e complet realist — vezi presetul din widget.
+export const REFRESH_DEFAULT_MS = 2000;
 
 export const REFRESH_PRESETS = [
   { label: "1s", ms: 1000 },

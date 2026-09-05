@@ -220,10 +220,22 @@ export async function discoverPlexUrl(
   const candidates = parsePlexResources(resourcesText);
 
   if (fallbackBase) {
+    // Prioritate -1: se încearcă PRIMA, înaintea adreselor de la plex.tv.
+    //
+    // Era 10 (ultima), iar adresele https plex.direct aveau 0 — deci serverul
+    // vorbea cu Plex-ul din aceeași rețea printr-un hostname plex.direct,
+    // rezolvat prin DNS și cu handshake TLS la fiecare cerere. Măsurat pe
+    // /status/sessions: ~539ms prin plex.direct vs ~0.4ms direct pe LAN.
+    // De peste 1000× mai lent, pentru o cutie care stă lângă Plex.
+    //
+    // Rămâne doar o preferință, nu o obligație: bucla de mai jos validează
+    // fiecare candidat înainte să-l accepte, deci dacă PLEX_URL e greșit sau
+    // serverul s-a mutat, se cade automat pe descoperirea de la plex.tv, ca
+    // înainte.
     candidates.push({
       uri: stripSlash(fallbackBase),
-      source: "Manual PLEX_URL fallback",
-      priority: 10,
+      source: "PLEX_URL configurat (local)",
+      priority: -1,
     });
   }
 

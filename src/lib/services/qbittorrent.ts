@@ -122,7 +122,7 @@ export const qbitAction = createServerFn({ method: "POST" })
   });
 
 // Cache partajat între toți clienții — vezi cachedAsync din ./shared.
-const QBIT_TTL_MS = 2_500;
+const QBIT_TTL_MS = 800; // sub ritmul minim al clientului (1s) — vezi host.ts
 
 export const getQbit = createServerFn({ method: "GET" }).handler(async (): Promise<QbitData> => {
   const { requireAdmin } = await import("../auth/admin.server");
