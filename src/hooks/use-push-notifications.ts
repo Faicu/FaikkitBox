@@ -4,6 +4,7 @@ import {
   subscribePush,
   unsubscribePush,
   getVapidPublicKey,
+  isPushEndpointRegistered,
 } from "@/lib/notifications/push.functions";
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
@@ -39,6 +40,7 @@ export function usePushNotifications() {
   const doSubscribe = useServerFn(subscribePush);
   const doUnsubscribe = useServerFn(unsubscribePush);
   const getKey = useServerFn(getVapidPublicKey);
+  const checkRegistered = useServerFn(isPushEndpointRegistered);
 
   useEffect(() => {
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
@@ -47,15 +49,30 @@ export function usePushNotifications() {
     }
     navigator.serviceWorker.ready.then(async (reg) => {
       const sub = await reg.pushManager.getSubscription();
-      if (sub) {
-        setState("subscribed");
-      } else if (Notification.permission === "denied") {
-        setState("denied");
-      } else {
-        setState("unsubscribed");
+      if (!sub) {
+        setState(Notification.permission === "denied" ? "denied" : "unsubscribed");
+        return;
       }
+      // Abonamentul local nu e suficient: rândul de pe server poate fi șters
+      // din Tehnic sau expirat (410). Fără verificarea asta, interfața arăta
+      // "activat" pentru un abonament la care nu mai putea ajunge nimic.
+      let registered = true;
+      try {
+        ({ registered } = await checkRegistered({ data: { endpoint: sub.endpoint } }));
+      } catch {
+        // server indisponibil — nu presupunem că e dezabonat, lăsăm starea locală
+        setState("subscribed");
+        return;
+      }
+      if (registered) {
+        setState("subscribed");
+        return;
+      }
+      // Curățăm și local, ca butonul de activare să poată crea un abonament nou.
+      await sub.unsubscribe().catch(() => {});
+      setState(Notification.permission === "denied" ? "denied" : "unsubscribed");
     });
-  }, []);
+  }, [checkRegistered]);
 
   async function subscribe() {
     setState("loading");

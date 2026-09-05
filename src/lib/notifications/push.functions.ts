@@ -34,6 +34,25 @@ export const subscribePush = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+/**
+ * Serverul mai știe de acest endpoint? Necesar fiindcă browserul își ține
+ * propriul abonament, independent de baza noastră: dacă rândul e șters din
+ * Tehnic (sau de pe alt dispozitiv), `pushManager.getSubscription()` întoarce
+ * în continuare un abonament, iar interfața ar raporta "activat" deși nu mai
+ * poate ajunge nimic la el.
+ */
+export const isPushEndpointRegistered = createServerFn({ method: "POST" })
+  .validator((d: { endpoint: string }) => d)
+  .handler(async ({ data }) => {
+    const { requireAdmin } = await import("../auth/admin.server");
+    await requireAdmin();
+    const { getDb } = await import("../db");
+    const row = getDb()
+      .prepare("SELECT 1 FROM push_subscriptions WHERE endpoint = ?")
+      .get(data.endpoint);
+    return { registered: !!row };
+  });
+
 export interface PushSubscriptionRow {
   id: string;
   endpointTail: string;
