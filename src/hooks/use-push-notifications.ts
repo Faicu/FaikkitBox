@@ -103,10 +103,33 @@ export function usePushNotifications() {
       const { publicKey } = await getKey();
       if (!publicKey) throw new Error("Lipsește cheia VAPID de pe server");
 
-      const sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(publicKey),
-      });
+      // Dacă browserul are deja un abonament, îl refolosim în loc să chemăm
+      // `subscribe()` din nou: un al doilea apel peste un abonament existent
+      // eșuează cu "Registration failed - push service error" (mai ales dacă
+      // vechiul abonament a fost creat cu altă cheie VAPID). Cazul apare des
+      // după ce rândul a fost șters de pe server, dar abonamentul local a
+      // rămas — atunci tot ce lipsește e reînregistrarea la noi în DB.
+      let sub = await reg.pushManager.getSubscription();
+      if (sub) {
+        // Cheia veche poate diferi de cea curentă; dacă diferă, abonamentul e
+        // inutilizabil și trebuie înlocuit, nu refolosit.
+        const current = urlBase64ToUint8Array(publicKey);
+        const existing = sub.options?.applicationServerKey;
+        const sameKey =
+          existing != null &&
+          new Uint8Array(existing).length === current.length &&
+          new Uint8Array(existing).every((b, i) => b === current[i]);
+        if (!sameKey) {
+          await sub.unsubscribe().catch(() => {});
+          sub = null;
+        }
+      }
+      if (!sub) {
+        sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(publicKey),
+        });
+      }
 
       const json = sub.toJSON();
       await doSubscribe({
