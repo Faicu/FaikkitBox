@@ -266,12 +266,18 @@ async function resumeOrphanedPolls(): Promise<void> {
   }
 }
 
-// Rulează la 15s după încărcarea modulului (serverul e pornit complet)
-if (typeof process !== "undefined" && process.env) {
-  setTimeout(() => {
-    resumeOrphanedPolls();
-  }, 15_000);
-}
+// Declanșată din server/plugins/filelist-resume.ts, NU dintr-un efect
+// secundar la nivel de modul.
+//
+// Înainte era un `setTimeout` executat la încărcarea modulului, ceea ce
+// funcționa doar accidental: barrel-ul filelist.functions.ts importa static
+// download.ts, deci modulul se încărca la boot. După ce server function-urile
+// s-au mutat în download.functions.ts (ca să nu mai scurgem cod server în
+// bundle-ul public), download.ts a devenit import leneș — și reluarea nu a mai
+// rulat NICIODATĂ la pornire. Reprodus: un torrent ajuns 100% în qBittorrent
+// rămânea cu completed_at NULL, fără subtitrare și fără legare Plex, fiindcă
+// bucla lui de polling murise la restart și nimeni nu o mai relua.
+export { resumeOrphanedPolls };
 
 // ---------------------------------------------------------------------------
 // Server function: descarcă torrent și trimite la qBittorrent
