@@ -147,7 +147,7 @@ export function DownloadConfirmFields({
               <Loader2 className="absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-muted-foreground" />
             )}
             {linkResults.length > 0 && (
-              <div className="absolute z-10 mt-1 max-h-40 w-full overflow-y-auto rounded-xl border border-border bg-card shadow-lg">
+              <div className="absolute z-10 mt-1 max-h-40 w-full overflow-y-auto rounded-xl glass-card shadow-lg">
                 {linkResults.map((m) => (
                   <button
                     key={`${m.mediaType}-${m.mediaId}`}
@@ -217,7 +217,7 @@ export function DownloadConfirmDialog({
     <DialogPrimitive.Root open onOpenChange={(open) => !open && onCancel()}>
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <DialogPrimitive.Content className="w-full max-w-sm rounded-2xl border border-border bg-card p-5 space-y-4 shadow-xl outline-none">
+          <DialogPrimitive.Content className="w-full max-w-sm rounded-2xl glass-card p-5 space-y-4 shadow-xl outline-none">
             <DialogPrimitive.Title className="text-sm font-semibold">
               Confirmare descărcare
             </DialogPrimitive.Title>

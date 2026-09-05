@@ -47,7 +47,7 @@ function RegisterPage() {
   if (done) {
     return (
       <PageShell title="Înregistrare">
-        <div className="flex flex-col items-center gap-3 rounded-2xl border border-border bg-card p-6 text-center">
+        <div className="flex flex-col items-center gap-3 rounded-2xl glass-card p-6 text-center">
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500/15 ring-1 ring-emerald-500/25">
             <CheckCircle2 className="h-7 w-7 text-emerald-400" />
           </div>
@@ -84,7 +84,7 @@ function RegisterPage() {
           e.preventDefault();
           m.mutate();
         }}
-        className="space-y-4 rounded-2xl border border-border bg-card p-5 shadow-sm"
+        className="space-y-4 rounded-2xl glass-card p-5 shadow-sm"
       >
         <div className="space-y-1.5">
           <label className="text-xs font-medium text-muted-foreground">Utilizator</label>

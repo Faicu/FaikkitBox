@@ -3,9 +3,11 @@ interface Props {
   label?: string;
   right?: string;
   tone?: "default" | "warn" | "danger" | "success" | "sky" | "muted";
+  /** Bară în lucru — gradient care curge, în locul culorii plate. */
+  active?: boolean;
 }
 
-export function Meter({ value, label, right, tone }: Props) {
+export function Meter({ value, label, right, tone, active }: Props) {
   const pct = Math.min(100, Math.max(0, value));
   const auto: Props["tone"] = pct >= 90 ? "danger" : pct >= 75 ? "warn" : "default";
   const t = tone ?? auto;
@@ -31,7 +33,9 @@ export function Meter({ value, label, right, tone }: Props) {
       )}
       <div className="relative h-2 w-full overflow-hidden rounded-full bg-muted/60">
         <div
-          className={`relative h-full ${color} overflow-hidden transition-[width] duration-700 ease-out`}
+          className={`relative h-full overflow-hidden transition-[width] duration-700 ease-out ${
+            active ? "progress-flow" : color
+          }`}
           style={{
             width: `${pct}%`,
             boxShadow: "0 0 12px color-mix(in oklab, currentColor 60%, transparent)",

@@ -118,7 +118,7 @@ function HostPage() {
       {isLoading && (
         <div className="grid grid-cols-2 gap-2">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-20 animate-pulse rounded-2xl bg-muted/60" />
+            <div key={i} className="h-20 skeleton-sweep rounded-2xl" />
           ))}
         </div>
       )}
@@ -167,7 +167,7 @@ function HostPage() {
               <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
                 <Boxes className="h-3.5 w-3.5" /> Aplicații
               </h2>
-              <ul className="rounded-2xl border border-border bg-card divide-y divide-border">
+              <ul className="rounded-2xl glass-card divide-y divide-border">
                 {data.apps.map((a) => (
                   <li key={a.name} className="flex items-center justify-between px-3 py-2 text-sm">
                     <div className="flex min-w-0 items-center gap-2">
@@ -200,7 +200,7 @@ function HostPage() {
             <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
               <HardDrive className="h-3.5 w-3.5" /> Discuri
             </h2>
-            <div className="rounded-2xl border border-border bg-card p-3 space-y-3">
+            <div className="rounded-2xl glass-card p-3 space-y-3">
               {(data.disks ?? [])
                 .filter((d) => ["/", "/media/ssd2tb", "/media/hddextern"].includes(d.mount))
                 .sort((a, b) => {
@@ -240,7 +240,7 @@ function HostPage() {
               </h2>
               <ul className="space-y-2">
                 {data.net.map((n) => (
-                  <li key={n.name} className="rounded-2xl border border-border bg-card p-3">
+                  <li key={n.name} className="rounded-2xl glass-card p-3">
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
                         <span className="font-medium">
@@ -279,7 +279,7 @@ function HostPage() {
               <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
                 <Terminal className="h-3.5 w-3.5" /> Top procese
               </h2>
-              <ul className="rounded-2xl border border-border bg-card divide-y divide-border">
+              <ul className="rounded-2xl glass-card divide-y divide-border">
                 {data.topProcesses.map((p, i) => (
                   <li key={i} className="flex items-center justify-between px-3 py-2 text-sm">
                     <span className="truncate pr-2 font-mono text-xs">{p.name}</span>
@@ -297,7 +297,7 @@ function HostPage() {
               <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
                 <HardDriveDownload className="h-3.5 w-3.5" /> Top I/O disc
               </h2>
-              <ul className="rounded-2xl border border-border bg-card divide-y divide-border">
+              <ul className="rounded-2xl glass-card divide-y divide-border">
                 {data.diskIO.map((p, i) => (
                   <li key={i} className="flex items-center justify-between px-3 py-2 text-sm">
                     <span className="truncate pr-2 font-mono text-xs">{p.name}</span>
@@ -327,7 +327,7 @@ function PushNotificationsCard({ push }: { push: ReturnType<typeof usePushNotifi
       <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
         <Bell className="h-3.5 w-3.5" /> Notificări Push
       </h2>
-      <div className="rounded-2xl border border-border bg-card p-4 flex items-center justify-between gap-3">
+      <div className="rounded-2xl glass-card p-4 flex items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm font-medium">
             {isSubscribed

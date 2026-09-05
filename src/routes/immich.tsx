@@ -47,6 +47,26 @@ function ImmichPage() {
     >
       <TehnicSubNav />
 
+      {isLoading && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-2">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="h-20 skeleton-sweep rounded-2xl" />
+            ))}
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="h-20 skeleton-sweep rounded-2xl" />
+            ))}
+          </div>
+          <div className="space-y-2">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="h-14 skeleton-sweep rounded-2xl" />
+            ))}
+          </div>
+        </div>
+      )}
+
       {data?.status === "error" &&
         (recovering ? (
           <div className="rounded-2xl border border-sky-500/30 bg-sky-500/10 p-3 text-sm text-sky-300">
@@ -118,7 +138,7 @@ function ImmichPage() {
               <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
                 <Trophy className="h-3.5 w-3.5" /> Top încărcători
               </h2>
-              <ol className="rounded-2xl border border-border bg-card divide-y divide-border">
+              <ol className="rounded-2xl glass-card divide-y divide-border stagger-in">
                 {data.topUploaders.map((u, i) => (
                   <li key={i} className="flex items-center justify-between px-3 py-2 text-sm">
                     <div className="flex min-w-0 items-center gap-2">
@@ -146,7 +166,7 @@ function ImmichPage() {
               <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Pe utilizator
               </h2>
-              <ul className="rounded-2xl border border-border bg-card divide-y divide-border">
+              <ul className="rounded-2xl glass-card divide-y divide-border stagger-in">
                 {data.usageByUser.map((u, i) => (
                   <li key={i} className="flex items-center justify-between px-3 py-2 text-sm">
                     <div>
@@ -168,10 +188,13 @@ function ImmichPage() {
               <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Joburi active
               </h2>
-              <ul className="rounded-2xl border border-border bg-card divide-y divide-border">
+              <ul className="rounded-2xl glass-card divide-y divide-border stagger-in">
                 {data.activeJobs.map((j) => (
                   <li key={j.name} className="flex items-center justify-between px-3 py-2 text-sm">
-                    <span className="capitalize">{j.name.replace(/([A-Z])/g, " $1").trim()}</span>
+                    <span className="flex items-center gap-2 capitalize">
+                      {j.active > 0 && <span className="live-dot" aria-hidden />}
+                      {j.name.replace(/([A-Z])/g, " $1").trim()}
+                    </span>
                     <span className="text-xs text-muted-foreground tabular-nums">
                       {j.active} active · {j.waiting} în așteptare
                     </span>
@@ -182,7 +205,7 @@ function ImmichPage() {
           )}
 
           {(!data.activeJobs || data.activeJobs.length === 0) && (
-            <div className="rounded-2xl border border-border bg-card p-3 text-sm text-muted-foreground">
+            <div className="rounded-2xl glass-card p-3 text-sm text-muted-foreground">
               Niciun job activ în fundal.
             </div>
           )}

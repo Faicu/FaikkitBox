@@ -58,7 +58,7 @@ export function SceneViewer({ item, onClose }: { item: DiscoverTitle; onClose: (
           </DrawerHeader>
           <div className="space-y-3 overflow-y-auto px-4 pb-6 pt-3">
             {videosQuery.isLoading ? (
-              <div className="aspect-video animate-pulse rounded-xl bg-muted/40" />
+              <div className="aspect-video skeleton-sweep rounded-xl" />
             ) : current ? (
               <div className="aspect-video overflow-hidden rounded-xl bg-black">
                 <iframe
@@ -71,13 +71,13 @@ export function SceneViewer({ item, onClose }: { item: DiscoverTitle; onClose: (
                 />
               </div>
             ) : (
-              <div className="rounded-xl border border-border bg-card p-6 text-center text-sm text-muted-foreground">
+              <div className="rounded-xl glass-card p-6 text-center text-sm text-muted-foreground">
                 Niciun clip disponibil pentru acest titlu.
               </div>
             )}
 
             {detailsQuery.isLoading ? (
-              <div className="h-12 animate-pulse rounded-lg bg-muted/40" />
+              <div className="h-12 skeleton-sweep rounded-lg" />
             ) : detailsQuery.data?.overview ? (
               <p className="text-sm leading-relaxed text-muted-foreground">
                 {detailsQuery.data.overview}

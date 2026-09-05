@@ -59,11 +59,11 @@ export function CommitStatsSection() {
       <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
         <GitCommitHorizontal className="h-3.5 w-3.5" /> Statistici commit-uri
       </h2>
-      <div className="rounded-2xl border border-border bg-card">
+      <div className="rounded-2xl glass-card">
         {isLoading ? (
           <div className="grid grid-cols-3 divide-x divide-border/50 p-3">
             {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="h-8 animate-pulse rounded-md bg-muted/50 mx-1" />
+              <div key={i} className="h-8 skeleton-sweep rounded-md mx-1" />
             ))}
           </div>
         ) : (
@@ -88,7 +88,7 @@ export function CommitStatsSection() {
       </div>
 
       {ahead > 0 && unpushed.data?.status === "ok" && unpushed.data.commits.length > 0 && (
-        <div className="rounded-2xl border border-border bg-card divide-y divide-border/50">
+        <div className="rounded-2xl glass-card divide-y divide-border/50">
           {unpushed.data.commits.map((c) => (
             <button
               key={c.sha}

@@ -18,7 +18,7 @@ export function RefreshRateCard() {
   }, []);
 
   return (
-    <div className="rounded-2xl border border-border bg-card p-3 space-y-3">
+    <div className="rounded-2xl glass-card p-3 space-y-3">
       <div className="flex items-center gap-2">
         <Gauge className="h-4 w-4 text-muted-foreground" />
         <span className="text-sm font-semibold text-foreground">Ritm de reîmprospătare</span>

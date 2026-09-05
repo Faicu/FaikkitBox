@@ -77,7 +77,7 @@ export function FilelistSection() {
         <Download className="h-3.5 w-3.5 text-blue-400" /> Descărcare manuala de pe FileList.io
       </h2>
 
-      <div className="rounded-2xl border border-border bg-card p-3 space-y-3">
+      <div className="rounded-2xl glass-card p-3 space-y-3">
         {/* Search input + category filter */}
         <div className="flex gap-2">
           <div className="relative flex-1">

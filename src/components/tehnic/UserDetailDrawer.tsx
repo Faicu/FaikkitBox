@@ -70,7 +70,7 @@ export function UserDetailDrawer({ userId, onClose }: { userId: number; onClose:
           ) : (
             <>
               {/* Contact */}
-              <div className="rounded-2xl border border-border bg-card p-3 space-y-2 text-sm">
+              <div className="rounded-2xl glass-card p-3 space-y-2 text-sm">
                 <div className="flex items-center gap-2">
                   <Mail className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                   <span className="break-all">{user.email ?? "—"}</span>
@@ -111,7 +111,7 @@ export function UserDetailDrawer({ userId, onClose }: { userId: number; onClose:
                     )}
                   </div>
                 ) : (
-                  <div className="rounded-2xl border border-border bg-card p-3 text-xs text-muted-foreground">
+                  <div className="rounded-2xl glass-card p-3 text-xs text-muted-foreground">
                     Niciun cont Plex asociat.
                   </div>
                 )}
@@ -123,12 +123,12 @@ export function UserDetailDrawer({ userId, onClose }: { userId: number; onClose:
                   <Download className="h-3 w-3" /> Titluri descărcate ({user.downloads.length})
                 </h3>
                 {user.downloads.length === 0 ? (
-                  <div className="rounded-2xl border border-border bg-card p-3 text-xs text-muted-foreground">
+                  <div className="rounded-2xl glass-card p-3 text-xs text-muted-foreground">
                     Nicio descărcare atribuită acestui cont (doar descărcările de după activarea
                     urmăririi apar aici).
                   </div>
                 ) : (
-                  <div className="rounded-2xl border border-border bg-card divide-y divide-border/50">
+                  <div className="rounded-2xl glass-card divide-y divide-border/50">
                     {user.downloads.map((d) => (
                       <div key={d.id} className="flex items-center gap-2.5 px-3 py-2">
                         {d.posterUrl ? (
@@ -182,15 +182,15 @@ export function UserDetailDrawer({ userId, onClose }: { userId: number; onClose:
                   <PlayCircle className="h-3 w-3" /> Activitate Plex ({user.plexActivity.length})
                 </h3>
                 {!user.plexUsername ? (
-                  <div className="rounded-2xl border border-border bg-card p-3 text-xs text-muted-foreground">
+                  <div className="rounded-2xl glass-card p-3 text-xs text-muted-foreground">
                     Fără cont Plex asociat.
                   </div>
                 ) : user.plexActivity.length === 0 ? (
-                  <div className="rounded-2xl border border-border bg-card p-3 text-xs text-muted-foreground">
+                  <div className="rounded-2xl glass-card p-3 text-xs text-muted-foreground">
                     Nicio activitate recentă (sau cache-ul Plex nu e încă populat).
                   </div>
                 ) : (
-                  <div className="rounded-2xl border border-border bg-card divide-y divide-border/50">
+                  <div className="rounded-2xl glass-card divide-y divide-border/50">
                     {user.plexActivity.map((e, i) => (
                       <div key={i} className="flex items-start gap-2 px-3 py-2 text-xs">
                         <div className="mt-0.5 shrink-0">
@@ -238,11 +238,11 @@ export function UserDetailDrawer({ userId, onClose }: { userId: number; onClose:
                   <LogIn className="h-3 w-3" /> Istoric autentificări ({user.logins.length})
                 </h3>
                 {user.logins.length === 0 ? (
-                  <div className="rounded-2xl border border-border bg-card p-3 text-xs text-muted-foreground">
+                  <div className="rounded-2xl glass-card p-3 text-xs text-muted-foreground">
                     Nicio autentificare înregistrată încă.
                   </div>
                 ) : (
-                  <div className="rounded-2xl border border-border bg-card divide-y divide-border/50">
+                  <div className="rounded-2xl glass-card divide-y divide-border/50">
                     {user.logins.map((l) => (
                       <div key={l.id} className="px-3 py-2 text-xs">
                         <div className="flex items-center justify-between gap-2">

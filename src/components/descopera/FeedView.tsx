@@ -165,7 +165,7 @@ export function FeedView({
 
   if (clips.length === 0) {
     return (
-      <div className="rounded-xl border border-border bg-card p-6 text-center text-sm text-muted-foreground">
+      <div className="rounded-xl glass-card p-6 text-center text-sm text-muted-foreground">
         {degraded
           ? "Serviciul TMDB este indisponibil momentan. Încearcă din nou mai târziu."
           : "Niciun clip disponibil pentru filtrele curente."}

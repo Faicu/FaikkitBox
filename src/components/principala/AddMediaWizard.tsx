@@ -731,10 +731,10 @@ export function AddMediaWizard({
 
             {(step === "checking" || (step === "search" && initialItem)) && (
               <div className="animate-in fade-in duration-200 space-y-4">
-                <div className="relative h-28 animate-pulse overflow-hidden rounded-2xl bg-muted/40" />
+                <div className="relative h-28 skeleton-sweep overflow-hidden rounded-2xl" />
                 <div className="space-y-2">
-                  <div className="h-4 w-2/3 animate-pulse rounded bg-muted/40" />
-                  <div className="h-3 w-1/3 animate-pulse rounded bg-muted/40" />
+                  <div className="h-4 w-2/3 skeleton-sweep rounded" />
+                  <div className="h-3 w-1/3 skeleton-sweep rounded" />
                 </div>
                 <div className="flex items-center justify-center gap-2 pt-2 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -795,7 +795,7 @@ export function AddMediaWizard({
 
                     {bulkPlan.length > 0 &&
                       (confirmBulk ? (
-                        <div className="space-y-2 rounded-xl border border-border bg-card p-3">
+                        <div className="space-y-2 rounded-xl glass-card p-3">
                           <div className="text-sm text-foreground">
                             Pornești {confirmBulk.length} descărcări — tot ce lipsește și e
                             disponibil pe Filelist, la calitatea {quality}?
@@ -900,7 +900,7 @@ export function AddMediaWizard({
                           />
                         </>
                       ) : (
-                        <div className="rounded-xl border border-border bg-card p-3 text-sm text-muted-foreground">
+                        <div className="rounded-xl glass-card p-3 text-sm text-muted-foreground">
                           Nu există încă la calitatea {quality} pe Filelist.
                         </div>
                       )}

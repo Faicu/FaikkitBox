@@ -81,7 +81,7 @@ function TehnicPage() {
       <button
         type="button"
         onClick={() => setSpeedtestDrawer(true)}
-        className="block w-full rounded-2xl border border-border bg-card p-4 text-left active:scale-[0.99] transition-transform"
+        className="block w-full rounded-2xl glass-card glass-card-hover press-tile p-4 text-left"
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -113,7 +113,7 @@ function TehnicPage() {
         ) : speedtest.isLoading ? (
           <div className="mt-3 grid min-w-0 grid-cols-3 gap-2">
             {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="h-10 animate-pulse rounded-lg bg-muted/50" />
+              <div key={i} className="h-10 skeleton-sweep rounded-lg" />
             ))}
           </div>
         ) : (
@@ -163,7 +163,7 @@ function TehnicPage() {
               </div>
             )}
             {speedtest.data?.server && (
-              <div className="rounded-xl border border-border bg-card p-3 text-xs text-muted-foreground">
+              <div className="rounded-xl glass-card p-3 text-xs text-muted-foreground">
                 <div>
                   Server: {speedtest.data.server.name ?? "—"}{" "}
                   {speedtest.data.server.location ? `(${speedtest.data.server.location})` : ""}

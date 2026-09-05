@@ -65,14 +65,14 @@ export function NetworkLinkCard() {
   const degraded = !!d?.degraded;
 
   return (
-    <div className="rounded-xl border border-border bg-card p-3 space-y-3">
+    <div className="rounded-xl glass-card p-3 space-y-3">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <Cable className="h-4 w-4 shrink-0 text-muted-foreground" />
           <span className="text-sm font-semibold text-foreground">Legătură Ethernet</span>
         </div>
         {link.isLoading ? (
-          <span className="h-5 w-16 animate-pulse rounded bg-muted/60" />
+          <span className="h-5 w-16 skeleton-sweep rounded" />
         ) : (
           <span
             className={`flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${

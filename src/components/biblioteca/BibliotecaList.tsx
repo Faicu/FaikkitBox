@@ -90,10 +90,10 @@ export function BibliotecaList() {
   if (browse.isLoading) {
     return (
       <div className="space-y-3">
-        <div className="h-10 animate-pulse rounded-xl bg-muted/60" />
-        <div className="space-y-1.5 rounded-2xl border border-border bg-card p-3">
+        <div className="h-10 skeleton-sweep rounded-xl" />
+        <div className="space-y-1.5 rounded-2xl glass-card p-3">
           {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="h-9 animate-pulse rounded-lg bg-muted/50" />
+            <div key={i} className="h-9 skeleton-sweep rounded-lg" />
           ))}
         </div>
       </div>
@@ -190,7 +190,7 @@ export function BibliotecaList() {
               setVisible(PAGE_SIZE);
             }}
             placeholder="Caută film sau serial…"
-            className="w-full rounded-xl border border-border bg-card py-2.5 pl-9 pr-3 text-sm outline-none focus:ring-1 focus:ring-primary"
+            className="w-full rounded-xl glass-card py-2.5 pl-9 pr-3 text-sm outline-none focus:ring-1 focus:ring-primary"
           />
         </div>
         <select
@@ -199,7 +199,7 @@ export function BibliotecaList() {
             setSortMode(e.target.value as SortMode);
             setVisible(PAGE_SIZE);
           }}
-          className="shrink-0 rounded-xl border border-border bg-card px-2 text-xs outline-none focus:ring-1 focus:ring-primary"
+          className="shrink-0 rounded-xl glass-card px-2 text-xs outline-none focus:ring-1 focus:ring-primary"
         >
           <option value="recent">Recent adăugate</option>
           <option value="mostWatched">Cei mai vizionați</option>
@@ -321,7 +321,7 @@ export function BibliotecaList() {
               role="dialog"
               aria-label="Ștergere completă"
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-sm space-y-4 rounded-2xl border border-border bg-card p-5 shadow-xl"
+              className="w-full max-w-sm space-y-4 rounded-2xl glass-card p-5 shadow-xl"
             >
               <div className="text-sm font-semibold">
                 {confirmDeleteTitle.isCancel ? "Anulare descărcare" : "Ștergere completă"}

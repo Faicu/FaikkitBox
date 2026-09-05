@@ -41,7 +41,7 @@ export function PluginStatusSection() {
       <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
         <Box className="h-3.5 w-3.5" /> Plugin-uri active
       </h2>
-      <div className="rounded-2xl border border-border bg-card divide-y divide-border/50">
+      <div className="rounded-2xl glass-card divide-y divide-border/50">
         {PLUGINS.map((p) => {
           const lastTs =
             p.id === "github-commit-tracker" ? lastCommitSync() : lastActivity(p.activityType);

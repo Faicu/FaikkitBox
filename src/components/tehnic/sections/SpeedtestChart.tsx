@@ -25,7 +25,7 @@ export function SpeedtestChart({ history }: { history: SpeedtestHistoryEntry[] }
       <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
         Istoric ({sorted.length} teste)
       </div>
-      <div className="min-w-0 rounded-xl border border-border bg-card p-3">
+      <div className="min-w-0 rounded-xl glass-card p-3">
         {/* Grafic bare */}
         <div className="flex min-w-0 items-end gap-1.5" style={{ height: BAR_H }}>
           {sorted.map((h) => {

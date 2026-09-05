@@ -86,7 +86,7 @@ export function ErrorLogSection() {
       <button
         type="button"
         onClick={handleOpen}
-        className="block w-full rounded-2xl border border-border bg-card p-4 text-left active:scale-[0.99] transition-transform"
+        className="block w-full rounded-2xl glass-card glass-card-hover press-tile p-4 text-left"
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -160,7 +160,7 @@ export function ErrorLogSection() {
             </div>
 
             {entries.length === 0 && (
-              <div className="rounded-xl border border-border bg-card p-4 text-center text-xs text-muted-foreground">
+              <div className="rounded-xl glass-card p-4 text-center text-xs text-muted-foreground">
                 {allEntries.length === 0
                   ? "Nicio eroare înregistrată încă."
                   : "Niciun rezultat pentru filtrele curente."}

@@ -63,7 +63,7 @@ export function ServiceHeaderActions({ service, status, onRestart, onCommandResu
           href={version.changelog}
           target="_blank"
           rel="noreferrer"
-          className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-muted-foreground hover:text-foreground"
+          className="flex h-9 w-9 items-center justify-center rounded-full glass-card text-muted-foreground hover:text-foreground"
           title="Changelog"
           aria-label="Changelog"
         >

@@ -90,7 +90,7 @@ function Overview() {
           <div className="mt-3 flex gap-2">
             <Link
               to="/register"
-              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-border bg-card py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted/60 active:scale-[0.99]"
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl glass-card glass-card-hover press-tile py-2 text-sm font-medium text-foreground"
             >
               <UserPlus className="h-4 w-4" /> Înregistrare
             </Link>
@@ -280,7 +280,7 @@ function Overview() {
       )}
 
       {isAuthenticated && recentWatchItems.length > 0 && (
-        <div className="mt-4 rounded-2xl border border-border bg-card p-4">
+        <div className="mt-4 rounded-2xl glass-card p-4">
           <div className="flex items-center gap-2.5">
             <span className="text-emerald-400">
               <Eye className="h-5 w-5" />
@@ -339,7 +339,7 @@ function Overview() {
           </DrawerHeader>
           <div className="overflow-y-auto overscroll-contain px-4 pb-6">
             {plex.data?.status === "ok" && (plex.data.todayViews?.length ?? 0) > 0 ? (
-              <ul className="rounded-2xl border border-border bg-card divide-y divide-border">
+              <ul className="rounded-2xl glass-card divide-y divide-border">
                 {plex.data.todayViews!.map((e, i) => {
                   const seasonEp =
                     e.season != null && e.episode != null
@@ -362,7 +362,7 @@ function Overview() {
                 })}
               </ul>
             ) : (
-              <div className="rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground">
+              <div className="rounded-xl glass-card p-4 text-sm text-muted-foreground">
                 Nicio vizionare azi.
               </div>
             )}
@@ -382,7 +382,7 @@ function Overview() {
           </DrawerHeader>
           <div className="overflow-y-auto overscroll-contain px-4 pb-6">
             {plex.data?.status === "ok" && (plex.data.activeUsersTodayList?.length ?? 0) > 0 ? (
-              <ul className="rounded-2xl border border-border bg-card divide-y divide-border">
+              <ul className="rounded-2xl glass-card divide-y divide-border">
                 {plex.data.activeUsersTodayList!.map((u, i) => (
                   <li key={i} className="flex items-center justify-between px-3 py-2 text-sm">
                     <span className="truncate">{u.user}</span>
@@ -393,7 +393,7 @@ function Overview() {
                 ))}
               </ul>
             ) : (
-              <div className="rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground">
+              <div className="rounded-xl glass-card p-4 text-sm text-muted-foreground">
                 Niciun utilizator activ azi.
               </div>
             )}
@@ -424,7 +424,7 @@ function ServiceRow({
   className?: string;
 }) {
   return (
-    <div className={`rounded-2xl border border-border bg-card p-4 ${className ?? ""}`}>
+    <div className={`rounded-2xl glass-card p-4 ${className ?? ""}`}>
       <div className="flex items-center gap-2.5">
         <span className={`${accent}`}>{icon}</span>
         <span className="font-semibold">{title}</span>

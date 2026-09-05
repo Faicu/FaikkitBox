@@ -130,12 +130,12 @@ function QbitPage() {
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-2">
             {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="h-20 animate-pulse rounded-2xl bg-muted/60" />
+              <div key={i} className="h-20 skeleton-sweep rounded-2xl" />
             ))}
           </div>
           <div className="space-y-2">
             {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="h-16 animate-pulse rounded-2xl bg-muted/60" />
+              <div key={i} className="h-16 skeleton-sweep rounded-2xl" />
             ))}
           </div>
         </div>
@@ -274,11 +274,11 @@ function QbitPage() {
                     </button>
                   </div>
                   {filtered.length === 0 ? (
-                    <div className="rounded-2xl border border-border bg-card p-3 text-sm text-muted-foreground">
+                    <div className="rounded-2xl glass-card p-3 text-sm text-muted-foreground">
                       Niciun torrent.
                     </div>
                   ) : (
-                    <ul className="rounded-2xl border border-border bg-card divide-y divide-border">
+                    <ul className="rounded-2xl glass-card divide-y divide-border">
                       {filtered.map((t) => (
                         <li key={t.hash} className="px-3 py-2">
                           <div className="truncate text-sm">{t.name}</div>
@@ -331,7 +331,7 @@ function QbitPage() {
               <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
                 <Timer className="h-3.5 w-3.5" /> Cea mai mare descărcare
               </h2>
-              <div className="rounded-2xl border border-border bg-card p-3">
+              <div className="rounded-2xl glass-card p-3">
                 <div className="truncate text-sm font-medium">{data.largestEta.name}</div>
                 <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground tabular-nums">
                   <span>{formatBytes(data.largestEta.remaining)} rămași</span>
@@ -367,11 +367,11 @@ function QbitPage() {
                 )}
               </div>
               {data.torrents.length === 0 ? (
-                <div className="rounded-2xl border border-border bg-card p-4 text-sm text-muted-foreground">
+                <div className="rounded-2xl glass-card p-4 text-sm text-muted-foreground">
                   Niciun torrent.
                 </div>
               ) : filteredTorrents.length === 0 ? (
-                <div className="rounded-2xl border border-border bg-card p-4 text-sm text-muted-foreground">
+                <div className="rounded-2xl glass-card p-4 text-sm text-muted-foreground">
                   Niciun rezultat pentru „{torrentSearch}".
                 </div>
               ) : (
@@ -381,8 +381,16 @@ function QbitPage() {
                     const isPaused = /paus|stop/i.test(t.state);
                     const busy = pendingHash === t.hash;
                     const tone = stateTone(t.state);
+                    // Descărcare activă → bară cu gradient în mișcare + halo pulsat pe card,
+                    // ca să se distingă dintr-o privire de torrentele oprite/terminate.
+                    const isActive = !isPaused && t.progress < 1;
                     return (
-                      <div key={t.hash} className="glass-card glass-card-hover rounded-2xl p-3">
+                      <div
+                        key={t.hash}
+                        className={`glass-card glass-card-hover rounded-2xl p-3 ${
+                          isActive ? "pulse-glow" : ""
+                        }`}
+                      >
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
                             <div className="truncate text-sm font-medium">{t.name}</div>
@@ -440,6 +448,7 @@ function QbitPage() {
                             value={t.progress * 100}
                             right={`${(t.progress * 100).toFixed(1)}%`}
                             tone={tone}
+                            active={isActive}
                           />
                         </div>
                         <div className="mt-1 flex items-center justify-between text-[11px] text-muted-foreground tabular-nums">

@@ -50,7 +50,7 @@ function LoginPage() {
           e.preventDefault();
           m.mutate();
         }}
-        className="space-y-4 rounded-2xl border border-border bg-card p-5 shadow-sm"
+        className="space-y-4 rounded-2xl glass-card p-5 shadow-sm"
       >
         <div className="space-y-1.5">
           <label className="text-xs font-medium text-muted-foreground">Utilizator</label>

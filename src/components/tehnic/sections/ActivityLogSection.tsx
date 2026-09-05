@@ -139,11 +139,11 @@ export function ActivityLogSection() {
             </button>
           ))}
         </div>
-        <div className="rounded-2xl border border-border bg-card divide-y divide-border/50">
+        <div className="rounded-2xl glass-card divide-y divide-border/50">
           {isLoading && (
             <div className="space-y-1.5 p-3">
               {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="h-8 animate-pulse rounded-lg bg-muted/50" />
+                <div key={i} className="h-8 skeleton-sweep rounded-lg" />
               ))}
             </div>
           )}

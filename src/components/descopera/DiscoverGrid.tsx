@@ -82,11 +82,11 @@ export function DiscoverGrid({
       {isLoading ? (
         <div className="grid grid-cols-3 gap-3">
           {Array.from({ length: 9 }).map((_, i) => (
-            <div key={i} className="aspect-[2/3] animate-pulse rounded-xl bg-muted/40" />
+            <div key={i} className="aspect-[2/3] skeleton-sweep rounded-xl" />
           ))}
         </div>
       ) : items.length === 0 ? (
-        <div className="rounded-xl border border-border bg-card p-6 text-center text-sm text-muted-foreground">
+        <div className="rounded-xl glass-card p-6 text-center text-sm text-muted-foreground">
           {degraded
             ? "Serviciul TMDB este indisponibil momentan. Încearcă din nou mai târziu."
             : "Niciun rezultat găsit."}
@@ -104,13 +104,13 @@ export function DiscoverGrid({
                 key={`${item.mediaType}-${item.id}`}
                 type="button"
                 onClick={() => setSelected(item)}
-                className="group relative aspect-[2/3] overflow-hidden rounded-xl border border-border bg-muted/40 text-left transition-colors hover:border-primary/40"
+                className="poster-tilt group relative aspect-[2/3] overflow-hidden rounded-xl border border-border bg-muted/40 text-left"
               >
                 {item.posterUrl ? (
                   <img
                     src={item.posterUrl}
                     alt=""
-                    className="h-full w-full object-cover transition-transform group-hover:scale-[1.02] group-active:scale-95"
+                    className="h-full w-full object-cover"
                     loading="lazy"
                   />
                 ) : (
