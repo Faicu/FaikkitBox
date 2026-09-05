@@ -361,14 +361,26 @@ export async function trackImmichUploads(
 let dbModuleRef: typeof import("./db") | null = null;
 let cryptoRef: typeof import("node:crypto") | null = null;
 
-async function isCodeRestart(): Promise<boolean> {
+// Marcaj scris de `npm run build` (vezi package.json) și consumat o singură
+// dată, la prima pornire de după. Înlocuiește vechea euristică pe mtime-ul lui
+// .output/server/index.mjs, care era greșită prin construcție: workflow-ul e
+// stop → build → start, deci la momentul opririi build-ul încă nu se făcuse
+// (mtime vechi → oprirea se loga), iar la pornire era proaspăt (→ pornirea se
+// suprima). Fiecare deploy producea astfel o oprire fără pereche, și jurnalul
+// arăta serverul ca oprit de zile întregi.
+function deployMarkerPath(): string {
+  return process.env.FAIKKITBOX_DEPLOY_MARKER ?? "/opt/faikkitbox/data/.deploy-marker";
+}
+
+// Consumă marcajul (îl șterge) și spune dacă pornirea curentă e un deploy.
+function consumeDeployMarker(): boolean {
   try {
-    const { stat } = await import("node:fs/promises");
-    const { fileURLToPath } = await import("node:url");
-    // Calea spre build-ul curent — dacă a fost modificat în ultimele 3 minute, e un restart din cod
-    const buildFile = new URL("../index.mjs", import.meta.url);
-    const s = await stat(fileURLToPath(buildFile));
-    return Date.now() - s.mtimeMs < 10 * 60_000;
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { existsSync, unlinkSync } = require("node:fs") as typeof import("node:fs");
+    const p = deployMarkerPath();
+    if (!existsSync(p)) return false;
+    unlinkSync(p);
+    return true;
   } catch {
     return false;
   }
@@ -387,39 +399,42 @@ async function logServerStartOnce(): Promise<void> {
     const dbModule = await import("./db");
     dbModuleRef = dbModule;
     cryptoRef = await import("node:crypto");
-    const db = dbModule.getDb();
-    // Deduplicare: modulul poate fi încărcat în mai multe chunk-uri de build.
-    // Dacă există deja un server_start în ultimele 30 secunde, nu logăm din nou.
-    const recent = db
-      .prepare("SELECT COUNT(*) as c FROM activity WHERE type = 'server_start' AND timestamp > ?")
-      .get(new Date(Date.now() - 30_000).toISOString()) as { c: number };
-    if (recent.c > 0) return;
-    // Nu logăm dacă e un restart cauzat de un build recent (modificare cod)
-    if (await isCodeRestart()) return;
+    // Deschide conexiunea (și rulează migrările) acum, la pornire — la oprire
+    // avem doar ~300ms până la ieșirea forțată din fast-shutdown.ts, prea
+    // puțin ca să deschidem DB-ul de la zero acolo.
+    dbModule.getDb();
+    // Nu mai există deduplicare pe fereastră de 30s: exista fiindcă modulul
+    // putea fi încărcat din mai multe chunk-uri de build, dar acum init-ul e
+    // apelat o singură dată, explicit, din server/plugins/activity-boot.ts,
+    // iar garda globalThis de mai jos acoperă dublul-init în același proces.
+    // Fereastra ascundea în schimb exact restarturile rapide — adică un
+    // crash-loop systemd, când jurnalul e cel mai util (verificat: două
+    // reporniri la 17s distanță produceau oprire fără pornire).
+
+    // Deploy-urile se loghează, dar fără push — altfel primești două
+    // notificări la fiecare `npm run build`. Înainte erau suprimate complet,
+    // ceea ce lăsa găuri în jurnal (opriri fără pornire corespunzătoare).
+    const isDeploy = consumeDeployMarker();
+
     // Cauza: sistemul repornit de curând (uptime OS mic) vs doar serviciul
-    // (systemctl start), cu sistemul deja pornit de mai mult timp.
+    // (systemctl start), cu sistemul deja pornit de mai mult timp. Se
+    // evaluează la boot — înainte, modulul se încărca abia la prima cerere
+    // HTTP, deci `os.uptime()` era deja mare și un reboot real apărea ca
+    // "pornire manuală".
     const os = await import("node:os");
-    const cause =
-      os.uptime() < 120 ? "după repornirea sistemului" : "pornire manuală a serviciului";
-    await logActivity("server_start", buildServerStartMessage(cause, nowHM()));
+    const cause = isDeploy
+      ? "actualizare de cod (deploy)"
+      : os.uptime() < 120
+        ? "după repornirea sistemului"
+        : "pornire manuală a serviciului";
+    await logActivity(
+      "server_start",
+      buildServerStartMessage(cause, nowHM()),
+      { deploy: isDeploy },
+      { skipPush: isDeploy },
+    );
   } catch {
     // logare best-effort — nu blocăm pornirea serverului
-  }
-}
-
-function isCodeRestartSync(): boolean {
-  try {
-    // require() e necesar aici (nu import dinamic) — funcția rulează sincron
-    // dintr-un handler de shutdown (process.on("exit"/"SIGTERM")).
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { statSync } = require("node:fs") as typeof import("node:fs");
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { fileURLToPath } = require("node:url") as typeof import("node:url");
-    const buildFile = new URL("../index.mjs", import.meta.url);
-    const s = statSync(fileURLToPath(buildFile));
-    return Date.now() - s.mtimeMs < 10 * 60_000;
-  } catch {
-    return false;
   }
 }
 
@@ -430,8 +445,6 @@ let crashCause: string | null = null;
 function logServerStopSync(): void {
   try {
     if (!dbModuleRef || !cryptoRef) return;
-    // Nu logăm dacă e un restart cauzat de un build recent (verificare async sau sync fallback)
-    if (codeRestartDetected || isCodeRestartSync()) return;
     const db = dbModuleRef.getDb();
     const cause = crashCause ?? "oprire manuală / redeploy";
     const message = buildServerStopMessage(cause, nowHM());
@@ -455,28 +468,26 @@ declare global {
   var __faikkitboxActivityInit: boolean | undefined;
 }
 
-let codeRestartDetected = false;
-
 // Rulează doar când modulul e încărcat din build-ul real (.output/server/...),
 // nu din sursă (ex. `npx tsx src/lib/*.ts` pentru un script de test) — altfel
-// isCodeRestart() de mai jos rezolvă greșit calea "../index.mjs" (relativă la
-// src/lib/, unde acel fișier nu există), catch-ul întoarce implicit false, iar
-// scriptul efemer ajunge să logheze fals "Serverul FaikkitBox a pornit/s-a
-// oprit" în Jurnalul de Activitate la fiecare rulare — asta a poluat jurnalul
+// un script efemer ajunge să logheze fals "Serverul FaikkitBox a pornit/s-a
+// oprit" în Jurnalul de Activitate la fiecare rulare; asta a poluat jurnalul
 // în timpul testării manuale a acestui fișier.
 const isRealServerBuild = import.meta.url.includes("/.output/");
 
-if (
-  isRealServerBuild &&
-  typeof process !== "undefined" &&
-  process.env &&
-  !globalThis.__faikkitboxActivityInit
-) {
+// Apelată explicit din server/plugins/activity-boot.ts, la pornirea Nitro.
+//
+// Înainte, blocul ăsta rula ca side-effect la încărcarea modulului — dar
+// nimic nu importa activity-log la boot, deci se executa abia la PRIMA CERERE
+// HTTP. Consecințe măsurate: ora pornirii era ora primei cereri (nu a
+// pornirii), `os.uptime()` era deja mare deci un reboot real apărea ca
+// "pornire manuală", iar dacă serverul era oprit înainte să vină vreo cerere,
+// handler-ele de shutdown nici nu existau — oprirea nu se loga deloc.
+export function initServerLifecycleLogging(): void {
+  if (!isRealServerBuild || typeof process === "undefined" || !process.env) return;
+  if (globalThis.__faikkitboxActivityInit) return;
   globalThis.__faikkitboxActivityInit = true;
-  // Detectăm înainte de logare dacă e restart din cod, pentru a suprima și server_stop
-  isCodeRestart().then((isCode) => {
-    codeRestartDetected = isCode;
-  });
+
   logServerStartOnce();
   // "exit" rulează la orice ieșire normală — doar cod sincron (node:sqlite poate).
   let stopLogged = false;
