@@ -201,7 +201,27 @@ export function getDb(): DatabaseSync {
 }
 
 function runCleanups(database: DatabaseSync): void {
+  // Migrările rulează într-o tranzacție: mai multe dintre ele fac secvențe
+  // CREATE -> INSERT -> DROP -> RENAME (v9 recreează pinned_items), iar o
+  // întrerupere la mijloc lăsa baza cu două tabele și fără cea originală.
+  //
+  // Eșecul e fatal, intenționat: înainte, tot blocul era învelit într-un
+  // try/catch care doar scria un console.warn, deci o migrare picată la
+  // jumătate nu incrementa user_version, dar aplicația pornea oricum — cu
+  // schemă parțială și fără ca nimeni să observe. Mai bine refuză să pornească.
+  database.exec("BEGIN");
   try {
+    applyCleanups(database);
+    database.exec("COMMIT");
+  } catch (e) {
+    database.exec("ROLLBACK");
+    console.error("[db] Migrare eșuată — pornirea e oprită:", e);
+    throw e;
+  }
+}
+
+function applyCleanups(database: DatabaseSync): void {
+  {
     const row = database.prepare("PRAGMA user_version").get() as { user_version: number };
     const version = row?.user_version ?? 0;
 
@@ -388,8 +408,14 @@ function runCleanups(database: DatabaseSync): void {
         const cols = database.prepare("PRAGMA table_info(pinned_items)").all() as Array<{
           name: string;
         }>;
+        // Pe o bază NOUĂ, pinned_items nu există deloc (v14 a eliminat funcția,
+        // deci blocul de schemă n-o mai creează). Fără verificarea asta, v9
+        // pornea oricum, crea pinned_items_new, apoi pica la INSERT ... FROM
+        // pinned_items — iar catch-ul de mai jos înghițea eroarea, lăsând
+        // tabela orfană pinned_items_new în orice instalare nouă. Reprodus pe
+        // o bază curată înainte de fix.
         const hasUserId = cols.some((c) => c.name === "user_id");
-        if (!hasUserId) {
+        if (cols.length > 0 && !hasUserId) {
           const admin = database
             .prepare("SELECT id FROM users WHERE role = 'admin' ORDER BY id ASC LIMIT 1")
             .get() as { id: number } | undefined;
@@ -530,7 +556,13 @@ function runCleanups(database: DatabaseSync): void {
       }
       database.exec("PRAGMA user_version = 16");
     }
-  } catch (e) {
-    console.warn("[db] Curățare eșuată:", e);
+
+    if (version < 17) {
+      // v17: curăță pinned_items_new, tabela orfană lăsată în urmă de v9 pe
+      // bazele create înainte de fixul de mai sus (v9 crea tabela, apoi pica
+      // la copiere fiindcă pinned_items nu exista, iar eroarea era înghițită).
+      database.exec("DROP TABLE IF EXISTS pinned_items_new");
+      database.exec("PRAGMA user_version = 17");
+    }
   }
 }

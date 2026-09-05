@@ -55,10 +55,25 @@ export const approveUser = createServerFn({ method: "POST" })
   .validator((data: { id: number }) => data)
   .handler(async ({ data }): Promise<{ ok: boolean }> => {
     const { requireAdmin } = await import("./admin.server");
-    await requireAdmin();
+    const session = await requireAdmin();
     const { getDb } = await import("../db");
     const db = getDb();
+    const target = db
+      .prepare("SELECT username FROM users WHERE id = ? AND role = 'user'")
+      .get(data.id) as { username: string } | undefined;
     db.prepare("UPDATE users SET status = 'approved' WHERE id = ? AND role = 'user'").run(data.id);
+
+    // Aprobările/revocările nu lăsau nicio urmă — nu se putea afla cine a dat
+    // acces cui, nici după fapt.
+    if (target) {
+      const { logActivity } = await import("../activity-log");
+      await logActivity(
+        "account_request",
+        `Cont aprobat: ${target.username} (de ${session.data.username ?? "admin necunoscut"})`,
+        { username: target.username, by: session.data.username ?? null },
+        { skipPush: true },
+      );
+    }
     return { ok: true };
   });
 
@@ -68,10 +83,24 @@ export const deleteUser = createServerFn({ method: "POST" })
   .validator((data: { id: number }) => data)
   .handler(async ({ data }): Promise<{ ok: boolean }> => {
     const { requireAdmin } = await import("./admin.server");
-    await requireAdmin();
+    const session = await requireAdmin();
     const { getDb } = await import("../db");
     const db = getDb();
+    const target = db
+      .prepare("SELECT username, status FROM users WHERE id = ? AND role = 'user'")
+      .get(data.id) as { username: string; status: string } | undefined;
     db.prepare("DELETE FROM users WHERE id = ? AND role = 'user'").run(data.id);
+
+    if (target) {
+      const { logActivity } = await import("../activity-log");
+      const what = target.status === "approved" ? "Acces revocat" : "Cerere respinsă";
+      await logActivity(
+        "account_request",
+        `${what}: ${target.username} (de ${session.data.username ?? "admin necunoscut"})`,
+        { username: target.username, by: session.data.username ?? null },
+        { skipPush: true },
+      );
+    }
     return { ok: true };
   });
 
