@@ -185,7 +185,10 @@ function AutoReloadWatcher() {
 
   useEffect(() => {
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js").catch(() => {});
+      // updateViaCache: "none" — sw.js e verificat mereu la sursă, nu din
+      // cache-ul HTTP. Fără el, o versiune nouă a service worker-ului (deci și
+      // a iconițelor de notificare) poate întârzia până la 24h pe telefon.
+      navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" }).catch(() => {});
     }
   }, []);
 

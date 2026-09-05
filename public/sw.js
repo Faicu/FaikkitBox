@@ -1,14 +1,25 @@
-// Cache-ul ține STRICT iconițele de notificare. Motiv: `icon` și `badge` nu
-// sunt încorporate în notificare, ci sunt URL-uri pe care browserul le descarcă
-// în momentul afișării. Notificarea "Serverul s-a oprit" pleacă exact când
-// serverul moare, deci fetch-ul lor eșuează și Android cade pe fallback —
-// clopoțel în bara de stare și avatar-literă în locul logo-ului. Din cache,
-// iconițele sunt disponibile chiar și cu serverul căzut.
+// Iconițele de notificare, disponibile și cu serverul oprit.
 //
-// Bumpează versiunea când se schimbă vreuna dintre imagini; `activate` șterge
-// cache-urile cu alt nume.
-const ASSET_CACHE = "faikkitbox-notif-icons-v1";
-const CACHED_ASSETS = ["/icon-192.png", "/badge-96.png"];
+// `icon` și `badge` nu sunt încorporate în notificare: sunt URL-uri pe care
+// browserul le descarcă abia în momentul afișării. Notificarea "Serverul s-a
+// oprit" pleacă exact când serverul moare, deci descărcarea lor eșuează și
+// Android cade pe fallback — clopoțel în bara de stare, avatar-literă în locul
+// logo-ului.
+//
+// ATENȚIE, aici a greșit prima încercare (f157b95): un handler `fetch` care
+// servea cele două căi din cache NU rezolvă nimic. Cererile pentru `icon`,
+// `badge` și `image` sunt făcute de browser la nivel intern și NU trec prin
+// evenimentul `fetch` al service worker-ului — comportament confirmat pe Chrome
+// și Firefox (vezi discuția din specificația Notifications, w3c/ServiceWorker).
+// De aceea clopoțelul a reapărut, deși cache-ul era plin.
+//
+// Singura cale care funcționează: citim imaginile din Cache Storage NOI, în
+// handler-ul de push, și le trecem ca `data:` URL. Un data URL nu mai are
+// nevoie de rețea, deci nu-l mai poate rata niciun server oprit.
+const ASSET_CACHE = "faikkitbox-notif-icons-v2";
+const ICON_URL = "/icon-192.png";
+const BADGE_URL = "/badge-96.png";
+const CACHED_ASSETS = [ICON_URL, BADGE_URL];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -16,7 +27,7 @@ self.addEventListener("install", (event) => {
       .open(ASSET_CACHE)
       .then((cache) => cache.addAll(CACHED_ASSETS))
       // Dacă serverul e picat chiar la instalare, nu blocăm instalarea —
-      // cache-ul se va umple la următoarea versiune de SW.
+      // cache-ul se umple la primul push cu serverul pornit (vezi asDataUrl).
       .catch(() => {}),
   );
   // Preluăm controlul imediat: fără asta, o versiune nouă rămâne "waiting"
@@ -35,28 +46,38 @@ self.addEventListener("activate", (event) => {
   );
 });
 
-// Interceptăm exclusiv cele două iconițe. Orice altă cerere trece neatinsă:
-// nu chemăm respondWith, deci browserul face rețea normal.
-self.addEventListener("fetch", (event) => {
-  const url = new URL(event.request.url);
-  if (url.origin !== self.location.origin) return;
-  if (!CACHED_ASSETS.includes(url.pathname)) return;
+// btoa vrea un string binar, iar String.fromCharCode(...) pe tot bufferul dintr-o
+// bucată depășește limita de argumente pentru icon-192.png (~76 KB). Mergem pe
+// felii.
+function bytesToBase64(bytes) {
+  let binary = "";
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(binary);
+}
 
-  event.respondWith(
-    caches.match(event.request).then(
-      (hit) =>
-        hit ??
-        fetch(event.request).then((res) => {
-          // Reîmprospătăm cache-ul când rețeaua răspunde.
-          if (res.ok) {
-            const copy = res.clone();
-            caches.open(ASSET_CACHE).then((c) => c.put(event.request, copy));
-          }
-          return res;
-        }),
-    ),
-  );
-});
+// Întoarce imaginea ca `data:` URL. La orice eșec cade pe calea simplă — adică
+// exact comportamentul de dinainte, nu mai rău.
+async function asDataUrl(path) {
+  try {
+    const cache = await caches.open(ASSET_CACHE);
+    let res = await cache.match(path);
+    if (!res) {
+      // Cache gol (instalare făcută cu serverul jos): dacă serverul e sus acum,
+      // luăm imaginea și o reținem pentru data viitoare, când poate nu va fi.
+      res = await fetch(path);
+      if (!res.ok) return path;
+      cache.put(path, res.clone()).catch(() => {});
+    }
+    const type = res.headers.get("content-type") || "image/png";
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    return `data:${type};base64,${bytesToBase64(bytes)}`;
+  } catch {
+    return path;
+  }
+}
 
 self.addEventListener("push", (event) => {
   if (!event.data) return;
@@ -73,20 +94,26 @@ self.addEventListener("push", (event) => {
   } catch {
     body = event.data.text();
   }
+
   event.waitUntil(
-    self.registration.showNotification(title, {
-      body,
-      icon: "/icon-192.png",
+    (async () => {
       // `badge` = iconița mică din bara de stare Android. Sistemul o folosește
-      // DOAR ca mască: păstrează canalul alfa și umple restul cu alb. Aici era
-      // icon-192.png, care e complet opac (alfa 255 peste tot), deci masca ieșea
-      // dreptunghi plin — un pătrat alb în bara de notificări. badge-96.png e
-      // monocrom, cu fundal transparent, exact ce așteaptă Android.
-      badge: "/badge-96.png",
-      image,
-      vibrate: [100, 50, 100],
-      data: { url },
-    }),
+      // DOAR ca mască: păstrează canalul alfa și umple restul cu alb. Trebuie
+      // monocromă, cu fundal transparent — de aceea badge-96.png, nu
+      // icon-192.png (care e complet opac și ar ieși un pătrat alb).
+      const [icon, badge] = await Promise.all([asDataUrl(ICON_URL), asDataUrl(BADGE_URL)]);
+      await self.registration.showNotification(title, {
+        body,
+        icon,
+        badge,
+        // Rămâne URL: e posterul titlului, diferit la fiecare notificare, deci
+        // nu poate fi precache-uit. Dacă nu se încarcă, Android afișează
+        // notificarea fără imaginea mare — restul iconițelor sunt neatinse.
+        image,
+        vibrate: [100, 50, 100],
+        data: { url },
+      });
+    })(),
   );
 });
 
