@@ -91,7 +91,9 @@ export function PushSubscriptionsSection() {
           Niciun dispozitiv abonat la notificări.
         </div>
       ) : (
-        <div className="rounded-2xl glass-card divide-y divide-border/50">
+        // Copiii direcți sunt div-uri simple, fără clasă care să seteze
+        // `animation` pe element — altfel stagger-ul i-ar lăsa invizibili.
+        <div className="rounded-2xl glass-card divide-y divide-border/50 stagger-in">
           {rows.map((r) => {
             const isMe = myTail != null && r.endpointTail === myTail;
             const standalone = r.displayMode === "standalone" || r.displayMode === "fullscreen";
@@ -113,7 +115,8 @@ export function PushSubscriptionsSection() {
                         {deviceLabel(r.userAgent)}
                       </span>
                       {isMe && (
-                        <span className="rounded bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400">
+                        <span className="inline-flex items-center gap-1 rounded bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400">
+                          <span className="live-dot" aria-hidden />
                           acest dispozitiv
                         </span>
                       )}
@@ -161,7 +164,7 @@ export function PushSubscriptionsSection() {
                     onClick={() => setConfirmId(confirmId === r.id ? null : r.id)}
                     disabled={remove.isPending}
                     title="Șterge abonamentul"
-                    className="shrink-0 rounded-md border border-red-500/30 bg-red-500/10 p-1.5 text-red-400 transition-colors hover:bg-red-500/20 active:scale-[0.93] disabled:opacity-50"
+                    className="press-tile shrink-0 rounded-md border border-red-500/30 bg-red-500/10 p-1.5 text-red-400 hover:bg-red-500/20 disabled:opacity-50"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
@@ -171,7 +174,7 @@ export function PushSubscriptionsSection() {
                     imbricat într-un Drawer și îngheța ecranul (vezi istoricul din
                     AddMediaWizard), așa că rămâne UI simplu. */}
                 {confirmId === r.id && (
-                  <div className="mt-2 rounded-xl border border-red-500/30 bg-red-500/10 p-2.5">
+                  <div className="mt-2 animate-in fade-in-0 slide-in-from-top-1 duration-200 rounded-xl border border-red-500/30 bg-red-500/10 p-2.5">
                     <p className="text-xs text-muted-foreground">
                       {isMe
                         ? "Ștergi abonamentul acestui dispozitiv — nu vei mai primi notificări aici până nu le reactivezi."
@@ -182,14 +185,14 @@ export function PushSubscriptionsSection() {
                         type="button"
                         onClick={() => remove.mutate(r.id)}
                         disabled={remove.isPending}
-                        className="rounded-lg bg-red-500/20 px-2.5 py-1 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/30 disabled:opacity-50"
+                        className="press-tile rounded-lg bg-red-500/20 px-2.5 py-1 text-xs font-medium text-red-400 hover:bg-red-500/30 disabled:opacity-50"
                       >
                         Șterge
                       </button>
                       <button
                         type="button"
                         onClick={() => setConfirmId(null)}
-                        className="rounded-lg bg-muted px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted/70"
+                        className="press-tile rounded-lg bg-muted px-2.5 py-1 text-xs text-muted-foreground hover:bg-muted/70"
                       >
                         Renunță
                       </button>
