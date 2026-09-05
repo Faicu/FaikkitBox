@@ -912,9 +912,7 @@ export function AddMediaWizard({
 
             {step === "pick" && torrentChoice && (
               <div className="animate-in fade-in slide-in-from-right-2 duration-200 space-y-4">
-                <div className="text-sm font-semibold">
-                  Alege torrentul — {torrentChoice.label}
-                </div>
+                <div className="text-sm font-semibold">Alege torrentul — {torrentChoice.label}</div>
                 <TorrentPicker
                   matches={torrentChoice.candidates}
                   selectedId={pickedTorrentId ?? torrentChoice.candidates[0].id}

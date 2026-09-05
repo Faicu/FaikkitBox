@@ -78,7 +78,9 @@ export function BibliotecaList() {
     queryClient.invalidateQueries({ queryKey: ["plexLibraryBrowse"] });
     if (res.qbitDeleted) {
       toast.success(
-        isCancel ? "Descărcare anulată — fișiere + qBittorrent" : "Titlu șters complet — fișiere + qBittorrent + Plex",
+        isCancel
+          ? "Descărcare anulată — fișiere + qBittorrent"
+          : "Titlu șters complet — fișiere + qBittorrent + Plex",
       );
     } else {
       toast.warning("Șters din jurnal, dar nu am putut confirma ștergerea din qBittorrent");

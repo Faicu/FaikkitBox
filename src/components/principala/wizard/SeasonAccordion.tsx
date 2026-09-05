@@ -76,7 +76,8 @@ function seasonBadge(season: SeasonRowData): { tone: string; label: string } {
   const allUpcoming = eps.every((e) => e.availability.kind === "upcoming");
   if (allUpcoming) {
     const firstDate = eps.find(
-      (e) => e.availability.kind === "upcoming" && (e.availability.airStamp || e.availability.airDate),
+      (e) =>
+        e.availability.kind === "upcoming" && (e.availability.airStamp || e.availability.airDate),
     );
     const dateLabel =
       firstDate?.availability.kind === "upcoming" ? upcomingLabel(firstDate.availability) : null;

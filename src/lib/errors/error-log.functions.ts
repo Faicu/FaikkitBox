@@ -38,10 +38,5 @@ export const logClientError = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { getRequestIP } = await import("@tanstack/react-start/server");
     const { recordClientError } = await import("./error-log");
-    recordClientError(
-      getRequestIP() ?? "unknown",
-      data.message,
-      data.stack,
-      data.level ?? "error",
-    );
+    recordClientError(getRequestIP() ?? "unknown", data.message, data.stack, data.level ?? "error");
   });

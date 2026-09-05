@@ -167,11 +167,7 @@ export const getPlexLibraryBrowse = createServerFn({ method: "GET" }).handler(
             Math.floor(new Date(`${r.added_at.replace(" ", "T")}Z`).getTime() / 1000),
           watchedByMe: false,
           watchedCount: 0,
-          status: r.plex_rating_key
-            ? "in_library"
-            : r.completed_at
-              ? "processing"
-              : "downloading",
+          status: r.plex_rating_key ? "in_library" : r.completed_at ? "processing" : "downloading",
           progress: null,
           dlspeed: null,
           eta: null,
@@ -443,11 +439,7 @@ async function buildDetailFromMediaRow(
     watchedByMeAt,
     watchedByOthers,
     addedByUsername,
-    status: row.plex_rating_key
-      ? "in_library"
-      : row.completed_at
-        ? "processing"
-        : "downloading",
+    status: row.plex_rating_key ? "in_library" : row.completed_at ? "processing" : "downloading",
     progress,
     dlspeed,
     eta,
@@ -680,7 +672,9 @@ export const getRecentWatches = createServerFn({ method: "GET" }).handler(
         episodeEnd: null,
         completed: !!row.completed,
         progressMinutes:
-          !row.completed && row.view_offset_ms != null ? Math.round(row.view_offset_ms / 60_000) : null,
+          !row.completed && row.view_offset_ms != null
+            ? Math.round(row.view_offset_ms / 60_000)
+            : null,
         durationMinutes:
           !row.completed && row.duration_ms != null ? Math.round(row.duration_ms / 60_000) : null,
         thumbUrl: row.poster_path,

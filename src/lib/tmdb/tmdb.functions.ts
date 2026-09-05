@@ -116,9 +116,7 @@ export const searchTmdb = createServerFn({ method: "GET" })
           `/search/multi?query=${encodeURIComponent(q)}&include_adult=false&language=ro-RO&page=1`,
         ).catch(() => null),
       ]);
-      const roByKey = new Map(
-        (roJson?.results ?? []).map((r) => [`${r.media_type}:${r.id}`, r]),
-      );
+      const roByKey = new Map((roJson?.results ?? []).map((r) => [`${r.media_type}:${r.id}`, r]));
       const results = json.results ?? [];
       return results
         .filter((r) => r.media_type === "movie" || r.media_type === "tv")
@@ -129,11 +127,7 @@ export const searchTmdb = createServerFn({ method: "GET" })
             r.media_type === "movie"
               ? (r.title ?? r.original_title ?? "")
               : (r.name ?? r.original_name ?? "");
-          const roTitle = roR
-            ? r.media_type === "movie"
-              ? roR.title
-              : roR.name
-            : null;
+          const roTitle = roR ? (r.media_type === "movie" ? roR.title : roR.name) : null;
           return {
             id: r.id,
             mediaType: r.media_type as "movie" | "tv",
@@ -467,4 +461,3 @@ export const getTmdbAllSeasons = createServerFn({ method: "GET" })
     await requireAuth();
     return getTmdbAllSeasonsInternal(data.tmdbId, data.seasonNumbers);
   });
-

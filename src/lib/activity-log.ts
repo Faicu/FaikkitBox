@@ -248,7 +248,7 @@ export async function trackPlexSessions(
       // Titlul afișat/stocat e cel tradus RO (dacă titlul redat e cunoscut
       // local) — atât aici cât și la stop (care citește din DB, nu recalculează).
       const displayGrandparentTitle = s.grandparentTitle
-        ? resolveDisplayTitle(s.ratingKey, true) ?? s.grandparentTitle
+        ? (resolveDisplayTitle(s.ratingKey, true) ?? s.grandparentTitle)
         : undefined;
       const displayTitle = !s.grandparentTitle
         ? (resolveDisplayTitle(s.ratingKey, false) ?? s.title)
@@ -270,7 +270,9 @@ export async function trackPlexSessions(
         s.ratingKey ?? null,
       );
 
-      const what = displayGrandparentTitle ? `${displayGrandparentTitle} — ${displayTitle}` : displayTitle;
+      const what = displayGrandparentTitle
+        ? `${displayGrandparentTitle} — ${displayTitle}`
+        : displayTitle;
       await logActivity("plex_watch_start", buildPlexWatchStartMessage(s.user, what), {
         user: s.user,
         title: displayTitle,

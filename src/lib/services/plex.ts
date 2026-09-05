@@ -116,7 +116,9 @@ export function getWatchedAt(
   if (item.ratingKey && index.ratingKeys.has(item.ratingKey)) {
     return index.ratingKeys.get(item.ratingKey) ?? 0;
   }
-  const key = item.show ? episodeKeyFor(item.show, item.season, item.episode) : `movie|${item.title}`;
+  const key = item.show
+    ? episodeKeyFor(item.show, item.season, item.episode)
+    : `movie|${item.title}`;
   if (index.titleKeys.has(key)) return index.titleKeys.get(key) ?? 0;
   return null;
 }
@@ -129,14 +131,19 @@ export function getWatchedAt(
 // acelui token, deci fallback-ul e sigur doar pentru owner, nu pentru
 // utilizatorii gestionați (Plex Home) — aceia au propria stare, invizibilă
 // prin tokenul owner-ului.
-let plexOwnerUsernameCache: { url: string; username: string | null; expiresAt: number } | null = null;
+let plexOwnerUsernameCache: { url: string; username: string | null; expiresAt: number } | null =
+  null;
 
 export async function getPlexOwnerUsername(): Promise<string | null> {
   const token = process.env.PLEX_TOKEN;
   if (!token) return null;
   try {
     const { url } = await discoverPlexUrl(token, process.env.PLEX_URL);
-    if (plexOwnerUsernameCache && plexOwnerUsernameCache.url === url && plexOwnerUsernameCache.expiresAt > Date.now()) {
+    if (
+      plexOwnerUsernameCache &&
+      plexOwnerUsernameCache.url === url &&
+      plexOwnerUsernameCache.expiresAt > Date.now()
+    ) {
       return plexOwnerUsernameCache.username;
     }
     const headers = { Accept: "application/json", "X-Plex-Token": token };

@@ -170,40 +170,40 @@ export interface LibraryTitleMatch {
 // IMDb ID-ul torrentului — greșit pentru titluri indexate pe Filelist sub
 // ID-ul altei producții din aceeași franciză (vezi spinoff-uri/reunion-uri).
 export async function searchLibraryTitlesCore(query: string): Promise<LibraryTitleMatch[]> {
-    const q = query.trim();
-    if (q.length < 2) return [];
-    const db = getDb();
-    const rows = db
-      .prepare(
-        `SELECT id, media_type, tmdb_id, imdb_id, title, original_title, literal_title, year, poster_path, tv_status
+  const q = query.trim();
+  if (q.length < 2) return [];
+  const db = getDb();
+  const rows = db
+    .prepare(
+      `SELECT id, media_type, tmdb_id, imdb_id, title, original_title, literal_title, year, poster_path, tv_status
          FROM media
          WHERE parent_id IS NULL AND media_type IN ('movie', 'tv_show') AND title LIKE ?
          ORDER BY title LIMIT 20`,
-      )
-      .all(`%${q}%`) as Array<{
-      id: number;
-      media_type: string;
-      tmdb_id: number | null;
-      imdb_id: string | null;
-      title: string;
-      original_title: string | null;
-      literal_title: string | null;
-      year: number | null;
-      poster_path: string | null;
-      tv_status: string | null;
-    }>;
-    return rows.map((r) => ({
-      mediaId: r.id,
-      mediaType: r.media_type === "movie" ? "movie" : "tv",
-      tmdbId: r.tmdb_id,
-      imdbId: r.imdb_id,
-      title: r.title,
-      originalTitle: r.original_title,
-      literalTitle: r.literal_title,
-      year: r.year,
-      posterPath: r.poster_path,
-      tvStatus: r.tv_status,
-    }));
+    )
+    .all(`%${q}%`) as Array<{
+    id: number;
+    media_type: string;
+    tmdb_id: number | null;
+    imdb_id: string | null;
+    title: string;
+    original_title: string | null;
+    literal_title: string | null;
+    year: number | null;
+    poster_path: string | null;
+    tv_status: string | null;
+  }>;
+  return rows.map((r) => ({
+    mediaId: r.id,
+    mediaType: r.media_type === "movie" ? "movie" : "tv",
+    tmdbId: r.tmdb_id,
+    imdbId: r.imdb_id,
+    title: r.title,
+    originalTitle: r.original_title,
+    literalTitle: r.literal_title,
+    year: r.year,
+    posterPath: r.poster_path,
+    tvStatus: r.tv_status,
+  }));
 }
 
 export interface DownloadingMediaEntry {
@@ -221,25 +221,25 @@ export async function getDownloadingMediaForTmdbIdCore(
   tmdbId: number,
   mediaType: "movie" | "tv",
 ): Promise<DownloadingMediaEntry[]> {
-    const db = getDb();
-    const dbMediaType = mediaType === "movie" ? "movie" : "episode";
-    const rows = db
-      .prepare(
-        `SELECT season, episode, is_season_pack, torrent_name FROM media
+  const db = getDb();
+  const dbMediaType = mediaType === "movie" ? "movie" : "episode";
+  const rows = db
+    .prepare(
+      `SELECT season, episode, is_season_pack, torrent_name FROM media
          WHERE tmdb_id = ? AND media_type = ? AND torrent_hash IS NOT NULL AND plex_rating_key IS NULL`,
-      )
-      .all(tmdbId, dbMediaType) as Array<{
-      season: number | null;
-      episode: number | null;
-      is_season_pack: number;
-      torrent_name: string | null;
-    }>;
-    return rows.map((r) => ({
-      season: r.season,
-      episode: r.episode,
-      isSeasonPack: !!r.is_season_pack,
-      torrentName: r.torrent_name,
-    }));
+    )
+    .all(tmdbId, dbMediaType) as Array<{
+    season: number | null;
+    episode: number | null;
+    is_season_pack: number;
+    torrent_name: string | null;
+  }>;
+  return rows.map((r) => ({
+    season: r.season,
+    episode: r.episode,
+    isSeasonPack: !!r.is_season_pack,
+    torrentName: r.torrent_name,
+  }));
 }
 
 // Un rând deja existent pentru EXACT același torrent (hash + sezon/episod) —

@@ -1,4 +1,9 @@
-import { QueryClient, QueryClientProvider, dehydrate, HydrationBoundary } from "@tanstack/react-query";
+import {
+  QueryClient,
+  QueryClientProvider,
+  dehydrate,
+  HydrationBoundary,
+} from "@tanstack/react-query";
 import type { DehydratedState } from "@tanstack/react-query";
 import {
   Outlet,

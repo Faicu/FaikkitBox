@@ -382,10 +382,7 @@ function QbitPage() {
                     const busy = pendingHash === t.hash;
                     const tone = stateTone(t.state);
                     return (
-                      <div
-                        key={t.hash}
-                        className="glass-card glass-card-hover rounded-2xl p-3"
-                      >
+                      <div key={t.hash} className="glass-card glass-card-hover rounded-2xl p-3">
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
                             <div className="truncate text-sm font-medium">{t.name}</div>
