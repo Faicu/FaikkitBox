@@ -91,6 +91,11 @@ const HOST_TTL_MS = 2_500;
 // la o secundă la alta, deci au cache propriu, mult mai lung.
 const HEAVY_TTL_MS = 15_000;
 
+// Servește valoarea veche imediat și reîmprospătează în fundal — vezi
+// cachedAsync. Fără asta, o cerere din 15 plătea recalcularea (2.3s), iar
+// pagina Sistem se poticnea periodic.
+const SWR = { staleWhileRevalidate: true } as const;
+
 async function collectHostData(): Promise<HostData> {
   try {
     const si = await import("systeminformation");
@@ -111,9 +116,15 @@ async function collectHostData(): Promise<HostData> {
         si.fsSize(),
         si.networkStats(),
         si.cpuTemperature().catch(() => null),
-        cachedAsync("host:processes", HEAVY_TTL_MS, () => si.processes()),
-        cachedAsync("host:docker", HEAVY_TTL_MS, () =>
-          si.dockerContainers().catch(() => [] as Awaited<ReturnType<typeof si.dockerContainers>>),
+        cachedAsync("host:processes", HEAVY_TTL_MS, () => si.processes(), SWR),
+        cachedAsync(
+          "host:docker",
+          HEAVY_TTL_MS,
+          () =>
+            si
+              .dockerContainers()
+              .catch(() => [] as Awaited<ReturnType<typeof si.dockerContainers>>),
+          SWR,
         ),
         readProcDiskstats(["nvme0n1", "nvme1n1", "sda"]),
       ]);
@@ -184,15 +195,26 @@ async function collectHostData(): Promise<HostData> {
       { name: "qBittorrent", match: /qbittorrent|qbit/i },
     ];
 
-    const containerStats = await Promise.all(
-      dockerContainers.map(async (c) => {
-        try {
-          const stats = await si.dockerContainerStats(c.id);
-          return { container: c, stats: Array.isArray(stats) ? stats[0] : stats };
-        } catch {
-          return { container: c, stats: null };
-        }
-      }),
+    // Cel mai scump apel din tot setul, de departe: măsurat 1676ms pentru 8
+    // containere — 83% din costul total al lui collectHostData. Fără cache,
+    // fiecare refresh al paginii Sistem plătea acele ~1.7s, iar cum TanStack
+    // Query repornește intervalul DUPĂ ce cererea se încheie, perioada reală
+    // percepută devenea 3s + 2s ≈ 5s în loc de 3s.
+    const containerStats = await cachedAsync(
+      "host:containerStats",
+      HEAVY_TTL_MS,
+      () =>
+        Promise.all(
+          dockerContainers.map(async (c) => {
+            try {
+              const stats = await si.dockerContainerStats(c.id);
+              return { container: c, stats: Array.isArray(stats) ? stats[0] : stats };
+            } catch {
+              return { container: c, stats: null };
+            }
+          }),
+        ),
+      SWR,
     );
 
     const apps: HostData["apps"] = APP_MAP.map(({ name, match }) => {

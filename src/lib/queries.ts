@@ -13,19 +13,23 @@ import {
   getUnpushedCommits,
 } from "./github.functions";
 import { getPlexLibraryBrowse, getRecentWatches } from "./services.functions";
+import { getRefreshMs, getFastRefreshMs } from "./refresh-rate";
 
-// Interval de bază pentru statistici live (Immich/qBit/Host).
+// Ritmul statisticilor live e reglabil din pagina Sistem — vezi
+// lib/refresh-rate.ts. `refetchInterval` primește o funcție, evaluată la
+// fiecare tick, deci schimbarea are efect imediat, fără reîncărcare.
 //
-// A fost 1000ms, ceea ce însemna, PER TAB DESCHIS, un set complet de apeluri
-// pe secundă: si.processes() (parcurge tot /proc), si.dockerContainers() +
-// dockerContainerStats per container, lista completă de torrente din
-// qBittorrent și statisticile Immich. Monitorul de sistem ajunsese principalul
-// consumator de CPU al sistemului monitorizat.
-//
-// Acum serverul cachează rezultatele (vezi cachedAsync din services/shared.ts),
-// deci N tab-uri costă cât unul; 3s e sub pragul la care ochiul percepe
-// diferența pentru cifre care oricum se mișcă lent.
-const REFRESH_MS = 3000;
+// A fost fix 1000ms, ceea ce însemna, PER TAB DESCHIS, un set complet de
+// apeluri pe secundă: si.processes(), dockerContainerStats per container,
+// lista completă de torrente din qBittorrent, statisticile Immich. Monitorul
+// de sistem ajunsese principalul consumator de CPU al sistemului monitorizat.
+// Acum serverul cachează rezultatele (cachedAsync din services/shared.ts),
+// deci N tab-uri costă cât unul.
+
+// Listele care se schimbă rar nu merită ritmul statisticilor de sistem, dar
+// nici nu trebuie să rămână blocate pe o valoare fixă când userul cere
+// explicit un ritm mai lent (ex. economie de baterie pe telefon).
+const slower = (factor: number) => () => getRefreshMs() * factor;
 
 // Păstrează datele vechi afișate în timp ce se încarcă cele noi (fără flicker)
 const keepPrev = { placeholderData: <T>(prev: T) => prev };
@@ -33,7 +37,7 @@ const keepPrev = { placeholderData: <T>(prev: T) => prev };
 export const plexQuery = queryOptions({
   queryKey: ["plex"],
   queryFn: () => getPlex(),
-  refetchInterval: 10_000,
+  refetchInterval: slower(3),
   refetchIntervalInBackground: false,
   staleTime: 10_000,
   ...keepPrev,
@@ -43,7 +47,7 @@ export const plexQuery = queryOptions({
 export const plexSessionsQuery = queryOptions({
   queryKey: ["plexSessions"],
   queryFn: () => getPlexSessions(),
-  refetchInterval: 1_000,
+  refetchInterval: () => getFastRefreshMs(),
   refetchIntervalInBackground: false,
   staleTime: 1_000,
   ...keepPrev,
@@ -52,7 +56,7 @@ export const plexSessionsQuery = queryOptions({
 export const immichQuery = queryOptions({
   queryKey: ["immich"],
   queryFn: () => getImmich(),
-  refetchInterval: REFRESH_MS,
+  refetchInterval: () => getRefreshMs(),
   staleTime: 0,
   ...keepPrev,
 });
@@ -60,7 +64,7 @@ export const immichQuery = queryOptions({
 export const qbitQuery = queryOptions({
   queryKey: ["qbit"],
   queryFn: () => getQbit(),
-  refetchInterval: REFRESH_MS,
+  refetchInterval: () => getRefreshMs(),
   staleTime: 0,
   ...keepPrev,
 });
@@ -68,7 +72,7 @@ export const qbitQuery = queryOptions({
 export const hostQuery = queryOptions({
   queryKey: ["host"],
   queryFn: () => getHost(),
-  refetchInterval: REFRESH_MS,
+  refetchInterval: () => getRefreshMs(),
   // Era `true`: statisticile de sistem continuau să fie cerute la fiecare
   // secundă și cu tabul minimizat, la nesfârșit. Nimeni nu le vede atunci.
   refetchIntervalInBackground: false,
@@ -79,7 +83,7 @@ export const hostQuery = queryOptions({
 export const activityLogQuery = queryOptions({
   queryKey: ["activityLog"],
   queryFn: () => getActivityLog(),
-  refetchInterval: 5_000,
+  refetchInterval: slower(2),
   staleTime: 2_000,
   ...keepPrev,
 });
@@ -87,7 +91,7 @@ export const activityLogQuery = queryOptions({
 export const errorLogQuery = queryOptions({
   queryKey: ["errorLog"],
   queryFn: () => getErrorLogs(),
-  refetchInterval: 15_000,
+  refetchInterval: slower(5),
   staleTime: 5_000,
   ...keepPrev,
 });
@@ -170,7 +174,7 @@ export const plexLibraryBrowseQuery = queryOptions({
   refetchInterval: (query) => {
     const data = query.state.data;
     const items = data?.status === "ok" ? data.items : [];
-    return items.some((it) => it.status === "downloading") ? 2500 : false;
+    return items.some((it) => it.status === "downloading") ? getRefreshMs() : false;
   },
 });
 

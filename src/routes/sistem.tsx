@@ -28,6 +28,7 @@ import { logAgentActivity, runAgentCommand } from "@/lib/system/agent.functions"
 import type { AgentCommand, AgentResult } from "@/lib/system/agent.functions";
 import { hostQuery } from "@/lib/queries";
 import { requireAdminBeforeLoad } from "@/lib/auth/admin-route-guard";
+import { RefreshRateCard } from "@/components/sistem/RefreshRateCard";
 
 import { formatBytes, formatSpeed, formatDurationHMS } from "@/lib/format";
 
@@ -107,6 +108,8 @@ function HostPage() {
       {lastCmd && <CommandOutput command={lastCmd.cmd} result={lastCmd.result} />}
 
       <PushNotificationsCard push={push} />
+
+      <RefreshRateCard />
 
       {isLoading && (
         <div className="grid grid-cols-2 gap-2">

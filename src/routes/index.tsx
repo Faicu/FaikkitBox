@@ -28,6 +28,7 @@ import { AddMediaWizard } from "@/components/principala/AddMediaWizard";
 import { FilelistSection } from "@/components/filelist/FilelistSection";
 import { plexQuery, plexSessionsQuery, adminStatusQuery, recentWatchesQuery } from "@/lib/queries";
 import { formatDateTime } from "@/components/tehnic/utils";
+import { useLiveViewOffsets } from "@/components/principala/useLiveViewOffsets";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -55,6 +56,9 @@ function Overview() {
   const recentWatchItems = recentWatches.data?.status === "ok" ? recentWatches.data.items : [];
   const sessions =
     plexSessions.data?.status === "ok" ? plexSessions.data.sessions : plex.data?.sessions;
+  // Ceasul de redare avansează local în fiecare secundă — Plex raportează
+  // progresul în trepte de ~10s, deci fără asta cifra "sărea". Vezi hook-ul.
+  const liveOffsets = useLiveViewOffsets(sessions);
   const [plexDrawer, setPlexDrawer] = useState<"views" | "users" | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
 
@@ -121,8 +125,9 @@ function Overview() {
                 {(sessions?.length ?? 0) > 0 ? (
                   <div className="space-y-1.5">
                     {sessions!.map((s, i) => {
+                      const offsetMs = liveOffsets[i] ?? s.viewOffsetMs;
                       const pct =
-                        s.durationMs > 0 ? Math.round((s.viewOffsetMs / s.durationMs) * 100) : 0;
+                        s.durationMs > 0 ? Math.round((offsetMs / s.durationMs) * 100) : 0;
                       const fmt = (ms: number) => {
                         const t = Math.floor(ms / 1000);
                         const h = Math.floor(t / 3600);
@@ -178,7 +183,7 @@ function Overview() {
                                 />
                               </div>
                               <div className="flex justify-between text-[10px] text-muted-foreground">
-                                <span>{fmt(s.viewOffsetMs)}</span>
+                                <span>{fmt(offsetMs)}</span>
                                 <span>{pct}%</span>
                                 <span>{fmt(s.durationMs)}</span>
                               </div>
