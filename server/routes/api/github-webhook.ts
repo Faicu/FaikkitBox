@@ -1,7 +1,7 @@
 import { defineEventHandler, readRawBody, getHeader, createError } from "h3";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { getDb } from "../../../src/lib/db";
-import { notifyGithubCommit } from "../../../src/lib/notifications/notifications";
+import { notifyGithubCommits } from "../../../src/lib/notifications/notifications";
 
 export default defineEventHandler(async (event) => {
   const secret = process.env.GITHUB_WEBHOOK_SECRET;
@@ -44,6 +44,7 @@ export default defineEventHandler(async (event) => {
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
   );
   const now = new Date().toISOString();
+  const fresh: Array<{ author: string; message: string }> = [];
 
   for (const c of commits) {
     const sha = String(c.id ?? "");
@@ -55,12 +56,13 @@ export default defineEventHandler(async (event) => {
     const url = c.url ?? `https://github.com/${repo}/commit/${sha}`;
 
     const result = stmt.run(sha, sha.slice(0, 7), message, author, date, url, now);
-    if (result.changes > 0) {
-      await notifyGithubCommit(author, message).catch((err) => {
-        console.warn("[github-webhook] Trimitere push eșuată:", err);
-      });
-    }
+    if (result.changes > 0) fresh.push({ author, message });
   }
+
+  // Un push cu N commit-uri ajunge într-un singur webhook — deci o notificare.
+  await notifyGithubCommits(fresh).catch((err) => {
+    console.warn("[github-webhook] Trimitere push eșuată:", err);
+  });
 
   return { ok: true, processed: commits.length };
 });

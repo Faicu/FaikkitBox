@@ -65,9 +65,10 @@ function githubHeaders(): Record<string, string> {
 async function upsertCommits(commits: GitHubCommit[]): Promise<void> {
   try {
     const { getDb } = await import("./db");
-    const { notifyGithubCommit } = await import("./notifications/notifications");
+    const { notifyGithubCommits } = await import("./notifications/notifications");
     const db = getDb();
     const now = new Date().toISOString();
+    const fresh: Array<{ author: string; message: string }> = [];
 
     // INSERT OR IGNORE (nu REPLACE) — ca să putem detecta commit-urile chiar noi
     // și să trimitem notificare push, indiferent care sursă (webhook, sync la
@@ -78,12 +79,12 @@ async function upsertCommits(commits: GitHubCommit[]): Promise<void> {
     );
     for (const c of commits) {
       const result = stmt.run(c.sha, c.shortSha, c.message, c.author, c.date, c.url, now);
-      if (result.changes > 0) {
-        await notifyGithubCommit(c.author, c.message).catch((err) => {
-          console.warn("[github] Trimitere push eșuată:", err);
-        });
-      }
+      if (result.changes > 0) fresh.push({ author: c.author, message: c.message });
     }
+    // O singură notificare pentru tot lotul, nu una per commit.
+    await notifyGithubCommits(fresh).catch((err) => {
+      console.warn("[github] Trimitere push eșuată:", err);
+    });
   } catch (e) {
     console.warn("[github] Upsert commits eșuat:", e);
   }

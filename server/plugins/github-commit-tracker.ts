@@ -36,7 +36,7 @@ async function syncOnStart() {
     if (!Array.isArray(raw)) return;
 
     const { getDb } = await import("../../src/lib/db");
-    const { notifyGithubCommit } = await import("../../src/lib/notifications/notifications");
+    const { notifyGithubCommits } = await import("../../src/lib/notifications/notifications");
 
     const db = getDb();
     const stmt = db.prepare(
@@ -44,6 +44,7 @@ async function syncOnStart() {
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
     );
     const now = new Date().toISOString();
+    const fresh: Array<{ author: string; message: string }> = [];
 
     for (const c of raw) {
       const sha = String(c.sha ?? "");
@@ -57,15 +58,20 @@ async function syncOnStart() {
       // INSERT OR IGNORE returnează changes=0 dacă sha există deja
       const result = stmt.run(sha, sha.slice(0, 7), message, author, date, url, now);
 
-      // Dacă e un commit nou (nu era în DB), trimite notificare push
+      // Commit nou (nu era în DB) — se strânge, notificarea pleacă o dată,
+      // la finalul lotului. La o pornire după mai multe commit-uri nepublicate
+      // altfel ar fi plecat câte un push pentru fiecare.
       if (result.changes > 0) {
-        console.log(
-          `[github-commit-tracker] Commit nou detectat (${sha.slice(0, 7)}), trimit push...`,
-        );
-        await notifyGithubCommit(author, message).catch((err) => {
-          console.warn("[github-commit-tracker] Trimitere push eșuată:", err);
-        });
+        console.log(`[github-commit-tracker] Commit nou detectat (${sha.slice(0, 7)})`);
+        fresh.push({ author, message });
       }
+    }
+
+    if (fresh.length > 0) {
+      console.log(`[github-commit-tracker] ${fresh.length} commit-uri noi, trimit push...`);
+      await notifyGithubCommits(fresh).catch((err) => {
+        console.warn("[github-commit-tracker] Trimitere push eșuată:", err);
+      });
     }
   } catch (err) {
     console.warn("[github-commit-tracker] Sync eșuat la pornire:", err);

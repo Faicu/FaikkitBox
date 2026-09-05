@@ -182,10 +182,41 @@ export async function buildTorrentCompleteNotification(params: {
   };
 }
 
-// --- Commit-uri GitHub (3 locuri: webhook, plugin de polling, funcție server) —
-// singurul caz din aplicație unde trimiterea e imediată, nu grupată/batch,
-// deci funcția trimite direct, nu doar construiește.
+// --- Commit-uri GitHub (3 locuri: webhook, plugin de pornire, funcție server) ---
+// Trimiterea e imediată, nu amânată, dar e grupată pe lot: un push cu 9
+// commit-uri trebuie să dea o notificare, nu nouă.
 
-export async function notifyGithubCommit(author: string, message: string): Promise<void> {
-  await sendPushToAll(`📦 Commit nou — ${author}`, message, { url: "/tehnic" });
+export interface CommitNotice {
+  author: string;
+  message: string;
+}
+
+/**
+ * O singură notificare pentru tot lotul de commit-uri noi.
+ *
+ * Înainte, fiecare apelant itera lista și trimitea un push per commit — un
+ * push cu 9 commit-uri însemna 9 notificări, care pe Android se grupau
+ * automat și acopereau ecranul.
+ */
+export async function notifyGithubCommits(commits: CommitNotice[]): Promise<void> {
+  if (commits.length === 0) return;
+
+  if (commits.length === 1) {
+    const { author, message } = commits[0];
+    await sendPushToAll(`📦 Commit nou — ${author}`, message, { url: "/tehnic" });
+    return;
+  }
+
+  const authors = [...new Set(commits.map((c) => c.author))];
+  const who = authors.length === 1 ? ` — ${authors[0]}` : "";
+  // Primele câteva mesaje, ca notificarea să spună ceva concret; restul
+  // se numără, ca să nu devină un perete de text.
+  const MAX_LINES = 4;
+  const lines = commits.slice(0, MAX_LINES).map((c) => `• ${c.message}`);
+  const rest = commits.length - MAX_LINES;
+  if (rest > 0) lines.push(`…și încă ${rest}`);
+
+  await sendPushToAll(`📦 ${commits.length} commit-uri noi${who}`, lines.join("\n"), {
+    url: "/tehnic",
+  });
 }
