@@ -136,9 +136,14 @@
  * Futuristic animation system
  * ============================================================ */
 
+/* `to` se termină în `transform: none`, NU în translate3d(0,0,0): animația
+ * rulează cu `forwards`, deci valoarea finală persistă. Un transform diferit
+ * de `none` face elementul containing block pentru `position: fixed` pe viață
+ * — exact cauza overlay-urilor decupate documentate în BibliotecaList.tsx.
+ * Cu `none` nu rămâne niciun containing block după ce animația s-a terminat. */
 @keyframes fade-slide-up {
   from { opacity: 0; transform: translate3d(0, 12px, 0); }
-  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+  to   { opacity: 1; transform: none; }
 }
 @keyframes pulse-glow {
   0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--primary) 50%, transparent); }
@@ -338,9 +343,16 @@
   animation: border-flow 6s linear infinite;
 }
 
-/* Press feedback for interactive tiles */
+/* Press feedback for interactive tiles.
+ * Repetă și border-color/box-shadow din `glass-card`: shorthand-ul `transition`
+ * nu se cumulează, iar utilitatea asta e definită mai jos, deci pe elementele
+ * care le au pe amândouă (glass-card + press-tile) ar fi tăiat tranziția de
+ * bordură a lui glass-card-hover, făcând hover-ul să sară brusc. */
 @utility press-tile {
-  transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 200ms ease;
+  transition:
+    transform 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 300ms ease,
+    box-shadow 200ms ease;
   &:active { transform: scale(0.97); }
 }
 
@@ -456,9 +468,11 @@
 }
 
 /* ---- Tranziție la schimbarea rutei ---- */
+/* `transform: none` la final — vezi nota de la fade-slide-up. Aici conta dublu:
+ * animația e pe <main>, deci ar fi făcut întreaga pagină containing block. */
 @keyframes page-enter {
   from { opacity: 0; transform: translate3d(0, 10px, 0) scale(0.995); }
-  to   { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+  to   { opacity: 1; transform: none; }
 }
 
 @utility page-enter {
@@ -470,6 +484,10 @@
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
+    /* Fără asta, copiii lui `stagger-in` tot ar aștepta până la 440ms la
+     * opacity: 0 înainte să apară — durata e zero, dar întârzierea nu era. */
+    animation-delay: 0s !important;
+    transition-delay: 0s !important;
   }
 }
 

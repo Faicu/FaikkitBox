@@ -211,7 +211,11 @@ export function BibliotecaList() {
         <div className="text-sm text-muted-foreground px-1">Niciun rezultat.</div>
       ) : (
         <div className="glass-card rounded-2xl p-3">
-          <div key={`${query}-${sortMode}`} className="space-y-1 stagger-in">
+          {/* `key` doar pe sortMode: schimbarea sortării chiar reordonează lista,
+              deci merită reanimată. Dacă `query` ar face parte din key, fiecare
+              tastă ar remonta containerul și ar reporni stagger-ul de la
+              opacity: 0 — lista pâlpâia la fiecare caracter tastat. */}
+          <div key={sortMode} className="space-y-1 stagger-in">
             {visibleRows.map((row) =>
               row.kind === "single" ? (
                 renderRow(row.item)
