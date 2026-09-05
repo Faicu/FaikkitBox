@@ -381,14 +381,18 @@ function QbitPage() {
                     const isPaused = /paus|stop/i.test(t.state);
                     const busy = pendingHash === t.hash;
                     const tone = stateTone(t.state);
-                    // Descărcare activă → bară cu gradient în mișcare + halo pulsat pe card,
-                    // ca să se distingă dintr-o privire de torrentele oprite/terminate.
-                    const isActive = !isPaused && t.progress < 1;
+                    // Trei stări vizuale distincte: descarcă (albastru), face seeding
+                    // (verde — bara e plină, deci fluxul e singurul semn că lucrează),
+                    // sau e oprit/blocat (static). Seeding-ul se consideră activ doar
+                    // dacă chiar urcă date; altfel e doar "terminat, în așteptare".
+                    const isDownloading = !isPaused && t.progress < 1;
+                    const isSeeding = !isPaused && t.progress >= 1 && t.upspeed > 0;
+                    const isActive = isDownloading || isSeeding;
                     return (
                       <div
                         key={t.hash}
                         className={`glass-card glass-card-hover rounded-2xl p-3 ${
-                          isActive ? "pulse-glow" : ""
+                          isDownloading ? "pulse-glow" : isSeeding ? "pulse-glow-up" : ""
                         }`}
                       >
                         <div className="flex items-start justify-between gap-2">
@@ -402,8 +406,9 @@ function QbitPage() {
                           </div>
                           <div className="flex shrink-0 items-center gap-1">
                             <span
-                              className={`rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide ${b.cls}`}
+                              className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide ${b.cls}`}
                             >
+                              {isActive && <span className="live-dot" aria-hidden />}
                               {b.text}
                             </span>
                             <button
@@ -448,7 +453,7 @@ function QbitPage() {
                             value={t.progress * 100}
                             right={`${(t.progress * 100).toFixed(1)}%`}
                             tone={tone}
-                            active={isActive}
+                            active={isSeeding ? "up" : isDownloading}
                           />
                         </div>
                         <div className="mt-1 flex items-center justify-between text-[11px] text-muted-foreground tabular-nums">
@@ -456,8 +461,24 @@ function QbitPage() {
                             {formatBytes(t.size * t.progress)} / {formatBytes(t.size)}
                           </span>
                           <span className="flex items-center gap-2">
-                            <span className="text-sky-400">↓ {formatSpeed(t.dlspeed)}</span>
-                            <span className="text-emerald-400">↑ {formatSpeed(t.upspeed)}</span>
+                            <span
+                              className={`text-sky-400 transition-all ${
+                                t.dlspeed > 0
+                                  ? "font-semibold drop-shadow-[0_0_6px_oklch(0.72_0.19_240/0.7)]"
+                                  : "opacity-50"
+                              }`}
+                            >
+                              ↓ {formatSpeed(t.dlspeed)}
+                            </span>
+                            <span
+                              className={`text-emerald-400 transition-all ${
+                                t.upspeed > 0
+                                  ? "font-semibold drop-shadow-[0_0_6px_oklch(0.72_0.19_155/0.7)]"
+                                  : "opacity-50"
+                              }`}
+                            >
+                              ↑ {formatSpeed(t.upspeed)}
+                            </span>
                             <span>{formatEta(t.eta)}</span>
                           </span>
                         </div>

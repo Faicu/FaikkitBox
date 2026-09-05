@@ -374,16 +374,34 @@
   100% { background-position: 200% 50%; }
 }
 
+/* Culorile vin din variabile ca să poată fi retematizate de modificatorii
+ * de mai jos (descărcare = albastru, seeding = verde), fără să dublăm regula. */
 @utility progress-flow {
-  background-image: linear-gradient(
-    90deg,
-    color-mix(in oklab, var(--primary) 70%, transparent),
-    oklch(0.72 0.19 200 / 0.95),
-    color-mix(in oklab, var(--primary) 70%, transparent)
-  );
+  --flow-a: color-mix(in oklab, var(--primary) 70%, transparent);
+  --flow-b: oklch(0.72 0.19 200 / 0.95);
+  --flow-glow: color-mix(in oklab, var(--primary) 60%, transparent);
+  background-image: linear-gradient(90deg, var(--flow-a), var(--flow-b), var(--flow-a));
   background-size: 200% 100%;
   animation: progress-flow 2.2s linear infinite;
-  box-shadow: 0 0 12px -2px color-mix(in oklab, var(--primary) 60%, transparent);
+  box-shadow: 0 0 12px -2px var(--flow-glow);
+}
+
+/* Seeding — același flux, dar verde și mai lent (urcă, nu se grăbește) */
+@utility progress-flow-up {
+  --flow-a: oklch(0.7 0.17 155 / 0.75);
+  --flow-b: oklch(0.85 0.19 148 / 0.95);
+  --flow-glow: oklch(0.72 0.19 155 / 0.55);
+  animation-duration: 3.2s;
+  animation-direction: reverse;
+}
+
+/* Halo verde, pereche pentru pulse-glow, folosit pe cardurile în seeding */
+@keyframes pulse-glow-up {
+  0%, 100% { box-shadow: 0 0 0 0 oklch(0.72 0.19 155 / 0.45); }
+  50%      { box-shadow: 0 0 0 6px oklch(0.72 0.19 155 / 0); }
+}
+@utility pulse-glow-up {
+  animation: pulse-glow-up 2.8s ease-in-out infinite;
 }
 
 /* ---- Skeleton cu sweep, alternativă la animate-pulse ---- */
