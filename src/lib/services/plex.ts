@@ -436,6 +436,7 @@ function mapPlexSessions(sessionsMd: PlexMetadataItem[]): PlexSession[] {
 
 export const getPlexSessions = createServerFn({ method: "GET" }).handler(
   async (): Promise<{ status: ServiceStatus; error?: string; sessions: PlexSession[] }> => {
+    await (await import("../auth/admin.server")).requireAuth();
     const token = process.env.PLEX_TOKEN;
     if (!token) {
       return { status: "error", error: "PLEX_TOKEN not configured", sessions: [] };
@@ -455,6 +456,7 @@ export const getPlexSessions = createServerFn({ method: "GET" }).handler(
 // ---------- Status live (sesiuni, biblioteci, recent added) ----------
 
 export const getPlex = createServerFn({ method: "GET" }).handler(async (): Promise<PlexData> => {
+  await (await import("../auth/admin.server")).requireAuth();
   const base = process.env.PLEX_URL;
   const token = process.env.PLEX_TOKEN;
   if (!token) {

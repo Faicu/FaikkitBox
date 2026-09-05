@@ -223,6 +223,8 @@ export const getGitHubSyncStatus = createServerFn({ method: "GET" }).handler(
   async (): Promise<
     { status: "ok"; data: GitHubSyncStatus } | { status: "error"; error: string }
   > => {
+    const { requireAdmin } = await import("./auth/admin.server");
+    await requireAdmin();
     try {
       const deployedSha = execSync("git rev-parse HEAD", { encoding: "utf8" }).trim();
 

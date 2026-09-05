@@ -159,6 +159,12 @@ export const runAgentCommand = createServerFn({ method: "POST" })
 export const logAgentActivity = createServerFn({ method: "POST" })
   .validator((data: { cmd: AgentCommand; ok: boolean }) => data)
   .handler(async ({ data: { cmd, ok } }): Promise<void> => {
+    // Scrie în Jurnalul de Activitate — fără gard, oricine putea injecta
+    // intrări false ("Plex a fost repornit"). Pereche cu runAgentCommand,
+    // care cere deja admin.
+    const { requireAdmin } = await import("../auth/admin.server");
+    await requireAdmin();
+
     const { logActivity } = await import("../activity-log");
     type ActivityType = Parameters<typeof logActivity>[0];
     const messages: Partial<Record<AgentCommand, string>> = {

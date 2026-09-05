@@ -17,7 +17,12 @@ interface Props {
 export function AppHeader({ title, subtitle, right }: Props) {
   const qc = useQueryClient();
   const admin = useQuery(adminStatusQuery);
-  const sync = useQuery(githubSyncQuery);
+  // Badge-ul de sincronizare GitHub e randat doar pentru admini (vezi mai
+  // jos), dar query-ul rula pentru toată lumea — inclusiv vizitatori anonimi
+  // pe Acasă, cu un `git rev-parse` + un apel GitHub API la fiecare 60s,
+  // degeaba. Acum getGitHubSyncStatus cere admin pe server, deci gardul de
+  // aici e și necesar (altfel: 401 la fiecare minut, în bucla de erori).
+  const sync = useQuery({ ...githubSyncQuery, enabled: !!admin.data?.isAdmin });
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
