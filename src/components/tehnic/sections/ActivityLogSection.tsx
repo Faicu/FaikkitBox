@@ -99,7 +99,13 @@ export function ActivityLogSection() {
 
   const filtered =
     filter === "all"
-      ? timeline
+      ? // "Toate" exclude intenționat evenimentele de server (pornire/oprire):
+        // se produc la fiecare deploy, deci ar îneca activitatea reală
+        // (vizionări, torrente, conturi) în zgomot. Rămân disponibile pe
+        // tab-ul lor dedicat, "Server".
+        timeline.filter(
+          (item) => item.kind === "commit" || TYPE_TO_GROUP[item.entry.type] !== "server",
+        )
       : timeline.filter((item) => {
           if (item.kind === "commit") return filter === "commits";
           return TYPE_TO_GROUP[item.entry.type] === filter;
