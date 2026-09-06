@@ -200,8 +200,26 @@ export const deleteMediaEntry = createServerFn({ method: "POST" })
       // ștergerea de mai sus (care lucrează strict după torrent_hash), deci
       // rămân orfane la nesfârșit dacă nu le curățăm explicit aici (găsit la
       // "Pompeii: Out of Time with Tom Hiddleston", 2026-09-02).
+      // `parent_id IS NOT NULL` e esențial: rândul-părinte al unui serial
+      // (ensureMediaPlaceholder) are prin construcție torrent_hash NULL, deci
+      // fără filtrul ăsta era prins de curățare — iar ștergerea lui declanșa
+      // ON DELETE CASCADE pe parent_id și lua cu el TOATE episoadele
+      // celorlalte sezoane, care rămâneau perfect valide în qBittorrent
+      // (găsit la "My Life with the Walter Boys", 2026-09-06: ștergerea unui
+      // episod din pachetul S2 a golit și S3 din bibliotecă).
       if (row.imdb_id) {
-        db.prepare("DELETE FROM media WHERE imdb_id = ? AND torrent_hash IS NULL").run(row.imdb_id);
+        db.prepare(
+          "DELETE FROM media WHERE imdb_id = ? AND torrent_hash IS NULL AND parent_id IS NOT NULL",
+        ).run(row.imdb_id);
+
+        // Rândul-serial rămâne util cât are măcar un episod; abia când
+        // pachetul șters era ultimul, devine un titlu gol în Bibliotecă și
+        // se curăță — intenția originală a curățării de mai sus, acum fără
+        // efectul colateral asupra sezoanelor rămase.
+        db.prepare(
+          `DELETE FROM media WHERE imdb_id = ? AND media_type = 'tv_show'
+             AND id NOT IN (SELECT parent_id FROM media WHERE parent_id IS NOT NULL)`,
+        ).run(row.imdb_id);
       }
 
       // Refresh Plex necondiționat — categoria Filelist (numerică) poate
