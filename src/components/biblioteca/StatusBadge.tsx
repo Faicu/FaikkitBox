@@ -1,5 +1,6 @@
-import { Download, Loader2 } from "lucide-react";
+import { Download } from "lucide-react";
 
+import { Orb } from "@/components/ui/orb";
 import type { PlexBrowseItem } from "@/lib/services/plex-browse";
 
 export function StatusBadge({
@@ -23,7 +24,7 @@ export function StatusBadge({
   if (status === "processing") {
     return (
       <span className="flex shrink-0 items-center gap-0.5 rounded-full bg-blue-500/15 px-1.5 py-0.5 text-[10px] font-medium text-blue-400">
-        <Loader2 className="h-2.5 w-2.5 animate-spin" /> Se procesează în Plex
+        <Orb state="working" px={12} /> Se procesează în Plex
       </span>
     );
   }

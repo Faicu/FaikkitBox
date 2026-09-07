@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Clock3, FileCode2, Activity, CircleHelp, RefreshCw, Tv, Tag } from "lucide-react";
-import { ThinkingOrb } from "thinking-orbs";
+import { Orb } from "@/components/ui/orb";
 
 import {
   Drawer,
@@ -93,12 +93,7 @@ export function PluginDetailDrawer({
                     desfășurate. */}
                 <div className="rounded-2xl glass-card p-3 text-xs">
                   <div className="mb-2 flex items-center gap-1.5 text-muted-foreground">
-                    <ThinkingOrb
-                      state="searching"
-                      size={20}
-                      style={{ width: 14, height: 14, flexShrink: 0 }}
-                    />{" "}
-                    Seriale urmărite
+                    <Orb state="searching" px={14} /> Seriale urmărite
                   </div>
                   {watch.shows.length === 0 ? (
                     <div className="text-muted-foreground">

@@ -28,7 +28,7 @@ import {
   RefreshCw,
   CircleDashed,
 } from "lucide-react";
-import { ThinkingOrb } from "thinking-orbs";
+import { Orb } from "@/components/ui/orb";
 
 import {
   Drawer,
@@ -557,12 +557,7 @@ export function TitleDetailDrawer({
                     >
                       <div className="flex items-center gap-2">
                         {d.autoDownload ? (
-                          <ThinkingOrb
-                            state="searching"
-                            size={20}
-                            style={{ width: 18, height: 18, flexShrink: 0 }}
-                            aria-label="Urmărit"
-                          />
+                          <Orb state="searching" px={18} label="Urmărit" />
                         ) : (
                           <Radar className="h-4 w-4 shrink-0 text-muted-foreground" />
                         )}

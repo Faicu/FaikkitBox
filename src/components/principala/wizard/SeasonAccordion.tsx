@@ -9,6 +9,7 @@ import {
   XCircle,
 } from "lucide-react";
 
+import { Orb } from "@/components/ui/orb";
 import type { FilelistTorrent } from "@/lib/filelist.functions";
 
 // ---------------------------------------------------------------------------
@@ -130,7 +131,7 @@ function EpisodeRow({
       )}
       {availability.kind === "downloading" && (
         <span className="flex shrink-0 items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-amber-400">
-          <Loader2 className="h-2.5 w-2.5 animate-spin" /> Se descarcă…
+          <Orb state="working" px={12} /> Se descarcă…
         </span>
       )}
       {availability.kind === "episode_torrent" && (
@@ -223,7 +224,7 @@ function SeasonRow({
         <div className="border-t border-border/60 px-3 py-2">
           {season.packDownloading ? (
             <div className="mb-2 flex items-center justify-center gap-1.5 rounded-lg bg-amber-500/10 py-1.5 text-xs font-medium text-amber-400">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Pachetul sezonului se descarcă…
+              <Orb state="working" px={14} /> Pachetul sezonului se descarcă…
             </div>
           ) : (
             hasPack && (

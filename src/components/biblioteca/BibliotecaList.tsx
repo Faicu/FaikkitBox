@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { Search, Film, Tv, Eye, Users, Layers, AlertTriangle } from "lucide-react";
-import { ThinkingOrb } from "thinking-orbs";
+import { Orb } from "@/components/ui/orb";
 
 import { plexLibraryBrowseQuery } from "@/lib/queries";
 import { deleteMediaEntry } from "@/lib/filelist.functions";
@@ -131,12 +131,7 @@ export function BibliotecaList() {
             title="Urmărit — episoadele noi se descarcă automat"
             className="flex shrink-0 items-center"
           >
-            <ThinkingOrb
-              state="searching"
-              size={20}
-              style={{ width: 16, height: 16 }}
-              aria-label="Urmărit"
-            />
+            <Orb state="searching" label="Urmărit" />
           </span>
         )}
         {isShow && item.downloadingCount > 0 ? (
