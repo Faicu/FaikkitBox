@@ -38,6 +38,12 @@ async function run(): Promise<void> {
     // pornit-o.
     await refreshShowMetadata();
     await checkDueShows();
+    // Filmele așteptate, la coadă și în aceeași buclă, nu într-un plugin
+    // separat: ambele caută pe Filelist, iar două bucle independente ar
+    // deschide sesiuni concurente acolo, fiecare cu garda ei de suprapunere
+    // inutilă față de cealaltă. Aici rămân strict secvențiale.
+    const { checkDueMovies } = await import("../../src/lib/media/movie-watch");
+    await checkDueMovies();
   } catch (e) {
     console.warn("[show-watcher] Rulare eșuată:", e);
   } finally {

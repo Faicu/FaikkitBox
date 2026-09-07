@@ -176,3 +176,57 @@ export const getShowWatchStatus = createServerFn({ method: "GET" }).handler(
     };
   },
 );
+
+// ---------------------------------------------------------------------------
+// Urmărirea filmelor (vezi movie-watch.ts)
+// ---------------------------------------------------------------------------
+
+export type { SetMovieWatchInput, WantedMovie, MovieWatchOutcome } from "./movie-watch";
+import type { SetMovieWatchInput, WantedMovie, MovieWatchOutcome } from "./movie-watch";
+
+// Pornirea urmăririi declanșează descărcări reale, deci cere aceleași drepturi
+// ca descărcarea manuală: doar admin. Spre deosebire de seriale, aici nu
+// există încă un rând cu un „proprietar" la care să ne raportăm — filmul nu e
+// în bibliotecă, tocmai de-aia îl urmărim.
+export const setMovieWatch = createServerFn({ method: "POST" })
+  .validator((data: SetMovieWatchInput) => data)
+  .handler(async ({ data }): Promise<{ ok: true } | { ok: false; error: string }> => {
+    try {
+      const { requireAdmin } = await import("../auth/admin.server");
+      const session = await requireAdmin();
+      const { setMovieWatchCore } = await import("./movie-watch");
+      await setMovieWatchCore({ ...data, requestedByUserId: session.data.userId ?? null });
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+  });
+
+export const listWantedMovies = createServerFn({ method: "GET" }).handler(
+  async (): Promise<WantedMovie[]> => {
+    const { requireAuth } = await import("../auth/admin.server");
+    await requireAuth();
+    const { listWantedMoviesCore } = await import("./movie-watch");
+    return listWantedMoviesCore();
+  },
+);
+
+// "Verifică acum" pentru un film urmărit — ignoră cadența de 12 ore. Aceeași
+// nevoie ca la checkShowNow: fără el, răspunsul la "de ce n-a descărcat?" ar
+// fi "așteaptă 12 ore și vezi".
+export const checkMovieNow = createServerFn({ method: "POST" })
+  .validator((data: { mediaId: number }) => data)
+  .handler(
+    async ({
+      data,
+    }): Promise<{ ok: true; outcome: MovieWatchOutcome } | { ok: false; error: string }> => {
+      try {
+        const { requireAdmin } = await import("../auth/admin.server");
+        await requireAdmin();
+        const { checkMovie } = await import("./movie-watch");
+        return { ok: true, outcome: await checkMovie(data.mediaId) };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : String(e) };
+      }
+    },
+  );

@@ -8,6 +8,7 @@ import {
   getSpeedtestState,
 } from "./system/speedtest.functions";
 import { getActivityLog } from "./activity-log.functions";
+import { listWantedMovies } from "./media/media.functions";
 import { getErrorLogs } from "./errors/error-log.functions";
 import {
   getRecentCommits,
@@ -239,4 +240,15 @@ export const showWatchStatusQuery = queryOptions({
   queryFn: () => getShowWatchStatus(),
   staleTime: 60_000,
   refetchInterval: 120_000,
+});
+
+// Filmele așteptate (urmărire pornită, dar încă negăsite pe Filelist) — vezi
+// movie-watch.ts. Puls lent: verificarea de fundal e la 12 ore per film, deci
+// lista se schimbă rar. Contează totuși să nu fie înghețată — un film găsit
+// între timp dispare de aici singur, fiindcă rândul de așteptare se șterge.
+export const wantedMoviesQuery = queryOptions({
+  queryKey: ["wanted-movies"],
+  queryFn: () => listWantedMovies(),
+  staleTime: 60_000,
+  refetchOnWindowFocus: true,
 });
