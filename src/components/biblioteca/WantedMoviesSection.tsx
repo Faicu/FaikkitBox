@@ -4,7 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { ChevronDown, ChevronRight, Film, X } from "lucide-react";
 
-import { wantedMoviesQuery } from "@/lib/queries";
+import { wantedMoviesQuery, adminStatusQuery } from "@/lib/queries";
 import { setMovieWatch, checkMovieNow } from "@/lib/media/media.functions";
 import { Orb } from "@/components/ui/orb";
 
@@ -20,6 +20,12 @@ import { Orb } from "@/components/ui/orb";
 export function WantedMoviesSection() {
   const queryClient = useQueryClient();
   const wanted = useQuery(wantedMoviesQuery);
+  // Lista se vede de oricine e logat, dar pornirea/oprirea urmăririi și
+  // verificarea la cerere sunt acțiuni de admin pe server (setMovieWatch /
+  // checkMovieNow). Fără gardă aici, un utilizator obișnuit ar vedea butoane
+  // care întorc 401 — mai bine să nu existe decât să pară stricate.
+  const { data: adminData } = useQuery(adminStatusQuery);
+  const isAdmin = !!adminData?.isAdmin;
   const [open, setOpen] = useState(true);
   const [busyId, setBusyId] = useState<number | null>(null);
   const setMovieWatchFn = useServerFn(setMovieWatch);
@@ -114,23 +120,27 @@ export function WantedMoviesSection() {
                   {m.quality} · {lastCheckLabel(m.lastCheckedAt)}
                 </span>
               </span>
-              <button
-                type="button"
-                disabled={busyId === m.mediaId}
-                onClick={() => checkNow(m.mediaId, m.title)}
-                className="shrink-0 rounded-lg border border-border px-2 py-1 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-muted/60 disabled:opacity-40"
-              >
-                Verifică
-              </button>
-              <button
-                type="button"
-                title="Nu mai aștepta filmul"
-                disabled={busyId === m.mediaId}
-                onClick={() => stopWatch(m.tmdbId, m.mediaId, m.title)}
-                className="shrink-0 rounded-full p-1 text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground disabled:opacity-40"
-              >
-                <X className="h-3 w-3" />
-              </button>
+              {isAdmin && (
+                <>
+                  <button
+                    type="button"
+                    disabled={busyId === m.mediaId}
+                    onClick={() => checkNow(m.mediaId, m.title)}
+                    className="shrink-0 rounded-lg border border-border px-2 py-1 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-muted/60 disabled:opacity-40"
+                  >
+                    Verifică
+                  </button>
+                  <button
+                    type="button"
+                    title="Nu mai aștepta filmul"
+                    disabled={busyId === m.mediaId}
+                    onClick={() => stopWatch(m.tmdbId, m.mediaId, m.title)}
+                    className="shrink-0 rounded-full p-1 text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground disabled:opacity-40"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </>
+              )}
             </div>
           ))}
         </div>
