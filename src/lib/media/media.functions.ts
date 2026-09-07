@@ -184,16 +184,43 @@ export const getShowWatchStatus = createServerFn({ method: "GET" }).handler(
 export type { SetMovieWatchInput, WantedMovie, MovieWatchOutcome } from "./movie-watch";
 import type { SetMovieWatchInput, WantedMovie, MovieWatchOutcome } from "./movie-watch";
 
-// Pornirea urmăririi declanșează descărcări reale, deci cere aceleași drepturi
-// ca descărcarea manuală: doar admin. Spre deosebire de seriale, aici nu
-// există încă un rând cu un „proprietar" la care să ne raportăm — filmul nu e
-// în bibliotecă, tocmai de-aia îl urmărim.
+// Cine poate opri o urmărire de film: cel care a pornit-o, sau un admin —
+// aceeași regulă ca la ștergerea unui titlu din bibliotecă (isAdminOrOwner).
+// Pornirea nu trece pe aici: e deschisă oricui e logat, fiindcă un film
+// așteptat nu ocupă nimic până când chiar apare.
+async function requireMovieWatchOwner(where: { tmdbId: number } | { mediaId: number }) {
+  const { requireAuth, isAdminOrOwner } = await import("../auth/admin.server");
+  const session = await requireAuth();
+  const { getDb } = await import("../db");
+  const db = getDb();
+  const row = (
+    "tmdbId" in where
+      ? db.prepare(
+          "SELECT requested_by_user_id FROM media WHERE tmdb_id = ? AND media_type = 'movie'",
+        )
+      : db.prepare("SELECT requested_by_user_id FROM media WHERE id = ? AND media_type = 'movie'")
+  ).get("tmdbId" in where ? where.tmdbId : where.mediaId) as
+    { requested_by_user_id: number | null } | undefined;
+  // Rând inexistent: lăsăm să treacă. Oprirea unei urmăriri care oricum nu mai
+  // există e un no-op în setMovieWatchCore, iar un mesaj de "n-ai drepturi"
+  // aici ar fi și fals, și derutant.
+  if (!row) return;
+  if (!isAdminOrOwner(session, row.requested_by_user_id)) {
+    throw new Error("Urmărirea a fost pornită de altcineva");
+  }
+}
+
+// Pornirea e deschisă oricui e logat — un film așteptat nu consumă nimic până
+// când apare, iar descărcarea pe care o declanșează atunci e exact ce a cerut
+// utilizatorul. Oprirea, în schimb, ar putea anula așteptarea altcuiva, deci
+// trece prin verificarea de proprietate.
 export const setMovieWatch = createServerFn({ method: "POST" })
   .validator((data: SetMovieWatchInput) => data)
   .handler(async ({ data }): Promise<{ ok: true } | { ok: false; error: string }> => {
     try {
-      const { requireAdmin } = await import("../auth/admin.server");
-      const session = await requireAdmin();
+      const { requireAuth } = await import("../auth/admin.server");
+      const session = await requireAuth();
+      if (!data.enabled) await requireMovieWatchOwner({ tmdbId: data.tmdbId });
       const { setMovieWatchCore } = await import("./movie-watch");
       await setMovieWatchCore({ ...data, requestedByUserId: session.data.userId ?? null });
       return { ok: true };
@@ -204,10 +231,17 @@ export const setMovieWatch = createServerFn({ method: "POST" })
 
 export const listWantedMovies = createServerFn({ method: "GET" }).handler(
   async (): Promise<WantedMovie[]> => {
-    const { requireAuth } = await import("../auth/admin.server");
-    await requireAuth();
+    const { requireAuth, isAdminOrOwner } = await import("../auth/admin.server");
+    const session = await requireAuth();
     const { listWantedMoviesCore } = await import("./movie-watch");
-    return listWantedMoviesCore();
+    // canManage se calculează aici, nu în stratul de DB: sesiunea e cunoscută
+    // doar la nivelul ăsta. Clientul primește un boolean gata decis, ca la
+    // titlurile din bibliotecă — nu-i trimitem id-uri de utilizator ca să
+    // compare el.
+    return listWantedMoviesCore().map((m) => ({
+      ...m,
+      canManage: isAdminOrOwner(session, m.requestedByUserId),
+    }));
   },
 );
 
@@ -221,8 +255,7 @@ export const checkMovieNow = createServerFn({ method: "POST" })
       data,
     }): Promise<{ ok: true; outcome: MovieWatchOutcome } | { ok: false; error: string }> => {
       try {
-        const { requireAdmin } = await import("../auth/admin.server");
-        await requireAdmin();
+        await requireMovieWatchOwner({ mediaId: data.mediaId });
         const { checkMovie } = await import("./movie-watch");
         return { ok: true, outcome: await checkMovie(data.mediaId) };
       } catch (e) {

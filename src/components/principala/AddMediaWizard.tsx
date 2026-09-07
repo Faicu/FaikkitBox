@@ -951,14 +951,18 @@ export function AddMediaWizard({
                             <Orb state="searching" px={16} />
                             Se așteaptă la {wantedEntry.quality} — se verifică din 12 în 12 ore.
                           </div>
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => toggleMovieWatch(false)}
-                            className="rounded-lg border border-border px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted/60 disabled:opacity-40"
-                          >
-                            Oprește urmărirea
-                          </button>
+                          {/* Oprirea ar putea anula așteptarea altcuiva, deci
+                              doar proprietarul sau un admin. */}
+                          {wantedEntry.canManage && (
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() => toggleMovieWatch(false)}
+                              className="rounded-lg border border-border px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted/60 disabled:opacity-40"
+                            >
+                              Oprește urmărirea
+                            </button>
+                          )}
                         </div>
                       )}
 
@@ -996,7 +1000,10 @@ export function AddMediaWizard({
                           </div>
                           {/* Fundacul de dinainte: mesajul spunea „încă", dar
                               nu-ți oferea nimic de făcut cu informația asta. */}
-                          {isAdmin && !wantedEntry && (
+                          {/* Deschis oricui e logat, nu doar adminilor: un film
+                              așteptat nu ocupă nimic până apare, iar descărcarea
+                              de atunci e exact ce a cerut utilizatorul. */}
+                          {!wantedEntry && (
                             <ActionButton
                               busy={busy}
                               icon={<Orb state="searching" px={16} />}

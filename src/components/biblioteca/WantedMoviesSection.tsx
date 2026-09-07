@@ -4,7 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { ChevronDown, ChevronRight, Film, X } from "lucide-react";
 
-import { wantedMoviesQuery, adminStatusQuery } from "@/lib/queries";
+import { wantedMoviesQuery } from "@/lib/queries";
 import { setMovieWatch, checkMovieNow } from "@/lib/media/media.functions";
 import { Orb } from "@/components/ui/orb";
 
@@ -20,12 +20,6 @@ import { Orb } from "@/components/ui/orb";
 export function WantedMoviesSection() {
   const queryClient = useQueryClient();
   const wanted = useQuery(wantedMoviesQuery);
-  // Lista se vede de oricine e logat, dar pornirea/oprirea urmăririi și
-  // verificarea la cerere sunt acțiuni de admin pe server (setMovieWatch /
-  // checkMovieNow). Fără gardă aici, un utilizator obișnuit ar vedea butoane
-  // care întorc 401 — mai bine să nu existe decât să pară stricate.
-  const { data: adminData } = useQuery(adminStatusQuery);
-  const isAdmin = !!adminData?.isAdmin;
   const [open, setOpen] = useState(true);
   const [busyId, setBusyId] = useState<number | null>(null);
   const setMovieWatchFn = useServerFn(setMovieWatch);
@@ -120,7 +114,10 @@ export function WantedMoviesSection() {
                   {m.quality} · {lastCheckLabel(m.lastCheckedAt)}
                 </span>
               </span>
-              {isAdmin && (
+              {/* Lista se vede de oricine e logat, dar butoanele doar pentru
+                  cel care a pornit urmărirea (sau un admin) — `canManage` vine
+                  gata calculat de pe server, la fel ca la titluri. */}
+              {m.canManage && (
                 <>
                   <button
                     type="button"

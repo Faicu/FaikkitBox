@@ -362,9 +362,14 @@ export interface WantedMovie {
   addedAt: string;
   lastCheckedAt: string | null;
   requestedByUserId: number | null;
+  // true doar pentru cel care a pornit urmărirea sau pentru un admin — la fel
+  // ca la titlurile din bibliotecă (vezi canManage din plex-browse.ts). Se
+  // calculează în server function, unde există sesiunea; aici, în stratul de
+  // DB, n-avem cine e cel care întreabă.
+  canManage: boolean;
 }
 
-export function listWantedMoviesCore(): WantedMovie[] {
+export function listWantedMoviesCore(): Omit<WantedMovie, "canManage">[] {
   const db = getDb();
   return (
     db
