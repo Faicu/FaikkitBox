@@ -28,11 +28,11 @@ export interface PluginInfo {
 export const PLUGINS: PluginInfo[] = [
   {
     id: "show-watcher",
-    label: "Urmărire Seriale",
-    description: "Descărcare automată episoade noi",
-    cadence: "la 3h per serial · metadate la 12h · verificat din 10 în 10 min",
+    label: "Urmărire Seriale și Filme",
+    description: "Descărcare automată episoade noi și filme așteptate",
+    cadence: "la 3h per serial · la 12h per film · metadate la 12h · verificat din 10 în 10 min",
     details:
-      "Face trei lucruri la fiecare tic, fiecare cu ritmul lui.\n\n1. Descărcarea episoadelor noi, la 3h per serial urmărit: compară ce s-a difuzat (TMDB) cu ce ai deja în bibliotecă și aduce diferența de pe Filelist, strict după IMDb ID. Nu ține minte ce a văzut ultima dată — întreabă de fiecare dată realitatea, deci se poate relua oricând, se repară singur după un restart și nu poate descărca de două ori.\n\n2. Numele episoadelor, pentru cele care încă n-au unul.\n\n3. Metadatele fiecărui serial, la 12h — inclusiv ale celor neurmărite: status (încheiat / în producție), titlul românesc și cel original, anul, și următorul episod anunțat. Contează că merge și pentru serialele neurmărite: statusul decide dacă ți se oferă butonul de urmărire, deci trebuie corect tocmai acolo unde încă n-ai pornit-o.",
+      "Face patru lucruri la fiecare tic, fiecare cu ritmul lui.\n\n1. Descărcarea episoadelor noi, la 3h per serial urmărit: compară ce s-a difuzat (TMDB) cu ce ai deja în bibliotecă și aduce diferența de pe Filelist, strict după IMDb ID. Nu ține minte ce a văzut ultima dată — întreabă de fiecare dată realitatea, deci se poate relua oricând, se repară singur după un restart și nu poate descărca de două ori.\n\n2. Numele episoadelor, pentru cele care încă n-au unul.\n\n3. Metadatele fiecărui serial, la 12h — inclusiv ale celor neurmărite: status (încheiat / în producție), titlul românesc și cel original, anul, și următorul episod anunțat. Contează că merge și pentru serialele neurmărite: statusul decide dacă ți se oferă butonul de urmărire, deci trebuie corect tocmai acolo unde încă n-ai pornit-o.\n\n4. Filmele așteptate, la 12h fiecare: filme pe care le-ai cerut, dar care încă nu existau pe Filelist la calitatea vrută. Cadență mai lentă decât la seriale fiindcă un film poate întârzia luni de zile, iar înainte de data lansării nici nu se caută — n-ar avea ce găsi. Spre deosebire de seriale, urmărirea unui film se stinge singură la prima descărcare reușită.",
     icon: <Orb state="searching" />,
     activityType: null,
   },

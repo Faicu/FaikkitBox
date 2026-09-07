@@ -176,3 +176,90 @@ export const getShowWatchStatus = createServerFn({ method: "GET" }).handler(
     };
   },
 );
+
+// ---------------------------------------------------------------------------
+// Urmărirea filmelor (vezi movie-watch.ts)
+// ---------------------------------------------------------------------------
+
+export type { SetMovieWatchInput, WantedMovie, MovieWatchOutcome } from "./movie-watch";
+import type { SetMovieWatchInput, WantedMovie, MovieWatchOutcome } from "./movie-watch";
+
+// Cine poate opri o urmărire de film: cel care a pornit-o, sau un admin —
+// aceeași regulă ca la ștergerea unui titlu din bibliotecă (isAdminOrOwner).
+// Pornirea nu trece pe aici: e deschisă oricui e logat, fiindcă un film
+// așteptat nu ocupă nimic până când chiar apare.
+async function requireMovieWatchOwner(where: { tmdbId: number } | { mediaId: number }) {
+  const { requireAuth, isAdminOrOwner } = await import("../auth/admin.server");
+  const session = await requireAuth();
+  const { getDb } = await import("../db");
+  const db = getDb();
+  const row = (
+    "tmdbId" in where
+      ? db.prepare(
+          "SELECT requested_by_user_id FROM media WHERE tmdb_id = ? AND media_type = 'movie'",
+        )
+      : db.prepare("SELECT requested_by_user_id FROM media WHERE id = ? AND media_type = 'movie'")
+  ).get("tmdbId" in where ? where.tmdbId : where.mediaId) as
+    { requested_by_user_id: number | null } | undefined;
+  // Rând inexistent: lăsăm să treacă. Oprirea unei urmăriri care oricum nu mai
+  // există e un no-op în setMovieWatchCore, iar un mesaj de "n-ai drepturi"
+  // aici ar fi și fals, și derutant.
+  if (!row) return;
+  if (!isAdminOrOwner(session, row.requested_by_user_id)) {
+    throw new Error("Urmărirea a fost pornită de altcineva");
+  }
+}
+
+// Pornirea e deschisă oricui e logat — un film așteptat nu consumă nimic până
+// când apare, iar descărcarea pe care o declanșează atunci e exact ce a cerut
+// utilizatorul. Oprirea, în schimb, ar putea anula așteptarea altcuiva, deci
+// trece prin verificarea de proprietate.
+export const setMovieWatch = createServerFn({ method: "POST" })
+  .validator((data: SetMovieWatchInput) => data)
+  .handler(async ({ data }): Promise<{ ok: true } | { ok: false; error: string }> => {
+    try {
+      const { requireAuth } = await import("../auth/admin.server");
+      const session = await requireAuth();
+      if (!data.enabled) await requireMovieWatchOwner({ tmdbId: data.tmdbId });
+      const { setMovieWatchCore } = await import("./movie-watch");
+      await setMovieWatchCore({ ...data, requestedByUserId: session.data.userId ?? null });
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+  });
+
+export const listWantedMovies = createServerFn({ method: "GET" }).handler(
+  async (): Promise<WantedMovie[]> => {
+    const { requireAuth, isAdminOrOwner } = await import("../auth/admin.server");
+    const session = await requireAuth();
+    const { listWantedMoviesCore } = await import("./movie-watch");
+    // canManage se calculează aici, nu în stratul de DB: sesiunea e cunoscută
+    // doar la nivelul ăsta. Clientul primește un boolean gata decis, ca la
+    // titlurile din bibliotecă — nu-i trimitem id-uri de utilizator ca să
+    // compare el.
+    return listWantedMoviesCore().map((m) => ({
+      ...m,
+      canManage: isAdminOrOwner(session, m.requestedByUserId),
+    }));
+  },
+);
+
+// "Verifică acum" pentru un film urmărit — ignoră cadența de 12 ore. Aceeași
+// nevoie ca la checkShowNow: fără el, răspunsul la "de ce n-a descărcat?" ar
+// fi "așteaptă 12 ore și vezi".
+export const checkMovieNow = createServerFn({ method: "POST" })
+  .validator((data: { mediaId: number }) => data)
+  .handler(
+    async ({
+      data,
+    }): Promise<{ ok: true; outcome: MovieWatchOutcome } | { ok: false; error: string }> => {
+      try {
+        await requireMovieWatchOwner({ mediaId: data.mediaId });
+        const { checkMovie } = await import("./movie-watch");
+        return { ok: true, outcome: await checkMovie(data.mediaId) };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : String(e) };
+      }
+    },
+  );

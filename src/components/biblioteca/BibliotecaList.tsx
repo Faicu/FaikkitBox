@@ -10,6 +10,7 @@ import { plexLibraryBrowseQuery } from "@/lib/queries";
 import { deleteMediaEntry } from "@/lib/filelist.functions";
 import type { PlexBrowseItem } from "@/lib/services/plex-browse";
 import { StatusBadge } from "./StatusBadge";
+import { WantedMoviesSection } from "./WantedMoviesSection";
 import { TitleDetailDrawer } from "./TitleDetailDrawer";
 import {
   addedDate,
@@ -88,7 +89,15 @@ export function BibliotecaList() {
     return <div className="text-sm text-red-400 px-1">{browse.data.error}</div>;
   }
   if (allItems.length === 0) {
-    return <div className="text-sm text-muted-foreground px-1">Biblioteca Plex e goală.</div>;
+    // Filmele așteptate se arată și aici: o bibliotecă goală în care aștepți
+    // ceva nu e același lucru cu una goală de tot, iar altfel n-ai avea de
+    // unde opri o urmărire pornită greșit.
+    return (
+      <div className="space-y-3">
+        <WantedMoviesSection />
+        <div className="text-sm text-muted-foreground px-1">Biblioteca Plex e goală.</div>
+      </div>
+    );
   }
 
   // Un singur fel de rând, pentru filme și seriale deopotrivă — episoadele nu
@@ -201,6 +210,11 @@ export function BibliotecaList() {
           <option value="unwatched">Nevăzute de nimeni</option>
         </select>
       </div>
+
+      {/* Deasupra listei, dar sub căutare: filmele așteptate nu sunt titluri
+          pe care le ai, deci n-au ce căuta nici în rezultatele căutării, nici
+          în sortări. Componenta se ascunde singură când lista e goală. */}
+      <WantedMoviesSection />
 
       {filtered.length === 0 ? (
         <div className="text-sm text-muted-foreground px-1">Niciun rezultat.</div>

@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Clock3, FileCode2, Activity, CircleHelp, RefreshCw, Tv, Tag } from "lucide-react";
+import { Clock3, FileCode2, Activity, CircleHelp, RefreshCw, Tv, Tag, Film } from "lucide-react";
 import { Orb } from "@/components/ui/orb";
 
 import {
@@ -9,7 +9,7 @@ import {
   DrawerTitle,
   DrawerDescription,
 } from "@/components/ui/drawer";
-import { showWatchStatusQuery } from "@/lib/queries";
+import { showWatchStatusQuery, wantedMoviesQuery } from "@/lib/queries";
 import { relativeTime, formatDateTime } from "./utils";
 import { useFlashOnChange } from "@/hooks/use-flash-on-change";
 import { nextEpisodeWhen } from "@/components/biblioteca/utils";
@@ -29,6 +29,8 @@ export function PluginDetailDrawer({
   onClose: () => void;
 }) {
   const { data: watch } = useQuery({ ...showWatchStatusQuery, enabled: !!plugin });
+  const { data: wanted } = useQuery({ ...wantedMoviesQuery, enabled: !!plugin });
+  const wantedMovies = wanted ?? [];
   const isWatcher = plugin?.id === "show-watcher";
 
   return (
@@ -132,6 +134,45 @@ export function PluginDetailDrawer({
                           </div>
                         );
                       })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Simetric cu serialele urmărite de deasupra. Aceeași
+                    întrebare, alt tip de titlu: „ce aștept și de când?". */}
+                <div className="rounded-2xl glass-card p-3 text-xs">
+                  <div className="mb-2 flex items-center gap-1.5 text-muted-foreground">
+                    <Orb state="searching" px={14} /> Filme așteptate
+                  </div>
+                  {wantedMovies.length === 0 ? (
+                    <div className="text-muted-foreground">
+                      Niciunul. Pornești urmărirea din wizard, când filmul căutat nu există încă pe
+                      Filelist.
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5 stagger-in">
+                      {wantedMovies.map((m) => (
+                        <div key={m.mediaId} className="rounded-lg bg-muted/40 px-2 py-1.5">
+                          <div className="flex items-center gap-2">
+                            <Film className="h-3 w-3 shrink-0 text-amber-400" />
+                            <span className="min-w-0 flex-1 truncate font-medium">
+                              {m.title}
+                              {m.year ? ` (${m.year})` : ""}
+                            </span>
+                            <span className="flex shrink-0 items-center gap-0.5 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-400">
+                              <Tag className="h-2.5 w-2.5" />
+                              {m.quality}
+                            </span>
+                          </div>
+                          <div className="mt-0.5 text-[10px] leading-relaxed text-muted-foreground">
+                            <FlashValue flashKey={m.lastCheckedAt}>
+                              {m.lastCheckedAt
+                                ? `verificat ${relativeTime(`${m.lastCheckedAt.replace(" ", "T")}Z`)}`
+                                : "încă neverificat"}
+                            </FlashValue>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
