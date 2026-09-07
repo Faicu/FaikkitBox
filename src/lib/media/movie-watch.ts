@@ -86,19 +86,25 @@ export function pickCandidates<
 // porni de două ori același torrent.
 const inProgress = new Set<number>();
 
-export async function checkMovie(movieId: number): Promise<MovieWatchOutcome> {
+export async function checkMovie(
+  movieId: number,
+  opts: { skipCache?: boolean } = {},
+): Promise<MovieWatchOutcome> {
   if (inProgress.has(movieId)) {
     return { mediaId: movieId, title: "?", downloaded: null, skipped: "verificare deja în curs" };
   }
   inProgress.add(movieId);
   try {
-    return await checkMovieInner(movieId);
+    return await checkMovieInner(movieId, opts);
   } finally {
     inProgress.delete(movieId);
   }
 }
 
-async function checkMovieInner(movieId: number): Promise<MovieWatchOutcome> {
+async function checkMovieInner(
+  movieId: number,
+  opts: { skipCache?: boolean },
+): Promise<MovieWatchOutcome> {
   const db = getDb();
   const row = db
     .prepare(
@@ -153,6 +159,7 @@ async function checkMovieInner(movieId: number): Promise<MovieWatchOutcome> {
     originalTitle: row.literal_title || row.original_title || row.title,
     imdbId: row.imdb_id,
     mediaType: "movie",
+    skipCache: opts.skipCache,
   });
   if (search.status !== "ok") {
     stamp();
@@ -232,9 +239,52 @@ function safeGenres(raw: string): string[] {
   }
 }
 
+// Prima verificare a unui film abia adăugat, la un minut după adăugare.
+//
+// Separată de bucla de 12h din două motive. Întâi, ritmul: fără ea, un film
+// nou aștepta până la 10 minute (cadența de poll a plugin-ului) și rândul
+// arăta „neverificat" tot timpul ăsta, ca și cum urmărirea ar fi moartă.
+//
+// Al doilea, și mai important: ocolește cache-ul Filelist. Wizard-ul tocmai a
+// căutat același IMDb ca să-ți poată spune „nu există încă la calitatea X",
+// iar cache-ul ăla ține 10 minute — exact cât ciclul plugin-ului. O verificare
+// care nimerește în el ar scrie un timestamp fără să fi întrebat pe nimeni.
+//
+// Minutul de așteptare nu e arbitrar: e cât să nu repetăm căutarea wizard-ului
+// în aceeași suflare, dar destul de scurt cât rândul să se completeze cât încă
+// te uiți la el.
+export async function checkNewMovies(): Promise<void> {
+  const db = getDb();
+  const fresh = db
+    .prepare(
+      `SELECT id FROM media
+         WHERE media_type = 'movie' AND auto_download = 1
+           AND torrent_hash IS NULL AND plex_rating_key IS NULL
+           AND watch_last_checked_at IS NULL
+           AND added_at <= datetime('now', '-60 seconds')`,
+    )
+    .all() as unknown as Array<{ id: number }>;
+
+  for (const { id } of fresh) {
+    try {
+      const outcome = await checkMovie(id, { skipCache: true });
+      console.log(
+        `[movie-watch] prima verificare "${outcome.title}" — ${outcome.downloaded ?? outcome.skipped}`,
+      );
+    } catch (e) {
+      console.warn(`[movie-watch] Eroare la prima verificare a filmului ${id}:`, e);
+    }
+  }
+}
+
 // Bucla periodică, analog cu checkDueShows. Cadența e persistată în
 // watch_last_checked_at, nu într-un timer în memorie, ca să supraviețuiască
 // restartului serviciului.
+//
+// Rândurile cu watch_last_checked_at NULL sunt lăsate intenționat pe seama lui
+// checkNewMovies: dacă ar intra și aici, un poll care se nimerește la câteva
+// secunde după adăugare ar face verificarea prea devreme și, mai rău, cu
+// cache-ul wizard-ului încă valid.
 export async function checkDueMovies(): Promise<void> {
   const db = getDb();
   const due = db
@@ -242,8 +292,8 @@ export async function checkDueMovies(): Promise<void> {
       `SELECT id FROM media
          WHERE media_type = 'movie' AND auto_download = 1
            AND torrent_hash IS NULL AND plex_rating_key IS NULL
-           AND (watch_last_checked_at IS NULL
-                OR watch_last_checked_at <= datetime('now', ?))`,
+           AND watch_last_checked_at IS NOT NULL
+           AND watch_last_checked_at <= datetime('now', ?)`,
     )
     .all(`-${Math.round(ITEM_INTERVAL_MS / 1000)} seconds`) as unknown as Array<{ id: number }>;
 
@@ -403,4 +453,77 @@ export function listWantedMoviesCore(): Omit<WantedMovie, "canManage">[] {
     lastCheckedAt: r.watch_last_checked_at,
     requestedByUserId: r.requested_by_user_id,
   }));
+}
+
+// Detaliile unui film așteptat, pentru drawer. Separat de listă intenționat:
+// descrierea, genurile și numele celui care a pornit urmărirea se văd doar la
+// deschidere, deci n-are rost cărate pentru toate rândurile.
+export interface WantedMovieDetail {
+  mediaId: number;
+  tmdbId: number | null;
+  imdbId: string | null;
+  title: string;
+  originalTitle: string | null;
+  year: number | null;
+  posterPath: string | null;
+  overview: string | null;
+  genres: string[];
+  quality: string;
+  addedAt: string;
+  lastCheckedAt: string | null;
+  requestedByUserId: number | null;
+  // Numele contului care a pornit urmărirea. Null când rândul e mai vechi
+  // decât urmărirea per utilizator, sau când contul a fost șters între timp —
+  // de-aia LEFT JOIN, nu JOIN: altfel rândul ar dispărea cu totul din drawer.
+  requestedByUsername: string | null;
+}
+
+export function getWantedMovieDetailCore(mediaId: number): WantedMovieDetail | null {
+  const db = getDb();
+  const r = db
+    .prepare(
+      `SELECT m.id, m.tmdb_id, m.imdb_id, m.title, m.original_title, m.year,
+              m.poster_path, m.overview_ro, m.genres, m.auto_download_quality,
+              m.added_at, m.watch_last_checked_at, m.requested_by_user_id,
+              u.username AS requested_by_username
+         FROM media m
+         LEFT JOIN users u ON u.id = m.requested_by_user_id
+        WHERE m.id = ? AND m.media_type = 'movie'
+          AND m.torrent_hash IS NULL AND m.plex_rating_key IS NULL`,
+    )
+    .get(mediaId) as unknown as
+    | {
+        id: number;
+        tmdb_id: number | null;
+        imdb_id: string | null;
+        title: string;
+        original_title: string | null;
+        year: number | null;
+        poster_path: string | null;
+        overview_ro: string | null;
+        genres: string;
+        auto_download_quality: string | null;
+        added_at: string;
+        watch_last_checked_at: string | null;
+        requested_by_user_id: number | null;
+        requested_by_username: string | null;
+      }
+    | undefined;
+  if (!r) return null;
+  return {
+    mediaId: r.id,
+    tmdbId: r.tmdb_id,
+    imdbId: r.imdb_id,
+    title: r.title,
+    originalTitle: r.original_title,
+    year: r.year,
+    posterPath: r.poster_path,
+    overview: r.overview_ro,
+    genres: safeGenres(r.genres),
+    quality: r.auto_download_quality || "1080p",
+    addedAt: r.added_at,
+    lastCheckedAt: r.watch_last_checked_at,
+    requestedByUserId: r.requested_by_user_id,
+    requestedByUsername: r.requested_by_username,
+  };
 }

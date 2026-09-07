@@ -181,8 +181,18 @@ export const getShowWatchStatus = createServerFn({ method: "GET" }).handler(
 // Urmărirea filmelor (vezi movie-watch.ts)
 // ---------------------------------------------------------------------------
 
-export type { SetMovieWatchInput, WantedMovie, MovieWatchOutcome } from "./movie-watch";
-import type { SetMovieWatchInput, WantedMovie, MovieWatchOutcome } from "./movie-watch";
+export type {
+  SetMovieWatchInput,
+  WantedMovie,
+  MovieWatchOutcome,
+  WantedMovieDetail,
+} from "./movie-watch";
+import type {
+  SetMovieWatchInput,
+  WantedMovie,
+  MovieWatchOutcome,
+  WantedMovieDetail,
+} from "./movie-watch";
 
 // Cine poate opri o urmărire de film: cel care a pornit-o, sau un admin —
 // aceeași regulă ca la ștergerea unui titlu din bibliotecă (isAdminOrOwner).
@@ -257,9 +267,25 @@ export const checkMovieNow = createServerFn({ method: "POST" })
       try {
         await requireMovieWatchOwner({ mediaId: data.mediaId });
         const { checkMovie } = await import("./movie-watch");
-        return { ok: true, outcome: await checkMovie(data.mediaId) };
+        // skipCache: un „verifică acum" apăsat de om trebuie să întrebe chiar
+        // Filelist. Fără asta ar putea răspunde din cache-ul de 10 minute al
+        // wizard-ului și ar raporta „verificat" fără să fi verificat.
+        return { ok: true, outcome: await checkMovie(data.mediaId, { skipCache: true }) };
       } catch (e) {
         return { ok: false, error: e instanceof Error ? e.message : String(e) };
       }
     },
   );
+
+// Detaliile unui film așteptat, pentru drawer. canManage se calculează aici,
+// ca la listă — clientul primește un boolean gata decis.
+export const getWantedMovieDetail = createServerFn({ method: "GET" })
+  .validator((data: { mediaId: number }) => data)
+  .handler(async ({ data }): Promise<(WantedMovieDetail & { canManage: boolean }) | null> => {
+    const { requireAuth, isAdminOrOwner } = await import("../auth/admin.server");
+    const session = await requireAuth();
+    const { getWantedMovieDetailCore } = await import("./movie-watch");
+    const detail = getWantedMovieDetailCore(data.mediaId);
+    if (!detail) return null;
+    return { ...detail, canManage: isAdminOrOwner(session, detail.requestedByUserId) };
+  });

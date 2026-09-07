@@ -14,6 +14,9 @@
 // ---------------------------------------------------------------------------
 
 const POLL_INTERVAL_MS = 10 * 60 * 1000; // 10 min — cât de des vedem cine a expirat
+// 30s: filmul se verifică la un minut după adăugare (condiția e în SQL), iar
+// un poll de 30s înseamnă că se întâmplă între minutul 1 și 1:30, nu la 2.
+const NEW_MOVIE_POLL_MS = 30 * 1000;
 
 // Gardă de suprapunere: o rulare atinge TMDB, TVmaze, Filelist și qBittorrent
 // pentru mai multe seriale, deci poate depăși intervalul de 10 minute.
@@ -51,10 +54,34 @@ async function run(): Promise<void> {
   }
 }
 
+// Prima verificare a filmelor abia adăugate — buclă proprie, deasă și
+// ieftină. Nu intră în `run()` fiindcă acolo se împrospătează metadate și se
+// verifică seriale, muncă mult prea grea pentru fiecare minut. Aici e un
+// singur SELECT care, în marea majoritate a minutelor, nu întoarce nimic.
+//
+// Gardă separată de `running`: cele două bucle pot rula în paralel fără să se
+// calce, fiindcă checkMovie are propria protecție per film (inProgress), iar
+// un film abia adăugat nu poate fi în același timp și scadent la 12h.
+let checkingNew = false;
+
+async function runNewMovies(): Promise<void> {
+  if (checkingNew) return;
+  checkingNew = true;
+  try {
+    const { checkNewMovies } = await import("../../src/lib/media/movie-watch");
+    await checkNewMovies();
+  } catch (e) {
+    console.warn("[show-watcher] Prima verificare a filmelor a eșuat:", e);
+  } finally {
+    checkingNew = false;
+  }
+}
+
 export default function () {
   // 45s: după filelist-resume (15s), ca reluarea descărcărilor întrerupte să
   // apuce să repopuleze starea înainte să ne apucăm să căutăm ce lipsește —
   // altfel un episod deja în curs ar putea părea lipsă.
   setTimeout(run, 45_000);
   setInterval(run, POLL_INTERVAL_MS);
+  setInterval(runNewMovies, NEW_MOVIE_POLL_MS);
 }

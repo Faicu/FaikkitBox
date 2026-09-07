@@ -190,6 +190,13 @@ export async function checkFilelistForItemInternal(data: {
   originalTitle: string;
   imdbId?: string | null;
   mediaType: "movie" | "tv";
+  // Ocolește cache-ul la CITIRE (scrierea rămâne, ca ceilalți apelanți să
+  // profite de rezultatul proaspăt). Necesar acolo unde un răspuns din cache
+  // ar fi o minciună, nu o optimizare: „verifică acum" apăsat de om, și prima
+  // verificare a unui film abia adăugat — ambele vin la scurt timp după
+  // căutarea făcută de wizard, deci ar nimeri fix în cache-ul ei de 10 minute
+  // și ar raporta „verificat" fără să fi întrebat pe nimeni.
+  skipCache?: boolean;
 }): Promise<FilelistSearchResult> {
   const username = process.env.FILELIST_USERNAME;
   const passkey = process.env.FILELIST_PASSKEY;
@@ -204,8 +211,10 @@ export async function checkFilelistForItemInternal(data: {
   const category: FilelistCategory = data.mediaType === "movie" ? "movies" : "series";
 
   const cacheKey = `${category}|${data.imdbId ?? ""}`;
-  const cached = filelistCheckCache.get(cacheKey);
-  if (cached && cached.expiresAt > Date.now()) return cached.result;
+  if (!data.skipCache) {
+    const cached = filelistCheckCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) return cached.result;
+  }
 
   if (!data.imdbId) return { status: "ok", torrents: [] };
 
