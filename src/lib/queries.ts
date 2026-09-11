@@ -20,6 +20,7 @@ import {
 import { getPlexLibraryBrowse, getRecentWatches } from "./services.functions";
 import { getRefreshMs, getFastRefreshMs, REFRESH_DEFAULT_MS } from "./refresh-rate";
 import { getNetworkLink } from "./system/network-link.functions";
+import { getDbBackupStatus } from "./system/db-backup.functions";
 import { getShowWatchStatus } from "./media/media.functions";
 
 // Ritmul statisticilor live e reglabil din pagina Sistem — vezi
@@ -224,6 +225,15 @@ export const recentWatchesQuery = queryOptions({
 // Viteza negociată a legăturii Ethernet — se schimbă doar la evenimente fizice
 // (cablu atins, switch repornit), deci un ritm lent e suficient. Componenta
 // invalidează manual query-ul cât timp urmărește revenirea după renegociere.
+// Starea backup-urilor, pentru cardul din Tehnic. Ritm lent: se schimbă o
+// dată pe zi, iar butonul manual invalidează explicit.
+export const dbBackupQuery = queryOptions({
+  queryKey: ["dbBackup"],
+  queryFn: () => getDbBackupStatus(),
+  staleTime: 5 * 60_000,
+  refetchInterval: 10 * 60_000,
+});
+
 export const networkLinkQuery = queryOptions({
   queryKey: ["networkLink"],
   queryFn: () => getNetworkLink(),

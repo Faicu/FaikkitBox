@@ -47,6 +47,7 @@ automat pe calea din numele fișierului.
 | Fișier | Ce conține |
 |---|---|
 | `plugins/activity-boot.ts` | Pornește logarea ciclului de viață al serverului (pornire/oprire/cauză) la boot-ul Nitro. Există fiindcă blocul respectiv rula ca side-effect de modul și se executa abia la prima cerere HTTP — vezi `src/lib/activity-log.ts`. |
+| `plugins/db-backup.ts` | La +90s după pornire, apoi la 24h: copie a bazei prin `VACUUM INTO` în `data/backups/`, cu rotație la 14 fișiere. Sare peste rulare dacă ultima copie e mai nouă de 20h (altfel o zi cu multe deploy-uri ar goli rotația de istoric util). |
 | `plugins/fast-shutdown.ts` | Shutdown rapid și controlat la SIGTERM/SIGINT (fără el, Node așteaptă implicit să dreneze toate conexiunile, inclusiv SSE-ul de auto-reload). |
 | `plugins/filelist-resume.ts` | La +15s după pornire: reia buclele de polling ale descărcărilor neterminate, omorâte de restart. Fără el, un torrent care se termină după restart nu e observat niciodată (fără subtitrare, `completed_at`, notificare sau legare Plex). |
 | `plugins/github-commit-tracker.ts` | La pornire: sincronizează ultimele commit-uri din GitHub în DB, trimite push pentru cele noi (acoperă webhook-ul picat în timpul unui restart). |
@@ -190,6 +191,8 @@ transversale, fără un singur domeniu clar.
 |---|---|---|
 | `agent.functions.ts` | Comenzi de sistem declanșate din UI (restart serviciu, actualizare) — server-only, cu whitelist strict de comenzi. | `ServiceHeaderActions.tsx`, `routes/sistem.tsx`. |
 | `network-link.ts` | Starea legăturii Ethernet (interfața rutei implicite, viteză negociată, maximul posibil pe ambele capete) + renegociere prin `ethtool -r`, rulat detașat fiindcă legătura cade câteva secunde. Server-only. | `network-link.functions.ts`. |
+| `db-backup.ts` | Backup-ul bazei — `runDbBackup` (VACUUM INTO + rotație la 14), `getBackupStatus`, `listBackups`. Server-only. | `db-backup.functions.ts`, `server/plugins/db-backup.ts`. |
+| `db-backup.functions.ts` | `getDbBackupStatus` / `runDbBackupNow` (admin). | `queries.ts`, `tehnic/sections/DbBackupCard.tsx`. |
 | `network-link.functions.ts` | `getNetworkLink` / `renegotiateNetworkLink`. | `queries.ts`, `tehnic/sections/NetworkLinkCard.tsx`. |
 | `speedtest.functions.ts` | Rulează speedtest CLI, salvează istoric în DB. | `tehnic/sections/SpeedtestChart.tsx`. |
 | `versions.functions.ts` | Verificare versiuni pachete/Ubuntu disponibile pentru actualizare. | `routes/sistem.tsx`. |
@@ -279,6 +282,7 @@ are legătură cu fostul sistem de fixare/urmărire (eliminat complet).
 | `sections/PlexServiceCard.tsx` | Control serviciu Plex (restart/actualizare). |
 | `sections/PluginStatusSection.tsx` | Status plugin-uri de fundal active (ultima rulare). |
 | `sections/SpeedtestChart.tsx` | Grafic istoric speedtest. |
+| `sections/DbBackupCard.tsx` | Starea backup-urilor bazei (vechimea ultimei copii, număr, spațiu) + buton de backup manual. Verde/chihlimbariu după 36h de la ultima copie. |
 | `sections/NetworkLinkCard.tsx` | În drawer-ul Speedtest: viteza negociată a legăturii Ethernet (badge verde/chihlimbariu) + buton de renegociere. Rezolvă cazul recurent în care atingerea fizică a cablului lasă legătura pe 100 Mb/s. |
 
 ### src/components/sistem/

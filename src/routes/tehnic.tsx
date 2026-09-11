@@ -22,6 +22,7 @@ import { PluginStatusSection } from "@/components/tehnic/sections/PluginStatusSe
 import { PushSubscriptionsSection } from "@/components/tehnic/sections/PushSubscriptionsSection";
 import { PlexServiceCard } from "@/components/tehnic/sections/PlexServiceCard";
 import { CommitStatsSection } from "@/components/tehnic/sections/CommitStatsSection";
+import { DbBackupCard } from "@/components/tehnic/sections/DbBackupCard";
 import { ActivityLogSection } from "@/components/tehnic/sections/ActivityLogSection";
 import { ErrorLogSection } from "@/components/tehnic/sections/ErrorLogSection";
 import { SpeedtestChart } from "@/components/tehnic/sections/SpeedtestChart";
@@ -109,6 +110,9 @@ function TehnicPage() {
 
       {/* Statistici commit-uri */}
       <CommitStatsSection />
+
+      {/* Backup bază de date */}
+      <DbBackupCard />
 
       {/* Speedtest */}
       <button

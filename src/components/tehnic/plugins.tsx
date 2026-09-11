@@ -1,5 +1,13 @@
 import type { ReactNode } from "react";
-import { GitCommitHorizontal, PlayCircle, Link2, RotateCcw, Power, PlugZap } from "lucide-react";
+import {
+  GitCommitHorizontal,
+  PlayCircle,
+  Link2,
+  RotateCcw,
+  Power,
+  PlugZap,
+  DatabaseBackup,
+} from "lucide-react";
 import { Orb } from "@/components/ui/orb";
 
 // Catalogul plugin-urilor de fundal — sursă unică pentru lista din Tehnic și
@@ -75,6 +83,16 @@ export const PLUGINS: PluginInfo[] = [
     details:
       "Aduce ultimele commit-uri din GitHub și trimite notificare pentru cele noi față de ce e în DB. Acoperă cazul în care webhook-ul a picat exact în timpul unui restart.",
     icon: <GitCommitHorizontal className="h-4 w-4 text-purple-400" />,
+    activityType: null,
+  },
+  {
+    id: "db-backup",
+    label: "Backup Bază de Date",
+    description: "Copie zilnică a bazei, cu rotație",
+    cadence: "la pornire (după 90s), apoi la 24h",
+    details:
+      "Baza ține tot ce știe aplicația — bibliotecă, conturi, jurnal, abonamente push — și până acum nu exista niciun backup: nici script, nici cron. Un disc mort sau o migrare greșită însemna pierdere totală.\n\nCopierea se face cu VACUUM INTO, nu cu o copiere de fișier: baza rulează în mod WAL, deci un `cp` poate prinde un .db fără tranzacțiile încă necheckpoint-ate și poate da o copie coruptă. Se păstrează ultimele 14 copii.\n\nO copie se face doar dacă cea mai recentă e mai veche de 20h — altfel o zi cu cinci deploy-uri ar face cinci copii identice și ar împinge afară din rotație istoricul chiar util. Copiile stau lângă bază, pe același disc: te apără de o stricăciune logică, nu de un disc mort.",
+    icon: <DatabaseBackup className="h-4 w-4 text-teal-400" />,
     activityType: null,
   },
   {
