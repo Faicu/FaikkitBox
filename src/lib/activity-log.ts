@@ -386,6 +386,33 @@ let cryptoRef: typeof import("node:crypto") | null = null;
 
 const HEARTBEAT_MS = 30_000;
 
+// Retenție jurnal: evenimentele mai vechi de atât se șterg. Jurnalul e o
+// fereastră pe ce se întâmplă acum, nu o arhivă — iar majoritatea rândurilor
+// vechi sunt perechi server_start/server_stop de la deploy-uri, care nu mai
+// spun nimic după o lună.
+const ACTIVITY_RETENTION_DAYS = 30;
+const PRUNE_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
+export function pruneActivityLog(): number {
+  try {
+    const db = dbModuleRef?.getDb();
+    if (!db) return 0;
+    const cutoff = new Date(
+      Date.now() - ACTIVITY_RETENTION_DAYS * 24 * 60 * 60 * 1000,
+    ).toISOString();
+    const result = db.prepare("DELETE FROM activity WHERE timestamp < ?").run(cutoff);
+    const removed = Number(result.changes ?? 0);
+    if (removed > 0) {
+      console.log(`[activity] Retenție ${ACTIVITY_RETENTION_DAYS}z: șterse ${removed} evenimente`);
+    }
+    return removed;
+  } catch (e) {
+    // O curățare ratată nu trebuie să oprească nimic — reîncearcă peste 24h.
+    console.warn("[activity] Curățarea jurnalului a eșuat:", e);
+    return 0;
+  }
+}
+
 // Marcaj scris de `npm run build` (vezi package.json) și consumat o singură
 // dată, la prima pornire de după. Înlocuiește o euristică veche pe mtime-ul
 // lui .output/server/index.mjs, care era greșită prin construcție: workflow-ul
@@ -597,6 +624,13 @@ export async function initServerLifecycleLogging(): Promise<void> {
   }, HEARTBEAT_MS);
   // Nu ține procesul în viață doar pentru heartbeat.
   beat.unref?.();
+
+  // Curățarea jurnalului: o dată la pornire (dbModuleRef e deja populat de
+  // logServerStart de mai sus) și apoi zilnic, pentru procesele care rulează
+  // săptămâni întregi fără restart.
+  pruneActivityLog();
+  const prune = setInterval(pruneActivityLog, PRUNE_INTERVAL_MS);
+  prune.unref?.();
 
   let stopLogged = false;
   const logOnce = () => {

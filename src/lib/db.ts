@@ -722,5 +722,17 @@ function applyCleanups(database: DatabaseSync): void {
       }
       database.exec("PRAGMA user_version = 22");
     }
+
+    if (version < 23) {
+      // v23: retenție de 30 de zile pentru jurnalul de activitate. Curățarea
+      // recurentă stă în activity-log.ts (`pruneActivityLog`, la pornire +
+      // zilnic); asta e doar ștergerea istoricului acumulat până acum.
+      const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      const removed = database
+        .prepare("DELETE FROM activity WHERE timestamp < ?")
+        .run(cutoff);
+      console.log(`[db] Migrare v23: șterse ${removed.changes} evenimente mai vechi de 30 de zile`);
+      database.exec("PRAGMA user_version = 23");
+    }
   }
 }
