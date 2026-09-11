@@ -386,14 +386,78 @@ export function clearMediaSubtitleStatus(torrentHash: string): void {
 }
 
 // Apelat când torrentul a ajuns la 100% (pollUntilComplete) — marchează
-// finalizarea, exact ca downloads.completed_at.
-export function markMediaCompleted(torrentHash: string): void {
-  getDb()
+// finalizarea.
+//
+// Întoarce `true` doar pentru apelantul care a marcat efectiv finalizarea.
+// Clauza `completed_at IS NULL` face din UPDATE-ul ăsta o gardă atomică: dacă
+// două bucle de polling ajung simultan la 100% (una pornită la descărcare,
+// alta reluată după restart), a doua vede changes = 0 și nu mai trimite a
+// doua notificare, nu mai rulează încă o dată pipeline-ul de subtitrări.
+// Înainte, garda stătea pe `downloads.id` (id-ul de torrent Filelist); pe
+// hash e mai corectă pentru pachetele de sezon, unde un singur torrent are
+// zeci de rânduri `media`, dar o singură finalizare.
+export function markMediaCompleted(torrentHash: string): boolean {
+  const res = getDb()
     .prepare(
       `UPDATE media SET completed_at = datetime('now'), updated_at = datetime('now')
        WHERE torrent_hash = ? AND completed_at IS NULL`,
     )
     .run(torrentHash);
+  return Number(res.changes ?? 0) > 0;
+}
+
+export interface UnfinishedTorrent {
+  torrentHash: string;
+  torrentName: string;
+  category: number | null;
+  // Fallback pentru cazul în care categoria Filelist lipsește (titluri
+  // adăugate altfel decât prin fluxul standard): media_type e mereu populat.
+  isMovie: boolean;
+  imdbId: string | null;
+}
+
+// Descărcările încă neterminate, pentru reluarea polling-ului după un restart
+// (server/plugins/filelist-resume.ts). Un rând per torrent, nu per episod —
+// un pachet de sezon cu 12 episoade are 12 rânduri `media` cu același hash,
+// dar are nevoie de o singură buclă de polling.
+//
+// Cele două filtre suplimentare nu sunt cosmetice:
+//
+// `plex_rating_key IS NULL` — backfill-ul din Plex (2026-08-15) a lăsat 77 de
+// rânduri cu hash și fără `completed_at`, deși titlurile erau demult pe disc
+// și indexate. Fără filtru, fiecare pornire ar fi lansat 33 de bucle de
+// polling pentru torrente care nu mai există în qBittorrent.
+//
+// `added_at` în ultimele 48h — exact fereastra după care `pollUntilComplete`
+// renunță oricum. Un torrent abandonat acum o lună n-are ce relua.
+export function listUnfinishedTorrents(): UnfinishedTorrent[] {
+  const rows = getDb()
+    .prepare(
+      `SELECT torrent_hash, MIN(torrent_name) AS torrent_name,
+              MIN(category) AS category, MIN(imdb_id) AS imdb_id,
+              MAX(media_type = 'movie') AS is_movie
+         FROM media
+        WHERE completed_at IS NULL
+          AND torrent_hash IS NOT NULL
+          AND plex_rating_key IS NULL
+          AND added_at > datetime('now', '-48 hours')
+        GROUP BY torrent_hash`,
+    )
+    .all() as unknown as Array<{
+    torrent_hash: string;
+    torrent_name: string | null;
+    category: number | null;
+    imdb_id: string | null;
+    is_movie: number;
+  }>;
+
+  return rows.map((r) => ({
+    torrentHash: r.torrent_hash,
+    torrentName: r.torrent_name ?? r.torrent_hash,
+    category: r.category,
+    isMovie: !!r.is_movie,
+    imdbId: r.imdb_id,
+  }));
 }
 
 // Titlu + poster deja cunoscute în `media` pentru un torrent — folosit de

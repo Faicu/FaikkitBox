@@ -41,8 +41,7 @@ export interface BackupStatus {
 }
 
 export type BackupResult =
-  | { ok: true; file: BackupFile; removed: number }
-  | { ok: false; error: string };
+  { ok: true; file: BackupFile; removed: number } | { ok: false; error: string };
 
 function dbPath(): string {
   return process.env.FAIKKITBOX_DB_PATH ?? "/opt/faikkitbox/data/faikkitbox.db";

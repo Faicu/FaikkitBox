@@ -728,11 +728,29 @@ function applyCleanups(database: DatabaseSync): void {
       // recurentă stă în activity-log.ts (`pruneActivityLog`, la pornire +
       // zilnic); asta e doar ștergerea istoricului acumulat până acum.
       const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-      const removed = database
-        .prepare("DELETE FROM activity WHERE timestamp < ?")
-        .run(cutoff);
+      const removed = database.prepare("DELETE FROM activity WHERE timestamp < ?").run(cutoff);
       console.log(`[db] Migrare v23: șterse ${removed.changes} evenimente mai vechi de 30 de zile`);
       database.exec("PRAGMA user_version = 23");
+    }
+
+    if (version < 24) {
+      // v24: restabilește invariantul "completed_at NULL = chiar se descarcă
+      // acum". Backfill-ul din Plex (2026-08-15) a lăsat 77 de rânduri cu
+      // torrent_hash și fără completed_at, deși titlurile erau demult pe disc
+      // și indexate de Plex. Reluarea polling-ului după restart se sprijină
+      // de-acum pe predicatul ăsta (listUnfinishedTorrents), deci un rând
+      // "veșnic în curs" ar fi însemnat o buclă de polling pornită degeaba la
+      // fiecare pornire, pentru un torrent care nu mai există în qBittorrent.
+      const fixed = database
+        .prepare(
+          `UPDATE media SET completed_at = COALESCE(plex_added_at, added_at)
+            WHERE completed_at IS NULL AND plex_rating_key IS NOT NULL`,
+        )
+        .run();
+      if (fixed.changes > 0) {
+        console.log(`[db] Migrare v24: ${fixed.changes} rânduri marcate complete (deja în Plex)`);
+      }
+      database.exec("PRAGMA user_version = 24");
     }
   }
 }

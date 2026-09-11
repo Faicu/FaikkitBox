@@ -141,7 +141,15 @@ async function pollUntilComplete(
       const isDone = isTorrentComplete(progress, state);
 
       if (isDone) {
-        const wasFirst = await markLogEntryComplete(torrentId);
+        // Garda de "cine a ajuns primul aici" stă pe `media`, nu pe
+        // `downloads`: markMediaCompleted face UPDATE ... WHERE completed_at
+        // IS NULL și întoarce true doar pentru apelantul care a schimbat
+        // efectiv rândul. Pe hash, nu pe id-ul de torrent Filelist — pentru
+        // un pachet de sezon există zeci de rânduri media, dar o singură
+        // finalizare. `downloads` rămâne scris deocamdată, doar ca oglindă.
+        const media = await import("../media/media");
+        const wasFirst = media.markMediaCompleted(torrentHash);
+        await markLogEntryComplete(torrentId);
         if (wasFirst) {
           console.log(`[filelist] "${torrentName}" complet — dau refresh Plex`);
           import("../notifications/notifications")
@@ -176,12 +184,9 @@ async function pollUntilComplete(
           } catch (e) {
             console.warn(`[filelist] Eroare subtitrare pentru "${torrentName}":`, e);
           }
-          const {
-            markMediaCompleted,
-            resolveMediaPlexLinkByTorrentHash,
-            resolveSeasonPackPlexLinks,
-          } = await import("../media/media");
-          markMediaCompleted(torrentHash);
+          // completed_at e deja setat de garda de mai sus — aici rămâne
+          // doar legarea la Plex.
+          const { resolveMediaPlexLinkByTorrentHash, resolveSeasonPackPlexLinks } = media;
           await refreshPlexLibrary(plexType);
           console.log(`[filelist] Plex refresh trimis pentru "${plexType}"`);
 
@@ -227,8 +232,35 @@ async function resumeOrphanedPolls(): Promise<void> {
   resumeDone = true;
 
   try {
-    const log = await readDownloadLog();
-    const orphaned = log.filter((e) => e.completedAt === null);
+    // Sursa principală e `media` — `downloads` e pe cale de eliminare (scrie
+    // aceleași câmpuri, nu mai e citit de niciun UI). Nu e încă singura sursă:
+    // 25 din cele 82 de rânduri `downloads` istorice n-au pereche în `media`,
+    // fiindcă rândul media se scrie doar dacă titlul a putut fi rezolvat la
+    // TMDB (vezi `if (mediaPayload)` din startDownload). Pentru descărcările
+    // alea, `downloads` rămâne singura urmă — iar o descărcare nereluată e
+    // exact eșecul tăcut pe care pluginul există ca să-l prevină: torrentul se
+    // termină, dar nu primește subtitrare, completed_at, notificare sau legare
+    // Plex. Deci deocamdată reunim ambele surse, deduplicat pe hash.
+    const { listUnfinishedTorrents } = await import("../media/media");
+    const fromMedia = listUnfinishedTorrents();
+    const seen = new Set(fromMedia.map((e) => e.torrentHash));
+
+    const legacy = (await readDownloadLog())
+      .filter((e) => e.completedAt === null && e.torrentHash && !seen.has(e.torrentHash))
+      .map((e) => ({
+        torrentHash: e.torrentHash!,
+        torrentName: e.name,
+        category: e.category,
+        isMovie: isMovieCategory(e.category),
+        imdbId: e.imdb ?? null,
+      }));
+    if (legacy.length) {
+      console.log(
+        `[filelist] Resume: ${legacy.length} descărcări găsite doar în \`downloads\`, fără rând media`,
+      );
+    }
+
+    const orphaned = [...fromMedia, ...legacy];
     if (orphaned.length === 0) return;
 
     const qbitBase = process.env.QBIT_URL;
@@ -237,28 +269,34 @@ async function resumeOrphanedPolls(): Promise<void> {
     if (!qbitBase || !qbitUser || !qbitPass) return;
 
     const url = qbitBase.replace(/\/$/, "");
-    // Nu mai facem login aici: pollUntilComplete folosește qbitGet, care
+    // Nu facem login aici: pollUntilComplete folosește qbitGet, care
     // gestionează singur cookie-ul (și reautentifică la expirare). Un login
-    // eșuat la pornire nu mai trebuie să anuleze reluarea tuturor polling-urilor.
+    // eșuat la pornire nu trebuie să anuleze reluarea tuturor polling-urilor.
 
     console.log(
       `[filelist] Reiau polling pentru ${orphaned.length} descărcări întrerupte de restart`,
     );
     for (const entry of orphaned) {
-      const plexType = isMovieCategory(entry.category) ? "movie" : "show";
-      if (!entry.torrentHash) {
-        console.warn(`[filelist] Resume: hash indisponibil pentru "${entry.name}" — skip`);
-        continue;
-      }
+      const plexType =
+        entry.category !== null
+          ? isMovieCategory(entry.category)
+            ? "movie"
+            : "show"
+          : entry.isMovie
+            ? "movie"
+            : "show";
+      // torrentId ajunge doar în meta-ul evenimentului din jurnal — garda de
+      // finalizare lucrează pe hash, deci reluarea nu mai are nevoie de
+      // id-ul Filelist, pe care `media` oricum nu-l ține.
       pollUntilComplete(
         url,
         entry.torrentHash,
         plexType,
-        entry.name,
-        entry.id,
+        entry.torrentName,
+        0,
         qbitUser,
         qbitPass,
-        entry.imdb,
+        entry.imdbId,
       ).catch((e) => console.error("[filelist] Eroare resume polling:", e));
     }
   } catch (e) {
