@@ -31,118 +31,28 @@ import type { DownloadingMediaEntry, WantedMovie } from "@/lib/media/media.funct
 import { Orb } from "@/components/ui/orb";
 import { getTvmazeAirstamps } from "@/lib/tvmaze/tvmaze.functions";
 import type { TvmazeAirstamp } from "@/lib/tvmaze/tvmaze.functions";
-import {
-  detectQuality,
-  groupTorrentsBySeasonEpisode,
-  emptyQualitySet,
-} from "@/components/filelist/quality-utils";
-import type { QualitySet } from "@/components/filelist/types";
+import { groupTorrentsBySeasonEpisode, emptyQualitySet } from "@/components/filelist/quality-utils";
 import { ActionButton, TorrentPicker, PosterHero, QualitySelector } from "./wizard/WizardControls";
 import { SearchStep } from "./wizard/SearchStep";
 import { DoneStep } from "./wizard/DoneStep";
 import { SeasonAccordion } from "./wizard/SeasonAccordion";
 import type { EpisodeAvailability, SeasonRowData } from "./wizard/SeasonAccordion";
-
-type Quality = "720p" | "1080p" | "4K" | "4K HDR";
-type Step = "search" | "checking" | "result" | "pick" | "confirm" | "done";
-
-interface CheckResult {
-  imdbId: string | null;
-  originalTitle: string;
-  plexFound: boolean;
-  plexQuality: string | null;
-  torrents: FilelistTorrent[];
-  seasons: Array<{ seasonNumber: number; episodeCount: number }>;
-}
-
-interface PlexSeasonEpisode {
-  num: number;
-  quality: string | null;
-  watched: boolean;
-}
-
-interface BulkDownloadItem {
-  torrent: FilelistTorrent;
-  season: number;
-  episode?: number;
-  isSeasonPack: boolean;
-  label: string;
-}
-
-// Torrentul/pachetul în așteptare de alegere manuală (admin, mai mulți
-// candidați la aceeași calitate) — un pas intermediar înainte de confirmare.
-interface TorrentChoiceContext {
-  label: string;
-  season?: number;
-  episode?: number;
-  isSeasonPack: boolean;
-  candidates: FilelistTorrent[];
-}
-
-function pickFromSet(set: QualitySet, quality: Quality): FilelistTorrent[] {
-  if (quality === "720p") return set.t720;
-  if (quality === "1080p") return set.t1080;
-  if (quality === "4K") return set.t4k;
-  return set.t4kHdr;
-}
-
-// Statusurile TMDB pentru un serial care încă poate primi sezoane/episoade
-// noi — restul ("Ended", "Canceled") înseamnă că seria s-a încheiat definitiv.
-const ONGOING_TV_STATUSES = new Set(["Returning Series", "In Production", "Planned", "Pilot"]);
-
-function tvStatusLabel(status: string): string {
-  switch (status) {
-    case "Returning Series":
-      return "va reveni cu sezoane noi";
-    case "In Production":
-      return "sezon nou în lucru";
-    case "Planned":
-      return "sezon nou anunțat, nefilmat încă";
-    case "Pilot":
-      return "doar episod pilot deocamdată";
-    default:
-      return status;
-  }
-}
-
-// Ordinea calităților, pentru a decide dacă o descărcare ar fi un upgrade
-// față de ce e deja în Plex. `plexQualityFromMedia` (plex-shared.ts) produce
-// exact același vocabular, deci comparația e directă; orice altceva
-// (rezoluții exotice, "480") primește 0 — necunoscut, deci niciodată "mai
-// bun decât", ca să nu propunem un upgrade pe baza unei ghiceli.
-const QUALITY_RANK: Record<string, number> = {
-  "720p": 1,
-  "1080p": 2,
-  "4K": 3,
-  "4K HDR": 4,
-};
-
-function qualityRank(q: string | null): number {
-  return q ? (QUALITY_RANK[q] ?? 0) : 0;
-}
-
-function bestOf(list: FilelistTorrent[]): FilelistTorrent | null {
-  return list.length ? [...list].sort((a, b) => b.seeders - a.seeders)[0] : null;
-}
-
-function sortBySeeders(list: FilelistTorrent[]): FilelistTorrent[] {
-  return [...list].sort((a, b) => b.seeders - a.seeders);
-}
-
-// Toate torrentele care se potrivesc la o calitate, sortate după seederi —
-// folosit pentru alegerea manuală (admin), la filme și acum și la
-// sezoane/episoade individuale.
-function matchesForQuality(torrents: FilelistTorrent[], quality: Quality): FilelistTorrent[] {
-  return sortBySeeders(
-    torrents.filter((t) => {
-      const q = detectQuality(t.name);
-      if (quality === "720p") return q.is720p;
-      if (quality === "1080p") return q.is1080p;
-      if (quality === "4K") return q.is4k;
-      return q.is4kHdr;
-    }),
-  );
-}
+import type {
+  Quality,
+  Step,
+  CheckResult,
+  PlexSeasonEpisode,
+  BulkDownloadItem,
+  TorrentChoiceContext,
+} from "./wizard/types";
+import {
+  pickFromSet,
+  ONGOING_TV_STATUSES,
+  tvStatusLabel,
+  qualityRank,
+  bestOf,
+  matchesForQuality,
+} from "./wizard/selection";
 
 export function AddMediaWizard({
   open,
