@@ -3,8 +3,8 @@
 //
 // După ce un torrent se termină, download.ts încearcă legarea într-o buclă de
 // 30 de minute (180 × 10s). Problema: bucla trăiește în procesul serverului, iar
-// resumeOrphanedPolls reia la pornire DOAR descărcările cu completedAt === null
-// — adică exact cele care încă se descarcă. Un titlu deja marcat complet, prins
+// resumeOrphanedPolls reia la pornire DOAR descărcările cu `completed_at` NULL
+// (listUnfinishedTorrents) — adică exact cele care încă se descarcă. Un titlu deja marcat complet, prins
 // de un restart în fereastra aceea de 30 de minute, nu mai era reluat de nimeni
 // (comentariul din download.ts o spunea explicit: "nu mai există job periodic de
 // backfill ca plasă de siguranță, deci fereastra asta e singura șansă").

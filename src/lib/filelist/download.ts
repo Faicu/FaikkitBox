@@ -13,8 +13,8 @@ import { refreshPlexLibrary } from "../plex-refresh";
 // Import dinamic (nu static) — subtitles.ts foloseşte node:child_process/node:util
 // pentru ffprobe, care nu trebuie să ajungă în bundle-ul de client. download.ts
 // e statically importat de filelist.functions.ts, folosit și din componente
-// client (hooks.ts, DownloadLogSection.tsx), deci orice import static de aici
-// se poate scurge în bundle-ul browserului.
+// client, deci orice import static de aici se poate scurge în bundle-ul
+// browserului.
 
 // Un torrent e considerat complet dacă a ajuns la 100% și starea din
 // qBittorrent indică seeding/pauzat-după-seeding — folosit de
@@ -97,7 +97,11 @@ async function pollUntilComplete(
   torrentHash: string,
   plexType: "movie" | "show",
   torrentName: string,
-  torrentId: number,
+  // Null la reluarea după restart: id-ul de torrent Filelist nu se păstrează
+  // în `media`, iar garda de finalizare lucrează pe hash, deci nu mai e
+  // nevoie de el. Ajunge doar în meta-ul evenimentului din jurnal — mai bine
+  // absent decât un 0 inventat.
+  torrentId: number | null,
   qbitUser: string,
   qbitPass: string,
   imdbId?: string | null,
@@ -262,15 +266,12 @@ async function resumeOrphanedPolls(): Promise<void> {
           : entry.isMovie
             ? "movie"
             : "show";
-      // torrentId ajunge doar în meta-ul evenimentului din jurnal — garda de
-      // finalizare lucrează pe hash, deci reluarea nu mai are nevoie de
-      // id-ul Filelist, pe care `media` oricum nu-l ține.
       pollUntilComplete(
         url,
         entry.torrentHash,
         plexType,
         entry.torrentName,
-        0,
+        null,
         qbitUser,
         qbitPass,
         entry.imdbId,
