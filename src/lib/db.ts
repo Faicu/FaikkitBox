@@ -35,21 +35,6 @@ export function getDb(): DatabaseSync {
     );
     CREATE INDEX IF NOT EXISTS idx_activity_timestamp ON activity(timestamp DESC);
 
-    CREATE TABLE IF NOT EXISTS downloads (
-      id INTEGER PRIMARY KEY,
-      name TEXT NOT NULL,
-      size INTEGER NOT NULL DEFAULT 0,
-      category INTEGER NOT NULL DEFAULT 0,
-      category_name TEXT NOT NULL DEFAULT '',
-      freeleech INTEGER NOT NULL DEFAULT 0,
-      internal INTEGER NOT NULL DEFAULT 0,
-      save_path TEXT NOT NULL DEFAULT '',
-      downloaded_at TEXT NOT NULL,
-      completed_at TEXT,
-      torrent_hash TEXT
-    );
-    CREATE INDEX IF NOT EXISTS idx_downloads_downloaded_at ON downloads(downloaded_at DESC);
-
     CREATE TABLE IF NOT EXISTS commits (
       sha TEXT PRIMARY KEY,
       short_sha TEXT NOT NULL,
@@ -751,6 +736,17 @@ function applyCleanups(database: DatabaseSync): void {
         console.log(`[db] Migrare v24: ${fixed.changes} rânduri marcate complete (deja în Plex)`);
       }
       database.exec("PRAGMA user_version = 24");
+    }
+
+    if (version < 25) {
+      // v25: `downloads` dispare. Era a doua sursă de adevăr pentru exact
+      // câmpurile pe care `media` le scria deja în paralel, la fiecare
+      // descărcare, și n-o mai citea niciun UI — ultimii doi consumatori
+      // (garda de finalizare și reluarea polling-ului) s-au mutat pe `media`
+      // în v24. Vezi regula "o singură sursă de adevăr" din AGENTS.md.
+      database.exec("DROP TABLE IF EXISTS downloads");
+      console.log("[db] Migrare v25: tabela downloads eliminată");
+      database.exec("PRAGMA user_version = 25");
     }
   }
 }

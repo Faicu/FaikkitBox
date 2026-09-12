@@ -1,5 +1,4 @@
 import { createServerFn } from "@tanstack/react-start";
-import type { FilelistLogEntry, DownloadLogRow } from "./types";
 import { qbitLogin } from "../qbit-client";
 import {
   refreshPlexLibraryForCategoryAndEmptyTrash,
@@ -8,96 +7,9 @@ import {
 } from "../plex-refresh";
 import { deleteMediaByTorrentHash } from "../media/media";
 
-// ---------------------------------------------------------------------------
-// Log persistent al descărcărilor
-// ---------------------------------------------------------------------------
-
-// Persistență SQLite (node:sqlite nativ) — vezi src/lib/db.ts
-
-function rowToEntry(r: DownloadLogRow): FilelistLogEntry {
-  return {
-    id: Number(r.id),
-    name: r.name,
-    size: Number(r.size ?? 0),
-    category: Number(r.category ?? 0),
-    categoryName: r.category_name ?? "",
-    freeleech: !!r.freeleech,
-    internal: !!r.internal,
-    savePath: r.save_path ?? "",
-    downloadedAt: r.downloaded_at,
-    completedAt: r.completed_at ?? null,
-    torrentHash: r.torrent_hash ?? undefined,
-    imdb: r.imdb ?? undefined,
-    requestedByUserId: r.requested_by_user_id,
-  };
-}
-
-export async function readDownloadLog(): Promise<FilelistLogEntry[]> {
-  try {
-    const { getDb } = await import("../db");
-    const rows = getDb()
-      .prepare("SELECT * FROM downloads ORDER BY downloaded_at DESC LIMIT 100")
-      .all() as unknown as DownloadLogRow[];
-    return rows.map(rowToEntry);
-  } catch {
-    return [];
-  }
-}
-
-export async function appendDownloadLog(entry: FilelistLogEntry): Promise<void> {
-  try {
-    const { getDb } = await import("../db");
-    getDb()
-      .prepare(
-        `INSERT OR REPLACE INTO downloads
-       (id, name, size, category, category_name, freeleech, internal, save_path, downloaded_at, completed_at, torrent_hash, imdb, requested_by_user_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
-        entry.id,
-        entry.name,
-        entry.size,
-        entry.category,
-        entry.categoryName,
-        entry.freeleech ? 1 : 0,
-        entry.internal ? 1 : 0,
-        entry.savePath,
-        entry.downloadedAt,
-        entry.completedAt,
-        entry.torrentHash ?? null,
-        entry.imdb ?? null,
-        entry.requestedByUserId ?? null,
-      );
-  } catch (e) {
-    console.warn("[filelist] Nu am putut scrie log-ul de descărcări:", e);
-  }
-}
-
-export async function markLogEntryComplete(torrentId: number): Promise<boolean> {
-  try {
-    const { getDb } = await import("../db");
-    const db = getDb();
-    const existing = db
-      .prepare("SELECT completed_at FROM downloads WHERE id = ?")
-      .get(torrentId) as { completed_at: string | null } | undefined;
-    if (existing?.completed_at) return false; // deja marcat de un alt polling loop
-    db.prepare("UPDATE downloads SET completed_at = ? WHERE id = ?").run(
-      new Date().toISOString(),
-      torrentId,
-    );
-    return true;
-  } catch (e) {
-    console.warn("[filelist] Nu am putut actualiza log-ul la completare:", e);
-    return false;
-  }
-}
-
-// Echivalentul de mai sus, dar sursat direct din `media` (media.id), nu din
-// `downloads` — folosit de Bibliotecă. Orice rând `media` cu torrent_hash
-// cunoscut e ștergibil, indiferent de proveniență — nu mai depinde de
-// existența unui rând `downloads` (care, dacă totuși există pentru același
-// torrent, e curățat și el, prin torrent_hash — nu mai are sens să rămână
-// orfan).
+// Ștergerea unui titlu: qBittorrent (torrent + fișiere), reziduul de pe disk
+// și rândurile din `media`. Orice rând `media` cu torrent_hash cunoscut e
+// ștergibil, indiferent de proveniență.
 export const deleteMediaEntry = createServerFn({ method: "POST" })
   .validator((data: { mediaId: number }) => data)
   .handler(async ({ data }): Promise<{ ok: boolean; qbitDeleted?: boolean; error?: string }> => {
@@ -192,7 +104,6 @@ export const deleteMediaEntry = createServerFn({ method: "POST" })
       // permanent ca "se descarcă" în Bibliotecă. Mesajul de confirmare din
       // drawer promite ștergerea întregului pachet — asta chiar face.
       deleteMediaByTorrentHash(row.torrent_hash);
-      db.prepare("DELETE FROM downloads WHERE torrent_hash = ?").run(row.torrent_hash);
 
       // Rânduri "fantomă" pentru același titlu (același imdb_id), fără
       // torrent_hash — create de exemplu de un backfill dintr-un scan Plex

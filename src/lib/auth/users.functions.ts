@@ -186,9 +186,9 @@ export const getUserDetail = createServerFn({ method: "GET" })
       user_agent: string | null;
     }>;
 
-    // Titlurile efectiv descărcate prin cont — sursate din `media` (nu din
-    // `downloads`, jurnalul tehnic vechi), ca să arate titlul real (nu numele
-    // tehnic al torrentului) + poster + calitate, consistent cu Bibliotecă.
+    // Titlurile efectiv descărcate prin cont — din `media`, ca să arate
+    // titlul real (nu numele tehnic al torrentului) + poster + calitate,
+    // consistent cu Bibliotecă.
     // torrent_hash IS NOT NULL exclude rândurile fără nimic descărcat.
     const downloadRows = db
       .prepare(

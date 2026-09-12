@@ -5,8 +5,8 @@ import { createHash } from "node:crypto";
 import type { FilelistDownloadResult, QbitTorrentInfo } from "./types";
 import { CATEGORY_NAMES, parseCategoryId, isMovieCategory } from "./categories";
 import { downloadTorrentFile } from "./filelist-client";
+import { parseSeasonEpisodeFromName } from "../media/torrent-name-parse";
 import { qbitGet, qbitLogin, qbitEnsureCookie, resetQbitCookie } from "../qbit-client";
-import { readDownloadLog, appendDownloadLog, markLogEntryComplete } from "./log";
 import { CORRECTED_OUTCOMES } from "./subtitle-outcomes";
 import type { SubtitleRunItem, DeleteSubtitleResult } from "./subtitles";
 import { refreshPlexLibrary } from "../plex-refresh";
@@ -142,14 +142,13 @@ async function pollUntilComplete(
 
       if (isDone) {
         // Garda de "cine a ajuns primul aici" stă pe `media`, nu pe
-        // `downloads`: markMediaCompleted face UPDATE ... WHERE completed_at
+        // id-ul de torrent Filelist: markMediaCompleted face UPDATE ... WHERE completed_at
         // IS NULL și întoarce true doar pentru apelantul care a schimbat
         // efectiv rândul. Pe hash, nu pe id-ul de torrent Filelist — pentru
         // un pachet de sezon există zeci de rânduri media, dar o singură
-        // finalizare. `downloads` rămâne scris deocamdată, doar ca oglindă.
+        // finalizare.
         const media = await import("../media/media");
         const wasFirst = media.markMediaCompleted(torrentHash);
-        await markLogEntryComplete(torrentId);
         if (wasFirst) {
           console.log(`[filelist] "${torrentName}" complet — dau refresh Plex`);
           import("../notifications/notifications")
@@ -232,35 +231,13 @@ async function resumeOrphanedPolls(): Promise<void> {
   resumeDone = true;
 
   try {
-    // Sursa principală e `media` — `downloads` e pe cale de eliminare (scrie
-    // aceleași câmpuri, nu mai e citit de niciun UI). Nu e încă singura sursă:
-    // 25 din cele 82 de rânduri `downloads` istorice n-au pereche în `media`,
-    // fiindcă rândul media se scrie doar dacă titlul a putut fi rezolvat la
-    // TMDB (vezi `if (mediaPayload)` din startDownload). Pentru descărcările
-    // alea, `downloads` rămâne singura urmă — iar o descărcare nereluată e
-    // exact eșecul tăcut pe care pluginul există ca să-l prevină: torrentul se
-    // termină, dar nu primește subtitrare, completed_at, notificare sau legare
-    // Plex. Deci deocamdată reunim ambele surse, deduplicat pe hash.
+    // Sursă unică: `media`. Rândul se scrie la fiecare descărcare, chiar și
+    // când titlul n-a putut fi identificat la TMDB (vezi fallback-ul din
+    // startDownload) — altfel exact descărcările alea ar fi rămas nereluabile
+    // după un restart.
     const { listUnfinishedTorrents } = await import("../media/media");
-    const fromMedia = listUnfinishedTorrents();
-    const seen = new Set(fromMedia.map((e) => e.torrentHash));
+    const orphaned = listUnfinishedTorrents();
 
-    const legacy = (await readDownloadLog())
-      .filter((e) => e.completedAt === null && e.torrentHash && !seen.has(e.torrentHash))
-      .map((e) => ({
-        torrentHash: e.torrentHash!,
-        torrentName: e.name,
-        category: e.category,
-        isMovie: isMovieCategory(e.category),
-        imdbId: e.imdb ?? null,
-      }));
-    if (legacy.length) {
-      console.log(
-        `[filelist] Resume: ${legacy.length} descărcări găsite doar în \`downloads\`, fără rând media`,
-      );
-    }
-
-    const orphaned = [...fromMedia, ...legacy];
     if (orphaned.length === 0) return;
 
     const qbitBase = process.env.QBIT_URL;
@@ -549,24 +526,41 @@ async function finishFilelistDownload(ctx: {
       console.warn("[filelist] Rezolvare automată media eșuată:", e);
       return null;
     }));
-  if (mediaPayload) {
-    const { upsertMediaEntry } = await import("../media/media");
-    try {
-      upsertMediaEntry({
-        ...mediaPayload,
-        torrentName: params.torrentName,
-        torrentHash: torrentHash ?? null,
-        category: catId,
-        categoryName: catName,
-        size: params.size ?? 0,
-        freeleech: params.freeleech ?? false,
-        internal: params.internal ?? false,
-        savePath,
-        requestedByUserId: params.requestedByUserId ?? null,
-      });
-    } catch (e) {
-      console.warn("[filelist] Nu am putut scrie în tabela media:", e);
-    }
+  // Dacă titlul n-a putut fi identificat la TMDB, scriem totuși un rând, cu
+  // numele tehnic al lansării. Rândul `media` e singura urmă a unei
+  // descărcări de când `downloads` a dispărut, iar fără el descărcarea ar fi
+  // de două ori invizibilă: n-ar apărea în Bibliotecă, dar mai ales n-ar
+  // putea fi reluată după un restart (listUnfinishedTorrents citește din
+  // `media`) — deci s-ar termina fără subtitrare, fără notificare și
+  // nelegată la Plex, fără ca nimic să se plângă. Mai bine un titlu urât în
+  // Bibliotecă decât o descărcare fantomă.
+  const { upsertMediaEntry } = await import("../media/media");
+  const parsed = isMovie ? null : parseSeasonEpisodeFromName(params.torrentName);
+  const fallbackPayload = {
+    mediaType: (isMovie ? "movie" : "episode") as "movie" | "episode",
+    imdbId: params.imdb ?? null,
+    tmdbId: null,
+    title: params.torrentName,
+    season: parsed?.season ?? null,
+    episode: parsed?.episode ?? null,
+    isSeasonPack: !isMovie && parsed?.episode == null,
+    addedVia: "manual" as const,
+  };
+  try {
+    upsertMediaEntry({
+      ...(mediaPayload ?? fallbackPayload),
+      torrentName: params.torrentName,
+      torrentHash: torrentHash ?? null,
+      category: catId,
+      categoryName: catName,
+      size: params.size ?? 0,
+      freeleech: params.freeleech ?? false,
+      internal: params.internal ?? false,
+      savePath,
+      requestedByUserId: params.requestedByUserId ?? null,
+    });
+  } catch (e) {
+    console.warn("[filelist] Nu am putut scrie în tabela media:", e);
   }
 
   // 7. Loghează descărcarea imediat (completedAt null = în curs)
@@ -594,21 +588,6 @@ async function finishFilelistDownload(ctx: {
       ),
     )
     .catch(() => {});
-  await appendDownloadLog({
-    id: params.torrentId,
-    name: params.torrentName,
-    size: params.size ?? 0,
-    category: catId,
-    categoryName: catName,
-    freeleech: params.freeleech ?? false,
-    internal: params.internal ?? false,
-    savePath,
-    downloadedAt: new Date().toISOString(),
-    completedAt: null,
-    torrentHash: torrentHash ?? undefined,
-    imdb: params.imdb ?? undefined,
-    requestedByUserId: params.requestedByUserId ?? null,
-  });
 
   // 8. Pornește polling background — refresh Plex și marchează complet DOAR la final
   const plexType = isMovie ? "movie" : "show";
@@ -637,8 +616,8 @@ export type CorrectSubtitleResult =
 
 // ---------------------------------------------------------------------------
 // Echivalentele de mai sus, dar sursate direct din `media` (media.id), nu din
-// `downloads` — folosite de Bibliotecă. Orice rând `media` cu torrent_hash
-// cunoscut e gestionabil — nu mai depinde de existența unui rând `downloads`.
+// `media` — folosite de Bibliotecă. Orice rând `media` cu torrent_hash
+// cunoscut e gestionabil.
 // ---------------------------------------------------------------------------
 
 interface MediaActionRow {
