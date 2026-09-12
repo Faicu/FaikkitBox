@@ -526,18 +526,21 @@ async function logServerStart(): Promise<void> {
 
     writeRuntimeStart(db);
 
-    // Deploy-urile se loghează, dar fără push — altfel primești o notificare
-    // la fiecare `npm run build`. Înainte erau suprimate complet, ceea ce
-    // lăsa găuri în jurnal.
-    await logActivity(
-      "server_start",
-      buildServerStartMessage(cause, nowHM()),
-      {
-        deploy: isDeploy,
-        pid: process.pid,
-      },
-      { skipPush: isDeploy },
-    );
+    // Push la fiecare pornire, inclusiv la deploy. A fost suprimat pentru
+    // deploy-uri o săptămână (5-12 sep), ca să nu vină o notificare la
+    // fiecare `npm run build` — dar oprirea nu putea fi suprimată simetric:
+    // când procesul moare, marcajul de deploy încă nu există, fiindcă
+    // build-ul rulează DUPĂ stop (workflow-ul e stop → build → start). Deci
+    // fiecare deploy trimitea "Serverul s-a oprit" și tăcea la revenire —
+    // exact oprirea fără pereche pe care marcajul o repara în jurnal.
+    // Dintre cele două, pornirea e și informația utilă ("e din nou sus"), și
+    // singura trimisă de un proces care chiar are timp s-o ducă la capăt:
+    // push-ul de la oprire pleacă fără await, într-o fereastră de ~300ms
+    // (fast-shutdown.ts), deci uneori nu ajunge deloc.
+    await logActivity("server_start", buildServerStartMessage(cause, nowHM()), {
+      deploy: isDeploy,
+      pid: process.pid,
+    });
   } catch (e) {
     console.warn("[activity-log] Logarea pornirii a eșuat:", e);
   }
