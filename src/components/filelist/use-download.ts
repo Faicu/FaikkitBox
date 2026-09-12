@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
+
+import { normalizeStoredPoster } from "@/lib/tmdb/poster";
 import { downloadFilelist } from "@/lib/filelist.functions";
 import type { FilelistTorrent } from "@/lib/filelist.functions";
 import { parseSeasonEpisodeFromName } from "@/lib/media/torrent-name-parse";
@@ -46,7 +48,7 @@ function buildMediaPayload(context: DownloadMediaContext, torrent: FilelistTorre
     episode: isTv ? (parsed?.episode ?? null) : null,
     overviewRo: context.overviewRo ?? null,
     genres: context.genres ?? [],
-    posterPath: context.posterUrl ?? null,
+    posterPath: normalizeStoredPoster(context.posterUrl ?? null),
     tvStatus: isTv ? (context.tvStatus ?? null) : null,
     isSeasonPack: isTv && !!parsed && parsed.episode === null,
     addedVia: "manual" as const,

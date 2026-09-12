@@ -19,6 +19,7 @@ import { sendPushToAll } from "./push";
 import { buildTorrentDisplayName, lookupPosterUrlByImdbId } from "../tmdb/tmdb-title-lookup";
 import { detectTorrentQuality } from "../media/torrent-quality";
 import type { ActivityType } from "../activity-log";
+import { resizePosterUrl } from "../tmdb/poster";
 
 export interface PushNotification {
   title: string;
@@ -112,8 +113,7 @@ export function buildPlexWatchStopMessage(user: string, what: string, progress: 
 // dimensiune a fost stocată inițial, fără să atingem valoarea din DB
 // (folosită și în altă parte, la dimensiunea ei originală).
 function upscalePosterForPush(posterPath: string | null): string | null {
-  if (!posterPath) return null;
-  return posterPath.replace(/\/t\/p\/w\d+\//, "/t/p/w780/");
+  return resizePosterUrl(posterPath, "w780");
 }
 
 function seasonEpisodeLabel(

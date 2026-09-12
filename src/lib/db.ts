@@ -748,5 +748,31 @@ function applyCleanups(database: DatabaseSync): void {
       console.log("[db] Migrare v25: tabela downloads eliminată");
       database.exec("PRAGMA user_version = 25");
     }
+
+    if (version < 26) {
+      // v26: posterele salvate la w92 urcă la w342.
+      //
+      // Lista de rezultate a căutării din wizard cere miniaturi de 92px —
+      // corect pentru ea — dar valoarea aia se salva ca atare în `media` și
+      // rămânea acolo, inclusiv pentru drawer-ul din Bibliotecă, unde
+      // posterul se vede la ~170×240px fizici și un w92 e vizibil moale.
+      // Sursa e reparată (normalizeStoredPoster, la scriere); aici corectăm
+      // ce s-a acumulat.
+      //
+      // E doar o rescriere de text în URL: TMDB servește aceeași imagine la
+      // orice dimensiune, ceea ce codul de notificări făcea deja la afișare.
+      for (const table of ["media", "recent_watch_cache"]) {
+        const res = database
+          .prepare(
+            `UPDATE ${table} SET poster_path = replace(poster_path, '/t/p/w92/', '/t/p/w342/')
+              WHERE poster_path LIKE '%/t/p/w92/%'`,
+          )
+          .run();
+        if (res.changes > 0) {
+          console.log(`[db] Migrare v26: ${res.changes} postere urcate la w342 în ${table}`);
+        }
+      }
+      database.exec("PRAGMA user_version = 26");
+    }
   }
 }

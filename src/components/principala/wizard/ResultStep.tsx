@@ -21,6 +21,7 @@ import {
   bestOf,
   matchesForQuality,
 } from "./selection";
+import { normalizeStoredPoster } from "@/lib/tmdb/poster";
 import type { CheckResult, TorrentChoiceContext } from "./types";
 import type { WizardAction, WizardState } from "./state";
 
@@ -143,7 +144,9 @@ export function ResultStep({
   return (
     <div className="animate-in fade-in slide-in-from-right-2 duration-200 space-y-4">
       <PosterHero
-        posterUrl={selected.posterUrl}
+        // Titlul vine din lista de căutare, cu poster w92 — aici se vede
+        // mult mai mare decât în listă, deci cerem dimensiunea potrivită.
+        posterUrl={normalizeStoredPoster(selected.posterUrl)}
         mediaType={selected.mediaType}
         title={selected.title}
         subtitle={checkResult.originalTitle + (selected.year ? ` · ${selected.year}` : "")}

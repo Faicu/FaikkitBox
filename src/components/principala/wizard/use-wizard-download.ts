@@ -13,6 +13,7 @@ import { downloadFilelist } from "@/lib/filelist.functions";
 import type { FilelistTorrent } from "@/lib/filelist.functions";
 import { listWantedMovies, setMovieWatch } from "@/lib/media/media.functions";
 import type { WantedMovie } from "@/lib/media/media.functions";
+import { normalizeStoredPoster } from "@/lib/tmdb/poster";
 import type { BulkDownloadItem } from "./types";
 import type { WizardAction, WizardState } from "./state";
 
@@ -56,7 +57,9 @@ export function useWizardDownload({
       episode: isTv ? opts.episode : null,
       overviewRo: tmdbDetails?.overview ?? null,
       genres: tmdbDetails?.genres ?? [],
-      posterPath: selected.posterUrl ?? null,
+      // Lista de căutare dă w92, potrivit pentru miniaturile ei; în `media`
+      // salvăm mereu dimensiunea folosită la afișare mare.
+      posterPath: normalizeStoredPoster(selected.posterUrl ?? null),
       tvStatus: tmdbDetails?.tvStatus ?? null,
       isSeasonPack: opts.isSeasonPack,
       addedVia: "wizard" as const,
@@ -81,7 +84,9 @@ export function useWizardDownload({
           originalTitle: checkResult.originalTitle,
           literalTitle: tmdbDetails?.literalTitle ?? null,
           year: Number.isFinite(parsedYear) ? parsedYear : null,
-          posterPath: selected.posterUrl ?? null,
+          // Lista de căutare dă w92, potrivit pentru miniaturile ei; în `media`
+          // salvăm mereu dimensiunea folosită la afișare mare.
+          posterPath: normalizeStoredPoster(selected.posterUrl ?? null),
           overviewRo: tmdbDetails?.overview ?? null,
           genres: tmdbDetails?.genres ?? [],
         },
