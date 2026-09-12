@@ -301,22 +301,57 @@ export async function checkPlexHasEpisode(
   }
 }
 
+// Variantele "Internal" există ca `wizard-check.functions.ts` să poată face
+// toată verificarea unui titlu într-o singură cerere, fără să treacă printr-un
+// server function per apel. Server function-urile de mai jos rămân — sunt
+// folosite și separat, din alte ecrane — și le cheamă tot pe ele.
+
+export async function checkPlexHasTitleInternal(data: {
+  title: string;
+  originalTitle: string;
+  mediaType: "movie" | "tv";
+}): Promise<{ found: boolean; quality: string | null } | null> {
+  const token = process.env.PLEX_TOKEN;
+  const base = process.env.PLEX_URL;
+  if (!token) return null;
+  try {
+    const headers = { Accept: "application/json", "X-Plex-Token": token };
+    const discovered = await discoverPlexUrl(token, base);
+    return await findByTitle(
+      discovered.url,
+      headers,
+      data.title,
+      data.originalTitle,
+      data.mediaType,
+    );
+  } catch {
+    return null;
+  }
+}
+
+export async function getPlexEpisodesInSeasonInternal(data: {
+  showTitle: string;
+  season: number;
+}): Promise<{ num: number; quality: string | null; watched: boolean }[]> {
+  const token = process.env.PLEX_TOKEN;
+  const base = process.env.PLEX_URL;
+  if (!token) return [];
+  try {
+    const headers = { Accept: "application/json", "X-Plex-Token": token };
+    const discovered = await discoverPlexUrl(token, base);
+    return await episodesInSeason(discovered.url, headers, data.showTitle, data.season);
+  } catch {
+    return [];
+  }
+}
+
 export const getPlexEpisodesInSeason = createServerFn({ method: "GET" })
   .validator((data: { showTitle: string; season: number }) => data)
   .handler(
     async ({ data }): Promise<{ num: number; quality: string | null; watched: boolean }[]> => {
       const { requireAuth } = await import("../auth/admin.server");
       await requireAuth();
-      const token = process.env.PLEX_TOKEN;
-      const base = process.env.PLEX_URL;
-      if (!token) return [];
-      try {
-        const headers = { Accept: "application/json", "X-Plex-Token": token };
-        const discovered = await discoverPlexUrl(token, base);
-        return await episodesInSeason(discovered.url, headers, data.showTitle, data.season);
-      } catch {
-        return [];
-      }
+      return getPlexEpisodesInSeasonInternal(data);
     },
   );
 
@@ -325,20 +360,5 @@ export const checkPlexHasTitle = createServerFn({ method: "GET" })
   .handler(async ({ data }): Promise<{ found: boolean; quality: string | null } | null> => {
     const { requireAuth } = await import("../auth/admin.server");
     await requireAuth();
-    const token = process.env.PLEX_TOKEN;
-    const base = process.env.PLEX_URL;
-    if (!token) return null;
-    try {
-      const headers = { Accept: "application/json", "X-Plex-Token": token };
-      const discovered = await discoverPlexUrl(token, base);
-      return await findByTitle(
-        discovered.url,
-        headers,
-        data.title,
-        data.originalTitle,
-        data.mediaType,
-      );
-    } catch {
-      return null;
-    }
+    return checkPlexHasTitleInternal(data);
   });
