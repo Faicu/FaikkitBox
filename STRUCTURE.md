@@ -127,6 +127,7 @@ transversale, fără un singur domeniu clar.
 | `activity-log.functions.ts` | Doar `getActivityLog` — fișierul subțire pe care îl importă clientul. | `queries.ts`, `tehnic/sections/ActivityLogSection.tsx`. |
 | `refresh-rate.ts` | Ritmul de reîmprospătare al statisticilor live, reglabil de utilizator (localStorage, per dispozitiv) — `getRefreshMs`, presetări, notificare la schimbare. | `queries.ts`, `sistem/RefreshRateCard.tsx`. |
 | `qbit-client.ts` | Client qBittorrent unic — autentificare cookie SID + fetch cu retry automat la 401/403. Folosit deopotrivă de `filelist/` și `services/`, nu are un singur "acasă" domeniu. | `filelist/download.ts`, `services/qbittorrent.ts`, `services/plex-browse.ts`. |
+| `services/recent-watch-merge.ts` + `recent-watch-types.ts` | Unirea episoadelor consecutive din „Vizionări recente", ca funcție pură + tipul ei. Separate de `plex-browse.ts` ca să fie testabile fără DB/Plex. |
 | `plex-refresh.ts` | SINGURUL loc care ar trebui să declanșeze un rescan de bibliotecă Plex, după orice modificare pe disk. | `filelist/download.ts`, `filelist/log.ts`, `services/qbittorrent.ts`. |
 | `github.functions.ts` | Server functions GitHub — listă commit-uri, push manual din Tehnic (`pushToGitHub`), commit-uri locale nepublicate. | `tehnic/sections/CommitStatsSection.tsx`. |
 | `format.ts` | Formatări reutilizate — bytes, viteză, durată, ETA. | Aproape toate rutele/componentele cu date numerice. |

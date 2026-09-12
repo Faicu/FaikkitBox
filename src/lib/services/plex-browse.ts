@@ -777,69 +777,9 @@ export const getPlexTitleDetail = createServerFn({ method: "GET" })
 // `media` — nu putem detecta vizionări noi pentru un titlu deja șters.
 // ---------------------------------------------------------------------------
 
-export interface RecentWatch {
-  ratingKey: string;
-  title: string;
-  show: string | null;
-  season: number | null;
-  episode: number | null;
-  episodeEnd: number | null;
-  thumbUrl: string | null;
-  username: string;
-  viewedAt: number;
-  completed: boolean;
-  progressMinutes: number | null;
-  durationMinutes: number | null;
-}
-
-// Unește episoade consecutive din același serial/sezon/user într-un singur
-// card (ex. S02E03-E05), ca "Vizionări recente" să nu se umple cu rânduri
-// separate pentru un maraton de episoade — grupare pur pe array-ul deja
-// calculat, fără nicio schimbare de schemă. Doar episoadele terminate
-// complet se unesc — un episod neterminat rămâne pe rândul lui, altfel
-// minutele afișate ("34/41 min") ar părea să se refere la tot intervalul
-// unit, nu la ultimul episod din el.
-function mergeConsecutiveEpisodes(items: RecentWatch[]): RecentWatch[] {
-  const episodeGroups = new Map<string, RecentWatch[]>();
-  const rest: RecentWatch[] = [];
-
-  for (const item of items) {
-    if (item.show == null || item.season == null || item.episode == null || !item.completed) {
-      rest.push(item);
-      continue;
-    }
-    const key = `${item.username}|${item.show}|${item.season}`;
-    const group = episodeGroups.get(key);
-    if (group) group.push(item);
-    else episodeGroups.set(key, [item]);
-  }
-
-  const merged: RecentWatch[] = [...rest];
-  for (const group of episodeGroups.values()) {
-    group.sort((a, b) => (a.episode ?? 0) - (b.episode ?? 0));
-    let run: RecentWatch[] = [];
-    const flush = () => {
-      if (run.length === 0) return;
-      const latest = run.reduce((a, b) => (b.viewedAt > a.viewedAt ? b : a));
-      merged.push({
-        ...latest,
-        episode: run[0].episode,
-        episodeEnd: run.length > 1 ? run[run.length - 1].episode : null,
-      });
-      run = [];
-    };
-    for (const item of group) {
-      const last = run[run.length - 1];
-      if (last && item.episode === (last.episode ?? 0) + 1) run.push(item);
-      else {
-        flush();
-        run = [item];
-      }
-    }
-    flush();
-  }
-  return merged;
-}
+export type { RecentWatch } from "./recent-watch-types";
+import type { RecentWatch } from "./recent-watch-types";
+import { mergeConsecutiveEpisodes } from "./recent-watch-merge";
 
 const RECENT_WATCH_WINDOW_SECONDS = 30 * 24 * 60 * 60;
 const RECENT_TITLES_LIMIT = 200;
@@ -912,6 +852,8 @@ export const getRecentWatches = createServerFn({ method: "GET" }).handler(
         }
       }
 
+      const { plexThumbUrl } = await import("./recent-watch-cache");
+
       db.prepare("DELETE FROM recent_watch_cache WHERE viewed_at < ?").run(cutoff);
       const cached = db
         .prepare(
@@ -950,13 +892,21 @@ export const getRecentWatches = createServerFn({ method: "GET" }).handler(
             : null,
         durationMinutes:
           !row.completed && row.duration_ms != null ? Math.round(row.duration_ms / 60_000) : null,
-        thumbUrl: row.poster_path,
+        // Trailerele și extras-urile n-au rând în `media`, deci nici poster —
+        // cădem pe miniatura din Plex, derivată din ratingKey și servită prin
+        // proxy-ul autentificat. Făcut la citire, nu la scriere, ca să acopere
+        // și rândurile deja existente în cache.
+        thumbUrl: row.poster_path ?? plexThumbUrl(row.plex_rating_key),
         username: row.username,
         viewedAt: row.viewed_at,
       }));
       const merged = mergeConsecutiveEpisodes(items);
       merged.sort((a, b) => b.viewedAt - a.viewedAt);
-      return { status: "ok", items: merged.slice(0, 8) };
+      // Trimitem tot ce e în fereastra de 30 de zile (maximum 100 de rânduri
+      // din interogarea de mai sus). Cardul de pe Acasă arată primele 8 și le
+      // desfășoară la cerere — tăierea la 8 era aici, pe server, deci butonul
+      // "arată mai multe" n-avea ce afișa.
+      return { status: "ok", items: merged };
     } catch (e) {
       return { status: "error", error: e instanceof Error ? e.message : String(e) };
     }

@@ -238,6 +238,9 @@ export async function trackPlexSessions(
             show: row.grandparent_title || null,
             season: mediaRow?.season ?? null,
             episode: mediaRow?.episode ?? null,
+            // Poate rămâne null pentru trailere/extras, care n-au rând în
+            // `media` — se completează la citire, în getRecentWatches, din
+            // miniatura Plex.
             posterPath: mediaRow?.poster_path ?? null,
             viewedAt: Math.floor(Date.now() / 1000),
             viewOffsetMs: row.last_view_offset_ms,

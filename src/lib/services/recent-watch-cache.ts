@@ -26,6 +26,21 @@ export interface RecentWatchCacheEntry {
   completed: boolean;
 }
 
+// Miniatura Plex pentru un item fără rând în `media` — trailere și extras-uri
+// (tip `clip`), pe care aplicația nu le-a descărcat și deci nu le cunoaște.
+// Fără asta rămâneau singurele intrări fără imagine din "Vizionări recente".
+//
+// Calea se derivă din ratingKey, fără să ținem minte nimic: Plex servește și
+// forma scurtă `/library/metadata/<id>/thumb`, nu doar pe cea cu marcaj de
+// timp din sesiune (verificat: ambele întorc 200 și aceeași imagine). Forma
+// scurtă trece și prin lista albă a proxy-ului din `api/plex-thumb.ts`.
+//
+// Merge prin proxy, nu direct: imaginile Plex cer token, iar tokenul n-are ce
+// căuta în browser.
+export function plexThumbUrl(ratingKey: string): string {
+  return `/api/plex-thumb?path=${encodeURIComponent(`/library/metadata/${ratingKey}/thumb`)}`;
+}
+
 export function createRecentWatchUpserter(
   db: DatabaseSync,
 ): (entry: RecentWatchCacheEntry) => void {

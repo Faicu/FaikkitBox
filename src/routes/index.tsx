@@ -30,6 +30,11 @@ import { plexQuery, plexSessionsQuery, adminStatusQuery, recentWatchesQuery } fr
 import { formatDateTime } from "@/components/tehnic/utils";
 import { useLiveViewOffsets } from "@/components/principala/useLiveViewOffsets";
 
+// Câte vizionări arată cardul de pe Acasă înainte de "Arată mai multe".
+// Serverul trimite tot ce e în fereastra de 30 de zile, deci tăierea e aici,
+// unde contează — pe lungimea paginii principale.
+const RECENT_WATCHES_COLLAPSED = 8;
+
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
@@ -61,6 +66,13 @@ function Overview() {
   const liveOffsets = useLiveViewOffsets(sessions);
   const [plexDrawer, setPlexDrawer] = useState<"views" | "users" | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
+  // Cardul arată primele câteva vizionări; restul, la cerere. Serverul trimite
+  // tot ce e în fereastra de 30 de zile.
+  const [allWatchesShown, setAllWatchesShown] = useState(false);
+  // Miniaturile de trailer vin din Plex prin proxy; dacă item-ul a dispărut
+  // între timp, imaginea ar rămâne o casetă goală — ținem minte ce n-a mers și
+  // cădem pe iconiță.
+  const [brokenThumbs, setBrokenThumbs] = useState<Set<string>>(new Set());
 
   const stop = (fn: () => void) => (e: React.MouseEvent) => {
     e.preventDefault();
@@ -288,17 +300,21 @@ function Overview() {
             <span className="font-semibold">Vizionări recente</span>
           </div>
           <div className="mt-3 space-y-1.5">
-            {recentWatchItems.map((it, i) => (
+            {(allWatchesShown
+              ? recentWatchItems
+              : recentWatchItems.slice(0, RECENT_WATCHES_COLLAPSED)
+            ).map((it, i) => (
               <div
                 key={`${it.ratingKey}-${it.username}-${i}`}
                 className="flex items-center gap-2.5 rounded-lg bg-muted/40 px-2.5 py-2"
               >
-                {it.thumbUrl ? (
+                {it.thumbUrl && !brokenThumbs.has(it.thumbUrl) ? (
                   <img
                     src={it.thumbUrl}
                     className="h-10 w-10 shrink-0 rounded object-cover bg-muted"
                     loading="lazy"
                     alt=""
+                    onError={() => setBrokenThumbs((prev) => new Set(prev).add(it.thumbUrl!))}
                   />
                 ) : (
                   <Film className="h-4 w-4 shrink-0 text-amber-400" />
@@ -326,6 +342,17 @@ function Overview() {
               </div>
             ))}
           </div>
+          {recentWatchItems.length > RECENT_WATCHES_COLLAPSED && (
+            <button
+              type="button"
+              onClick={() => setAllWatchesShown((v) => !v)}
+              className="mt-2 w-full rounded-lg py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/40"
+            >
+              {allWatchesShown
+                ? "Arată mai puține"
+                : `Arată mai multe (${recentWatchItems.length - RECENT_WATCHES_COLLAPSED})`}
+            </button>
+          )}
         </div>
       )}
 
