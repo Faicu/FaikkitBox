@@ -1,6 +1,5 @@
 import { useEffect, useReducer, useRef } from "react";
-import { useQueryClient, useQuery } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
+import { useQuery } from "@tanstack/react-query";
 import {
   Loader2,
   CheckCircle2,
@@ -16,35 +15,16 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DownloadConfirmFields } from "@/components/filelist/DownloadConfirmDialog";
 import { adminStatusQuery } from "@/lib/queries";
-import { searchTmdb, getTmdbDetails, getTmdbAllSeasons } from "@/lib/tmdb/tmdb.functions";
-import type { TmdbDetails, TmdbSeasonSchema } from "@/lib/tmdb/tmdb.functions";
 import type { TmdbSearchResult } from "@/lib/tmdb/tmdb.functions";
-import { checkPlexHasTitle, getPlexEpisodesInSeason } from "@/lib/services.functions";
-import { checkFilelistForItem, downloadFilelist } from "@/lib/filelist.functions";
 import type { FilelistTorrent } from "@/lib/filelist.functions";
-import {
-  getDownloadingMediaForTmdbId,
-  listWantedMovies,
-  setMovieWatch,
-} from "@/lib/media/media.functions";
-import type { DownloadingMediaEntry, WantedMovie } from "@/lib/media/media.functions";
 import { Orb } from "@/components/ui/orb";
-import { getTvmazeAirstamps } from "@/lib/tvmaze/tvmaze.functions";
-import type { TvmazeAirstamp } from "@/lib/tvmaze/tvmaze.functions";
 import { groupTorrentsBySeasonEpisode } from "@/components/filelist/quality-utils";
 import { ActionButton, TorrentPicker, PosterHero, QualitySelector } from "./wizard/WizardControls";
 import { SearchStep } from "./wizard/SearchStep";
 import { DoneStep } from "./wizard/DoneStep";
 import { SeasonAccordion } from "./wizard/SeasonAccordion";
 import type { SeasonRowData } from "./wizard/SeasonAccordion";
-import type {
-  Quality,
-  Step,
-  CheckResult,
-  PlexSeasonEpisode,
-  BulkDownloadItem,
-  TorrentChoiceContext,
-} from "./wizard/types";
+import type { Step, BulkDownloadItem, TorrentChoiceContext } from "./wizard/types";
 import {
   ONGOING_TV_STATUSES,
   tvStatusLabel,
@@ -53,6 +33,8 @@ import {
   matchesForQuality,
 } from "./wizard/selection";
 import { deriveSeasonRows, deriveBulkPlan } from "./wizard/derive-seasons";
+import { useWizardData } from "./wizard/use-wizard-data";
+import { useWizardDownload } from "./wizard/use-wizard-download";
 import { wizardReducer, initialWizardState } from "./wizard/state";
 
 export function AddMediaWizard({
@@ -66,21 +48,8 @@ export function AddMediaWizard({
   // dintr-un titlu deja identificat (ex. butonul "Adaugă" din Descoperă).
   initialItem?: TmdbSearchResult | null;
 }) {
-  const queryClient = useQueryClient();
   const { data: adminData } = useQuery(adminStatusQuery);
   const isAdmin = !!adminData?.isAdmin;
-
-  const searchFn = useServerFn(searchTmdb);
-  const detailsFn = useServerFn(getTmdbDetails);
-  const plexFn = useServerFn(checkPlexHasTitle);
-  const plexSeasonFn = useServerFn(getPlexEpisodesInSeason);
-  const filelistFn = useServerFn(checkFilelistForItem);
-  const allSeasonsFn = useServerFn(getTmdbAllSeasons);
-  const tvmazeFn = useServerFn(getTvmazeAirstamps);
-  const downloadingFn = useServerFn(getDownloadingMediaForTmdbId);
-  const wantedFn = useServerFn(listWantedMovies);
-  const setMovieWatchFn = useServerFn(setMovieWatch);
-  const downloadFn = useServerFn(downloadFilelist);
 
   const [state, dispatch] = useReducer(wizardReducer, initialWizardState);
 
@@ -125,7 +94,20 @@ export function AddMediaWizard({
   const doneMessage = flow.step === "done" ? flow.message : null;
 
   const cancelBulkRef = useRef(false);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const isTv = selected?.mediaType === "tv";
+
+  // Hook-urile stau înaintea efectelor care le folosesc: `selectItem` e
+  // chemat din efectul de deschidere prefill, iar o declarație de după s-ar
+  // fi bazat pe faptul că efectul rulează oricum mai târziu — adevărat, dar
+  // fragil de citit.
+  const { onQueryChange, selectItem } = useWizardData(dispatch);
+  const { downloadOne, downloadBulk, toggleMovieWatch } = useWizardDownload({
+    state,
+    dispatch,
+    isTv,
+    cancelBulkRef,
+  });
 
   function reset() {
     dispatch({ type: "RESET" });
@@ -153,293 +135,6 @@ export function AddMediaWizard({
     if (!isAdmin) dispatch({ type: "SET_QUALITY", quality: "1080p" });
   }, [isAdmin]);
 
-  function onQueryChange(value: string) {
-    dispatch({ type: "QUERY_CHANGED", query: value });
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    const q = value.trim();
-    if (q.length < 2) return;
-    debounceRef.current = setTimeout(async () => {
-      dispatch({ type: "SEARCH_STARTED" });
-      try {
-        dispatch({ type: "SEARCH_RESULTS", results: await searchFn({ data: { query: q } }) });
-      } catch {
-        dispatch({ type: "SEARCH_RESULTS", results: [] });
-      }
-    }, 400);
-  }
-
-  async function selectItem(item: TmdbSearchResult) {
-    dispatch({ type: "SELECT_ITEM", item });
-    try {
-      const details = await detailsFn({ data: { id: item.id, mediaType: item.mediaType } });
-      const originalTitle = details.literalTitle || details.originalTitle || item.originalTitle;
-      const [plexRes, filelistRes, downloading, wanted] = await Promise.all([
-        plexFn({ data: { title: item.title, originalTitle, mediaType: item.mediaType } }),
-        filelistFn({
-          data: {
-            title: item.title,
-            originalTitle,
-            imdbId: details.imdbId,
-            mediaType: item.mediaType,
-          },
-        }),
-        downloadingFn({ data: { tmdbId: item.id, mediaType: item.mediaType } }).catch(() => []),
-        item.mediaType === "movie"
-          ? wantedFn().catch(() => [] as WantedMovie[])
-          : Promise.resolve([] as WantedMovie[]),
-      ]);
-      const seasons = details.seasons
-        .filter((s) => s.seasonNumber > 0)
-        .map((s) => ({ seasonNumber: s.seasonNumber, episodeCount: s.episodeCount }));
-
-      // Pentru seriale: schema completă (toate sezoanele/episoadele, un
-      // singur request suplimentar) + statusul Plex per-sezon (pentru TOATE
-      // sezoanele deodată) — totul gata înainte de a arăta ecranul de
-      // rezultat, ca extinderea unui sezon să nu declanșeze cereri noi.
-      let plexBySeasonMap = new Map<number, PlexSeasonEpisode[]>();
-      let schemaResult: TmdbSeasonSchema[] = [];
-      let airstampsResult: TvmazeAirstamp[] = [];
-      if (item.mediaType === "tv" && seasons.length > 0) {
-        const [plexResults, schema, airstamps] = await Promise.all([
-          Promise.allSettled(
-            seasons.map((s) =>
-              plexSeasonFn({ data: { showTitle: originalTitle, season: s.seasonNumber } }),
-            ),
-          ),
-          allSeasonsFn({
-            data: { tmdbId: item.id, seasonNumbers: seasons.map((s) => s.seasonNumber) },
-          }),
-          details.imdbId ? tvmazeFn({ data: { imdbId: details.imdbId } }) : Promise.resolve([]),
-        ]);
-        const map = new Map<number, PlexSeasonEpisode[]>();
-        seasons.forEach((s, i) => {
-          const r = plexResults[i];
-          map.set(s.seasonNumber, r.status === "fulfilled" ? r.value : []);
-        });
-        plexBySeasonMap = map;
-        schemaResult = schema;
-        airstampsResult = airstamps;
-      }
-
-      // O singură acțiune, la final: ecranul de rezultat apare cu toate
-      // datele deodată. Înainte, starea se scria în șapte pași, ceea ce
-      // însemna că o eroare la mijloc lăsa în urmă jumătate din ea.
-      dispatch({
-        type: "CHECK_LOADED",
-        payload: {
-          checkResult: {
-            imdbId: details.imdbId,
-            originalTitle,
-            plexFound: !!plexRes?.found,
-            plexQuality: plexRes?.quality ?? null,
-            torrents: filelistRes.status === "ok" ? filelistRes.torrents : [],
-            seasons,
-          },
-          tmdbDetails: details,
-          seasonSchema: schemaResult,
-          tvmazeAirstamps: airstampsResult,
-          plexBySeason: plexBySeasonMap,
-          downloadingEntries: downloading,
-          wantedEntry: wanted.find((w) => w.tmdbId === item.id) ?? null,
-        },
-      });
-    } catch (e) {
-      const error = e instanceof Error ? e.message : String(e);
-      toast.error("Eroare la verificare", { description: error });
-      dispatch({
-        type: "CHECK_FAILED",
-        error,
-        fallback: {
-          imdbId: null,
-          originalTitle: item.originalTitle,
-          plexFound: false,
-          plexQuality: null,
-          torrents: [],
-          seasons: [],
-        },
-      });
-    }
-  }
-
-  // Metadatele TMDB deja cunoscute (titlu, gen, rezumat RO, imdb/tmdb id) —
-  // trimise o dată cu descărcarea, ca torrentul să apară direct în tabela
-  // `media` fără nicio căutare TMDB ulterioară (vezi Bibliotecă).
-  function buildMediaPayload(opts: {
-    season: number | null;
-    episode: number | null;
-    isSeasonPack: boolean;
-  }) {
-    if (!selected || !checkResult) return undefined;
-    const parsedYear = selected.year ? Number(selected.year) : NaN;
-    return {
-      mediaType: (isTv ? "episode" : "movie") as "episode" | "movie",
-      imdbId: checkResult.imdbId,
-      tmdbId: selected.id,
-      title: selected.title,
-      originalTitle: checkResult.originalTitle,
-      literalTitle: tmdbDetails?.literalTitle ?? null,
-      year: Number.isFinite(parsedYear) ? parsedYear : null,
-      season: isTv ? opts.season : null,
-      episode: isTv ? opts.episode : null,
-      overviewRo: tmdbDetails?.overview ?? null,
-      genres: tmdbDetails?.genres ?? [],
-      posterPath: selected.posterUrl ?? null,
-      tvStatus: tmdbDetails?.tvStatus ?? null,
-      isSeasonPack: opts.isSeasonPack,
-      addedVia: "wizard" as const,
-    };
-  }
-
-  // Urmărirea unui film care încă nu există pe Filelist la calitatea cerută.
-  // Nu închide wizard-ul: rămâi pe același ecran, care se transformă în
-  // bannerul „se așteaptă", ca să vezi imediat că s-a înregistrat.
-  async function toggleMovieWatch(enabled: boolean) {
-    if (!selected || !checkResult) return;
-    dispatch({ type: "SET_BUSY", busy: true });
-    try {
-      const parsedYear = selected.year ? Number(selected.year) : NaN;
-      const res = await setMovieWatchFn({
-        data: {
-          tmdbId: selected.id,
-          enabled,
-          quality,
-          imdbId: checkResult.imdbId,
-          title: selected.title,
-          originalTitle: checkResult.originalTitle,
-          literalTitle: tmdbDetails?.literalTitle ?? null,
-          year: Number.isFinite(parsedYear) ? parsedYear : null,
-          posterPath: selected.posterUrl ?? null,
-          overviewRo: tmdbDetails?.overview ?? null,
-          genres: tmdbDetails?.genres ?? [],
-        },
-      }).catch((e) => ({ ok: false as const, error: e instanceof Error ? e.message : String(e) }));
-
-      if (!res.ok) {
-        toast.error(res.error);
-        return;
-      }
-      const fresh = await wantedFn().catch(() => [] as WantedMovie[]);
-      dispatch({ type: "SET_WANTED", wanted: fresh.find((w) => w.tmdbId === selected.id) ?? null });
-      // Biblioteca arată secțiunea „Se așteaptă", deci trebuie să afle.
-      queryClient.invalidateQueries({ queryKey: ["wanted-movies"] });
-      toast.success(enabled ? `Urmărești „${selected.title}”` : "Urmărire oprită");
-    } finally {
-      dispatch({ type: "SET_BUSY", busy: false });
-    }
-  }
-
-  // Nu atinge `busy` — apelantul îl deține. downloadBulk cheamă funcția asta
-  // în serie, iar cât timp ea își făcea singură dispatch({ type: "SET_BUSY", busy: true })/finally
-  // dispatch({ type: "SET_BUSY", busy: false }), primul element terminat deblocheze tot wizard-ul în
-  // mijlocul lotului: butoanele redeveneau active și dialogul se putea
-  // închide (`onOpenChange` se uită tot la `busy`), deși restul descărcărilor
-  // încă porneau una câte una.
-  async function downloadNow(
-    torrent: FilelistTorrent,
-    opts: { season: number | null; episode: number | null; isSeasonPack: boolean },
-  ) {
-    dispatch({ type: "SET_DOWNLOADING_TORRENT", torrentId: torrent.id });
-    const toastId = toast.loading(`Se descarcă: ${torrent.name}…`);
-    try {
-      const res = await downloadFn({
-        data: {
-          torrentId: torrent.id,
-          torrentName: torrent.name,
-          categoryId: torrent.category,
-          categoryName: torrent.categoryName,
-          size: torrent.size,
-          freeleech: torrent.freeleech,
-          internal: torrent.internal,
-          imdb: torrent.imdb,
-          media: buildMediaPayload(opts),
-        },
-      });
-      if (res.status === "ok") {
-        toast.success("Adăugat în qBittorrent!", {
-          id: toastId,
-          description: `${torrent.name} → ${res.savePath}`,
-          duration: 6000,
-        });
-        queryClient.invalidateQueries({ queryKey: ["filelistLog"] });
-        return true;
-      }
-      toast.error("Eroare la descărcare", { id: toastId, description: res.error, duration: 8000 });
-      return false;
-    } catch (e) {
-      toast.error("Eroare neașteptată", {
-        id: toastId,
-        description: e instanceof Error ? e.message : String(e),
-        duration: 8000,
-      });
-      return false;
-    } finally {
-      dispatch({ type: "SET_DOWNLOADING_TORRENT", torrentId: null });
-    }
-  }
-
-  async function downloadOne(
-    torrent: FilelistTorrent,
-    opts: { season: number | null; episode: number | null; isSeasonPack: boolean },
-  ) {
-    dispatch({ type: "SET_BUSY", busy: true });
-    try {
-      if (await downloadNow(torrent, opts)) {
-        dispatch({ type: "DONE", message: `„${torrent.name}” a fost adăugat în qBittorrent.` });
-      }
-    } finally {
-      dispatch({ type: "SET_BUSY", busy: false });
-    }
-  }
-
-  // "Descarcă tot ce lipsește" — pornește în serie (nu paralel, ca să nu
-  // suprasolicităm qBittorrent/autentificarea) fiecare element din plan:
-  // pachet de sezon acolo unde există, altfel fiecare episod individual găsit
-  // (vezi computeBulkPlan) — nimic din ce e disponibil nu rămâne pe dinafară.
-  async function downloadBulk(items: BulkDownloadItem[]) {
-    dispatch({ type: "SET_BUSY", busy: true });
-    cancelBulkRef.current = false;
-    dispatch({ type: "SET_BULK_PROGRESS", progress: { done: 0, total: items.length } });
-    let okCount = 0;
-    let stopped = false;
-    try {
-      for (const item of items) {
-        // Verificat ÎNTRE elemente, nu în timpul unuia: o descărcare deja
-        // trimisă la qBittorrent nu mai poate fi retrasă, deci "oprește"
-        // înseamnă cinstit "nu mai porni altele".
-        if (cancelBulkRef.current) {
-          stopped = true;
-          break;
-        }
-        const success = await downloadNow(item.torrent, {
-          season: item.season,
-          episode: item.episode ?? null,
-          isSeasonPack: item.isSeasonPack,
-        });
-        if (success) okCount++;
-        dispatch({ type: "SET_BULK_PROGRESS", progress: { done: okCount, total: items.length } });
-      }
-    } finally {
-      // finally, ca o excepție neprevăzută să nu lase wizard-ul blocat pe
-      // "busy" la nesfârșit, fără nicio cale de închidere.
-      dispatch({ type: "SET_BUSY", busy: false });
-      dispatch({ type: "SET_BULK_PROGRESS", progress: null });
-      cancelBulkRef.current = false;
-    }
-    if (okCount > 0) {
-      const suffix = stopped ? " (oprit la cerere)" : "";
-      toast.success(`${okCount}/${items.length} descărcări adăugate în qBittorrent${suffix}`);
-      dispatch({
-        type: "DONE",
-        message: `${okCount}/${items.length} descărcări adăugate în qBittorrent${suffix}.`,
-      });
-      return;
-    }
-    // Oprit înainte să pornească ceva (sau toate au eșuat) — nu are sens un
-    // ecran "gata" care nu anunță nimic; ne întoarcem de unde am plecat.
-    dispatch({ type: "BACK" });
-  }
-
-  const isTv = selected?.mediaType === "tv";
   const seasonGroups = checkResult ? groupTorrentsBySeasonEpisode(checkResult.torrents) : [];
 
   // Schema per-sezon afișată în accordion: pentru fiecare episod, exact una
@@ -926,7 +621,13 @@ export function AddMediaWizard({
                     Pornești {confirmBulk.length} descărcări — tot ce lipsește și e disponibil pe
                     Filelist, la calitatea {quality}?
                   </div>
-                  <div className="max-h-48 space-y-1 overflow-y-auto">
+                  {/* Fără înălțime maximă și scroll propriu: limita era
+                      moștenită de pe vremea când confirmarea în lot era un
+                      card înghesuit pe ecranul de rezultat, între selectorul
+                      de calitate și acordeon. Acum, fiind pas propriu, lista
+                      curge în scroll-ul dialogului — un scroll în scroll e
+                      incomod pe telefon și tăia primul rând. */}
+                  <div className="space-y-1">
                     {confirmBulk.map((item) => (
                       <div key={`${item.season}-${item.episode ?? "pack"}`} className="text-xs">
                         <span className="font-medium text-foreground">{item.label}</span>{" "}
