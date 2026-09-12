@@ -1,7 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Loader2, CheckCircle2, Download, ArrowLeft, Check, Info } from "lucide-react";
+import {
+  Loader2,
+  CheckCircle2,
+  Download,
+  ArrowLeft,
+  Check,
+  Info,
+  AlertTriangle,
+  RefreshCw,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -94,6 +103,22 @@ function tvStatusLabel(status: string): string {
     default:
       return status;
   }
+}
+
+// Ordinea calităților, pentru a decide dacă o descărcare ar fi un upgrade
+// față de ce e deja în Plex. `plexQualityFromMedia` (plex-shared.ts) produce
+// exact același vocabular, deci comparația e directă; orice altceva
+// (rezoluții exotice, "480") primește 0 — necunoscut, deci niciodată "mai
+// bun decât", ca să nu propunem un upgrade pe baza unei ghiceli.
+const QUALITY_RANK: Record<string, number> = {
+  "720p": 1,
+  "1080p": 2,
+  "4K": 3,
+  "4K HDR": 4,
+};
+
+function qualityRank(q: string | null): number {
+  return q ? (QUALITY_RANK[q] ?? 0) : 0;
 }
 
 function bestOf(list: FilelistTorrent[]): FilelistTorrent | null {
@@ -199,6 +224,15 @@ export function AddMediaWizard({
   // pornească (pachete de sezon + episoade individuale, acolo unde nu există
   // pachet complet).
   const [confirmBulk, setConfirmBulk] = useState<BulkDownloadItem[] | null>(null);
+  // Verificarea a eșuat (TMDB/Plex/Filelist) — ținut separat de `checkResult`,
+  // fiindcă un rezultat gol și o eroare arătau identic: "nu există încă la
+  // calitatea X pe Filelist", deși adevărul era că n-am reușit să întrebăm.
+  const [checkError, setCheckError] = useState<string | null>(null);
+  // Progresul descărcării în lot + steagul de oprire. Elementele pornesc în
+  // serie, deci oprirea e curată: se verifică între două elemente, iar ce a
+  // pornit deja rămâne pornit (qBittorrent le are, nu le putem retrage).
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
+  const cancelBulkRef = useRef(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function reset() {
@@ -221,6 +255,9 @@ export function AddMediaWizard({
     setTorrentChoice(null);
     setPickedTorrentId(null);
     setConfirmBulk(null);
+    setCheckError(null);
+    setBulkProgress(null);
+    cancelBulkRef.current = false;
   }
 
   function handleClose() {
@@ -271,6 +308,7 @@ export function AddMediaWizard({
 
   async function selectItem(item: TmdbSearchResult) {
     setSelected(item);
+    setCheckError(null);
     setStep("checking");
     try {
       const details = await detailsFn({ data: { id: item.id, mediaType: item.mediaType } });
@@ -336,6 +374,7 @@ export function AddMediaWizard({
       toast.error("Eroare la verificare", {
         description: e instanceof Error ? e.message : String(e),
       });
+      setCheckError(e instanceof Error ? e.message : String(e));
       setCheckResult({
         imdbId: null,
         originalTitle: item.originalTitle,
@@ -485,26 +524,46 @@ export function AddMediaWizard({
   // (vezi computeBulkPlan) — nimic din ce e disponibil nu rămâne pe dinafară.
   async function downloadBulk(items: BulkDownloadItem[]) {
     setBusy(true);
+    cancelBulkRef.current = false;
+    setBulkProgress({ done: 0, total: items.length });
     let okCount = 0;
+    let stopped = false;
     try {
       for (const item of items) {
+        // Verificat ÎNTRE elemente, nu în timpul unuia: o descărcare deja
+        // trimisă la qBittorrent nu mai poate fi retrasă, deci "oprește"
+        // înseamnă cinstit "nu mai porni altele".
+        if (cancelBulkRef.current) {
+          stopped = true;
+          break;
+        }
         const success = await downloadNow(item.torrent, {
           season: item.season,
           episode: item.episode ?? null,
           isSeasonPack: item.isSeasonPack,
         });
         if (success) okCount++;
+        setBulkProgress({ done: okCount, total: items.length });
       }
     } finally {
       // finally, ca o excepție neprevăzută să nu lase wizard-ul blocat pe
       // "busy" la nesfârșit, fără nicio cale de închidere.
       setBusy(false);
+      setBulkProgress(null);
+      cancelBulkRef.current = false;
     }
     if (okCount > 0) {
-      toast.success(`${okCount}/${items.length} descărcări adăugate în qBittorrent`);
-      setDoneMessage(`${okCount}/${items.length} descărcări adăugate în qBittorrent.`);
+      const suffix = stopped ? " (oprit la cerere)" : "";
+      toast.success(`${okCount}/${items.length} descărcări adăugate în qBittorrent${suffix}`);
+      setDoneMessage(`${okCount}/${items.length} descărcări adăugate în qBittorrent${suffix}.`);
+      setConfirmBulk(null);
       setStep("done");
+      return;
     }
+    // Oprit înainte să pornească ceva (sau toate au eșuat) — nu are sens un
+    // ecran "gata" care nu anunță nimic; ne întoarcem de unde am plecat.
+    setConfirmBulk(null);
+    setStep("result");
   }
 
   const isTv = selected?.mediaType === "tv";
@@ -651,6 +710,12 @@ export function AddMediaWizard({
 
   // Pentru filme, "există în Plex" e suficient (verificare atomică).
   const alreadyInPlex = !isTv && !!checkResult?.plexFound;
+  // Un film deja în Plex nu mai e fundătură: dacă alegi o calitate superioară
+  // celei existente, îți oferim explicit upgrade-ul. Comparația e strict "mai
+  // mare" — la calitate egală sau necunoscută nu propunem nimic, ca să nu
+  // producem duplicate dintr-o ghiceală (vezi qualityRank).
+  const plexQualityRank = qualityRank(checkResult?.plexQuality ?? null);
+  const isQualityUpgrade = alreadyInPlex && qualityRank(quality) > plexQualityRank;
   const showQualityAndAction = !isTv && !!checkResult && !alreadyInPlex && !movieAlreadyDownloading;
 
   // Deschide direct confirmarea când există un singur candidat (sau userul
@@ -699,6 +764,13 @@ export function AddMediaWizard({
   // închide direct.
   function goBack() {
     if (step === "confirm") {
+      // Confirmarea în lot nu vine niciodată dintr-o alegere de torrent —
+      // se ajunge la ea direct din rezultat, deci acolo se întoarce.
+      if (confirmBulk) {
+        setConfirmBulk(null);
+        setStep("result");
+        return;
+      }
       setConfirmTorrent(null);
       setStep(torrentChoice ? "pick" : "result");
       return;
@@ -723,6 +795,7 @@ export function AddMediaWizard({
       setDownloadingEntries([]);
       setWantedEntry(null);
       setPickedTorrentId(null);
+      setCheckError(null);
       return;
     }
   }
@@ -759,7 +832,7 @@ export function AddMediaWizard({
               )}
               <DialogTitle className="flex-1 pr-6">Adaugă film/serial</DialogTitle>
             </div>
-            {step !== "done" && stepperSteps.length > 1 && (
+            {effectiveStep !== "search" && step !== "done" && stepperSteps.length > 1 && (
               <div className="flex items-center gap-1 pt-2">
                 {stepperSteps.map((s, i) => (
                   <div key={s.key} className="flex flex-1 items-center gap-1">
@@ -823,7 +896,34 @@ export function AddMediaWizard({
                   }
                 />
 
-                {isTv ? (
+                {/* O verificare eșuată producea până acum un `checkResult`
+                    gol, indistinct de un rezultat real gol: ecranul spunea
+                    „nu există încă la calitatea X pe Filelist" și îți oferea
+                    urmărirea, deși adevărul era că n-am reușit să întrebăm.
+                    Toastul de eroare dispărea, minciuna rămânea. */}
+                {checkError ? (
+                  <div className="space-y-3 rounded-xl border border-destructive/30 bg-destructive/10 p-3">
+                    <div className="flex items-start gap-2 text-sm text-destructive-foreground">
+                      <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-destructive" />
+                      <div className="space-y-1">
+                        <div className="font-medium">Verificarea a eșuat</div>
+                        <div className="text-xs text-muted-foreground break-words">
+                          {checkError}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          Nu știu ce există în Plex sau pe Filelist pentru titlul ăsta — nimic din
+                          ce-ar apărea mai jos n-ar fi de încredere.
+                        </div>
+                      </div>
+                    </div>
+                    <ActionButton
+                      busy={busy}
+                      icon={<RefreshCw className="h-4 w-4" />}
+                      label="Reîncearcă"
+                      onClick={() => selectItem(selected)}
+                    />
+                  </div>
+                ) : isTv ? (
                   <>
                     {tmdbDetails?.tvStatus && ONGOING_TV_STATUSES.has(tmdbDetails.tvStatus) && (
                       <div className="flex items-start gap-2 rounded-xl bg-amber-500/10 p-3 text-xs text-amber-300">
@@ -862,56 +962,17 @@ export function AddMediaWizard({
 
                     <QualitySelector quality={quality} onChange={setQuality} isAdmin={isAdmin} />
 
-                    {bulkPlan.length > 0 &&
-                      (confirmBulk ? (
-                        <div className="space-y-2 rounded-xl glass-card p-3">
-                          <div className="text-sm text-foreground">
-                            Pornești {confirmBulk.length} descărcări — tot ce lipsește și e
-                            disponibil pe Filelist, la calitatea {quality}?
-                          </div>
-                          <div className="max-h-40 space-y-1 overflow-y-auto">
-                            {confirmBulk.map((item) => (
-                              <div
-                                key={`${item.season}-${item.episode ?? "pack"}`}
-                                className="text-xs"
-                              >
-                                <span className="font-medium text-foreground">{item.label}</span>{" "}
-                                <span className="break-all text-muted-foreground">
-                                  — {item.torrent.name}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                          <div className="flex gap-2">
-                            <button
-                              type="button"
-                              disabled={busy}
-                              onClick={() => setConfirmBulk(null)}
-                              className="flex-1 rounded-lg border border-border py-2 text-sm font-medium text-muted-foreground hover:bg-muted/60 disabled:opacity-50"
-                            >
-                              Anulează
-                            </button>
-                            <button
-                              type="button"
-                              disabled={busy}
-                              onClick={() => {
-                                downloadBulk(confirmBulk);
-                                setConfirmBulk(null);
-                              }}
-                              className="flex-1 rounded-lg bg-primary py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
-                            >
-                              Descarcă
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <ActionButton
-                          busy={busy}
-                          icon={<Download className="h-4 w-4" />}
-                          label={`Descarcă tot ce lipsește (${bulkPlan.length})`}
-                          onClick={() => setConfirmBulk(bulkPlan)}
-                        />
-                      ))}
+                    {bulkPlan.length > 0 && (
+                      <ActionButton
+                        busy={busy}
+                        icon={<Download className="h-4 w-4" />}
+                        label={`Descarcă tot ce lipsește (${bulkPlan.length})`}
+                        onClick={() => {
+                          setConfirmBulk(bulkPlan);
+                          setStep("confirm");
+                        }}
+                      />
+                    )}
 
                     <div>
                       <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -927,11 +988,58 @@ export function AddMediaWizard({
                     </div>
                   </>
                 ) : alreadyInPlex ? (
-                  <div className="flex items-center gap-2 rounded-xl bg-emerald-500/10 p-3 text-sm text-emerald-400">
-                    <CheckCircle2 className="h-4 w-4 shrink-0" />
-                    Deja în bibliotecă Plex
-                    {checkResult.plexQuality ? ` — ${checkResult.plexQuality}` : ""}
-                  </div>
+                  <>
+                    <div className="flex items-center gap-2 rounded-xl bg-emerald-500/10 p-3 text-sm text-emerald-400">
+                      <CheckCircle2 className="h-4 w-4 shrink-0" />
+                      Deja în bibliotecă Plex
+                      {checkResult.plexQuality ? ` — ${checkResult.plexQuality}` : ""}
+                    </div>
+
+                    {/* Selectorul rămâne disponibil: singurul motiv să mai
+                        stai pe ecranul ăsta e să iei o variantă mai bună
+                        decât cea din Plex. */}
+                    <QualitySelector quality={quality} onChange={setQuality} isAdmin={isAdmin} />
+
+                    {isQualityUpgrade &&
+                      (movieMatch ? (
+                        <>
+                          <div className="flex items-start gap-2 rounded-xl bg-amber-500/10 p-3 text-xs text-amber-300">
+                            <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                            <span>
+                              Ai deja {checkResult.plexQuality} în Plex. Descărcarea adaugă un al
+                              doilea fișier, la {quality} — pe cel vechi îl ștergi tu, din
+                              Bibliotecă.
+                            </span>
+                          </div>
+                          {isAdmin && (
+                            <TorrentPicker
+                              matches={movieMatches}
+                              selectedId={movieMatch.id}
+                              onSelect={setPickedTorrentId}
+                            />
+                          )}
+                          <ActionButton
+                            busy={busy}
+                            icon={<Download className="h-4 w-4" />}
+                            label={`Descarcă varianta ${quality}`}
+                            onClick={() => {
+                              setConfirmTorrent({
+                                torrent: movieMatch,
+                                label: `Film — upgrade la ${quality}`,
+                                season: undefined,
+                                episode: undefined,
+                                isSeasonPack: false,
+                              });
+                              setStep("confirm");
+                            }}
+                          />
+                        </>
+                      ) : (
+                        <div className="rounded-xl glass-card p-3 text-sm text-muted-foreground">
+                          Nu există {quality} pe Filelist pentru upgrade.
+                        </div>
+                      ))}
+                  </>
                 ) : movieAlreadyDownloading ? (
                   <div className="flex items-center gap-2 rounded-xl bg-amber-500/10 p-3 text-sm text-amber-400">
                     <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
@@ -1048,24 +1156,104 @@ export function AddMediaWizard({
               </div>
             )}
 
-            {step === "confirm" && confirmTorrent && (
+            {step === "confirm" && confirmBulk && (
+              <div className="animate-in fade-in slide-in-from-right-2 duration-200 space-y-4">
+                <div className="text-sm font-semibold">Confirmare descărcare în lot</div>
+                <div className="space-y-2 rounded-xl glass-card p-3">
+                  <div className="text-sm text-foreground">
+                    Pornești {confirmBulk.length} descărcări — tot ce lipsește și e disponibil pe
+                    Filelist, la calitatea {quality}?
+                  </div>
+                  <div className="max-h-48 space-y-1 overflow-y-auto">
+                    {confirmBulk.map((item) => (
+                      <div key={`${item.season}-${item.episode ?? "pack"}`} className="text-xs">
+                        <span className="font-medium text-foreground">{item.label}</span>{" "}
+                        <span className="break-all text-muted-foreground">
+                          — {item.torrent.name}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Cât rulează lotul, butoanele lasă locul progresului: e
+                    singurul moment în care dialogul nu poate fi închis, deci
+                    trebuie să se vadă unde s-a ajuns și să existe o ieșire. */}
+                {bulkProgress ? (
+                  <div className="space-y-2 rounded-xl glass-card p-3">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="flex items-center gap-2 text-foreground">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        {bulkProgress.done}/{bulkProgress.total} adăugate
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          cancelBulkRef.current = true;
+                          toast.info("Se oprește după descărcarea curentă");
+                        }}
+                        className="rounded-lg border border-border px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted/60"
+                      >
+                        Oprește
+                      </button>
+                    </div>
+                    <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                      <div
+                        className="h-full rounded-full bg-primary transition-[width] duration-300"
+                        style={{
+                          width: `${Math.round((bulkProgress.done / Math.max(bulkProgress.total, 1)) * 100)}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setConfirmBulk(null);
+                        setStep("result");
+                      }}
+                      className="flex-1 rounded-xl border border-border py-2 text-sm text-muted-foreground transition-colors hover:bg-muted"
+                    >
+                      Anulează
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => downloadBulk(confirmBulk)}
+                      className="flex-1 rounded-xl bg-primary py-2 text-sm font-semibold text-primary-foreground"
+                    >
+                      Descarcă
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {step === "confirm" && !confirmBulk && confirmTorrent && (
               <div className="animate-in fade-in slide-in-from-right-2 duration-200 space-y-4">
                 <div className="text-sm font-semibold">Confirmare descărcare</div>
                 <DownloadConfirmFields
                   torrent={confirmTorrent.torrent}
                   label={confirmTorrent.label}
-                  onCancel={() => {
-                    setConfirmTorrent(null);
-                    setStep(torrentChoice ? "pick" : "result");
-                  }}
+                  // Wizard-ul trimite mereu metadatele TMDB proprii
+                  // (buildMediaPayload), deci legarea manuală de un titlu
+                  // existent n-ar avea ce influența — ascunsă, ca să nu fie un
+                  // control care pare că face ceva și e ignorat în tăcere.
+                  allowLinking={false}
+                  onCancel={goBack}
                   onConfirm={() => {
+                    // Fără curățare aici: `downloadOne` schimbă pasul pe
+                    // "done" DOAR la succes, iar dacă goleam `confirmTorrent`
+                    // înainte de a ști rezultatul, o descărcare eșuată lăsa
+                    // pasul "confirm" fără țintă — adică un corp de dialog
+                    // gol, cu stepper și săgeată deasupra. Curățarea se face
+                    // în reset(), la închidere.
                     downloadOne(confirmTorrent.torrent, {
                       season: confirmTorrent.season ?? null,
                       episode: confirmTorrent.episode ?? null,
                       isSeasonPack: confirmTorrent.isSeasonPack ?? false,
                     });
-                    setConfirmTorrent(null);
-                    setTorrentChoice(null);
                   }}
                 />
               </div>
