@@ -47,7 +47,11 @@ export function DbBackupCard() {
       <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
         <DatabaseBackup className="h-3.5 w-3.5" /> Backup bază de date
       </h2>
-      <div className="rounded-2xl glass-card p-3 space-y-3">
+      {/* stagger-in ca la celelalte secțiuni din Tehnic. Copiii direcți sunt
+          rândul de stare și linia cu calea — niciunul n-are clasă care setează
+          `animation`, deci nu calcă animația de intrare (vezi nota din
+          styles.css: shorthand-ul ar lăsa copilul invizibil). */}
+      <div className="rounded-2xl glass-card p-3 space-y-3 stagger-in">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
             {stale ? (

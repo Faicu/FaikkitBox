@@ -6,6 +6,7 @@ import type { RefObject } from "react";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
+import { Progress } from "@/components/ui/progress";
 import type { BulkDownloadItem, Quality } from "./types";
 
 export function ConfirmBulkStep({
@@ -67,14 +68,13 @@ export function ConfirmBulkStep({
               Oprește
             </button>
           </div>
-          <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-            <div
-              className="h-full rounded-full bg-primary transition-[width] duration-300"
-              style={{
-                width: `${Math.round((bulkProgress.done / Math.max(bulkProgress.total, 1)) * 100)}%`,
-              }}
-            />
-          </div>
+          {/* Componenta casei, nu o bară proprie: `progress-flow` (gradient
+              care curge + glow) e stilul folosit peste tot pentru progresul
+              unei descărcări, inclusiv în drawer-ul din Bibliotecă. */}
+          <Progress
+            value={Math.round((bulkProgress.done / Math.max(bulkProgress.total, 1)) * 100)}
+            className="h-1.5"
+          />
         </div>
       ) : (
         <div className="flex gap-2">
