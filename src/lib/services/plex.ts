@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { cachedAsync, fetchJson, errMsg, type ServiceStatus } from "./shared";
 import {
   discoverPlexUrl,
+  plexQualityFromMedia,
   type PlexApiResponse,
   type PlexMetadataItem,
   type PlexStream,
@@ -28,6 +29,15 @@ export interface PlexSession {
   audioDecision?: string;
   bitrateKbps?: number;
   thumbPath?: string;
+  // Detalii de calitate/redare (vezi mapPlexSessions)
+  playbackMode?: "direct" | "direct-stream" | "transcode";
+  sourceQuality?: string;
+  streamQuality?: string;
+  videoCodec?: string;
+  audioCodec?: string;
+  audioChannels?: number;
+  hwTranscode?: boolean;
+  burnedSubtitle?: boolean;
 }
 
 export interface PlexLibrary {
@@ -419,6 +429,20 @@ function mapPlexSessions(sessionsMd: PlexMetadataItem[]): PlexSession[] {
     // Plex returnează viewOffset în ms, dar dur e tot în ms
     // Dacă dur > 1000 și off < 1000 și off > 0, probabil off e în secunde
     const off = dur > 1000 && rawOff > 0 && rawOff < 1000 ? rawOff * 1000 : rawOff;
+    const ts = s.TranscodeSession;
+    const videoDecision = ts?.videoDecision ?? video?.decision ?? part?.decision;
+    const audioDecision = ts?.audioDecision ?? audio?.decision ?? part?.decision;
+    // "transcode" = re-encodare reală a unui flux; "copy" = doar remux
+    // (direct stream); nimic din toate astea = direct play.
+    const decisions = [videoDecision, audioDecision, part?.decision];
+    const playbackMode: "direct" | "direct-stream" | "transcode" = decisions.includes("transcode")
+      ? "transcode"
+      : decisions.includes("copy")
+        ? "direct-stream"
+        : "direct";
+    const streamQuality = plexQualityFromMedia(media);
+    const sourceQuality =
+      playbackMode === "transcode" ? (sourceQualityFromStream(video) ?? streamQuality) : streamQuality;
     return {
       title: s.title ?? "Unknown",
       grandparentTitle: s.grandparentTitle,
@@ -431,12 +455,34 @@ function mapPlexSessions(sessionsMd: PlexMetadataItem[]): PlexSession[] {
       progress: dur > 0 ? off / dur : 0,
       viewOffsetMs: off,
       durationMs: dur,
-      videoDecision: video?.decision,
-      audioDecision: audio?.decision,
+      videoDecision,
+      audioDecision,
       bitrateKbps: Number(media?.bitrate ?? 0) || undefined,
       thumbPath: s.thumb,
+      playbackMode,
+      sourceQuality: sourceQuality ?? undefined,
+      streamQuality: streamQuality ?? undefined,
+      videoCodec: ts?.videoCodec ?? media?.videoCodec ?? video?.codec,
+      audioCodec: ts?.audioCodec ?? media?.audioCodec ?? audio?.codec,
+      audioChannels: ts?.audioChannels ?? media?.audioChannels ?? audio?.channels,
+      hwTranscode: !!(ts?.transcodeHwFullPipeline || ts?.transcodeHwRequested),
+      burnedSubtitle: ts?.subtitleDecision === "burn",
     };
   });
+}
+
+// La transcodare, `Media`/`Part` din sesiune descriu deja fluxul *livrat*, nu
+// fișierul. Rezoluția sursei rămâne vizibilă doar în `displayTitle`-ul
+// stream-ului video ("4K DoVi/HDR10 (HEVC Main 10)"), de unde o scoatem.
+function sourceQualityFromStream(video: PlexStream | undefined): string | null {
+  const title = video?.displayTitle;
+  if (!title) return null;
+  const m = /^\s*(4K|2160p?|1080p?|720p?|576p?|480p?|SD)\b/i.exec(title);
+  if (!m) return null;
+  const token = m[1].toUpperCase();
+  if (token === "4K" || token.startsWith("2160")) return "4K";
+  if (token === "SD") return "SD";
+  return token.endsWith("P") ? token.toLowerCase() : `${token}p`;
 }
 
 // ---------- Doar sesiuni curente (rapid — pentru "cine vizionează acum") ----------

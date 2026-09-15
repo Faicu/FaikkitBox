@@ -16,18 +16,45 @@ export interface PlexStream {
   decision?: string;
   language?: string;
   languageCode?: string;
+  codec?: string;
+  channels?: number;
+  height?: number;
+  displayTitle?: string;
 }
 
 export interface PlexMediaPart {
   file?: string;
   duration?: number;
+  container?: string;
+  decision?: string;
   Stream?: PlexStream[];
 }
 
 export interface PlexMedia {
   videoResolution?: string;
   bitrate?: number;
+  videoCodec?: string;
+  audioCodec?: string;
+  audioChannels?: number;
+  container?: string;
+  height?: number;
   Part?: PlexMediaPart[];
+}
+
+// Prezent doar când Plex chiar transcodează/remuxează sesiunea.
+export interface PlexTranscodeSession {
+  videoDecision?: string;
+  audioDecision?: string;
+  subtitleDecision?: string;
+  sourceVideoCodec?: string;
+  sourceAudioCodec?: string;
+  videoCodec?: string;
+  audioCodec?: string;
+  audioChannels?: number;
+  container?: string;
+  throttled?: boolean;
+  transcodeHwRequested?: boolean;
+  transcodeHwFullPipeline?: boolean;
 }
 
 export interface PlexMetadataItem {
@@ -56,6 +83,8 @@ export interface PlexMetadataItem {
   Guid?: Array<{ id?: string }>;
   User?: { title?: string };
   Player?: { title?: string; device?: string; product?: string; state?: string };
+  TranscodeSession?: PlexTranscodeSession;
+  Session?: { bandwidth?: number; location?: string };
 }
 
 export interface PlexDirectory {

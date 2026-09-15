@@ -29,6 +29,7 @@ import { FilelistSection } from "@/components/filelist/FilelistSection";
 import { plexQuery, plexSessionsQuery, adminStatusQuery, recentWatchesQuery } from "@/lib/queries";
 import { formatDateTime } from "@/components/tehnic/utils";
 import { useLiveViewOffsets } from "@/components/principala/useLiveViewOffsets";
+import type { PlexSession } from "@/lib/services/plex";
 
 // Câte vizionări arată cardul de pe Acasă înainte de "Arată mai multe".
 // Serverul trimite tot ce e în fereastra de 30 de zile, deci tăierea e aici,
@@ -183,6 +184,38 @@ function Overview() {
                               )}
                               <div className="text-[11px] text-muted-foreground">
                                 {s.user} · {s.player}
+                              </div>
+                              <div className="mt-1 flex flex-wrap items-center gap-1">
+                                <span
+                                  className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                                    s.playbackMode === "transcode"
+                                      ? "bg-orange-500/15 text-orange-400"
+                                      : s.playbackMode === "direct-stream"
+                                        ? "bg-sky-500/15 text-sky-400"
+                                        : "bg-emerald-500/15 text-emerald-400"
+                                  }`}
+                                >
+                                  {s.playbackMode === "transcode"
+                                    ? `Transcodare${s.hwTranscode ? " HW" : ""}`
+                                    : s.playbackMode === "direct-stream"
+                                      ? "Direct Stream"
+                                      : "Direct Play"}
+                                </span>
+                                {qualityLabel(s) && (
+                                  <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                                    {qualityLabel(s)}
+                                  </span>
+                                )}
+                                {codecLabel(s) && (
+                                  <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                                    {codecLabel(s)}
+                                  </span>
+                                )}
+                                {s.burnedSubtitle && (
+                                  <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                                    Subtitrare arsă
+                                  </span>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -471,4 +504,51 @@ function libIcon(type: string) {
   if (type === "artist") return <Music className="h-4 w-4 shrink-0 text-purple-400" />;
   if (type === "photo") return <ImageIcon className="h-4 w-4 shrink-0 text-emerald-400" />;
   return <Film className="h-4 w-4 shrink-0 text-muted-foreground" />;
+}
+
+// „4K → 1080p" când Plex reîncodează, altfel doar calitatea redată.
+function qualityLabel(s: PlexSession): string | null {
+  const stream = s.streamQuality;
+  if (!stream) return s.sourceQuality ?? null;
+  if (s.sourceQuality && s.sourceQuality !== stream) return `${s.sourceQuality} → ${stream}`;
+  return stream;
+}
+
+function codecLabel(s: PlexSession): string | null {
+  const parts: string[] = [];
+  if (s.videoCodec) parts.push(prettyCodec(s.videoCodec));
+  if (s.audioCodec) {
+    const ch = channelsLabel(s.audioChannels);
+    parts.push(ch ? `${prettyCodec(s.audioCodec)} ${ch}` : prettyCodec(s.audioCodec));
+  }
+  if (s.bitrateKbps) parts.push(`${(s.bitrateKbps / 1000).toFixed(1)} Mbps`);
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
+
+function prettyCodec(codec: string): string {
+  const c = codec.toLowerCase();
+  const known: Record<string, string> = {
+    h264: "H.264",
+    hevc: "HEVC",
+    h265: "HEVC",
+    av1: "AV1",
+    vp9: "VP9",
+    mpeg4: "MPEG-4",
+    aac: "AAC",
+    eac3: "E-AC3",
+    ac3: "AC3",
+    dca: "DTS",
+    truehd: "TrueHD",
+    flac: "FLAC",
+    opus: "Opus",
+    mp3: "MP3",
+  };
+  return known[c] ?? codec.toUpperCase();
+}
+
+function channelsLabel(channels: number | undefined): string | null {
+  if (!channels) return null;
+  if (channels === 1) return "Mono";
+  if (channels === 2) return "Stereo";
+  return `${channels - 1}.1`;
 }
