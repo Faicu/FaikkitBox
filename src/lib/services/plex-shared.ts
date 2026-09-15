@@ -122,14 +122,21 @@ export function normalizeShowTitle(value: string): string {
 export function plexQualityFromMedia(media: PlexMedia | undefined): string | null {
   const res: string | undefined = media?.videoResolution;
   if (!res) return null;
-  const r = String(res).toLowerCase();
+  // Plex trimite când "1080", când "1080p", în funcție de endpoint.
+  const r = String(res).toLowerCase().replace(/p$/, "");
   const is4k = r === "4k" || r === "2160";
   const filename: string = media?.Part?.[0]?.file ?? "";
-  const isHdr = /dovi|hdr10|hdr|hlg/i.test(filename);
+  const isHdr = isHdrLabel(filename);
   if (is4k) return isHdr ? "4K HDR" : "4K";
   if (r === "1080") return "1080p";
   if (r === "720") return "720p";
-  return res.toUpperCase();
+  return `${r}p`;
+}
+
+// DoVi/HDR10/HLG apar fie în numele fișierului, fie în `displayTitle`-ul
+// stream-ului video ("4K DoVi/HDR10 (HEVC Main 10)").
+export function isHdrLabel(value: string | undefined): boolean {
+  return /dovi|dolby\s*vision|hdr10|hdr|hlg|pq/i.test(value ?? "");
 }
 
 function parseAttributes(raw: string): Record<string, string> {

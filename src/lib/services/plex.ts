@@ -3,6 +3,7 @@ import { cachedAsync, fetchJson, errMsg, type ServiceStatus } from "./shared";
 import {
   discoverPlexUrl,
   plexQualityFromMedia,
+  isHdrLabel,
   type PlexApiResponse,
   type PlexMetadataItem,
   type PlexStream,
@@ -440,9 +441,11 @@ function mapPlexSessions(sessionsMd: PlexMetadataItem[]): PlexSession[] {
       : decisions.includes("copy")
         ? "direct-stream"
         : "direct";
-    const streamQuality = plexQualityFromMedia(media);
-    const sourceQuality =
-      playbackMode === "transcode" ? (sourceQualityFromStream(video) ?? streamQuality) : streamQuality;
+    // La direct play/stream fluxul livrat *e* sursa, deci eticheta e aceeași —
+    // preferată cea din stream, fiindcă include marcajul HDR.
+    const mediaQuality = plexQualityFromMedia(media);
+    const sourceQuality = sourceQualityFromStream(video) ?? mediaQuality;
+    const streamQuality = playbackMode === "transcode" ? mediaQuality : sourceQuality;
     return {
       title: s.title ?? "Unknown",
       grandparentTitle: s.grandparentTitle,
@@ -480,9 +483,10 @@ function sourceQualityFromStream(video: PlexStream | undefined): string | null {
   const m = /^\s*(4K|2160p?|1080p?|720p?|576p?|480p?|SD)\b/i.exec(title);
   if (!m) return null;
   const token = m[1].toUpperCase();
-  if (token === "4K" || token.startsWith("2160")) return "4K";
+  const hdr = isHdrLabel(title) ? " HDR" : "";
+  if (token === "4K" || token.startsWith("2160")) return `4K${hdr}`;
   if (token === "SD") return "SD";
-  return token.endsWith("P") ? token.toLowerCase() : `${token}p`;
+  return `${token.replace(/P$/, "").toLowerCase()}p${hdr}`;
 }
 
 // ---------- Doar sesiuni curente (rapid — pentru "cine vizionează acum") ----------
