@@ -12,7 +12,13 @@ interface Props {
 export function PageShell({ title, subtitle, right, children }: Props) {
   // `key` pe pathname repornește animația CSS la fiecare schimbare de rută —
   // fără el, clasa rămâne aplicată și animația rulează o singură dată, la montare.
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  // `resolvedLocation` (locația *comisă*), nu `location`: aceasta din urmă se
+  // schimbă imediat la click, cât timp chunk-ul rutei noi încă se încarcă, deci
+  // `key` s-ar schimba peste conținutul vechi — pagina curentă se remonta și
+  // își rejuca animația („refresh"), iar apoi ruta nouă o rejuca încă o dată.
+  const pathname = useRouterState({
+    select: (s) => s.resolvedLocation?.pathname ?? s.location.pathname,
+  });
 
   return (
     <div className="relative min-h-screen bg-background pb-24">
