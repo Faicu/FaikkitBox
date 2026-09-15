@@ -17,7 +17,7 @@ import { deriveSeasonRows, deriveBulkPlan } from "./derive-seasons";
 import {
   ONGOING_TV_STATUSES,
   tvStatusLabel,
-  qualityRank,
+  qualityDirection,
   bestOf,
   matchesForQuality,
 } from "./selection";
@@ -88,12 +88,12 @@ export function ResultStep({
 
   // Pentru filme, "există în Plex" e suficient (verificare atomică).
   const alreadyInPlex = !isTv && !!checkResult?.plexFound;
-  // Un film deja în Plex nu mai e fundătură: dacă alegi o calitate superioară
-  // celei existente, îți oferim explicit upgrade-ul. Comparația e strict "mai
-  // mare" — la calitate egală sau necunoscută nu propunem nimic, ca să nu
-  // producem duplicate dintr-o ghiceală (vezi qualityRank).
-  const plexQualityRank = qualityRank(checkResult?.plexQuality ?? null);
-  const isQualityUpgrade = alreadyInPlex && qualityRank(quality) > plexQualityRank;
+  // Un film deja în Plex nu mai e fundătură: dacă alegi altă calitate decât
+  // cea existentă, îți oferim explicit descărcarea — în ambele sensuri, nu
+  // doar în sus (vezi qualityDirection pentru când e `null`).
+  const direction = alreadyInPlex
+    ? qualityDirection(checkResult?.plexQuality ?? null, quality)
+    : null;
   const showQualityAndAction = !isTv && !!checkResult && !alreadyInPlex && !movieAlreadyDownloading;
 
   // Deschide direct confirmarea când există un singur candidat (sau userul
@@ -257,22 +257,24 @@ export function ResultStep({
           </div>
 
           {/* Selectorul rămâne disponibil: singurul motiv să mai
-            stai pe ecranul ăsta e să iei o variantă mai bună
-            decât cea din Plex. */}
+            stai pe ecranul ăsta e să iei altă variantă decât cea
+            din Plex — mai bună sau, deliberat, mai mică. */}
           <QualitySelector
             quality={quality}
             onChange={(q) => dispatch({ type: "SET_QUALITY", quality: q })}
             isAdmin={isAdmin}
           />
 
-          {isQualityUpgrade &&
+          {direction &&
             (movieMatch ? (
               <>
                 <div className="flex items-start gap-2 rounded-xl bg-amber-500/10 p-3 text-xs text-amber-300">
                   <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
                   <span>
                     Ai deja {checkResult.plexQuality} în Plex. Descărcarea adaugă un al doilea
-                    fișier, la {quality} — pe cel vechi îl ștergi tu, din Bibliotecă.
+                    fișier, la {quality}
+                    {direction === "downgrade" ? " (calitate mai mică)" : ""} — pe cel vechi îl
+                    ștergi tu, din Bibliotecă.
                   </span>
                 </div>
                 {isAdmin && (
@@ -292,7 +294,10 @@ export function ResultStep({
                       target: {
                         kind: "single",
                         torrent: movieMatch,
-                        label: `Film — upgrade la ${quality}`,
+                        // Explicit, nu neutru: label-ul ajunge în jurnal, iar
+                        // peste o lună vrei să vezi de ce ai două fișiere
+                        // pentru același film și în ce sens s-a mișcat.
+                        label: `Film — ${direction} la ${quality}`,
                         isSeasonPack: false,
                       },
                       back: { step: "result" },
@@ -302,7 +307,7 @@ export function ResultStep({
               </>
             ) : (
               <div className="rounded-xl glass-card p-3 text-sm text-muted-foreground">
-                Nu există {quality} pe Filelist pentru upgrade.
+                Nu există {quality} pe Filelist pentru titlul ăsta.
               </div>
             ))}
         </>

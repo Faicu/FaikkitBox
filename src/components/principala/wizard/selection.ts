@@ -54,6 +54,28 @@ export function qualityRank(q: string | null): number {
   return q ? (QUALITY_RANK[q] ?? 0) : 0;
 }
 
+// În ce direcție ar duce descărcarea calității alese, față de ce e deja în
+// Plex. Ambele sensuri sunt legitime: iei 4K HDR peste 1080p, dar și 1080p
+// peste 4K HDR (spațiu, un TV care nu duce 4K, un telefon). În ambele cazuri
+// rezultatul e un al doilea fișier, nu o înlocuire — de-aia ecranul spune
+// explicit asta.
+//
+// `null` înseamnă "nu propunem nimic": la calitate egală n-ai ce câștiga, iar
+// dacă vreunul dintre ranguri e necunoscut (0 — `plexQuality` lipsă sau o
+// rezoluție exotică) nu știm în ce direcție ne-am mișca, și o a doua
+// descărcare pe baza unei ghiceli e exact duplicatul pe care vrem să-l evităm.
+export type QualityDirection = "upgrade" | "downgrade";
+
+export function qualityDirection(
+  plexQuality: string | null,
+  chosen: string | null,
+): QualityDirection | null {
+  const from = qualityRank(plexQuality);
+  const to = qualityRank(chosen);
+  if (from === 0 || to === 0 || from === to) return null;
+  return to > from ? "upgrade" : "downgrade";
+}
+
 export function bestOf(list: FilelistTorrent[]): FilelistTorrent | null {
   return list.length ? [...list].sort((a, b) => b.seeders - a.seeders)[0] : null;
 }

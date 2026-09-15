@@ -5,6 +5,7 @@ import {
   sortBySeeders,
   matchesForQuality,
   qualityRank,
+  qualityDirection,
   pickFromSet,
   tvStatusLabel,
   ONGOING_TV_STATUSES,
@@ -54,6 +55,32 @@ describe("qualityRank", () => {
 
   it("nu declară upgrade la calitate egală", () => {
     expect(qualityRank("1080p") > qualityRank("1080p")).toBe(false);
+  });
+});
+
+describe("qualityDirection", () => {
+  it("recunoaște urcarea în calitate", () => {
+    expect(qualityDirection("1080p", "4K HDR")).toBe("upgrade");
+    expect(qualityDirection("720p", "1080p")).toBe("upgrade");
+  });
+
+  it("recunoaște coborârea în calitate", () => {
+    // Cazul pentru care există funcția: ai 4K HDR, dar vrei și un 1080p
+    // (spațiu, un TV care nu duce 4K).
+    expect(qualityDirection("4K HDR", "1080p")).toBe("downgrade");
+    expect(qualityDirection("4K", "720p")).toBe("downgrade");
+  });
+
+  it("nu propune nimic la calitate egală", () => {
+    expect(qualityDirection("1080p", "1080p")).toBeNull();
+  });
+
+  it("nu propune nimic când un rang e necunoscut", () => {
+    // Fără ambele ranguri cunoscute n-am ști în ce sens ne mișcăm, iar o a
+    // doua descărcare pe baza unei ghiceli e exact duplicatul de evitat.
+    expect(qualityDirection(null, "1080p")).toBeNull();
+    expect(qualityDirection("480", "1080p")).toBeNull();
+    expect(qualityDirection("1080p", null)).toBeNull();
   });
 });
 
