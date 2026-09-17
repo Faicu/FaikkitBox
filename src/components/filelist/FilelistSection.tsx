@@ -103,8 +103,10 @@ export function FilelistSection() {
           </select>
         </div>
 
-        {/* Filtre calitate */}
-        <div className="flex flex-wrap gap-2">
+        {/* Filtre calitate — cinci butoane care trebuie să intre pe un rând
+          de telefon, de-aia sunt compacte și fără tracking suplimentar.
+          flex-wrap rămâne ca plasă pentru ecrane și mai înguste. */}
+        <div className="flex flex-wrap gap-1.5">
           {(
             [
               { label: "720p", color: "neutral" },
@@ -143,35 +145,12 @@ export function FilelistSection() {
                     return next;
                   });
                 }}
-                className={`rounded-lg border px-3 py-1 text-xs font-semibold tracking-wide transition-all ${styles[color]}`}
+                className={`rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition-all ${styles[color]}`}
               >
                 {label}
               </button>
             );
           })}
-        </div>
-
-        {/* Ce e filtrat + sortarea, pe rândul lor. Stăteau la coada
-          filtrelor de calitate, dar a cincea calitate (1080p HDR) a umplut
-          rândul și a împins selectul de sortare în afara ecranului pe
-          telefon. */}
-        <div className="flex items-center gap-2">
-          {qualityFilters.size > 0 && (
-            <span className="min-w-0 truncate text-[11px] text-muted-foreground">
-              {qualityFilters.size > 1
-                ? `Afișez ${[...qualityFilters].join(" + ")}`
-                : `Afișez doar ${[...qualityFilters][0]}`}
-            </span>
-          )}
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as SortBy)}
-            className="ml-auto shrink-0 rounded-lg border border-border bg-background px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-primary"
-          >
-            <option value="relevance">Relevanță</option>
-            <option value="seeders">Seederi</option>
-            <option value="size">Mărime</option>
-          </select>
         </div>
 
         {/* Eroare căutare */}
@@ -205,9 +184,25 @@ export function FilelistSection() {
                   );
             return (
               <div className="space-y-2">
-                <div className="text-[11px] text-muted-foreground px-0.5">
-                  {displayed.length} {qualityFilters.size > 0 ? `din ${results.length}` : ""}{" "}
-                  rezultate
+                {/* Sortarea stă aici, nu printre filtrele de calitate: ea
+                  privește lista de rezultate, iar linia asta o descrie deja.
+                  Lângă filtre nu mai încăpea (cinci calități umplu rândul) și
+                  dubla informația cu „N din M rezultate". */}
+                <div className="flex items-center gap-2 px-0.5">
+                  <span className="min-w-0 truncate text-[11px] text-muted-foreground">
+                    {displayed.length} {qualityFilters.size > 0 ? `din ${results.length}` : ""}{" "}
+                    rezultate
+                  </span>
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as SortBy)}
+                    aria-label="Sortează rezultatele"
+                    className="ml-auto shrink-0 rounded-lg border border-border bg-background px-2 py-1 text-[11px] outline-none focus:ring-1 focus:ring-primary"
+                  >
+                    <option value="relevance">Relevanță</option>
+                    <option value="seeders">Seederi</option>
+                    <option value="size">Mărime</option>
+                  </select>
                 </div>
                 {displayed.map((t) => (
                   <div
