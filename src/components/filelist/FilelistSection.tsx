@@ -104,7 +104,7 @@ export function FilelistSection() {
         </div>
 
         {/* Filtre calitate */}
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {(
             [
               { label: "720p", color: "neutral" },
@@ -149,8 +149,15 @@ export function FilelistSection() {
               </button>
             );
           })}
+        </div>
+
+        {/* Ce e filtrat + sortarea, pe rândul lor. Stăteau la coada
+          filtrelor de calitate, dar a cincea calitate (1080p HDR) a umplut
+          rândul și a împins selectul de sortare în afara ecranului pe
+          telefon. */}
+        <div className="flex items-center gap-2">
           {qualityFilters.size > 0 && (
-            <span className="self-center text-[11px] text-muted-foreground ml-1">
+            <span className="min-w-0 truncate text-[11px] text-muted-foreground">
               {qualityFilters.size > 1
                 ? `Afișez ${[...qualityFilters].join(" + ")}`
                 : `Afișez doar ${[...qualityFilters][0]}`}
@@ -159,7 +166,7 @@ export function FilelistSection() {
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as SortBy)}
-            className="ml-auto rounded-lg border border-border bg-background px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-primary"
+            className="ml-auto shrink-0 rounded-lg border border-border bg-background px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-primary"
           >
             <option value="relevance">Relevanță</option>
             <option value="seeders">Seederi</option>
