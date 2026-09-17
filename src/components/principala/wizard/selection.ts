@@ -10,6 +10,7 @@ import type { Quality } from "./types";
 export function pickFromSet(set: QualitySet, quality: Quality): FilelistTorrent[] {
   if (quality === "720p") return set.t720;
   if (quality === "1080p") return set.t1080;
+  if (quality === "1080p HDR") return set.t1080Hdr;
   if (quality === "4K") return set.t4k;
   return set.t4kHdr;
 }
@@ -43,11 +44,14 @@ export function tvStatusLabel(status: string): string {
 // exact același vocabular, deci comparația e directă; orice altceva
 // (rezoluții exotice, "480") primește 0 — necunoscut, deci niciodată "mai
 // bun decât", ca să nu propunem un upgrade pe baza unei ghiceli.
+// Rezoluția primează, HDR departajează în interiorul ei: un 4K fără HDR e
+// peste un 1080p HDR.
 const QUALITY_RANK: Record<string, number> = {
   "720p": 1,
   "1080p": 2,
-  "4K": 3,
-  "4K HDR": 4,
+  "1080p HDR": 3,
+  "4K": 4,
+  "4K HDR": 5,
 };
 
 export function qualityRank(q: string | null): number {
@@ -106,6 +110,7 @@ export function matchesForQuality(
       const q = detectQuality(t.name);
       if (quality === "720p") return q.is720p;
       if (quality === "1080p") return q.is1080p;
+      if (quality === "1080p HDR") return q.is1080pHdr;
       if (quality === "4K") return q.is4k;
       return q.is4kHdr;
     }),

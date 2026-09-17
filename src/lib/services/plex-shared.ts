@@ -20,6 +20,12 @@ export interface PlexStream {
   channels?: number;
   height?: number;
   displayTitle?: string;
+  // Semnale HDR date direct de Plex, mai de încredere decât numele fișierului:
+  // `colorTrc` e funcția de transfer ("smpte2084" = PQ/HDR10, "arib-std-b67" =
+  // HLG), iar `DOVIPresent` marchează Dolby Vision. O lansare numită doar
+  // „DV" — fără „HDR" în nume — nu se vede în filename, dar se vede aici.
+  colorTrc?: string;
+  DOVIPresent?: boolean;
 }
 
 export interface PlexMediaPart {
@@ -182,12 +188,25 @@ export function plexQualityFromMedia(media: PlexMedia | undefined): string | nul
   // Plex trimite când "1080", când "1080p", în funcție de endpoint.
   const r = String(res).toLowerCase().replace(/p$/, "");
   const is4k = r === "4k" || r === "2160";
-  const filename: string = media?.Part?.[0]?.file ?? "";
-  const isHdr = isHdrLabel(filename);
+  const isHdr = mediaIsHdr(media);
   if (is4k) return isHdr ? "4K HDR" : "4K";
-  if (r === "1080") return "1080p";
+  if (r === "1080") return isHdr ? "1080p HDR" : "1080p";
   if (r === "720") return "720p";
   return `${r}p`;
+}
+
+// HDR-ul unei versiuni, din tot ce spune Plex despre ea.
+//
+// Numele fișierului singur nu ajunge: „...DV HDR10P..." se prinde, dar o
+// lansare marcată doar „DV" nu. Stream-ul video poartă însă datele reale —
+// `colorTrc`, `DOVIPresent` și `displayTitle` ("1080p DoVi/HDR10+").
+export function mediaIsHdr(media: PlexMedia | undefined): boolean {
+  const video = (media?.Part?.[0]?.Stream ?? []).find((st) => st.streamType === 1);
+  if (video?.DOVIPresent) return true;
+  // smpte2084 = PQ (HDR10/HDR10+/DoVi), arib-std-b67 = HLG.
+  if (/smpte2084|arib-std-b67/i.test(video?.colorTrc ?? "")) return true;
+  if (isHdrLabel(video?.displayTitle)) return true;
+  return isHdrLabel(media?.Part?.[0]?.file ?? "");
 }
 
 // DoVi/HDR10/HLG apar fie în numele fișierului, fie în `displayTitle`-ul

@@ -5,17 +5,33 @@ import type { QualitySet, SeasonGroup } from "./types";
 // Detectare calitate torrent
 // ---------------------------------------------------------------------------
 
+// Marcajele HDR dintr-un nume de lansare. „DV"/„DoVi" (Dolby Vision) intră și
+// ele: o lansare marcată doar așa e tot HDR, iar numele o spune fără să scrie
+// „HDR" (ex. „...Atmos DV HDR10P x265-HiDt").
+const HDR_TAG = /\bhdr\d*\+?\b|\bdovi\b|\bdv\b|dolby.?vision|\bhlg\b/;
+
 export function detectQuality(name: string) {
   const n = name.toLowerCase();
   const is4k = /2160p|4k/.test(n);
-  const is4kHdr = is4k && /hdr/.test(n);
-  const is1080p = /1080p/.test(n);
+  const isHdr = HDR_TAG.test(n);
+  const is4kHdr = is4k && isHdr;
+  const has1080p = /1080p/.test(n);
+  const is1080pHdr = has1080p && isHdr;
   const is720p = /720p/.test(n);
-  return { is720p, is1080p, is4k: is4k && !is4kHdr, is4kHdr };
+  // Fiecare calitate e exclusivă: „1080p" înseamnă 1080p SDR, exact cum „4K"
+  // însemna deja 4K fără HDR. Altfel o lansare HDR ar apărea în ambele
+  // categorii, iar alegerea „1080p" ți-ar aduce un fișier HDR.
+  return {
+    is720p,
+    is1080p: has1080p && !is1080pHdr,
+    is1080pHdr,
+    is4k: is4k && !is4kHdr,
+    is4kHdr,
+  };
 }
 
 export function emptyQualitySet(): QualitySet {
-  return { t720: [], t1080: [], t4k: [], t4kHdr: [] };
+  return { t720: [], t1080: [], t1080Hdr: [], t4k: [], t4kHdr: [] };
 }
 
 export function groupTorrentsBySeasonEpisode(torrents: FilelistTorrent[]): SeasonGroup[] {
@@ -47,12 +63,14 @@ export function groupTorrentsBySeasonEpisode(torrents: FilelistTorrent[]): Seaso
       const ep = group.episodes.get(epNum)!;
       if (q.is720p) ep.t720.push(t);
       if (q.is1080p) ep.t1080.push(t);
+      if (q.is1080pHdr) ep.t1080Hdr.push(t);
       if (q.is4k) ep.t4k.push(t);
       if (q.is4kHdr) ep.t4kHdr.push(t);
     } else {
       const bq = group.byQuality;
       if (q.is720p) bq.t720.push(t);
       if (q.is1080p) bq.t1080.push(t);
+      if (q.is1080pHdr) bq.t1080Hdr.push(t);
       if (q.is4k) bq.t4k.push(t);
       if (q.is4kHdr) bq.t4kHdr.push(t);
     }

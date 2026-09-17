@@ -838,3 +838,82 @@ export async function resolveSeasonPackPlexLinks(torrentHash: string): Promise<b
   db.prepare("DELETE FROM media WHERE id = ?").run(row.id);
   return true;
 }
+
+// ---------------------------------------------------------------------------
+// Recalcularea etichetelor de calitate, o singură dată.
+//
+// Odată ce „1080p HDR" a devenit o categorie de sine stătătoare, rândurile
+// scrise înainte au rămas cu eticheta veche: un fișier HDR salvat ca „1080p"
+// simplu. Nu e doar cosmetic — wizard-ul decide pe baza etichetei, deci ți-ar
+// fi oferit „upgrade la 1080p HDR" pentru un film care E deja HDR.
+//
+// Recalculăm din Plex, nu din numele torrentului: Plex știe ce e în fișier
+// (colorTrc, DOVIPresent), numele minte uneori. O cerere per item Plex, nu per
+// rând — mai multe rânduri pot împărți același item (versiunile aceluiași
+// film).
+// ---------------------------------------------------------------------------
+
+const REDETECT_JOB = "redetect-qualities-1080p-hdr";
+
+export async function redetectQualitiesOnce(): Promise<number> {
+  const db = getDb();
+  const done = db.prepare("SELECT 1 FROM one_time_jobs WHERE name = ?").get(REDETECT_JOB);
+  if (done) return 0;
+
+  const rows = db
+    .prepare(
+      `SELECT id, plex_rating_key, quality, torrent_hash, torrent_name
+         FROM media
+        WHERE plex_rating_key IS NOT NULL`,
+    )
+    .all() as Array<{
+    id: number;
+    plex_rating_key: string;
+    quality: string | null;
+    torrent_hash: string | null;
+    torrent_name: string | null;
+  }>;
+
+  const { fetchPlexItemVersions } = await import("../services/plex-library");
+  const { plexMediaForPath, plexQualityFromMedia } = await import("../services/plex-shared");
+  const update = db.prepare(
+    "UPDATE media SET quality = ?, updated_at = datetime('now') WHERE id = ?",
+  );
+
+  // Cache per ratingKey: versiunile aceluiași film sunt rânduri diferite, dar
+  // un singur item Plex.
+  const itemCache = new Map<string, Awaited<ReturnType<typeof fetchPlexItemVersions>>>();
+  let changed = 0;
+
+  for (const row of rows) {
+    let item = itemCache.get(row.plex_rating_key);
+    if (item === undefined) {
+      item = await fetchPlexItemVersions(row.plex_rating_key);
+      itemCache.set(row.plex_rating_key, item);
+    }
+    if (!item) continue;
+
+    const versions = item.Media ?? [];
+    const ours =
+      versions.length === 1
+        ? versions[0]
+        : plexMediaForPath(
+            item,
+            row.torrent_hash ? await contentPathForTorrent(row.torrent_hash) : null,
+            row.torrent_name,
+          );
+    const quality = plexQualityFromMedia(ours);
+    // Nu ștergem o etichetă existentă când nu putem decide acum: mai bine una
+    // veche decât niciuna.
+    if (!quality || quality === row.quality) continue;
+    update.run(quality, row.id);
+    changed++;
+    console.log(`[media] Calitate recalculată (#${row.id}): ${row.quality} → ${quality}`);
+  }
+
+  db.prepare("INSERT INTO one_time_jobs (name, done_at) VALUES (?, datetime('now'))").run(
+    REDETECT_JOB,
+  );
+  console.log(`[media] Recalculare calități încheiată: ${changed} din ${rows.length} corectate`);
+  return changed;
+}

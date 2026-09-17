@@ -178,10 +178,51 @@ async function findByTitle(
       // Toate versiunile, nu doar prima: un film poate fi în bibliotecă
       // simultan la 4K HDR și 1080p, iar wizard-ul trebuie să știe ambele ca
       // să nu-ți ofere ceva ce deja ai.
-      return { found: true, qualities: plexQualitiesFromItem(results[0]) };
+      const ratingKey = results[0]?.ratingKey;
+      const full = ratingKey
+        ? ((await fetchItemWithStreams(url, headers, String(ratingKey))) ?? results[0])
+        : results[0];
+      return { found: true, qualities: plexQualitiesFromItem(full) };
     }
   }
   return { found: false, qualities: [] };
+}
+
+// Item-ul complet, cu stream-urile fiecărei versiuni.
+//
+// `/search` întoarce Media și Part, dar NU și `Part.Stream` — adică exact
+// câmpurile din care se vede HDR-ul fără echivoc (colorTrc, DOVIPresent).
+// Fără trecerea asta, eticheta ar depinde de numele fișierului, care nu spune
+// mereu adevărul (o lansare marcată doar „DV" n-are „HDR" în nume). Plex e
+// local, deci cererea în plus costă milisecunde.
+async function fetchItemWithStreams(
+  url: string,
+  headers: Record<string, string>,
+  ratingKey: string,
+): Promise<PlexMetadataItem | undefined> {
+  const detail = await fetchJson<PlexApiResponse>(
+    `${url}/library/metadata/${ratingKey}`,
+    { headers },
+    8000,
+  );
+  return detail?.MediaContainer?.Metadata?.[0];
+}
+
+// Item-ul Plex cu toate versiunile lui, după ratingKey — pentru recalcularea
+// etichetelor de calitate ale rândurilor deja legate (media.ts).
+export async function fetchPlexItemVersions(
+  ratingKey: string,
+): Promise<PlexMetadataItem | undefined> {
+  const token = process.env.PLEX_TOKEN;
+  const base = process.env.PLEX_URL;
+  if (!token) return undefined;
+  try {
+    const headers = { Accept: "application/json", "X-Plex-Token": token };
+    const { url } = await discoverPlexUrl(token, base);
+    return await fetchItemWithStreams(url, headers, ratingKey);
+  } catch {
+    return undefined;
+  }
 }
 
 export interface PlexItemLink {
@@ -222,12 +263,14 @@ export async function findPlexMovieLink(
         { headers },
         8000,
       );
-      const item = (search?.MediaContainer?.Metadata ?? []).find((r) => r.type === "movie");
-      if (item?.ratingKey) {
+      const found = (search?.MediaContainer?.Metadata ?? []).find((r) => r.type === "movie");
+      if (found?.ratingKey) {
+        const item =
+          (await fetchItemWithStreams(url, headers, String(found.ratingKey))) ?? found;
         const versions = item.Media ?? [];
         const ours = plexMediaForPath(item, contentPath, torrentName);
         return {
-          ratingKey: String(item.ratingKey),
+          ratingKey: String(found.ratingKey),
           quality: plexQualityFromMedia(ours),
           // Durata e a versiunii noastre când o știm; altfel cea a item-ului,
           // care pentru un film e oricum aceeași în toate versiunile.

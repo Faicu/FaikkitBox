@@ -230,6 +230,15 @@ export function getDb(): DatabaseSync {
     -- SIGKILL de la systemd, OOM kill, pană de curent. La oprirea curată
     -- punem clean_shutdown = 1; dacă la pornire găsim 0, rularea anterioară
     -- s-a terminat brutal, iar last_heartbeat ne dă momentul aproximativ.
+    -- Joburi care trebuie rulate exact o dată, dar care nu pot sta într-o
+    -- migrare: migrările rulează sincron, în tranzacție, iar astea fac cereri
+    -- de rețea (Plex, qBittorrent). Marcajul se scrie după ce jobul reușește,
+    -- deci o rulare eșuată se reia la următoarea pornire.
+    CREATE TABLE IF NOT EXISTS one_time_jobs (
+      name TEXT PRIMARY KEY,
+      done_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS server_runtime (
       id INTEGER PRIMARY KEY CHECK (id = 1),
       started_at TEXT NOT NULL,

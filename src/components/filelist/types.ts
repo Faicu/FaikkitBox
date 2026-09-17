@@ -4,6 +4,7 @@ import type { FilelistTorrent } from "@/lib/filelist.functions";
 export interface QualitySet {
   t720: FilelistTorrent[];
   t1080: FilelistTorrent[];
+  t1080Hdr: FilelistTorrent[];
   t4k: FilelistTorrent[];
   t4kHdr: FilelistTorrent[];
 }

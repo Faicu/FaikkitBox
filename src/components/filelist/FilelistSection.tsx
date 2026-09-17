@@ -109,6 +109,7 @@ export function FilelistSection() {
             [
               { label: "720p", color: "neutral" },
               { label: "1080p", color: "blue" },
+              { label: "1080p HDR", color: "cyan" },
               { label: "4K", color: "purple" },
               { label: "4K HDR", color: "amber" },
             ] as const
@@ -121,6 +122,9 @@ export function FilelistSection() {
               blue: active
                 ? "border-blue-400/70 bg-blue-500/30 text-blue-200 shadow-sm shadow-blue-500/30"
                 : "border-blue-500/40 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 hover:text-blue-300",
+              cyan: active
+                ? "border-cyan-400/70 bg-cyan-500/30 text-cyan-200 shadow-sm shadow-cyan-500/30"
+                : "border-cyan-500/40 bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 hover:text-cyan-300",
               purple: active
                 ? "border-purple-400/70 bg-purple-500/30 text-purple-200 shadow-sm shadow-purple-500/30"
                 : "border-purple-500/40 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 hover:text-purple-300",
@@ -182,6 +186,7 @@ export function FilelistSection() {
                       if (f === "4K HDR") return q.is4kHdr;
                       if (f === "4K") return q.is4k;
                       if (f === "720p") return q.is720p;
+                      if (f === "1080p HDR") return q.is1080pHdr;
                       return q.is1080p;
                     });
                   });

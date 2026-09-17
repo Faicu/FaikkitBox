@@ -28,9 +28,21 @@ export default function () {
     }
   }
 
+  // Recalcularea unică a etichetelor de calitate (vezi redetectQualitiesOnce):
+  // rulează înaintea primei reconcilieri, ca reconcilierul să lucreze deja pe
+  // etichete corecte. Se marchează ca făcută, deci pornirile următoare o sar.
+  async function redetect() {
+    try {
+      const { redetectQualitiesOnce } = await import("../../src/lib/media/media");
+      await redetectQualitiesOnce();
+    } catch (e) {
+      console.warn("[media] Recalcularea calităților a eșuat, se reia la următoarea pornire:", e);
+    }
+  }
+
   // Prima rulare la 45s după pornire — după ce Plex și qBittorrent au avut timp
   // să răspundă, și după fereastra în care resumeOrphanedPolls (15s) își reia
   // propriile polling-uri, ca să nu se calce reciproc pe același hash.
-  setTimeout(run, 45_000);
+  setTimeout(() => void redetect().then(run), 45_000);
   setInterval(run, INTERVAL_MS);
 }

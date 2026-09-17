@@ -4,7 +4,7 @@
 
 import type { FilelistTorrent } from "@/lib/filelist.functions";
 
-export type Quality = "720p" | "1080p" | "4K" | "4K HDR";
+export type Quality = "720p" | "1080p" | "1080p HDR" | "4K" | "4K HDR";
 
 export type Step = "search" | "checking" | "result" | "pick" | "confirm" | "done";
 

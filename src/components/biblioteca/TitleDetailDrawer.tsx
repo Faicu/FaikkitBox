@@ -629,7 +629,7 @@ export function TitleDetailDrawer({
                               disabled={savingWatch}
                               className="rounded-lg border border-border bg-muted/40 px-1.5 py-0.5 text-[11px] outline-none focus:ring-1 focus:ring-primary"
                             >
-                              {["4K HDR", "4K", "1080p", "720p", "SD"].map((q) => (
+                              {["4K HDR", "4K", "1080p HDR", "1080p", "720p", "SD"].map((q) => (
                                 <option key={q} value={q}>
                                   {q}
                                 </option>

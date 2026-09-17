@@ -19,7 +19,7 @@ function downloading(season: number, episode: number | null, isSeasonPack = fals
 }
 
 function qualitySet(torrents: FilelistTorrent[] = []) {
-  return { t720: [], t1080: torrents, t4k: [], t4kHdr: [] };
+  return { t720: [], t1080: torrents, t1080Hdr: [], t4k: [], t4kHdr: [] };
 }
 
 function input(over: Partial<DeriveSeasonsInput> = {}): DeriveSeasonsInput {

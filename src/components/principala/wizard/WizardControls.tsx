@@ -4,7 +4,7 @@ import { Loader2, HardDrive, Users, Zap, Film, Tv } from "lucide-react";
 import { formatBytes } from "@/lib/format";
 import type { FilelistTorrent } from "@/lib/filelist.functions";
 
-export type WatchQuality = "720p" | "1080p" | "4K" | "4K HDR";
+export type WatchQuality = "720p" | "1080p" | "1080p HDR" | "4K" | "4K HDR";
 
 // ---------------------------------------------------------------------------
 // Piese mici, fără stare proprie (cu excepția QualitySelector) — reutilizate
@@ -22,6 +22,13 @@ const QUALITY_STYLES: Record<WatchQuality, { active: string; inactive: string }>
     active: "border-blue-400/70 bg-blue-500/30 text-blue-200 shadow-sm shadow-blue-500/30",
     inactive:
       "border-blue-500/40 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 hover:text-blue-300",
+  },
+  // Cyan, între albastrul lui 1080p și violetul lui 4K: aceeași rezoluție ca
+  // 1080p, dar peste el.
+  "1080p HDR": {
+    active: "border-cyan-400/70 bg-cyan-500/30 text-cyan-200 shadow-sm shadow-cyan-500/30",
+    inactive:
+      "border-cyan-500/40 bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 hover:text-cyan-300",
   },
   "4K": {
     active: "border-purple-400/70 bg-purple-500/30 text-purple-200 shadow-sm shadow-purple-500/30",
@@ -91,8 +98,13 @@ export function QualitySelector({
         <QualityButton q="1080p" active={quality === "1080p"} onClick={() => onChange("1080p")} />
       </div>
       {expanded && (
-        <div className="mt-2 flex gap-2">
+        <div className="mt-2 flex flex-wrap gap-2">
           <QualityButton q="720p" active={quality === "720p"} onClick={() => onChange("720p")} />
+          <QualityButton
+            q="1080p HDR"
+            active={quality === "1080p HDR"}
+            onClick={() => onChange("1080p HDR")}
+          />
           <QualityButton q="4K" active={quality === "4K"} onClick={() => onChange("4K")} />
           <QualityButton
             q="4K HDR"

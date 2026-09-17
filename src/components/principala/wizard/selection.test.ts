@@ -44,6 +44,13 @@ describe("qualityRank", () => {
     expect(qualityRank("4K")).toBeLessThan(qualityRank("4K HDR"));
   });
 
+  it("așază 1080p HDR între 1080p și 4K", () => {
+    // Rezoluția primează, HDR departajează în interiorul ei: un 4K fără HDR
+    // rămâne peste un 1080p HDR.
+    expect(qualityRank("1080p")).toBeLessThan(qualityRank("1080p HDR"));
+    expect(qualityRank("1080p HDR")).toBeLessThan(qualityRank("4K"));
+  });
+
   it("dă 0 pentru necunoscut sau absent", () => {
     // Contează pentru upgrade-ul filmelor: un rang necunoscut nu trebuie să
     // pară niciodată „mai bun decât" ceva, ca să nu propunem o a doua
@@ -120,11 +127,13 @@ describe("pickFromSet", () => {
     const set = {
       t720: [t("720", 1)],
       t1080: [t("1080", 2)],
+      t1080Hdr: [t("1080hdr", 5)],
       t4k: [t("4k", 3)],
       t4kHdr: [t("hdr", 4)],
     };
     expect(pickFromSet(set, "720p")[0].name).toBe("720");
     expect(pickFromSet(set, "1080p")[0].name).toBe("1080");
+    expect(pickFromSet(set, "1080p HDR")[0].name).toBe("1080hdr");
     expect(pickFromSet(set, "4K")[0].name).toBe("4k");
     expect(pickFromSet(set, "4K HDR")[0].name).toBe("hdr");
   });
