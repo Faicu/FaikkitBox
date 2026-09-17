@@ -18,7 +18,11 @@
 // ---------------------------------------------------------------------------
 
 import { getDb } from "../db";
-import { resolveMediaPlexLinkByTorrentHash, resolveSeasonPackPlexLinks } from "./media";
+import {
+  resolveMediaPlexLinkByTorrentHash,
+  resolveSeasonPackPlexLinks,
+  repairLinkedMovieQuality,
+} from "./media";
 
 // Cât timp după completare mai merită reîncercat. Peste asta, fie fișierul nu a
 // ajuns niciodată în bibliotecă (șters manual, mutat, respins de Plex), fie e
@@ -35,6 +39,16 @@ export async function reconcilePlexLinks(): Promise<ReconcileResult> {
 
   // Un hash poate acoperi mai multe rânduri (pachet de sezon), de aceea DISTINCT
   // — funcțiile de legare lucrează oricum la nivel de hash.
+  // Filmele legate corect, dar fără calitate (nu s-a putut decide care versiune
+  // Plex e a noastră) — altă stare decât „nelegat", deci altă interogare.
+  const repaired = await repairLinkedMovieQuality(MAX_AGE_HOURS).catch((e) => {
+    console.warn("[plex-reconcile] Eroare la completarea calităților:", e);
+    return 0;
+  });
+  if (repaired > 0) {
+    console.log(`[plex-reconcile] ${repaired} filme au primit calitatea lipsă`);
+  }
+
   const rows = db
     .prepare(
       `SELECT DISTINCT torrent_hash FROM media

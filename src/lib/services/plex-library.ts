@@ -188,20 +188,26 @@ export interface PlexItemLink {
   ratingKey: string;
   quality: string | null;
   durationMs: number;
-  addedAt: number;
+  // `null` când item-ul Plex are mai multe versiuni: `addedAt` e al ITEM-ului,
+  // adică data la care a intrat PRIMA versiune, nu a noastră. Scriind-o pe
+  // rândul nou, filmul proaspăt descărcat sărea instant în josul Bibliotecii,
+  // la data celui vechi. Apelantul lasă atunci coloana goală, iar sortarea
+  // cade pe `added_at` — când l-am adăugat noi (vezi rowAddedAt).
+  addedAt: number | null;
 }
 
 // Găsește ratingKey-ul + calitatea/durata unui film deja apărut în Plex —
 // folosit ca să legăm un rând din tabela `media` de item-ul lui real din
 // Plex, o singură dată, cache-uit permanent acolo (vezi media.ts).
-// `savePath`/`torrentName` identifică fișierul NOSTRU printre versiunile
-// item-ului Plex (vezi plexMediaForPath). Fără ele — sau când nu se potrivește
-// nimic — legarea se face oricum (ratingKey-ul e al item-ului, deci corect),
-// dar calitatea rămâne null: mai bine lipsă decât preluată de la altă versiune.
+// `contentPath` (calea reală de pe disk, din qBittorrent) identifică fișierul
+// NOSTRU printre versiunile item-ului Plex (vezi plexMediaForPath). Fără el —
+// sau când nu se potrivește nimic — legarea se face oricum (ratingKey-ul e al
+// item-ului, deci corect), dar calitatea rămâne null: mai bine lipsă decât
+// preluată de la altă versiune.
 export async function findPlexMovieLink(
   title: string,
   originalTitle: string,
-  savePath: string | null = null,
+  contentPath: string | null = null,
   torrentName: string | null = null,
 ): Promise<PlexItemLink | null> {
   const token = process.env.PLEX_TOKEN;
@@ -218,14 +224,15 @@ export async function findPlexMovieLink(
       );
       const item = (search?.MediaContainer?.Metadata ?? []).find((r) => r.type === "movie");
       if (item?.ratingKey) {
-        const ours = plexMediaForPath(item, savePath, torrentName);
+        const versions = item.Media ?? [];
+        const ours = plexMediaForPath(item, contentPath, torrentName);
         return {
           ratingKey: String(item.ratingKey),
           quality: plexQualityFromMedia(ours),
           // Durata e a versiunii noastre când o știm; altfel cea a item-ului,
           // care pentru un film e oricum aceeași în toate versiunile.
           durationMs: Number(ours?.Part?.[0]?.duration ?? item.duration ?? 0),
-          addedAt: Number(item.addedAt ?? 0),
+          addedAt: versions.length > 1 ? null : Number(item.addedAt ?? 0),
         };
       }
     }

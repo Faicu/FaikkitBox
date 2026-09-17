@@ -130,9 +130,19 @@ export function plexQualitiesFromItem(item: { Media?: PlexMedia[] } | undefined)
   return [...new Set(all)];
 }
 
-// Care dintre versiunile Plex ale unui item e fișierul nostru, identificat
-// după calea de pe disc. Plex dă calea completă a fiecărei versiuni în
-// `Part.file`, iar noi știm în ce folder a salvat qBittorrent torrentul.
+// Care dintre versiunile Plex ale unui item e fișierul nostru.
+//
+// `contentPath` vine din qBittorrent (`qbitContentPath`) și e calea reală de pe
+// disk — se potrivește caracter cu caracter cu `Part.file` din Plex, fiindcă
+// ambele descriu același fișier. Prima încercare de potrivire folosea
+// `torrent_name` din `media`, și a eșuat exact pe cazul pentru care a fost
+// scrisă: torrentul se numea pe Filelist
+// „Avatar.Fire.and.Ash.2025.Hybrid.1080p...DoVi.HDR.x265-HiDt", iar pe disk
+// „Avatar Fire and Ash 2025 Hybrid 1080p ... DV HDR10P x265-HiDt.mkv".
+// Numele de pe tracker nu e o sursă de adevăr pentru disk.
+//
+// `torrentName` rămâne doar ca rezervă, pentru cazul în care torrentul nu mai
+// e în qBittorrent (șters manual după descărcare).
 //
 // Întoarce `undefined` când nu se potrivește nimic — apelantul NU trebuie să
 // cadă atunci pe `Media[0]`: ar afișa calitatea celeilalte versiuni ca fapt.
@@ -140,7 +150,7 @@ export function plexQualitiesFromItem(item: { Media?: PlexMedia[] } | undefined)
 // qualityRank din wizard).
 export function plexMediaForPath(
   item: { Media?: PlexMedia[] } | undefined,
-  savePath: string | null,
+  contentPath: string | null,
   torrentName: string | null,
 ): PlexMedia | undefined {
   const media = item?.Media ?? [];
@@ -148,15 +158,19 @@ export function plexMediaForPath(
   // Un singur fișier pe item — nu e nimic de distins, e al nostru.
   if (media.length === 1) return media[0];
 
-  const needles = [
-    savePath && torrentName ? `${savePath.replace(/\/$/, "")}/${torrentName}` : null,
-    torrentName,
-  ].filter((n): n is string => !!n && n.length > 0);
+  const files = (m: PlexMedia): string[] => (m.Part ?? []).map((part) => part.file ?? "");
 
-  for (const needle of needles) {
+  if (contentPath) {
+    const needle = contentPath.replace(/\/$/, "");
+    // Fișier unic: egalitate. Torrent cu folder: `Part.file` e înăuntru.
     const hit = media.find((m) =>
-      (m.Part ?? []).some((part) => (part.file ?? "").includes(needle)),
+      files(m).some((f) => f === needle || f.startsWith(`${needle}/`)),
     );
+    if (hit) return hit;
+  }
+
+  if (torrentName) {
+    const hit = media.find((m) => files(m).some((f) => f.includes(torrentName)));
     if (hit) return hit;
   }
   return undefined;

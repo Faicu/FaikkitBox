@@ -84,6 +84,32 @@ export function qbitPostForm(
   );
 }
 
+// Calea reală de pe disk a conținutului unui torrent — fișierul, pentru un
+// torrent cu un singur fișier; folderul, pentru unul cu mai multe.
+//
+// E singura sursă de adevăr pentru „unde e fișierul nostru": `torrent_name`
+// din `media` vine de pe Filelist și diferă adesea de ce a scris qBittorrent
+// pe disk (punctele devin spații, „DoVi.HDR" devine „DV HDR10P" ș.a.m.d.).
+// Ștergerea unui titlu se bazează pe asta de mult (vezi log.ts); legarea la
+// Plex are nevoie de ea ca să știe care versiune a unui film e a noastră.
+export async function qbitContentPath(
+  url: string,
+  hash: string,
+  user: string,
+  pass: string,
+): Promise<string | null> {
+  try {
+    const res = await qbitGet(url, `/api/v2/torrents/info?hashes=${hash}`, user, pass);
+    if (!res.ok) return null;
+    const info = (await res.json()) as Array<{ content_path?: string }>;
+    return info[0]?.content_path ?? null;
+  } catch {
+    // Torrentul poate lipsi din qBittorrent (șters manual după descărcare) —
+    // apelantul are o rezervă, nu are rost să propagăm.
+    return null;
+  }
+}
+
 export interface QbitFileInfo {
   index: number; // poziția fișierului în torrent — necesar pentru filePrio
   name: string; // cale relativă în torrent, ex. "Sub/movie.srt"

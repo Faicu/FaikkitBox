@@ -552,12 +552,12 @@ export async function resolveMediaPlexLinkByTorrentHash(torrentHash: string): Pr
   const { findPlexMovieLink, findPlexEpisodeLink } = await import("../services/plex-library");
   const link =
     row.media_type === "movie"
-      ? // Calea fișierului nostru, ca legarea să ia calitatea versiunii
-        // corecte când filmul există în Plex în mai multe versiuni.
+      ? // Calea reală de pe disk, ca legarea să ia calitatea versiunii corecte
+        // când filmul există în Plex în mai multe versiuni.
         await findPlexMovieLink(
           row.title,
           row.original_title ?? row.title,
-          row.save_path,
+          await contentPathForTorrent(torrentHash),
           row.torrent_name,
         )
       : row.media_type === "episode" && row.season != null && row.episode != null
@@ -570,6 +570,71 @@ export async function resolveMediaPlexLinkByTorrentHash(torrentHash: string): Pr
      updated_at = datetime('now') WHERE id = ?`,
   ).run(link.ratingKey, link.quality, link.durationMs, link.addedAt, row.id);
   return true;
+}
+
+// Calea de pe disk a unui torrent, din qBittorrent. Izolată aici fiindcă o
+// folosesc și legarea, și reparația de mai jos.
+async function contentPathForTorrent(torrentHash: string): Promise<string | null> {
+  const url = (process.env.QBIT_URL ?? "http://192.168.1.192:25556").replace(/\/$/, "");
+  const user = process.env.QBIT_USERNAME;
+  const pass = process.env.QBIT_PASSWORD;
+  if (!user || !pass) return null;
+  const { qbitContentPath } = await import("../qbit-client");
+  return qbitContentPath(url, torrentHash, user, pass);
+}
+
+// Repară filmele legate corect de Plex, dar rămase fără calitate.
+//
+// Se întâmplă când filmul are mai multe versiuni în Plex (4K HDR + 1080p) și
+// nu am putut decide, la momentul legării, care versiune e a noastră — caz în
+// care nu ghicim, lăsăm calitatea goală. Reconcilierul obișnuit nu le vede:
+// el caută rânduri cu `plex_rating_key` NULL, iar astea SUNT legate.
+//
+// Reîncercarea are rost fiindcă motivul obișnuit al eșecului e trecător:
+// torrentul încă nu apăruse în qBittorrent, sau Plex nu terminase de analizat
+// a doua versiune. Aceeași fereastră ca restul reconcilierii — peste ea, fie
+// fișierul nu mai e, fie e nevoie de intervenție.
+export async function repairLinkedMovieQuality(maxAgeHours: number): Promise<number> {
+  const db = getDb();
+  const rows = db
+    .prepare(
+      `SELECT id, title, original_title, torrent_hash, torrent_name
+         FROM media
+        WHERE media_type = 'movie'
+          AND plex_rating_key IS NOT NULL
+          AND quality IS NULL
+          AND torrent_hash IS NOT NULL
+          AND completed_at IS NOT NULL
+          AND completed_at > datetime('now', ?)`,
+    )
+    .all(`-${maxAgeHours} hours`) as Array<{
+    id: number;
+    title: string;
+    original_title: string | null;
+    torrent_hash: string;
+    torrent_name: string | null;
+  }>;
+  if (rows.length === 0) return 0;
+
+  const { findPlexMovieLink } = await import("../services/plex-library");
+  const update = db.prepare(
+    `UPDATE media SET quality = ?, duration_ms = ?, plex_added_at = ?,
+     updated_at = datetime('now') WHERE id = ?`,
+  );
+  let repaired = 0;
+  for (const row of rows) {
+    const link = await findPlexMovieLink(
+      row.title,
+      row.original_title ?? row.title,
+      await contentPathForTorrent(row.torrent_hash),
+      row.torrent_name,
+    );
+    if (!link?.quality) continue;
+    update.run(link.quality, link.durationMs, link.addedAt, row.id);
+    repaired++;
+    console.log(`[media] Calitate completată pentru "${row.title}": ${link.quality}`);
+  }
+  return repaired;
 }
 
 interface SeasonPackMediaRow {

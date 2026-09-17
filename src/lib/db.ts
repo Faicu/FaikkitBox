@@ -813,5 +813,35 @@ function applyCleanups(database: DatabaseSync): void {
       console.log("[db] Migrare v27: unicitatea plex_rating_key restrânsă la episoade");
       database.exec("PRAGMA user_version = 27");
     }
+
+    if (version < 28) {
+      // v28: data de indexare Plex, doar pe versiunea care a adus-o.
+      //
+      // Când un film are mai multe versiuni, Plex le ține sub un singur item,
+      // iar `addedAt`-ul item-ului e momentul în care a intrat PRIMA versiune.
+      // Legarea îl copia pe rândul fiecărei versiuni noi, așa că un film abia
+      // descărcat apărea în Bibliotecă la data celui vechi — adică sărea
+      // instant în jos, sub intrarea veche, imediat după procesare.
+      //
+      // Aici golim coloana pe toate rândurile în plus (păstrând-o pe cel mai
+      // vechi, unde chiar e a lui). Sortarea cade atunci pe `added_at` — când
+      // am adăugat noi titlul — exact ce se aștepta.
+      const res = database
+        .prepare(
+          `UPDATE media SET plex_added_at = NULL
+            WHERE media_type = 'movie'
+              AND plex_rating_key IS NOT NULL
+              AND id NOT IN (
+                SELECT MIN(id) FROM media
+                 WHERE media_type = 'movie' AND plex_rating_key IS NOT NULL
+                 GROUP BY plex_rating_key
+              )`,
+        )
+        .run();
+      if (res.changes > 0) {
+        console.log(`[db] Migrare v28: ${res.changes} versiuni suplimentare de film redatate`);
+      }
+      database.exec("PRAGMA user_version = 28");
+    }
   }
 }
