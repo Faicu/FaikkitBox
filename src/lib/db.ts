@@ -195,7 +195,19 @@ export function getDb(): DatabaseSync {
     CREATE INDEX IF NOT EXISTS idx_media_imdb ON media(imdb_id);
     CREATE INDEX IF NOT EXISTS idx_media_parent ON media(parent_id);
     CREATE INDEX IF NOT EXISTS idx_media_torrent_hash ON media(torrent_hash) WHERE torrent_hash IS NOT NULL;
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_media_plex_key ON media(plex_rating_key) WHERE plex_rating_key IS NOT NULL;
+    -- Unicitate DOAR pentru episoade. Un episod chiar e unul singur: două
+    -- rânduri pe același ratingKey ar fi un duplicat, iar indexul e plasa pe
+    -- care se bazează resolveSeasonPackPlexLinks (vezi media.ts) ca să nu
+    -- insereze de două ori același episod dintr-un pachet de sezon.
+    --
+    -- Un FILM, în schimb, poate avea legitim mai multe versiuni (4K HDR și
+    -- 1080p pentru același titlu), iar Plex le unește sub UN SINGUR item, deci
+    -- sub același ratingKey. Cu indexul unic pe toate tipurile, al doilea rând
+    -- nu se putea lega niciodată de Plex și rămânea pe veci „se procesează".
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_media_plex_key_episode ON media(plex_rating_key)
+      WHERE plex_rating_key IS NOT NULL AND media_type = 'episode';
+    -- Nesortat/neunic, pentru căutările după ratingKey (activity-log, legare).
+    CREATE INDEX IF NOT EXISTS idx_media_plex_key ON media(plex_rating_key) WHERE plex_rating_key IS NOT NULL;
 
     CREATE TABLE IF NOT EXISTS recent_watch_cache (
       plex_rating_key TEXT NOT NULL,
@@ -773,6 +785,33 @@ function applyCleanups(database: DatabaseSync): void {
         }
       }
       database.exec("PRAGMA user_version = 26");
+    }
+
+    if (version < 27) {
+      // v27: indexul unic pe plex_rating_key se restrânge la episoade.
+      //
+      // Un film poate avea mai multe versiuni în același timp (4K HDR pentru
+      // seara de film, 1080p pentru un TV care nu duce 4K). Plex le vede ca
+      // două versiuni ale ACELUIAȘI item, deci întoarce același ratingKey
+      // pentru amândouă — iar indexul unic făcea ca al doilea rând `media` să
+      // nu se poată lega niciodată: UPDATE-ul din resolveMediaPlexLinkByTorrentHash
+      // arunca, eroarea era înghițită de catch, iar rândul rămânea permanent
+      // pe „se procesează" în Bibliotecă, cu reconcilierul reîncercând 72h.
+      //
+      // Pentru episoade unicitatea rămâne, neatinsă: acolo un ratingKey chiar
+      // înseamnă un singur rând, iar resolveSeasonPackPlexLinks se bazează pe
+      // index ca să nu insereze episoade duplicate dintr-un pachet de sezon.
+      database.exec("DROP INDEX IF EXISTS idx_media_plex_key");
+      database.exec(
+        `CREATE UNIQUE INDEX IF NOT EXISTS idx_media_plex_key_episode ON media(plex_rating_key)
+           WHERE plex_rating_key IS NOT NULL AND media_type = 'episode'`,
+      );
+      database.exec(
+        `CREATE INDEX IF NOT EXISTS idx_media_plex_key ON media(plex_rating_key)
+           WHERE plex_rating_key IS NOT NULL`,
+      );
+      console.log("[db] Migrare v27: unicitatea plex_rating_key restrânsă la episoade");
+      database.exec("PRAGMA user_version = 27");
     }
   }
 }

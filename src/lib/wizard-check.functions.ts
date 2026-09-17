@@ -28,7 +28,10 @@ export interface WizardCheckResult {
   details: TmdbDetails;
   originalTitle: string;
   plexFound: boolean;
-  plexQuality: string | null;
+  // TOATE calitățile pe care Plex le are pentru titlu, nu doar una: un film
+  // poate fi în bibliotecă simultan la 4K HDR și 1080p, iar wizard-ul nu
+  // trebuie să ofere o calitate deja deținută (vezi qualityDirection).
+  plexQualities: string[];
   torrents: FilelistTorrent[];
   seasons: Array<{ seasonNumber: number; episodeCount: number }>;
   seasonSchema: TmdbSeasonSchema[];
@@ -127,7 +130,7 @@ export const checkTitleForWizard = createServerFn({ method: "GET" })
       details,
       originalTitle,
       plexFound: !!plexRes?.found,
-      plexQuality: plexRes?.quality ?? null,
+      plexQualities: plexRes?.qualities ?? [],
       torrents: filelistRes.status === "ok" ? filelistRes.torrents : [],
       seasons,
       seasonSchema,

@@ -4,6 +4,8 @@ import {
   discoverPlexUrl,
   normalizeShowTitle,
   plexQualityFromMedia,
+  plexQualitiesFromItem,
+  plexMediaForPath,
   type PlexApiResponse,
   type PlexMetadataItem,
 } from "./plex-shared";
@@ -163,7 +165,7 @@ async function findByTitle(
   title: string,
   originalTitle: string,
   mediaType: "movie" | "tv",
-): Promise<{ found: boolean; quality: string | null }> {
+): Promise<{ found: boolean; qualities: string[] }> {
   const plexType = mediaType === "movie" ? 1 : 2;
   for (const q of [title, originalTitle, normalizeShowTitle(title)].filter(Boolean)) {
     const search = await fetchJson<PlexApiResponse>(
@@ -173,11 +175,13 @@ async function findByTitle(
     );
     const results = search?.MediaContainer?.Metadata ?? [];
     if (results.length > 0) {
-      const quality = plexQualityFromMedia(results[0]?.Media?.[0]);
-      return { found: true, quality };
+      // Toate versiunile, nu doar prima: un film poate fi în bibliotecă
+      // simultan la 4K HDR și 1080p, iar wizard-ul trebuie să știe ambele ca
+      // să nu-ți ofere ceva ce deja ai.
+      return { found: true, qualities: plexQualitiesFromItem(results[0]) };
     }
   }
-  return { found: false, quality: null };
+  return { found: false, qualities: [] };
 }
 
 export interface PlexItemLink {
@@ -190,9 +194,15 @@ export interface PlexItemLink {
 // Găsește ratingKey-ul + calitatea/durata unui film deja apărut în Plex —
 // folosit ca să legăm un rând din tabela `media` de item-ul lui real din
 // Plex, o singură dată, cache-uit permanent acolo (vezi media.ts).
+// `savePath`/`torrentName` identifică fișierul NOSTRU printre versiunile
+// item-ului Plex (vezi plexMediaForPath). Fără ele — sau când nu se potrivește
+// nimic — legarea se face oricum (ratingKey-ul e al item-ului, deci corect),
+// dar calitatea rămâne null: mai bine lipsă decât preluată de la altă versiune.
 export async function findPlexMovieLink(
   title: string,
   originalTitle: string,
+  savePath: string | null = null,
+  torrentName: string | null = null,
 ): Promise<PlexItemLink | null> {
   const token = process.env.PLEX_TOKEN;
   const base = process.env.PLEX_URL;
@@ -208,10 +218,13 @@ export async function findPlexMovieLink(
       );
       const item = (search?.MediaContainer?.Metadata ?? []).find((r) => r.type === "movie");
       if (item?.ratingKey) {
+        const ours = plexMediaForPath(item, savePath, torrentName);
         return {
           ratingKey: String(item.ratingKey),
-          quality: plexQualityFromMedia(item.Media?.[0]),
-          durationMs: Number(item.duration ?? 0),
+          quality: plexQualityFromMedia(ours),
+          // Durata e a versiunii noastre când o știm; altfel cea a item-ului,
+          // care pentru un film e oricum aceeași în toate versiunile.
+          durationMs: Number(ours?.Part?.[0]?.duration ?? item.duration ?? 0),
           addedAt: Number(item.addedAt ?? 0),
         };
       }
@@ -310,7 +323,7 @@ export async function checkPlexHasTitleInternal(data: {
   title: string;
   originalTitle: string;
   mediaType: "movie" | "tv";
-}): Promise<{ found: boolean; quality: string | null } | null> {
+}): Promise<{ found: boolean; qualities: string[] } | null> {
   const token = process.env.PLEX_TOKEN;
   const base = process.env.PLEX_URL;
   if (!token) return null;
@@ -357,7 +370,7 @@ export const getPlexEpisodesInSeason = createServerFn({ method: "GET" })
 
 export const checkPlexHasTitle = createServerFn({ method: "GET" })
   .validator((data: { title: string; originalTitle: string; mediaType: "movie" | "tv" }) => data)
-  .handler(async ({ data }): Promise<{ found: boolean; quality: string | null } | null> => {
+  .handler(async ({ data }): Promise<{ found: boolean; qualities: string[] } | null> => {
     const { requireAuth } = await import("../auth/admin.server");
     await requireAuth();
     return checkPlexHasTitleInternal(data);

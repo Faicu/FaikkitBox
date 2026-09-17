@@ -119,6 +119,49 @@ export function normalizeShowTitle(value: string): string {
     .trim();
 }
 
+// Toate calitățile pe care Plex le are pentru un item, nu doar prima.
+//
+// Un film poate exista în mai multe versiuni sub același item Plex (4K HDR +
+// 1080p). Citind doar `Media[0]`, wizard-ul credea că ai o singură calitate —
+// și-ți oferea „upgrade" la una pe care deja o aveai, adică o a treia
+// descărcare. Ordinea e cea dată de Plex; duplicatele se elimină.
+export function plexQualitiesFromItem(item: { Media?: PlexMedia[] } | undefined): string[] {
+  const all = (item?.Media ?? []).map((m) => plexQualityFromMedia(m)).filter((q) => q !== null);
+  return [...new Set(all)];
+}
+
+// Care dintre versiunile Plex ale unui item e fișierul nostru, identificat
+// după calea de pe disc. Plex dă calea completă a fiecărei versiuni în
+// `Part.file`, iar noi știm în ce folder a salvat qBittorrent torrentul.
+//
+// Întoarce `undefined` când nu se potrivește nimic — apelantul NU trebuie să
+// cadă atunci pe `Media[0]`: ar afișa calitatea celeilalte versiuni ca fapt.
+// Mai bine fără calitate decât cu una greșită (aceeași regulă ca la
+// qualityRank din wizard).
+export function plexMediaForPath(
+  item: { Media?: PlexMedia[] } | undefined,
+  savePath: string | null,
+  torrentName: string | null,
+): PlexMedia | undefined {
+  const media = item?.Media ?? [];
+  if (media.length === 0) return undefined;
+  // Un singur fișier pe item — nu e nimic de distins, e al nostru.
+  if (media.length === 1) return media[0];
+
+  const needles = [
+    savePath && torrentName ? `${savePath.replace(/\/$/, "")}/${torrentName}` : null,
+    torrentName,
+  ].filter((n): n is string => !!n && n.length > 0);
+
+  for (const needle of needles) {
+    const hit = media.find((m) =>
+      (m.Part ?? []).some((part) => (part.file ?? "").includes(needle)),
+    );
+    if (hit) return hit;
+  }
+  return undefined;
+}
+
 export function plexQualityFromMedia(media: PlexMedia | undefined): string | null {
   const res: string | undefined = media?.videoResolution;
   if (!res) return null;

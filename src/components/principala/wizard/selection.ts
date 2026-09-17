@@ -60,19 +60,29 @@ export function qualityRank(q: string | null): number {
 // rezultatul e un al doilea fișier, nu o înlocuire — de-aia ecranul spune
 // explicit asta.
 //
-// `null` înseamnă "nu propunem nimic": la calitate egală n-ai ce câștiga, iar
-// dacă vreunul dintre ranguri e necunoscut (0 — `plexQuality` lipsă sau o
-// rezoluție exotică) nu știm în ce direcție ne-am mișca, și o a doua
-// descărcare pe baza unei ghiceli e exact duplicatul pe care vrem să-l evităm.
+// `owned` e lista COMPLETĂ a calităților din Plex, fiindcă un film poate fi
+// acolo în mai multe versiuni deodată. `null` înseamnă "nu propunem nimic":
+//  - calitatea aleasă e deja în bibliotecă (inclusiv ca a doua versiune) —
+//    altfel, cu 4K HDR + 1080p deținute, ecranul ți-ar fi oferit vesel un
+//    "upgrade la 4K HDR" pe care deja îl ai;
+//  - niciun rang cunoscut de comparat (0 — listă goală, doar rezoluții
+//    exotice, sau alegere necunoscută): n-am ști în ce direcție ne mișcăm, iar
+//    o a doua descărcare pe baza unei ghiceli e exact duplicatul de evitat.
+//
+// Referința e cea mai bună calitate deținută: cu 4K HDR + 720p în bibliotecă,
+// un 1080p e un downgrade față de ce ai mai bun, nu un upgrade față de 720p.
 export type QualityDirection = "upgrade" | "downgrade";
 
 export function qualityDirection(
-  plexQuality: string | null,
+  owned: readonly string[],
   chosen: string | null,
 ): QualityDirection | null {
-  const from = qualityRank(plexQuality);
+  if (!chosen) return null;
+  if (owned.includes(chosen)) return null;
   const to = qualityRank(chosen);
-  if (from === 0 || to === 0 || from === to) return null;
+  if (to === 0) return null;
+  const from = Math.max(0, ...owned.map(qualityRank));
+  if (from === 0) return null;
   return to > from ? "upgrade" : "downgrade";
 }
 

@@ -88,12 +88,11 @@ export function ResultStep({
 
   // Pentru filme, "există în Plex" e suficient (verificare atomică).
   const alreadyInPlex = !isTv && !!checkResult?.plexFound;
-  // Un film deja în Plex nu mai e fundătură: dacă alegi altă calitate decât
-  // cea existentă, îți oferim explicit descărcarea — în ambele sensuri, nu
-  // doar în sus (vezi qualityDirection pentru când e `null`).
-  const direction = alreadyInPlex
-    ? qualityDirection(checkResult?.plexQuality ?? null, quality)
-    : null;
+  const plexQualities = checkResult?.plexQualities ?? [];
+  // Un film deja în Plex nu mai e fundătură: dacă alegi o calitate pe care
+  // n-o ai, îți oferim explicit descărcarea — în ambele sensuri, nu doar în
+  // sus (vezi qualityDirection pentru când e `null`).
+  const direction = alreadyInPlex ? qualityDirection(plexQualities, quality) : null;
   const showQualityAndAction = !isTv && !!checkResult && !alreadyInPlex && !movieAlreadyDownloading;
 
   // Deschide direct confirmarea când există un singur candidat (sau userul
@@ -248,12 +247,17 @@ export function ResultStep({
             />
           </div>
         </>
+      ) : movieAlreadyDownloading ? (
+        <div className="flex items-center gap-2 rounded-xl bg-amber-500/10 p-3 text-sm text-amber-400">
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+          Filmul se descarcă deja — aștepți să apară în Plex înainte de orice altă acțiune.
+        </div>
       ) : alreadyInPlex ? (
         <>
           <div className="flex items-center gap-2 rounded-xl bg-emerald-500/10 p-3 text-sm text-emerald-400">
             <CheckCircle2 className="h-4 w-4 shrink-0" />
             Deja în bibliotecă Plex
-            {checkResult.plexQuality ? ` — ${checkResult.plexQuality}` : ""}
+            {plexQualities.length > 0 ? ` — ${plexQualities.join(", ")}` : ""}
           </div>
 
           {/* Selectorul rămâne disponibil: singurul motiv să mai
@@ -265,15 +269,24 @@ export function ResultStep({
             isAdmin={isAdmin}
           />
 
+          {/* Fără asta, alegerea unei calități deja deținute nu producea
+            nimic sub selector — un ecran mut, imposibil de distins de o
+            eroare. */}
+          {!direction && plexQualities.includes(quality) && (
+            <div className="rounded-xl glass-card p-3 text-sm text-muted-foreground">
+              {quality} e deja în bibliotecă. Alege altă calitate dacă vrei încă o variantă.
+            </div>
+          )}
+
           {direction &&
             (movieMatch ? (
               <>
                 <div className="flex items-start gap-2 rounded-xl bg-amber-500/10 p-3 text-xs text-amber-300">
                   <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
                   <span>
-                    Ai deja {checkResult.plexQuality} în Plex. Descărcarea adaugă un al doilea
+                    Ai deja {plexQualities.join(", ")} în Plex. Descărcarea adaugă încă un
                     fișier, la {quality}
-                    {direction === "downgrade" ? " (calitate mai mică)" : ""} — pe cel vechi îl
+                    {direction === "downgrade" ? " (calitate mai mică)" : ""} — pe cele vechi le
                     ștergi tu, din Bibliotecă.
                   </span>
                 </div>
@@ -311,11 +324,6 @@ export function ResultStep({
               </div>
             ))}
         </>
-      ) : movieAlreadyDownloading ? (
-        <div className="flex items-center gap-2 rounded-xl bg-amber-500/10 p-3 text-sm text-amber-400">
-          <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
-          Filmul se descarcă deja — aștepți să apară în Plex înainte de orice altă acțiune.
-        </div>
       ) : (
         showQualityAndAction && (
           <>

@@ -14,7 +14,9 @@ export interface CheckResult {
   imdbId: string | null;
   originalTitle: string;
   plexFound: boolean;
-  plexQuality: string | null;
+  // Toate calitățile prezente în Plex pentru titlu (un film poate fi acolo
+  // în mai multe versiuni simultan) — goală dacă nu e în bibliotecă.
+  plexQualities: string[];
   torrents: FilelistTorrent[];
   seasons: Array<{ seasonNumber: number; episodeCount: number }>;
 }

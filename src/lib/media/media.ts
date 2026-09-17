@@ -526,7 +526,8 @@ export async function resolveMediaPlexLinkByTorrentHash(torrentHash: string): Pr
   // rând deja legat ar masca pachetul care încă are treabă.
   const row = db
     .prepare(
-      `SELECT id, media_type, title, original_title, season, episode, plex_rating_key
+      `SELECT id, media_type, title, original_title, season, episode, plex_rating_key,
+              save_path, torrent_name
          FROM media WHERE torrent_hash = ?
         ORDER BY plex_rating_key IS NOT NULL, id LIMIT 1`,
     )
@@ -539,6 +540,8 @@ export async function resolveMediaPlexLinkByTorrentHash(torrentHash: string): Pr
         season: number | null;
         episode: number | null;
         plex_rating_key: string | null;
+        save_path: string | null;
+        torrent_name: string | null;
       }
     | undefined;
   if (!row) return false;
@@ -549,7 +552,14 @@ export async function resolveMediaPlexLinkByTorrentHash(torrentHash: string): Pr
   const { findPlexMovieLink, findPlexEpisodeLink } = await import("../services/plex-library");
   const link =
     row.media_type === "movie"
-      ? await findPlexMovieLink(row.title, row.original_title ?? row.title)
+      ? // Calea fișierului nostru, ca legarea să ia calitatea versiunii
+        // corecte când filmul există în Plex în mai multe versiuni.
+        await findPlexMovieLink(
+          row.title,
+          row.original_title ?? row.title,
+          row.save_path,
+          row.torrent_name,
+        )
       : row.media_type === "episode" && row.season != null && row.episode != null
         ? await findPlexEpisodeLink(row.title, row.season, row.episode)
         : null;

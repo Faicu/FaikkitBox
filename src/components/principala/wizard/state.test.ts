@@ -20,7 +20,7 @@ const emptyCheck: CheckResult = {
   imdbId: null,
   originalTitle: "Titlu",
   plexFound: false,
-  plexQuality: null,
+  plexQualities: [],
   torrents: [],
   seasons: [],
 };
