@@ -13,6 +13,7 @@ Construit cu [TanStack Start](https://tanstack.com/start) (React 19 + TanStack R
 - [Funcționalități](#funcționalități)
 - [Autentificare și conturi](#autentificare-și-conturi)
 - [Adăugare și urmărire titluri](#adăugare-și-urmărire-titluri)
+- [Calități și versiuni multiple](#calități-și-versiuni-multiple)
 - [Urmărire automată](#urmărire-automată)
 - [Backup și retenție](#backup-și-retenție)
 - [Sistemul de erori și observabilitate](#sistemul-de-erori-și-observabilitate)
@@ -87,7 +88,7 @@ requireAuth()    // aruncă 401 dacă session.data.userId lipsește (orice rol a
 
 ## Adăugare și urmărire titluri
 
-Wizard-ul de adăugare (`AddMediaWizard.tsx`) — accesibil din butonul „Adaugă film/serial" de pe Acasă, sau direct dintr-un titlu deja deschis în Descoperă (`SceneViewer.tsx`) — face totul într-un flux: căutare TMDB → verificare Plex + Filelist → alegere calitate (1080p implicit, restul ascunse sub un toggle, admin-only) → confirmare și descărcare. Verificarea e **o singură cerere** către server (`checkTitleForWizard`, `src/lib/wizard-check.functions.ts`), care agregă acolo TMDB + Plex + Filelist + `media` + TVmaze; înainte erau zece dus-întors făcute de pe telefon, în trei valuri — munca în sine durează ~1s pe server, costul real erau rundele înmulțite cu latența mobilă. Pentru seriale, fiecare sezon/episod arată statusul lui (în Plex / se descarcă / disponibil pe Filelist / indisponibil / nelansat încă), iar descărcarea respectă ce oferă efectiv Filelist — pachet de sezon întreg sau episod individual, nu presupune una din ele. Dacă titlul e deja în Plex, ecranul spune explicit dacă alegerea ta e un *upgrade* sau un *downgrade* față de ce ai — o a doua descărcare e un al doilea fișier, nu o înlocuire.
+Wizard-ul de adăugare (`AddMediaWizard.tsx`) — accesibil din butonul „Adaugă film/serial" de pe Acasă, sau direct dintr-un titlu deja deschis în Descoperă (`SceneViewer.tsx`) — face totul într-un flux: căutare TMDB → verificare Plex + Filelist → alegere calitate (1080p implicit, restul ascunse sub un toggle, admin-only) → confirmare și descărcare. Verificarea e **o singură cerere** către server (`checkTitleForWizard`, `src/lib/wizard-check.functions.ts`), care agregă acolo TMDB + Plex + Filelist + `media` + TVmaze; înainte erau zece dus-întors făcute de pe telefon, în trei valuri — munca în sine durează ~1s pe server, costul real erau rundele înmulțite cu latența mobilă. Pentru seriale, fiecare sezon/episod arată statusul lui (în Plex / se descarcă / disponibil pe Filelist / indisponibil / nelansat încă), iar descărcarea respectă ce oferă efectiv Filelist — pachet de sezon întreg sau episod individual, nu presupune una din ele. Dacă titlul e deja în Plex, ecranul spune explicit dacă alegerea ta e un *upgrade* sau un *downgrade* — o a doua descărcare e un al doilea fișier, nu o înlocuire. Vezi [Calități și versiuni multiple](#calități-și-versiuni-multiple).
 
 Wizard-ul a fost refactorizat complet în sept. 2026: componenta a scăzut de la 1268 la 265 de linii, starea stă într-un `useReducer` cu pașii ca uniune discriminată (stări care logic nu pot coexista nu mai pot coexista nici în tip), derivările sunt funcții pure cu teste, iar fiecare pas e componenta lui — vezi `src/components/principala/wizard/` în [`STRUCTURE.md`](./STRUCTURE.md).
 
@@ -123,6 +124,27 @@ O descărcare pornită din aplicație e urmărită de o buclă de polling care t
 Ambele sunt plugin-uri explicite, nu efecte secundare la nivel de modul: un `setTimeout` scris în corpul unui modul rulează doar dacă cineva importă modulul, iar asta depinde de grafuri de import care se schimbă la refactorizări.
 
 Conținutul (titlu + text) notificărilor de torrent adăugat/complet trăiește în `src/lib/notifications/notifications.ts` — sursă unică, nu recalculat inline la fiecare loc care trimite o notificare.
+
+---
+
+## Calități și versiuni multiple
+
+**Cinci trepte, exclusive între ele:** `720p < 1080p < 1080p HDR < 4K < 4K HDR`. Rezoluția primează, HDR departajează în interiorul ei. Exclusive înseamnă că „1080p" e 1080p **SDR**: o lansare HDR nu apare în ambele categorii, altfel alegând „1080p" ai primi un fișier care pe un TV fără HDR arată spălăcit. Consecință voită: o urmărire automată setată pe „1080p" nu mai ia lansări HDR.
+
+Detectarea trăiește în două locuri, după sursă:
+
+- **Din numele lansării** — `detectQuality` (`src/components/filelist/quality-utils.ts`, pentru grupare/filtrare) și `detectTorrentQuality` (`src/lib/media/torrent-quality.ts`, pentru notificări). Ambele tratează „DV"/„DoVi" ca HDR — Dolby Vision e HDR chiar când numele nu scrie „HDR" — cu limite de cuvânt, ca „Advent" să nu devină Dolby Vision.
+- **Din Plex** — `mediaIsHdr` (`src/lib/services/plex-shared.ts`) citește `colorTrc`/`DOVIPresent` de pe item-ul complet, nu ghicește din numele fișierului. De-asta legarea cere item-ul întreg: `/search` nu întoarce `Part.Stream`.
+
+**Un film poate exista în Plex în mai multe calități deodată** (4K HDR pentru seara de film, 1080p pentru un TV care nu duce 4K). Plex le vede ca două **versiuni ale aceluiași item**, deci întoarce același `ratingKey` pentru amândouă — iar asta atinge trei lucruri:
+
+1. **Unicitatea în DB.** Indexul unic pe `plex_rating_key` a fost restrâns la episoade (migrarea v27). Înainte, al doilea rând `media` nu se putea lega niciodată: `UPDATE`-ul arunca, eroarea era înghițită, iar rândul rămânea pe veci „se procesează" în Bibliotecă. La episoade unicitatea rămâne — acolo un `ratingKey` chiar înseamnă un singur rând, iar `resolveSeasonPackPlexLinks` se bazează pe index.
+2. **Care versiune e a mea.** Legarea alege versiunea după **calea fișierului** (`plexMediaForPath`), iar calea vine din `qbitContentPath` — `content_path` de la qBittorrent, singurul care coincide caracter cu caracter cu `Part.file` din Plex. Numele de pe Filelist nu descrie discul. Când versiunea nu poate fi identificată sigur, calitatea rămâne `null` — mai bine lipsă decât preluată de la altă versiune.
+3. **Data.** `addedAt` e al item-ului, adică momentul primei versiuni. Se scrie doar când item-ul are o singură versiune; altfel rămâne gol și sortarea cade pe `added_at` (când am adăugat noi titlul), ca un film abia descărcat să nu sară instant sub intrarea veche.
+
+**În wizard**, verificarea întoarce toate calitățile din Plex, nu doar `Media[0]`, iar `qualityDirection` primește lista completă: nu propune nimic pentru o calitate pe care deja o deții, și compară cu cea mai bună deținută — cu 4K HDR + 720p în bibliotecă, un 1080p e downgrade, nu upgrade față de 720p.
+
+**Rândurile deja existente** își recalculează eticheta o dată, din Plex, la prima pornire după update (`redetectQualitiesOnce`, declanșat de `plex-link-reconciler`). Marcajul stă în tabela `one_time_jobs` — munca de pornire care atinge rețeaua nu poate sta într-o migrare sincronă, care rulează în tranzacție și e fatală la eșec.
 
 ---
 
@@ -387,12 +409,13 @@ Vezi [`STRUCTURE.md`](./STRUCTURE.md) pentru lista completă, fișier cu fișier
 - **`media` (db.ts)** — sursa unică de adevăr pentru bibliotecă. Conține conținut real (descărcat sau backfill din Plex), plus urmărirea, ca patru coloane pe rândul-părinte — **nu** ca tabelă paralelă: exact structura paralelă (`pinned_*`) a fost sursa unei clase întregi de bug-uri și a fost eliminată. Singura excepție de la „conținut real" e filmul urmărit, care are un rând fără `torrent_hash` și fără `plex_rating_key` — și tocmai de-asta rămâne invizibil peste tot unde se cere una dintre cele două coloane. Dacă ai nevoie de un flux nou de intenție/monitorizare, extinde rândul existent, nu crea o structură lângă el. Tabela `downloads` a fost eliminată în migrarea v25: nu mai există un jurnal separat de descărcări.
 - **`*.functions.ts` — fără importuri server statice.** Corpul unui handler `createServerFn` e eliminat din bundle-ul de client, deci un `await import("./x")` din interiorul lui rămâne pe server; un import static la vârful fișierului trage tot graful în bundle-ul public. De aceea logica stă în `media.ts` / `activity-log.ts` / `error-log.ts` / `filelist/download.ts` / `system/network-link.ts` / `system/speedtest.ts` / `system/db-backup.ts`, iar definițiile de server functions în perechile lor `*.functions.ts`. Nerespectarea regulii a servit public schema SQLite completă și a produs eroarea `(0 , n.dirname) is not a function`, rămasă luni de zile neexplicată.
 - **Munca de la pornirea serverului se declanșează din `server/plugins/`**, nu dintr-un `setTimeout` la nivel de modul. Un efect de modul rulează doar dacă cineva importă modulul, iar asta depinde de grafuri de import care se schimbă la refactorizări — două bug-uri identice au fost cauzate exact de asta (logarea pornirii/opririi rula abia la prima cerere HTTP; reluarea polling-urilor a încetat complet să mai ruleze după un refactor de bundle).
+- **Munca de pornire care atinge rețeaua nu are ce căuta într-o migrare.** Migrarea rulează sincron, în tranzacție, și e fatală la eșec — un apel Plex picat ar bloca pornirea. Pentru „o singură dată pe instalare, dar cu rețea", folosește tabela `one_time_jobs` și declanșează din plugin (vezi `redetectQualitiesOnce`).
 - **Migrările sunt tranzacționale și fatale la eșec** — `runCleanups` rulează în `BEGIN`/`COMMIT`, iar o eroare oprește pornirea. Înainte, un `catch` cu `console.warn` lăsa aplicația să pornească cu schemă parțială. O migrare nouă trebuie să fie idempotentă și să verifice că tabela sursă chiar există (v9 nu o făcea și lăsa o tabelă orfană pe orice instalare nouă).
 - **DB** — SQLite nativ (`node:sqlite`), un singur fișier la `/opt/faikkitbox/data/faikkitbox.db` (override cu `FAIKKITBOX_DB_PATH`). Fără ORM/migrations tool — schema se creează cu `CREATE TABLE IF NOT EXISTS`, migrările incrementale via `PRAGMA user_version` (`runCleanups` în `db.ts`); orice schimbare de schemă se adaugă acolo, niciodată prin modificarea unei migrări deja aplicate.
 
 ### Puncte de refolosit în componente
 
-- `src/components/filelist/quality-utils.ts` — `detectQuality(name)` (1080p/4K/4K HDR din numele torrentului), `groupTorrentsBySeasonEpisode`. Orice logică nouă de parsare a numelui de torrent ar trebui să treacă prin aici, nu regex inline în componente.
+- `src/components/filelist/quality-utils.ts` — `detectQuality(name)` (cele cinci categorii exclusive), `emptyQualitySet`, `groupTorrentsBySeasonEpisode`. Orice logică nouă de parsare a numelui de torrent ar trebui să treacă prin aici, nu regex inline în componente. O treaptă nouă de calitate se adaugă în șase locuri care trebuie să rămână în acord: `QualitySet` (`components/filelist/types.ts`), `detectQuality`, `detectTorrentQuality` (`lib/media/torrent-quality.ts`), `QUALITY_RANK` și tipul `WatchQuality` (`wizard/selection.ts`, `wizard/WizardControls.tsx`), selectorul de calitate din wizard, și filtrele din `FilelistSection.tsx`.
 - `src/components/filelist/DownloadConfirmDialog.tsx` — dialogul standard de confirmare descărcare, inclusiv butonul „Info Căutare". Orice buton nou de download ar trebui să treacă prin el, nu să descarce direct.
 - `src/components/filelist/use-download.ts` — `useDownload()` (upload qBittorrent + toast + invalidare cache).
 - `src/components/ui/alert-dialog.tsx` — wrapper Radix deja stilizat; folosește-l pentru orice confirmare distructivă în loc de `window.confirm()`.
