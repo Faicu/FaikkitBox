@@ -10,7 +10,6 @@ import {
 } from "./plex-shared";
 
 export type { ShowEpisodeInfo, ShowStatusData } from "./plex-library";
-export { checkPlexHasEpisode, getPlexEpisodesInSeason, checkPlexHasTitle } from "./plex-library";
 
 // ---------- Types ----------
 

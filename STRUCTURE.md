@@ -235,7 +235,7 @@ transversale, fără un singur domeniu clar.
 | `shared.ts` | Helpere HTTP comune (fetch cu timeout, tipuri de status partajate). | Restul `services/*`. |
 | `plex-shared.ts` | Tipuri + helpere partajate între modulele Plex (discover URL, calitate media, subtitrare încorporată RO). Extras din fostul `plex.ts` monolitic. Aici stau și cele trei funcții pe care se sprijină versiunile multiple ale unui film: `plexQualitiesFromItem` (TOATE calitățile unui item, nu doar `Media[0]`), `plexMediaForPath` (alege versiunea corectă după calea fișierului) și `mediaIsHdr` (HDR-ul citit din `colorTrc`/`DOVIPresent`, nu ghicit din numele fișierului). | `plex.ts`, `plex-library.ts`, `plex-browse.ts`. |
 | `plex.ts` | Status Plex principal — sesiuni active, biblioteci, istoric vizionări per user. | `routes/index.tsx`, `plex-session-tracker.ts`. |
-| `plex-library.ts` | Căutare titluri/episoade în biblioteca Plex (`checkPlexHasTitle`, `getPlexEpisodesInSeason`, `checkPlexHasEpisode`). | `AddMediaWizard.tsx` (wizard). |
+| `plex-library.ts` | Căutare titluri/episoade în biblioteca Plex (`checkPlexHasTitleInternal`, `getPlexEpisodesInSeasonInternal`) + legarea unui rând `media` de item-ul lui Plex (`findPlexMovieLink`, `findPlexSeasonLinks`, `versionLinkFromItem`). | `wizard-check.functions.ts`, `media.ts`. |
 | `plex-browse.ts` | Date pentru pagina Bibliotecă — listă + detalii per titlu, citite exclusiv din `media` (zero cereri Plex/TMDB live la navigare). | `routes/biblioteca.tsx`, `BibliotecaList.tsx`, `TitleDetailDrawer.tsx`. |
 | `qbittorrent.ts` | Status/acțiuni qBittorrent pentru pagina `/qbit` (listă torrente, pauză/reia/șterge). | `routes/qbit.tsx`. |
 | `immich.ts` | Status/control serviciu Immich. | `routes/immich.tsx`. |

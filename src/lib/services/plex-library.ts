@@ -1,4 +1,3 @@
-import { createServerFn } from "@tanstack/react-start";
 import { fetchJson, type ServiceStatus } from "./shared";
 import {
   discoverPlexUrl,
@@ -145,18 +144,6 @@ async function episodesInSeason(
       quality: plexQualityFromMedia(e.Media?.[0]),
       watched: Number(e.viewCount ?? 0) > 0,
     }));
-}
-
-async function hasEpisode(
-  url: string,
-  headers: Record<string, string>,
-  showTitle: string,
-  season: number,
-  episode: number,
-): Promise<boolean> {
-  const episodesMd = await findSeasonEpisodes(url, headers, showTitle, season);
-  if (!episodesMd) return false;
-  return episodesMd.some((e: PlexMetadataItem) => Number(e.index) === episode);
 }
 
 async function findByTitle(
@@ -359,27 +346,13 @@ export async function findPlexSeasonLinks(
   }
 }
 
-export async function checkPlexHasEpisode(
-  showTitle: string,
-  season: number,
-  episode: number,
-): Promise<boolean | null> {
-  const token = process.env.PLEX_TOKEN;
-  const base = process.env.PLEX_URL;
-  if (!token) return null;
-  try {
-    const headers = { Accept: "application/json", "X-Plex-Token": token };
-    const discovered = await discoverPlexUrl(token, base);
-    return await hasEpisode(discovered.url, headers, showTitle, season, episode);
-  } catch {
-    return null;
-  }
-}
-
-// Variantele "Internal" există ca `wizard-check.functions.ts` să poată face
-// toată verificarea unui titlu într-o singură cerere, fără să treacă printr-un
-// server function per apel. Server function-urile de mai jos rămân — sunt
-// folosite și separat, din alte ecrane — și le cheamă tot pe ele.
+// Verificările din Plex apelate de `wizard-check.functions.ts`, care face
+// toată munca unui titlu într-o singură cerere venită de la client.
+//
+// Sufixul "Internal" e o rămășiță: peste ele au existat și server function-uri
+// publice (checkPlexHasTitle, getPlexEpisodesInSeason, checkPlexHasEpisode),
+// de pe vremea când wizard-ul făcea zece cereri separate. După consolidare
+// nu le-a mai chemat nimeni, așa că au fost șterse.
 
 export async function checkPlexHasTitleInternal(data: {
   title: string;
@@ -419,21 +392,3 @@ export async function getPlexEpisodesInSeasonInternal(data: {
     return [];
   }
 }
-
-export const getPlexEpisodesInSeason = createServerFn({ method: "GET" })
-  .validator((data: { showTitle: string; season: number }) => data)
-  .handler(
-    async ({ data }): Promise<{ num: number; quality: string | null; watched: boolean }[]> => {
-      const { requireAuth } = await import("../auth/admin.server");
-      await requireAuth();
-      return getPlexEpisodesInSeasonInternal(data);
-    },
-  );
-
-export const checkPlexHasTitle = createServerFn({ method: "GET" })
-  .validator((data: { title: string; originalTitle: string; mediaType: "movie" | "tv" }) => data)
-  .handler(async ({ data }): Promise<{ found: boolean; qualities: string[] } | null> => {
-    const { requireAuth } = await import("../auth/admin.server");
-    await requireAuth();
-    return checkPlexHasTitleInternal(data);
-  });
