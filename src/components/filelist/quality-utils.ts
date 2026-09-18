@@ -1,19 +1,15 @@
 import type { FilelistTorrent } from "@/lib/filelist.functions";
+import { isHdrReleaseName } from "@/lib/media/torrent-quality";
 import type { QualitySet, SeasonGroup } from "./types";
 
 // ---------------------------------------------------------------------------
 // Detectare calitate torrent
 // ---------------------------------------------------------------------------
 
-// Marcajele HDR dintr-un nume de lansare. „DV"/„DoVi" (Dolby Vision) intră și
-// ele: o lansare marcată doar așa e tot HDR, iar numele o spune fără să scrie
-// „HDR" (ex. „...Atmos DV HDR10P x265-HiDt").
-const HDR_TAG = /\bhdr\d*\+?\b|\bdovi\b|\bdv\b|dolby.?vision|\bhlg\b/;
-
 export function detectQuality(name: string) {
   const n = name.toLowerCase();
   const is4k = /2160p|4k/.test(n);
-  const isHdr = HDR_TAG.test(n);
+  const isHdr = isHdrReleaseName(n);
   const is4kHdr = is4k && isHdr;
   const has1080p = /1080p/.test(n);
   const is1080pHdr = has1080p && isHdr;

@@ -5,6 +5,10 @@
 // ---------------------------------------------------------------------------
 
 import { getDb } from "../db";
+// Doar tipuri: `import type` dispare la compilare, deci nu trage modulele Plex
+// în graf — restul fișierului le încarcă dinamic, exact ca până acum.
+import type { PlexItemLink } from "../services/plex-library";
+import type { PlexMetadataItem } from "../services/plex-shared";
 
 // "auto" = pornit de urmărirea serialelor (show-watch.ts), fără intervenție
 // umană — singurul caz în care un torrent apare în bibliotecă fără ca cineva
@@ -527,7 +531,7 @@ export async function resolveMediaPlexLinkByTorrentHash(torrentHash: string): Pr
   const row = db
     .prepare(
       `SELECT id, media_type, title, original_title, season, episode, plex_rating_key,
-              save_path, torrent_name
+              torrent_name
          FROM media WHERE torrent_hash = ?
         ORDER BY plex_rating_key IS NOT NULL, id LIMIT 1`,
     )
@@ -540,7 +544,6 @@ export async function resolveMediaPlexLinkByTorrentHash(torrentHash: string): Pr
         season: number | null;
         episode: number | null;
         plex_rating_key: string | null;
-        save_path: string | null;
         torrent_name: string | null;
       }
     | undefined;
@@ -583,6 +586,22 @@ async function contentPathForTorrent(torrentHash: string): Promise<string | null
   return qbitContentPath(url, torrentHash, user, pass);
 }
 
+// Ce știe Plex despre versiunea NOASTRĂ a unui rând deja legat.
+//
+// Calea de pe disk se cere din qBittorrent doar când item-ul chiar are mai
+// multe versiuni — altfel n-avem ce distinge, iar cererea ar fi degeaba
+// (cazul covârșitor: un film, un fișier).
+async function versionLinkForRow(
+  item: PlexMetadataItem,
+  row: { torrent_hash: string | null; torrent_name: string | null },
+): Promise<PlexItemLink | null> {
+  const { versionLinkFromItem } = await import("../services/plex-library");
+  const hasVersions = (item.Media ?? []).length > 1;
+  const contentPath =
+    hasVersions && row.torrent_hash ? await contentPathForTorrent(row.torrent_hash) : null;
+  return versionLinkFromItem(item, contentPath, row.torrent_name);
+}
+
 // Repară filmele legate corect de Plex, dar rămase fără calitate.
 //
 // Se întâmplă când filmul are mai multe versiuni în Plex (4K HDR + 1080p) și
@@ -598,7 +617,7 @@ export async function repairLinkedMovieQuality(maxAgeHours: number): Promise<num
   const db = getDb();
   const rows = db
     .prepare(
-      `SELECT id, title, original_title, torrent_hash, torrent_name
+      `SELECT id, title, plex_rating_key, torrent_hash, torrent_name
          FROM media
         WHERE media_type = 'movie'
           AND plex_rating_key IS NOT NULL
@@ -610,25 +629,30 @@ export async function repairLinkedMovieQuality(maxAgeHours: number): Promise<num
     .all(`-${maxAgeHours} hours`) as Array<{
     id: number;
     title: string;
-    original_title: string | null;
+    plex_rating_key: string;
     torrent_hash: string;
     torrent_name: string | null;
   }>;
   if (rows.length === 0) return 0;
 
-  const { findPlexMovieLink } = await import("../services/plex-library");
+  // Direct pe ratingKey-ul cunoscut, nu printr-o căutare după titlu: rândul e
+  // deja legat, deci item-ul lui e știut. O cerere în loc de două, și fără
+  // riscul ca titlul să nimerească alt film.
+  const { fetchPlexItemVersions } = await import("../services/plex-library");
+  // COALESCE, nu atribuire directă: pentru un item cu mai multe versiuni,
+  // `addedAt` vine null (nu putem ști a cui e data — vezi PlexItemLink). Dacă
+  // și rândul VECHI al aceluiași film ar trece pe-aici, o atribuire directă
+  // i-ar șterge data pe care o are pe bună dreptate. Completăm ce lipsește,
+  // nu ștergem ce există.
   const update = db.prepare(
-    `UPDATE media SET quality = ?, duration_ms = ?, plex_added_at = ?,
-     updated_at = datetime('now') WHERE id = ?`,
+    `UPDATE media SET quality = ?, duration_ms = ?,
+       plex_added_at = COALESCE(?, plex_added_at),
+       updated_at = datetime('now') WHERE id = ?`,
   );
   let repaired = 0;
   for (const row of rows) {
-    const link = await findPlexMovieLink(
-      row.title,
-      row.original_title ?? row.title,
-      await contentPathForTorrent(row.torrent_hash),
-      row.torrent_name,
-    );
+    const item = await fetchPlexItemVersions(row.plex_rating_key);
+    const link = item ? await versionLinkForRow(item, row) : null;
     if (!link?.quality) continue;
     update.run(link.quality, link.durationMs, link.addedAt, row.id);
     repaired++;
@@ -875,7 +899,10 @@ export async function redetectQualitiesOnce(): Promise<number> {
   }>;
 
   const { fetchPlexItemVersions } = await import("../services/plex-library");
-  const { plexMediaForPath, plexQualityFromMedia } = await import("../services/plex-shared");
+  // Doar `quality`, nu și datele de timp: `plex_added_at` s-a corectat o dată
+  // la migrarea v28, care a păstrat data pe cel mai vechi rând al fiecărui
+  // item. Rescriind-o aici după aceeași regulă ca la legare, versiunea veche
+  // a unui film cu două versiuni ar rămâne fără dată — exact ce v28 a evitat.
   const update = db.prepare(
     "UPDATE media SET quality = ?, updated_at = datetime('now') WHERE id = ?",
   );
@@ -884,31 +911,36 @@ export async function redetectQualitiesOnce(): Promise<number> {
   // un singur item Plex.
   const itemCache = new Map<string, Awaited<ReturnType<typeof fetchPlexItemVersions>>>();
   let changed = 0;
+  let itemsRead = 0;
 
   for (const row of rows) {
     let item = itemCache.get(row.plex_rating_key);
     if (item === undefined) {
       item = await fetchPlexItemVersions(row.plex_rating_key);
       itemCache.set(row.plex_rating_key, item);
+      if (item) itemsRead++;
     }
     if (!item) continue;
 
-    const versions = item.Media ?? [];
-    const ours =
-      versions.length === 1
-        ? versions[0]
-        : plexMediaForPath(
-            item,
-            row.torrent_hash ? await contentPathForTorrent(row.torrent_hash) : null,
-            row.torrent_name,
-          );
-    const quality = plexQualityFromMedia(ours);
+    const quality = (await versionLinkForRow(item, row))?.quality ?? null;
     // Nu ștergem o etichetă existentă când nu putem decide acum: mai bine una
     // veche decât niciuna.
     if (!quality || quality === row.quality) continue;
     update.run(quality, row.id);
     changed++;
     console.log(`[media] Calitate recalculată (#${row.id}): ${row.quality} → ${quality}`);
+  }
+
+  // Nu marcăm jobul ca făcut dacă Plex n-a răspuns pentru NICIUN rând: ar
+  // însemna să declarăm terminată o trecere care n-a citit nimic, iar
+  // etichetele vechi ar rămâne greșite pe veci. Plex picat la pornire e exact
+  // scenariul (serviciul nostru repornește la fiecare deploy) — atunci lăsăm
+  // jobul nemarcat și se reia la următoarea pornire.
+  if (rows.length > 0 && itemsRead === 0) {
+    console.warn(
+      "[media] Recalcularea calităților: Plex n-a răspuns pentru niciun titlu — reiau la următoarea pornire",
+    );
+    return 0;
   }
 
   db.prepare("INSERT INTO one_time_jobs (name, done_at) VALUES (?, datetime('now'))").run(

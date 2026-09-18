@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { qbitLogin } from "../qbit-client";
+import { qbitLogin, qbitContentPath } from "../qbit-client";
 import {
   refreshPlexLibraryForCategoryAndEmptyTrash,
   refreshPlexLibraryAndEmptyTrash,
@@ -55,18 +55,7 @@ export const deleteMediaEntry = createServerFn({ method: "POST" })
         // torrentului salvat în DB poate diferi de numele folderului de pe
         // disk (qBittorrent normalizează unele nume), deci e singura sursă
         // de adevăr pentru fallback-ul de mai jos.
-        try {
-          const infoRes = await fetch(
-            `${qbitUrl}/api/v2/torrents/info?hashes=${row.torrent_hash}`,
-            { headers: { Cookie: cookie } },
-          );
-          if (infoRes.ok) {
-            const info = (await infoRes.json()) as Array<{ content_path?: string }>;
-            contentPath = info[0]?.content_path ?? null;
-          }
-        } catch (e) {
-          console.warn("[filelist] Nu am putut citi content_path din qBit:", e);
-        }
+        contentPath = await qbitContentPath(qbitUrl, row.torrent_hash, user, pass);
 
         const form = new URLSearchParams({ hashes: row.torrent_hash, deleteFiles: "true" });
         const res = await fetch(`${qbitUrl}/api/v2/torrents/delete`, {

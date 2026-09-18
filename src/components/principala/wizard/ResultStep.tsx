@@ -284,8 +284,8 @@ export function ResultStep({
                 <div className="flex items-start gap-2 rounded-xl bg-amber-500/10 p-3 text-xs text-amber-300">
                   <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
                   <span>
-                    Ai deja {plexQualities.join(", ")} în Plex. Descărcarea adaugă încă un
-                    fișier, la {quality}
+                    Ai deja {plexQualities.join(", ")} în Plex. Descărcarea adaugă încă un fișier,
+                    la {quality}
                     {direction === "downgrade" ? " (calitate mai mică)" : ""} — pe cele vechi le
                     ștergi tu, din Bibliotecă.
                   </span>

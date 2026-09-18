@@ -169,9 +169,7 @@ export function plexMediaForPath(
   if (contentPath) {
     const needle = contentPath.replace(/\/$/, "");
     // Fișier unic: egalitate. Torrent cu folder: `Part.file` e înăuntru.
-    const hit = media.find((m) =>
-      files(m).some((f) => f === needle || f.startsWith(`${needle}/`)),
-    );
+    const hit = media.find((m) => files(m).some((f) => f === needle || f.startsWith(`${needle}/`)));
     if (hit) return hit;
   }
 
@@ -200,7 +198,7 @@ export function plexQualityFromMedia(media: PlexMedia | undefined): string | nul
 // Numele fișierului singur nu ajunge: „...DV HDR10P..." se prinde, dar o
 // lansare marcată doar „DV" nu. Stream-ul video poartă însă datele reale —
 // `colorTrc`, `DOVIPresent` și `displayTitle` ("1080p DoVi/HDR10+").
-export function mediaIsHdr(media: PlexMedia | undefined): boolean {
+function mediaIsHdr(media: PlexMedia | undefined): boolean {
   const video = (media?.Part?.[0]?.Stream ?? []).find((st) => st.streamType === 1);
   if (video?.DOVIPresent) return true;
   // smpte2084 = PQ (HDR10/HDR10+/DoVi), arib-std-b67 = HLG.

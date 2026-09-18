@@ -237,6 +237,28 @@ export interface PlexItemLink {
   addedAt: number | null;
 }
 
+// Ce scriem în `media` despre un item Plex: care versiune e a noastră, cu ce
+// calitate, durată și dată. Regula stă aici, într-un singur loc, fiindcă e
+// nevoie de ea din două direcții — la prima legare (findPlexMovieLink, care
+// caută item-ul după titlu) și la recalcularea unui rând deja legat (media.ts,
+// care pornește direct de la ratingKey).
+export function versionLinkFromItem(
+  item: PlexMetadataItem,
+  contentPath: string | null,
+  torrentName: string | null,
+): PlexItemLink | null {
+  if (!item.ratingKey) return null;
+  const ours = plexMediaForPath(item, contentPath, torrentName);
+  return {
+    ratingKey: String(item.ratingKey),
+    quality: plexQualityFromMedia(ours),
+    // Durata e a versiunii noastre când o știm; altfel cea a item-ului, care
+    // pentru un film e oricum aceeași în toate versiunile.
+    durationMs: Number(ours?.Part?.[0]?.duration ?? item.duration ?? 0),
+    addedAt: (item.Media ?? []).length > 1 ? null : Number(item.addedAt ?? 0),
+  };
+}
+
 // Găsește ratingKey-ul + calitatea/durata unui film deja apărut în Plex —
 // folosit ca să legăm un rând din tabela `media` de item-ul lui real din
 // Plex, o singură dată, cache-uit permanent acolo (vezi media.ts).
@@ -265,18 +287,8 @@ export async function findPlexMovieLink(
       );
       const found = (search?.MediaContainer?.Metadata ?? []).find((r) => r.type === "movie");
       if (found?.ratingKey) {
-        const item =
-          (await fetchItemWithStreams(url, headers, String(found.ratingKey))) ?? found;
-        const versions = item.Media ?? [];
-        const ours = plexMediaForPath(item, contentPath, torrentName);
-        return {
-          ratingKey: String(found.ratingKey),
-          quality: plexQualityFromMedia(ours),
-          // Durata e a versiunii noastre când o știm; altfel cea a item-ului,
-          // care pentru un film e oricum aceeași în toate versiunile.
-          durationMs: Number(ours?.Part?.[0]?.duration ?? item.duration ?? 0),
-          addedAt: versions.length > 1 ? null : Number(item.addedAt ?? 0),
-        };
+        const item = (await fetchItemWithStreams(url, headers, String(found.ratingKey))) ?? found;
+        return versionLinkFromItem(item, contentPath, torrentName);
       }
     }
     return null;
