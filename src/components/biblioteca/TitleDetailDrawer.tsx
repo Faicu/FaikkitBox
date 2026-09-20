@@ -27,6 +27,7 @@ import {
   CheckCheck,
   RefreshCw,
   CircleDashed,
+  Download,
 } from "lucide-react";
 import { Orb } from "@/components/ui/orb";
 
@@ -824,25 +825,48 @@ function NextEpisodeLine({ detail }: { detail: PlexTitleDetail }) {
 
   if (!when || !detail.nextEpisode) {
     return (
-      <div className="flex items-center gap-2 rounded-xl bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-        <CalendarClock className="h-3.5 w-3.5 shrink-0" />
-        Niciun episod nou anunțat încă
+      <div className="rounded-xl bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+        <div className="flex items-center gap-2">
+          <CalendarClock className="h-3.5 w-3.5 shrink-0" />
+          Niciun episod nou anunțat încă
+        </div>
+        <AutoDownloadNote on={detail.autoDownload} />
       </div>
     );
   }
 
   return (
     <div
-      className={`flex items-center gap-2 rounded-xl px-3 py-2 text-xs ${
+      className={`rounded-xl px-3 py-2 text-xs ${
         when.soon ? "bg-primary/10 text-foreground" : "bg-muted/30 text-muted-foreground"
       }`}
     >
-      <CalendarClock
-        className={`h-3.5 w-3.5 shrink-0 ${when.soon ? "animate-pulse text-primary" : ""}`}
-      />
+      <div className="flex items-center gap-2">
+        <CalendarClock
+          className={`h-3.5 w-3.5 shrink-0 ${when.soon ? "animate-pulse text-primary" : ""}`}
+        />
+        <span>
+          Urmează <span className="font-medium text-foreground">{detail.nextEpisode}</span> ·{" "}
+          {when.text}
+        </span>
+      </div>
+      <AutoDownloadNote on={detail.autoDownload} />
+    </div>
+  );
+}
+
+// Pentru serialele urmărite, spunem explicit, lângă data următorului episod, că
+// nu e nimic de făcut manual: show-watcher-ul îl ia singur când apare pe
+// Filelist. Fără rândul ăsta, "Urmează S02E05 · peste 3 zile" se citea ca o
+// simplă informație, nu ca o promisiune că episodul chiar ajunge în bibliotecă.
+function AutoDownloadNote({ on }: { on: boolean }) {
+  if (!on) return null;
+  return (
+    <div className="mt-1.5 flex items-start gap-2 border-t border-border/50 pt-1.5 text-[11px] text-muted-foreground">
+      <Download className="mt-px h-3 w-3 shrink-0 text-primary" />
       <span>
-        Urmează <span className="font-medium text-foreground">{detail.nextEpisode}</span> ·{" "}
-        {when.text}
+        Episoadele viitoare se descarcă automat, imediat ce apar pe Filelist. Nu trebuie să ceri
+        nimic manual.
       </span>
     </div>
   );
