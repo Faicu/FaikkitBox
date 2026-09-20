@@ -8,6 +8,48 @@ import { nitro } from "nitro/vite";
 // Standalone Vite config (no Lovable dependency). Produces a standard Node
 // server build via Nitro's "node-server" preset, ready to run with
 // `node .output/server/index.mjs` behind a reverse proxy (nginx) on Ubuntu.
+// ---------------------------------------------------------------------------
+// Headere de securitate, pe toate răspunsurile.
+//
+// CSP e deocamdată Report-Only: SSR-ul TanStack Start injectează script și
+// stiluri inline, iar o politică strictă aplicată direct ar albi pagina. În
+// modul ăsta browserul raportează în consolă ce ar fi blocat, fără să strice
+// nimic — când lista de încălcări e curată, `-Report-Only` se poate scoate din
+// numele headerului.
+//
+// Sursele externe reale: postere TMDB, embed-uri YouTube (Descoperă), iar
+// `connect-src` acoperă și SSE-ul de pe /api/deploy-sha (same-origin).
+// ---------------------------------------------------------------------------
+const CSP = [
+  "default-src 'self'",
+  "img-src 'self' data: blob: https://image.tmdb.org",
+  "script-src 'self' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline'",
+  "font-src 'self' data:",
+  "connect-src 'self'",
+  "frame-src https://www.youtube.com",
+  "media-src 'self' blob:",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+].join("; ");
+
+const SECURITY_HEADERS = {
+  "Content-Security-Policy-Report-Only": CSP,
+  // Dublează `frame-ancestors` pentru browserele care încă nu-l respectă —
+  // fără el, aplicația poate fi pusă într-un iframe pe un site străin și
+  // butoanele de ștergere apăsate prin clickjacking.
+  "X-Frame-Options": "DENY",
+  "X-Content-Type-Options": "nosniff",
+  "Referrer-Policy": "strict-origin-when-cross-origin",
+  // Nimic din aplicație nu are nevoie de ele; le tăiem explicit.
+  "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+  // Aplicația se servește prin proxy peste HTTPS. Fără `preload`: e o decizie
+  // greu reversibilă, care se ia separat.
+  "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+};
+
 export default defineConfig(({ command }) => ({
   css: { transformer: "lightningcss" },
   resolve: {
@@ -55,7 +97,7 @@ export default defineConfig(({ command }) => ({
             preset: "node-server",
             scanDirs: ["server"],
             routeRules: {
-              "/**": { headers: { "Cache-Control": "no-store" } },
+              "/**": { headers: { "Cache-Control": "no-store", ...SECURITY_HEADERS } },
               "/assets/**": {
                 headers: { "Cache-Control": "public, max-age=31536000, immutable" },
               },

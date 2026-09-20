@@ -35,10 +35,41 @@ export async function getSession() {
   return useSession<AdminSession>(sessionConfig());
 }
 
+// Contul din cookie mai există și mai e aprobat?
+//
+// Cookie-ul e semnat și ține 7 zile, deci fără verificarea asta „revocă
+// accesul" din pagina Utilizatori nu revoca nimic: rândul dispărea din `users`,
+// dar sesiunea deja emisă rămânea bună până expira singură, cu tot cu dreptul
+// de a descărca și șterge. Un SELECT pe cheie primară într-un SQLite local e
+// prea ieftin ca să merite un cache care ar reintroduce exact fereastra asta.
+//
+// Tot de aici vine și rolul: dacă cineva e retrogradat din admin, sesiunea lui
+// nu mai trebuie să poarte mai departe `admin: true` înghețat la login.
+export async function isAccountLive(userId: number): Promise<string | null> {
+  return (await liveAccount(userId))?.role ?? null;
+}
+
+async function liveAccount(userId: number): Promise<{ role: string; status: string } | null> {
+  const { getDb } = await import("../db");
+  const row = getDb().prepare("SELECT role, status FROM users WHERE id = ?").get(userId) as
+    | { role: string; status: string }
+    | undefined;
+  if (!row || row.status !== "approved") return null;
+  return row;
+}
+
 // Orice cont autentificat (admin sau user obișnuit, ambele aprobate).
 export async function requireAuth() {
   const session = await getSession();
-  if (!session.data.userId) {
+  const userId = session.data.userId;
+  if (!userId) {
+    throw new Response("Unauthorized", { status: 401 });
+  }
+  const account = await liveAccount(userId);
+  if (!account) {
+    // Golim cookie-ul, altfel clientul continuă să se creadă logat și se
+    // lovește de 401 la fiecare cerere, fără să fie trimis la autentificare.
+    await session.clear();
     throw new Response("Unauthorized", { status: 401 });
   }
   return session;
@@ -46,7 +77,12 @@ export async function requireAuth() {
 
 export async function requireAdmin() {
   const session = await getSession();
-  if (!session.data.admin) {
+  const userId = session.data.userId;
+  if (!userId) {
+    throw new Response("Unauthorized", { status: 401 });
+  }
+  const account = await liveAccount(userId);
+  if (!session.data.admin || account?.role !== "admin") {
     throw new Response("Unauthorized", { status: 401 });
   }
   return session;

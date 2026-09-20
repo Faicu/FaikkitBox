@@ -84,13 +84,24 @@ export const adminLogout = createServerFn({ method: "POST" }).handler(async () =
 });
 
 export const getAdminStatus = createServerFn({ method: "GET" }).handler(async () => {
-  const { getSession } = await import("./admin.server");
+  const { getSession, isAccountLive } = await import("./admin.server");
   const session = await getSession();
+  const userId = session.data.userId;
+
+  // Aceeași verificare pe care o fac `requireAuth`/`requireAdmin`, ca UI-ul să
+  // nu rămână „logat" pentru un cont căruia i s-a revocat accesul — altfel ar
+  // arăta butoanele și ar lua 401 la fiecare apăsare, fără explicație.
+  const role = userId ? await isAccountLive(userId) : null;
+  if (userId && !role) {
+    await session.clear();
+    return { isAdmin: false, isAuthenticated: false, username: null, role: null };
+  }
+
   return {
-    isAdmin: !!session.data.admin,
-    isAuthenticated: !!session.data.userId,
+    isAdmin: role === "admin",
+    isAuthenticated: !!userId,
     username: session.data.username ?? null,
-    role: session.data.role ?? null,
+    role: (role as "admin" | "user" | null) ?? null,
   };
 });
 
