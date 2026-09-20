@@ -607,7 +607,10 @@ async function buildDetailFromMediaRow(
     : undefined;
   const watchedByMe = !!myWatched;
   const watchedByMeAt = myWatched && myWatched.viewedAt > 0 ? myWatched.viewedAt : null;
-  const watchedByOthers = watchedByAll.filter((w) => w.username !== myPlexUsername);
+  // Ordonat cronologic invers — vizionarea cea mai recentă sus.
+  const watchedByOthers = watchedByAll
+    .filter((w) => w.username !== myPlexUsername)
+    .sort((a, b) => b.viewedAt - a.viewedAt);
 
   const canManage = isAdminOrOwner(session, row.requested_by_user_id);
   const isAdmin = !!session.data.admin;
