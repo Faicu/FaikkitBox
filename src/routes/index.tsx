@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/drawer";
 import { AddMediaWizard } from "@/components/principala/AddMediaWizard";
 import { FilelistSection } from "@/components/filelist/FilelistSection";
+import { SupportWidget } from "@/components/principala/SupportWidget";
 import { plexQuery, plexSessionsQuery, adminStatusQuery, recentWatchesQuery } from "@/lib/queries";
 import { formatDateTime } from "@/components/tehnic/utils";
 import { useLiveViewOffsets } from "@/components/principala/useLiveViewOffsets";
@@ -120,6 +121,12 @@ function Overview() {
       {isAdmin && (
         <div className="mb-4">
           <FilelistSection />
+        </div>
+      )}
+
+      {isAuthenticated && (
+        <div className="mb-4">
+          <SupportWidget />
         </div>
       )}
 
