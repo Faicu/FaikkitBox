@@ -7,6 +7,7 @@
 import { getDb } from "../db";
 // Doar tipuri: `import type` dispare la compilare, deci nu trage modulele Plex
 // în graf — restul fișierului le încarcă dinamic, exact ca până acum.
+import type { SubtitleSource } from "../filelist/subtitle-outcomes";
 import type { PlexItemLink } from "../services/plex-library";
 import type { PlexMetadataItem } from "../services/plex-shared";
 
@@ -329,18 +330,15 @@ export function upsertMediaEntry(input: UpsertMediaEntryInput): number {
 // ---------------------------------------------------------------------------
 
 // Sursa subtitrării, derivată din outcome-ul ensureRomanianSubtitle
-// (subtitles.ts) — vezi SubtitleOutcome acolo pentru lista completă. La
-// descărcări, outcome-ul nu distinge OpenSubtitles de subs.ro (numele
-// `downloaded_opensubtitles` e istoric), așa că sursa reală vine ca
-// argument separat și are prioritate — vezi `downloadedSource` mai jos.
+// (subtitles.ts) — vezi SubtitleOutcome acolo pentru lista completă.
+// Outcome-urile de descărcare lipsesc intenționat: pentru ele sursa nu se
+// poate deduce (OpenSubtitles sau subs.ro), vine ca argument separat.
 const SUBTITLE_SOURCE_BY_OUTCOME: Record<string, string | null> = {
   already_embedded: "embedded",
   audio_already_romanian: "audio_ro",
   srt_already_ok: "tracked_srt",
   renamed_srt: "tracked_srt",
   reencoded_srt: "tracked_srt",
-  downloaded: "opensubtitles",
-  downloaded_approximate: "opensubtitles",
   season_corrected: "season_aggregate",
   season_already_ok: "season_aggregate",
 };
@@ -363,10 +361,15 @@ export function updateMediaSubtitleStatus(
   torrentHash: string,
   outcome: string,
   detail: string,
-  downloadedSource?: "opensubtitles" | "subsro" | null,
+  downloadedSource?: SubtitleSource | null,
 ): void {
-  const source =
-    downloadedSource === "subsro" ? "subsro" : (SUBTITLE_SOURCE_BY_OUTCOME[outcome] ?? null);
+  // Sursa transmisă contează doar la o descărcare reușită — la
+  // `download_failed` apelantul o trimite oricum (știe de unde a încercat),
+  // dar pe disc n-a ajuns nimic, deci rândul rămâne fără sursă.
+  const isDownload = outcome === "downloaded" || outcome === "downloaded_approximate";
+  const source = isDownload
+    ? (downloadedSource ?? null)
+    : (SUBTITLE_SOURCE_BY_OUTCOME[outcome] ?? null);
   getDb()
     .prepare(
       `UPDATE media SET has_romanian_subtitle = ?, subtitle_source = ?, subtitle_detail = ?,
