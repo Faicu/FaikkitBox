@@ -449,7 +449,11 @@ export async function logSubtitleRun(
 
   const message =
     trigger === "download"
-      ? `${items[0].displayTitle}: ${shortLabelFor(items[0].outcome, items[0].source)}`
+      ? `${items[0].displayTitle}: ${shortLabelFor(items[0].outcome, {
+          source: items[0].source,
+          matchedCriteria: items[0].matchedCriteria,
+          maxCriteria: items[0].maxCriteria,
+        })}`
       : `Backfill subtitrări: ${items.length} verificate — ${corrected} corectate, ${ok} deja ok, ${rest} sărite/eșuate`;
 
   // La o descărcare unică, dacă n-a fost nevoie de nicio intervenție

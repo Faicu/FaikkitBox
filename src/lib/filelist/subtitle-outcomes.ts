@@ -82,16 +82,32 @@ export const SUBTITLE_SOURCE_LABELS: Record<SubtitleSource, string> = {
   subsro: "subs.ro",
 };
 
-// Eticheta scurtă pentru jurnal/push. Pentru descărcări o compunem cu sursa
-// reală, ca să nu contrazică detaliul (care o conține dintotdeauna); fără
-// sursă cunoscută (înregistrări vechi) rămâne eticheta statică.
-export function shortLabelFor(outcome: SubtitleOutcome, source?: SubtitleSource | null): string {
-  if (!source) return SHORT_LABELS[outcome];
-  const label = SUBTITLE_SOURCE_LABELS[source];
-  if (outcome === "downloaded") return `subtitrare descărcată de pe ${label}`;
-  if (outcome === "downloaded_approximate")
-    return `subtitrare aproximativă descărcată de pe ${label} — verifică sincronizarea`;
-  return SHORT_LABELS[outcome];
+// Eticheta scurtă pentru jurnal/push. Pentru descărcări o compunem din
+// datele rulării — sursa reală (ca să nu contrazică detaliul, care o conține
+// dintotdeauna) și cât de bine s-a potrivit release-ul, informația după care
+// se uită oricine citește notificarea ca să știe dacă merită verificată
+// sincronizarea. Fără ele (înregistrări vechi) rămâne eticheta statică.
+export function shortLabelFor(
+  outcome: SubtitleOutcome,
+  info?: {
+    source?: SubtitleSource | null;
+    matchedCriteria?: number | null;
+    maxCriteria?: number | null;
+  },
+): string {
+  const isDownload = outcome === "downloaded" || outcome === "downloaded_approximate";
+  if (!isDownload) return SHORT_LABELS[outcome];
+
+  const sourceNote = info?.source ? ` de pe ${SUBTITLE_SOURCE_LABELS[info.source]}` : "";
+  const { matchedCriteria: matched, maxCriteria: max } = info ?? {};
+  const matchNote =
+    matched != null && max != null && max > 0
+      ? ` (${matched}/${max}${matched === max ? " — potrivire perfectă" : ""})`
+      : "";
+
+  return outcome === "downloaded"
+    ? `subtitrare descărcată${sourceNote}${matchNote}`
+    : `subtitrare aproximativă descărcată${sourceNote}${matchNote} — verifică sincronizarea`;
 }
 
 // Eticheta afișată pentru `media.subtitle_source` (Bibliotecă → detalii
