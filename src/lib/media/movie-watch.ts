@@ -59,7 +59,7 @@ interface MovieRow {
 //
 // Fără dată în TMDB căutăm oricum: o dată lipsă nu e o dovadă că filmul n-a
 // apărut, iar a refuza să căutăm ar bloca urmărirea la nesfârșit.
-export function hasReleased(releaseDate: string | null, now: Date = new Date()): boolean {
+function hasReleased(releaseDate: string | null, now: Date = new Date()): boolean {
   if (!releaseDate) return true;
   const released = new Date(`${releaseDate}T00:00:00`);
   if (Number.isNaN(released.getTime())) return true;

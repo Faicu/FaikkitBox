@@ -12,14 +12,40 @@ const IBAN_BANK = "Raiffeisen Bank";
 // afișare — în clipboard ajunge forma fără spații, cea acceptată de bănci.
 const ibanGrouped = IBAN.replace(/(.{4})/g, "$1 ").trim();
 
+// `navigator.clipboard` există doar în context securizat. Prin proxy (HTTPS) e
+// acolo, dar cine deschide aplicația direct pe IP-ul din rețea, pe portul 3000,
+// primește HTTP — și atunci API-ul lipsește cu totul. Fallback-ul vechi cu
+// `execCommand` nu mai e recomandat, dar aici e singura variantă care
+// funcționează, iar alternativa e un buton care nu face nimic.
+async function copyToClipboard(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    // cădem pe varianta de mai jos
+  }
+  try {
+    const el = document.createElement("textarea");
+    el.value = text;
+    el.setAttribute("readonly", "");
+    el.style.position = "fixed";
+    el.style.opacity = "0";
+    document.body.appendChild(el);
+    el.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(el);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
 export function SupportWidget() {
   const copyIban = async () => {
-    try {
-      await navigator.clipboard.writeText(IBAN);
-      toast.success("IBAN copiat");
-    } catch {
-      toast.error("Nu am putut copia IBAN-ul");
-    }
+    if (await copyToClipboard(IBAN)) toast.success("IBAN copiat");
+    else toast.error("Nu am putut copia IBAN-ul");
   };
 
   return (

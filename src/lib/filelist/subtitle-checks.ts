@@ -14,7 +14,7 @@ import { findTag } from "./release-scoring";
 const execFileAsync = promisify(execFile);
 
 export const MEDIA_EXTENSIONS = [".mkv", ".mp4", ".avi", ".m2ts", ".ts", ".wmv", ".mov"];
-export const ROMANIAN_LANG_CODES = ["ro", "rum", "ron"];
+const ROMANIAN_LANG_CODES = ["ro", "rum", "ron"];
 
 // Extrage sezon+episod dintr-un nume de fișier (ex. "...S08E01..." → {8, 1}).
 // Folosit atât pentru a asocia fiecare fișier media cu subtitrarea lui

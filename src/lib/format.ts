@@ -26,7 +26,7 @@ export function formatEta(sec: number): string {
   return `${s}s`;
 }
 
-export function formatDuration(sec: number): string {
+function formatDuration(sec: number): string {
   if (!sec || sec <= 0) return "—";
   const d = Math.floor(sec / 86400);
   const h = Math.floor((sec % 86400) / 3600);

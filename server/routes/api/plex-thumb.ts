@@ -19,7 +19,11 @@ import {
   sendStream,
 } from "h3";
 
-import { sessionConfig, type AdminSession } from "../../../src/lib/auth/admin.server";
+import {
+  sessionConfig,
+  isAccountLive,
+  type AdminSession,
+} from "../../../src/lib/auth/admin.server";
 
 // Exact ce trimite Plex ca `thumb` pe o sesiune: /library/metadata/<id>/thumb/<ts>
 // (segmentul final lipsește la unele item-uri, de aici grupul opțional).
@@ -27,7 +31,10 @@ const THUMB_PATH = /^\/library\/metadata\/\d+\/[a-z]+(\/\d+)?$/;
 
 export default defineEventHandler(async (event) => {
   const session = await getSession<AdminSession>(event, sessionConfig());
-  if (!session.data.userId) {
+  // Aceeași verificare ca `requireAuth`: cookie-ul e valid 7 zile, deci simplul
+  // fapt că poartă un userId nu înseamnă că acel cont mai are acces.
+  const userId = session.data.userId;
+  if (!userId || !(await isAccountLive(userId))) {
     setResponseStatus(event, 401);
     return "Unauthorized";
   }

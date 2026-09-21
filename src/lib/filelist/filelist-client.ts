@@ -67,7 +67,7 @@ function mapApiTorrents(raw: FilelistApiTorrent[]): FilelistTorrent[] {
     .filter((t) => !isRawDiscRelease(t.name));
 }
 
-export async function searchFilelistRaw(
+async function searchFilelistRaw(
   query: string,
   category: FilelistCategory,
   type: "name" | "imdb" = "name",
@@ -238,21 +238,6 @@ export async function checkFilelistForItemInternal(data: {
     return { status: "error", error: e instanceof Error ? e.message : String(e), torrents: [] };
   }
 }
-
-export const checkFilelistForItem = createServerFn({ method: "GET" })
-  .validator(
-    (data: {
-      title: string;
-      originalTitle: string;
-      imdbId?: string | null;
-      mediaType: "movie" | "tv";
-    }) => data,
-  )
-  .handler(async ({ data }): Promise<FilelistSearchResult> => {
-    const { requireAuth } = await import("../auth/admin.server");
-    await requireAuth();
-    return checkFilelistForItemInternal(data);
-  });
 
 // Descarcă bytes-ii fișierului .torrent de la Filelist — Filelist API nu are
 // endpoint dedicat de download, se folosește direct download.php cu passkey.

@@ -20,7 +20,7 @@ import { createServerFn } from "@tanstack/react-start";
 
 // Doar tipuri — se șterg la compilare, nu trag nimic în bundle.
 export type { LibraryTitleMatch, DownloadingMediaEntry } from "./media";
-import type { LibraryTitleMatch, DownloadingMediaEntry } from "./media";
+import type { LibraryTitleMatch } from "./media";
 export type { ShowWatchOutcome, SetShowWatchInput } from "./show-watch";
 import type { ShowWatchOutcome, SetShowWatchInput } from "./show-watch";
 
@@ -33,17 +33,6 @@ export const searchLibraryTitles = createServerFn({ method: "GET" })
     await requireAdmin();
     const { searchLibraryTitlesCore } = await import("./media");
     return searchLibraryTitlesCore(data.query);
-  });
-
-// Ce e deja în curs de descărcare pentru un titlu (torrent pornit, dar încă
-// neindexat de Plex) — folosit de wizard ca să blocheze acțiuni duplicate.
-export const getDownloadingMediaForTmdbId = createServerFn({ method: "GET" })
-  .validator((data: { tmdbId: number; mediaType: "movie" | "tv" }) => data)
-  .handler(async ({ data }): Promise<DownloadingMediaEntry[]> => {
-    const { requireAuth } = await import("../auth/admin.server");
-    await requireAuth();
-    const { getDownloadingMediaForTmdbIdCore } = await import("./media");
-    return getDownloadingMediaForTmdbIdCore(data.tmdbId, data.mediaType);
   });
 
 // ---------------------------------------------------------------------------

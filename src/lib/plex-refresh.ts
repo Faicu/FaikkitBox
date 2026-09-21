@@ -135,13 +135,6 @@ export async function refreshPlexLibraryForCategory(category: number): Promise<v
   return refreshPlexLibrary(isMovieCategory(category) ? "movie" : "show");
 }
 
-// Rescanează ambele biblioteci (filme + seriale) — folosit când nu putem
-// determina cu certitudine tipul conținutului șters (ex. ștergere de torrent
-// direct din pagina qBittorrent, fără categorie Filelist asociată).
-export async function refreshPlexLibraries(): Promise<void> {
-  await Promise.all([refreshPlexLibrary("movie"), refreshPlexLibrary("show")]);
-}
-
 // Variantele de mai sus, dar cu emptyTrash — vezi refreshPlexLibraryAndEmptyTrash.
 export async function refreshPlexLibraryForCategoryAndEmptyTrash(category: number): Promise<void> {
   return refreshPlexLibraryAndEmptyTrash(isMovieCategory(category) ? "movie" : "show");

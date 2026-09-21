@@ -41,7 +41,7 @@ export function formatEpisodeKey(k: EpisodeKey): string {
   return `S${String(k.season).padStart(2, "0")}E${String(k.episode).padStart(2, "0")}`;
 }
 
-export function parseEpisodeKey(s: string | null): EpisodeKey | null {
+function parseEpisodeKey(s: string | null): EpisodeKey | null {
   const m = s?.match(/^S(\d+)E(\d+)$/i);
   return m ? { season: Number(m[1]), episode: Number(m[2]) } : null;
 }

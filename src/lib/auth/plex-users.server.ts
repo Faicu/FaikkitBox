@@ -44,7 +44,7 @@ function parsePlexUsersXml(xml: string): PlexAccountEntry[] {
   return entries;
 }
 
-export async function getPlexAccounts(): Promise<PlexAccountEntry[]> {
+async function getPlexAccounts(): Promise<PlexAccountEntry[]> {
   if (cache && cache.expiresAt > Date.now()) return cache.entries;
 
   const token = process.env.PLEX_TOKEN;

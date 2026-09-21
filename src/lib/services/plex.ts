@@ -226,24 +226,8 @@ export async function getPlexUserHistory(username: string): Promise<PlexHistoryE
   }
 }
 
-// Index "văzut" neplafonat, pentru un singur user — folosit de listă/drawer
-// prin `isItemWatched`/`getWatchedAt`. Vezi comentariul de pe `PlexWatchedIndex`.
-export async function getPlexWatchedIndex(username: string): Promise<PlexWatchedIndex> {
-  const empty = (): PlexWatchedIndex => ({ ratingKeys: new Map(), titleKeys: new Map() });
-  const token = process.env.PLEX_TOKEN;
-  if (!token) return empty();
-  try {
-    const { url } = await discoverPlexUrl(token, process.env.PLEX_URL);
-    const headers = { Accept: "application/json", "X-Plex-Token": token };
-    const history = await fetchPlexHistory(url, headers);
-    return history.watchedIndexByUser[username] ?? empty();
-  } catch {
-    return empty();
-  }
-}
-
-// La fel ca `getPlexWatchedIndex`, dar pentru toți userii deodată — folosit
-// de drawer pentru "alți utilizatori care au văzut".
+// Indexul "văzut" pentru toți userii deodată — folosit de drawer pentru
+// "alți utilizatori care au văzut".
 export async function getAllPlexWatchedIndexes(): Promise<Record<string, PlexWatchedIndex>> {
   const token = process.env.PLEX_TOKEN;
   if (!token) return {};

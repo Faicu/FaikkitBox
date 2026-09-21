@@ -64,7 +64,7 @@ function toBackupFile(dir: string, name: string): BackupFile {
   return { name, path, size: st.size, createdAt: st.mtime.toISOString() };
 }
 
-export function listBackups(): BackupFile[] {
+function listBackups(): BackupFile[] {
   const dir = backupDir();
   if (!existsSync(dir)) return [];
   return readdirSync(dir)

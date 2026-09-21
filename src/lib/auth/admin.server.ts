@@ -1,3 +1,4 @@
+import type { StatementSync } from "node:sqlite";
 import { useSession } from "@tanstack/react-start/server";
 
 export type AdminSession = {
@@ -49,11 +50,17 @@ export async function isAccountLive(userId: number): Promise<string | null> {
   return (await liveAccount(userId))?.role ?? null;
 }
 
+// Statement-ul se pregătește o singură dată: verificarea rulează la FIECARE
+// cerere autentificată, inclusiv la fiecare poster prin /api/plex-thumb, iar
+// re-parsarea SQL-ului de fiecare dată ar fi singurul cost care se vede.
+let accountStmt: StatementSync | null = null;
+
 async function liveAccount(userId: number): Promise<{ role: string; status: string } | null> {
-  const { getDb } = await import("../db");
-  const row = getDb().prepare("SELECT role, status FROM users WHERE id = ?").get(userId) as
-    | { role: string; status: string }
-    | undefined;
+  if (!accountStmt) {
+    const { getDb } = await import("../db");
+    accountStmt = getDb().prepare("SELECT role, status FROM users WHERE id = ?");
+  }
+  const row = accountStmt.get(userId) as { role: string; status: string } | undefined;
   if (!row || row.status !== "approved") return null;
   return row;
 }

@@ -18,6 +18,7 @@ Construit cu [TanStack Start](https://tanstack.com/start) (React 19 + TanStack R
 - [Backup și retenție](#backup-și-retenție)
 - [Sistemul de erori și observabilitate](#sistemul-de-erori-și-observabilitate)
 - [Securitate](#securitate)
+  - [Privilegiile procesului](#privilegiile-procesului)
 - [Performanță și date live](#performanță-și-date-live)
 - [Stack tehnic](#stack-tehnic)
 - [Structură proiect](#structură-proiect)
@@ -200,6 +201,8 @@ Avertismentele proprii ale Node.js (`ExperimentalWarning` etc.) sunt filtrate di
 ## Securitate
 
 - **Toate server function-urile cer autentificare**, cu două excepții intenționate: `getAdminStatus` (clientul trebuie să poată afla că *nu* e logat) și `getVapidPublicKey` (cheie publică prin definiție). Gardul e `requireAuth()` (orice cont aprobat) sau `requireAdmin()`, ca primă instrucțiune din handler — nu în client, unde poate fi ocolit.
+- **Sesiunile se validează în baza de date la fiecare cerere.** `requireAuth`/`requireAdmin` (și `/api/plex-thumb`, și `getAdminStatus`) verifică prin `liveAccount()` că rândul din `users` există și e `approved`, apoi citesc rolul de acolo. Cookie-ul e semnat și ține 7 zile, deci fără verificarea asta „revocă accesul" din pagina Utilizatori nu revoca nimic pentru sesiunile deja emise, iar o retrogradare din admin rămânea fără efect până la expirare. Statement-ul e pregătit o singură dată — verificarea rulează pe fiecare cerere, inclusiv pe fiecare poster.
+- **Headere de securitate** pe toate răspunsurile, din `routeRules` (`vite.config.ts`, constanta `SECURITY_HEADERS`): `X-Frame-Options: DENY` + `frame-ancestors 'none'` (clickjacking peste butoanele de ștergere), `nosniff`, `Referrer-Policy`, `Permissions-Policy`, HSTS. **CSP-ul e deocamdată `Report-Only`** — SSR-ul injectează script și stiluri inline, iar o politică aplicată direct ar albi pagina; se trece pe aplicat după ce consola browserului rămâne curată.
 - **Rate limiting** pe autentificare (15 încercări/IP și 8/utilizator la 15 min, contorul se stinge la login reușit) și pe înregistrare (6/IP pe oră). Înregistrarea interoghează lista de prieteni Plex, deci fără limită ar fi și un oracol de enumerare.
 - **`/api/plex-thumb`** acceptă o singură formă de cale, pe **listă albă** (`/library/metadata/<id>/<tip>/<ts>`), nu o filtrare de `..`. `fetch()` normalizează `/library/../x` la `/x` înainte de a emite cererea, deci un `startsWith("/library/")` era ocolibil și transforma ruta într-un proxy autentificat către întreg API-ul Plex. Blacklist-urile de path traversal se ocolesc; forma nu.
 - **Codul server nu ajunge în bundle-ul public.** Vezi regula `*.functions.ts` de mai jos. Verificare după orice refactor:
@@ -209,6 +212,16 @@ Avertismentele proprii ale Node.js (`ExperimentalWarning` etc.) sunt filtrate di
   ```
 
 - **Secretele nu ajung niciodată în bundle** — build-ul înlocuiește `process.env` cu `{}` în codul de client. Verificare: caută valorile din `.env` în `.output/public/`.
+
+### Privilegiile procesului
+
+Serviciul rulează sub contul de sistem **`faikkitbox`** (grup `media`), nu ca root. Drepturile de sistem vin dintr-o listă sudoers cu comenzi fixe — exact cele din `agent.functions.ts` și `network-link.ts`, cu `ethtool` fixat pe interfața reală. O comandă nouă în pagina Tehnic trebuie adăugată și în `deploy/hardening/faikkitbox.sudoers`, altfel eșuează cu „not allowed".
+
+Scrierea în bibliotecă (subtitrări, ștergeri) merge prin grupul `media`: `/media/ssd2tb` e `setgid` + scriibil de grup, iar qBittorrent pornește cu `Group=media` și `UMask=0002`, deci fișierele descărcate ies `root:media`.
+
+Peste asta, un drop-in systemd (`deploy/hardening/hardening.conf`) restrânge procesul: `PrivateTmp`, `ProtectClock`, `ProtectControlGroups`, `ProtectKernelLogs`, `ProtectHostname`, `LockPersonality`, `RestrictRealtime`, familii de socket-uri limitate.
+
+**Limita cunoscută:** `NoNewPrivileges` nu poate fi activat (sudo e setuid), iar `ProtectSystem` nici atât, cât timp pagina Sistem poate rula `apt-get upgrade` — apt scrie în `/usr` și `/var`. Prin sudo, `apt-get upgrade` e practic echivalent cu root deplin: orice pachet rulează scripturi la instalare. Contul dedicat limitează daunele și accesul la fișiere, dar nu blochează un atacator care ajunge să execute cod în aplicație. Detalii și pașii pentru etanșare: `deploy/hardening/README.md`.
 
 ---
 
@@ -230,7 +243,7 @@ Pentru datele scumpe și lent-schimbătoare (`si.processes()`, statistici Docker
 
 - [React 19](https://react.dev/) + [TanStack Start](https://tanstack.com/start) / [TanStack Router](https://tanstack.com/router) / [TanStack Query](https://tanstack.com/query)
 - [Vite](https://vitejs.dev/) + [Nitro](https://nitro.build/) (preset `node-server`)
-- [Tailwind CSS v4](https://tailwindcss.com/) + [shadcn/ui](https://ui.shadcn.com/) (doar componentele efectiv folosite — dialog, drawer, alert-dialog, progress, sonner, button)
+- [Tailwind CSS v4](https://tailwindcss.com/) + [shadcn/ui](https://ui.shadcn.com/) (doar componentele efectiv folosite — dialog, drawer, progress, sonner, button)
 - [systeminformation](https://www.npmjs.com/package/systeminformation) — metrici sistem
 - SQLite nativ (`node:sqlite`, Node.js 22.5+) — fără ORM
 - [Vitest](https://vitest.dev/) — teste pe logica pură (urmărire seriale, reducer-ul și derivările wizard-ului, unirea vizionărilor recente, dimensionarea posterelor)
@@ -279,6 +292,9 @@ server/
                       show-watcher, db-backup, github-commit-tracker,
                       fast-shutdown
   routes/             rute API: GitHub webhook, SSE auto-reload, proxy thumbnail-uri Plex
+deploy/
+  hardening/          unit systemd, listă sudoers și scripturi pentru contul
+                      dedicat sub care rulează serviciul (vezi Securitate)
 public/               assets statice, Service Worker
 ```
 
@@ -348,10 +364,11 @@ node .output/server/index.mjs
 ## Deploy
 
 ```bash
-sudo systemctl stop faikkitbox   # 1. oprește serviciul ÎNAINTE de build
-npm run build                    # 2. rulează tsc --noEmit, apoi vite build
-git add <fișiere> && git commit  # 3.
-sudo systemctl start faikkitbox  # 4. repornește cu build-ul nou
+sudo systemctl stop faikkitbox        # 1. oprește serviciul ÎNAINTE de build
+npm run build                         # 2. rulează tsc --noEmit, apoi vite build
+sudo chown -R faikkitbox:media .output  # 3. build-ul rulat ca root lasă fișiere root
+git add <fișiere> && git commit       # 4.
+sudo systemctl start faikkitbox       # 5. repornește cu build-ul nou
 ```
 
 **Push-ul către GitHub NU e automat** — commit-urile locale rămân nepublicate până când utilizatorul apasă butonul dedicat din pagina Tehnic (`pushToGitHub`, `src/lib/github.functions.ts`). E intenționat, nu o eroare de urmărit sau reparat — vezi `CLAUDE.md`.
@@ -418,7 +435,7 @@ Vezi [`STRUCTURE.md`](./STRUCTURE.md) pentru lista completă, fișier cu fișier
 - `src/components/filelist/quality-utils.ts` — `detectQuality(name)` (cele cinci categorii exclusive), `emptyQualitySet`, `groupTorrentsBySeasonEpisode`. Orice logică nouă de parsare a numelui de torrent ar trebui să treacă prin aici, nu regex inline în componente. O treaptă nouă de calitate se adaugă în șase locuri care trebuie să rămână în acord: `QualitySet` (`components/filelist/types.ts`), `detectQuality`, `detectTorrentQuality` (`lib/media/torrent-quality.ts`), `QUALITY_RANK` și tipul `WatchQuality` (`wizard/selection.ts`, `wizard/WizardControls.tsx`), selectorul de calitate din wizard, și filtrele din `FilelistSection.tsx`.
 - `src/components/filelist/DownloadConfirmDialog.tsx` — dialogul standard de confirmare descărcare, inclusiv butonul „Info Căutare". Orice buton nou de download ar trebui să treacă prin el, nu să descarce direct.
 - `src/components/filelist/use-download.ts` — `useDownload()` (upload qBittorrent + toast + invalidare cache).
-- `src/components/ui/alert-dialog.tsx` — wrapper Radix deja stilizat; folosește-l pentru orice confirmare distructivă în loc de `window.confirm()`.
+- **Confirmările distructive se fac inline**, nu cu `AlertDialog`/`Dialog` Radix și nici cu `window.confirm()`. Wrapper-ul `ui/alert-dialog.tsx` a fost eliminat (21 sept. 2026): imbricat într-un `Drawer` vaul îngheța ecranul fără nicio eroare logată (vezi commit `c76ce30`). Modelul de urmat: overlay-ul simplu din `BibliotecaList.tsx` sau confirmarea inline din `PushSubscriptionsSection.tsx`.
 - Pagina Descoperă are două moduri (`grid`/`feed`) cu componente separate (`DiscoverGrid.tsx`, `FeedView.tsx`) care share `FilterTabs`. Dacă adaugi un filtru nou, verifică dacă trebuie propagat în ambele moduri.
 - `src/components/principala/AddMediaWizard.tsx` — wizard-ul de adăugare, deschis fie din Acasă, fie prefill dintr-un titlu deja identificat (prop `initialItem`, folosit din `SceneViewer.tsx`). E doar shell: starea e în `wizard/state.ts`, derivările în `wizard/derive-seasons.ts` și `wizard/selection.ts` (pure, testate), fiecare pas într-un fișier propriu. Un pas nou se adaugă în uniunea `Step`, nu ca `useState` în componentă.
 - `src/components/ui/orb.tsx` — orb animat pentru o **așteptare fără capăt cunoscut** (urmărire activă, procesare în Plex, descărcare fără procent). Pentru confirmarea unui clic rămâne `Loader2` — un orb acolo ar promite o muncă de fundal care nu există.

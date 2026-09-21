@@ -1,5 +1,3 @@
-import { createServerFn } from "@tanstack/react-start";
-
 import { fetchJson } from "../services/shared";
 
 // ---------------------------------------------------------------------------
@@ -45,11 +43,3 @@ export async function getTvmazeAirstampsInternal(imdbId: string): Promise<Tvmaze
     return [];
   }
 }
-
-export const getTvmazeAirstamps = createServerFn({ method: "GET" })
-  .validator((data: { imdbId: string }) => data)
-  .handler(async ({ data }): Promise<TvmazeAirstamp[]> => {
-    const { requireAuth } = await import("../auth/admin.server");
-    await requireAuth();
-    return getTvmazeAirstampsInternal(data.imdbId);
-  });

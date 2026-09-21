@@ -469,11 +469,3 @@ export async function getTmdbAllSeasonsInternal(
     return [];
   }
 }
-
-export const getTmdbAllSeasons = createServerFn({ method: "GET" })
-  .validator((data: { tmdbId: number; seasonNumbers: number[] }) => data)
-  .handler(async ({ data }): Promise<TmdbSeasonSchema[]> => {
-    const { requireAuth } = await import("../auth/admin.server");
-    await requireAuth();
-    return getTmdbAllSeasonsInternal(data.tmdbId, data.seasonNumbers);
-  });
