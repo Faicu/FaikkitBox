@@ -39,7 +39,8 @@ import {
   type SubtitleOutcome,
   CORRECTED_OUTCOMES,
   OK_OUTCOMES,
-  SHORT_LABELS,
+  shortLabelFor,
+  type SubtitleSource,
 } from "./subtitle-outcomes";
 import { lookupTitleByImdbId, searchImdbIdByReleaseName } from "../tmdb/tmdb-title-lookup";
 import {
@@ -84,6 +85,9 @@ export interface SubtitleRunItem {
   // rezultate gen "deja are subtitrare" unde nu s-a făcut nicio scorare).
   matchedCriteria?: number;
   maxCriteria?: number;
+  // Sursa externă (OpenSubtitles / subs.ro) de unde a venit subtitrarea —
+  // prezentă doar la outcome-urile de descărcare.
+  source?: SubtitleSource;
 }
 
 function item(
@@ -91,7 +95,13 @@ function item(
   displayTitle: string,
   outcome: SubtitleOutcome,
   detail: string,
-  extra?: { release?: string; path?: string; matchedCriteria?: number; maxCriteria?: number },
+  extra?: {
+    release?: string;
+    path?: string;
+    matchedCriteria?: number;
+    maxCriteria?: number;
+    source?: SubtitleSource;
+  },
 ): SubtitleRunItem {
   return { torrentName, displayTitle, outcome, detail, ...extra };
 }
@@ -201,6 +211,7 @@ export async function ensureRomanianSubtitle(
     path: result.path,
     matchedCriteria: result.matchedCriteria,
     maxCriteria: result.maxCriteria,
+    source: result.source,
   });
 }
 
@@ -438,7 +449,7 @@ export async function logSubtitleRun(
 
   const message =
     trigger === "download"
-      ? `${items[0].displayTitle}: ${SHORT_LABELS[items[0].outcome]}`
+      ? `${items[0].displayTitle}: ${shortLabelFor(items[0].outcome, items[0].source)}`
       : `Backfill subtitrări: ${items.length} verificate — ${corrected} corectate, ${ok} deja ok, ${rest} sărite/eșuate`;
 
   // La o descărcare unică, dacă n-a fost nevoie de nicio intervenție
@@ -468,6 +479,7 @@ export async function logSubtitleRun(
           path: it.path,
           matchedCriteria: it.matchedCriteria,
           maxCriteria: it.maxCriteria,
+          source: it.source,
         })),
       },
       { skipPush },

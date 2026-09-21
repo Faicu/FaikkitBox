@@ -15,7 +15,7 @@ import { basename, dirname, extname, join } from "node:path";
 import { readFile } from "node:fs/promises";
 import type { QbitFileInfo } from "../qbit-client";
 import type { OpenSubtitlesResult } from "./opensubtitles-client";
-import type { SubtitleOutcome } from "./subtitle-outcomes";
+import type { SubtitleOutcome, SubtitleSource } from "./subtitle-outcomes";
 import {
   fileExists,
   hasEmbeddedRomanianSubtitle,
@@ -61,6 +61,8 @@ export interface ProcessMediaFileResult {
   path?: string;
   matchedCriteria?: number;
   maxCriteria?: number;
+  // Sursa externă reală a subtitrării descărcate (outcome-ul nu o mai spune).
+  source?: SubtitleSource;
 }
 
 export async function processMediaFile(
@@ -154,7 +156,7 @@ export async function processMediaFile(
 
   // Pas 4 — descarcă și scrie subtitrarea aleasă.
   const destPath = join(savePath, mediaDir === "." ? "" : mediaDir, `${mediaBaseName}.ro.srt`);
-  const { outcome, detail, matchedCriteria, maxCriteria } = await downloadAndWriteSubtitle(
+  const { outcome, detail, matchedCriteria, maxCriteria, source } = await downloadAndWriteSubtitle(
     resolved.winner,
     resolved.confident,
     destPath,
@@ -166,5 +168,6 @@ export async function processMediaFile(
     path: destPath,
     matchedCriteria,
     maxCriteria,
+    source,
   };
 }

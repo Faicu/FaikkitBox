@@ -329,7 +329,10 @@ export function upsertMediaEntry(input: UpsertMediaEntryInput): number {
 // ---------------------------------------------------------------------------
 
 // Sursa subtitrării, derivată din outcome-ul ensureRomanianSubtitle
-// (subtitles.ts) — vezi SubtitleOutcome acolo pentru lista completă.
+// (subtitles.ts) — vezi SubtitleOutcome acolo pentru lista completă. La
+// descărcări, outcome-ul nu distinge OpenSubtitles de subs.ro (numele
+// `downloaded_opensubtitles` e istoric), așa că sursa reală vine ca
+// argument separat și are prioritate — vezi `downloadedSource` mai jos.
 const SUBTITLE_SOURCE_BY_OUTCOME: Record<string, string | null> = {
   already_embedded: "embedded",
   audio_already_romanian: "audio_ro",
@@ -360,7 +363,10 @@ export function updateMediaSubtitleStatus(
   torrentHash: string,
   outcome: string,
   detail: string,
+  downloadedSource?: "opensubtitles" | "subsro" | null,
 ): void {
+  const source =
+    downloadedSource === "subsro" ? "subsro" : (SUBTITLE_SOURCE_BY_OUTCOME[outcome] ?? null);
   getDb()
     .prepare(
       `UPDATE media SET has_romanian_subtitle = ?, subtitle_source = ?, subtitle_detail = ?,
@@ -370,7 +376,7 @@ export function updateMediaSubtitleStatus(
     )
     .run(
       HAS_ROMANIAN_OUTCOMES.has(outcome) ? 1 : 0,
-      SUBTITLE_SOURCE_BY_OUTCOME[outcome] ?? null,
+      source,
       detail,
       outcome === "audio_already_romanian" ? 1 : 0,
       torrentHash,

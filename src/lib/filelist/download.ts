@@ -183,7 +183,12 @@ async function pollUntilComplete(
             });
             await logSubtitleRun([subtitleItem], "download");
             const { updateMediaSubtitleStatus } = await import("../media/media");
-            updateMediaSubtitleStatus(torrentHash, subtitleItem.outcome, subtitleItem.detail);
+            updateMediaSubtitleStatus(
+              torrentHash,
+              subtitleItem.outcome,
+              subtitleItem.detail,
+              subtitleItem.source,
+            );
           } catch (e) {
             console.warn(`[filelist] Eroare subtitrare pentru "${torrentName}":`, e);
           }
@@ -681,7 +686,7 @@ export async function correctSubtitleForMediaCore(
 
     await logSubtitleRun([result], "download");
     const { updateMediaSubtitleStatus } = await import("../media/media");
-    updateMediaSubtitleStatus(row.torrent_hash, result.outcome, result.detail);
+    updateMediaSubtitleStatus(row.torrent_hash, result.outcome, result.detail, result.source);
     if (CORRECTED_OUTCOMES.includes(result.outcome)) {
       await refreshPlexLibrary(plexType).catch(() => {});
     }

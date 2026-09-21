@@ -64,10 +64,33 @@ export const SHORT_LABELS: Record<SubtitleOutcome, string> = {
   multiple_srt_skipped: "mai multe .srt găsite, am sărit peste",
   season_pack_skipped: "pachet de episoade, am sărit peste",
   no_imdb: "fără subtitrare și fără IMDb id pentru căutare",
-  no_subtitle_found: "nicio subtitrare găsită pe OpenSubtitles",
+  no_subtitle_found: "nicio subtitrare găsită pe OpenSubtitles sau subs.ro",
   download_failed: "eroare la corectarea subtitrării",
   no_media_file: "niciun fișier media găsit în torrent",
   season_corrected: "subtitrări corectate pentru sezon (vezi detalii per episod)",
   season_already_ok: "toate episoadele au deja subtitrare corectă",
   season_no_subtitle_found: "unele episoade fără subtitrare găsită (vezi detalii)",
 };
+
+// Sursa externă de la care a venit subtitrarea descărcată. Outcome-ul
+// (`downloaded_opensubtitles`) a rămas cu numele istoric, de pe vremea când
+// OpenSubtitles era singura sursă, deci nu mai e el cel care spune sursa —
+// câmpul ăsta e.
+export type SubtitleSource = "opensubtitles" | "subsro";
+
+export const SUBTITLE_SOURCE_LABELS: Record<SubtitleSource, string> = {
+  opensubtitles: "OpenSubtitles",
+  subsro: "subs.ro",
+};
+
+// Eticheta scurtă pentru jurnal/push. Pentru descărcări o compunem cu sursa
+// reală, ca să nu contrazică detaliul (care o conține dintotdeauna); fără
+// sursă cunoscută (înregistrări vechi) rămâne eticheta statică.
+export function shortLabelFor(outcome: SubtitleOutcome, source?: SubtitleSource | null): string {
+  if (!source) return SHORT_LABELS[outcome];
+  const label = SUBTITLE_SOURCE_LABELS[source];
+  if (outcome === "downloaded_opensubtitles") return `subtitrare descărcată de pe ${label}`;
+  if (outcome === "downloaded_opensubtitles_approximate")
+    return `subtitrare aproximativă descărcată de pe ${label} — verifică sincronizarea`;
+  return SHORT_LABELS[outcome];
+}

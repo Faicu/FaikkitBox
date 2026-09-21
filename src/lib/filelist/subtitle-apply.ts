@@ -14,7 +14,7 @@ import {
   piecesOverlap,
   writeFileWithRetry,
 } from "./subtitle-encoding";
-import type { SubtitleOutcome } from "./subtitle-outcomes";
+import { SUBTITLE_SOURCE_LABELS, type SubtitleOutcome, type SubtitleSource } from "./subtitle-outcomes";
 import type { SubtitleWinner } from "./subtitle-sources";
 
 // Descarcă și scrie pe disc subtitrarea aleasă de resolveBestSubtitle,
@@ -28,8 +28,9 @@ export async function downloadAndWriteSubtitle(
   detail: string;
   matchedCriteria: number;
   maxCriteria: number;
+  source: SubtitleSource;
 }> {
-  const sourceLabel = winner.source === "opensubtitles" ? "OpenSubtitles" : "subs.ro";
+  const sourceLabel = SUBTITLE_SOURCE_LABELS[winner.source];
   const { matchedCriteria, maxCriteria } = winner;
   const isPerfect = maxCriteria > 0 && matchedCriteria === maxCriteria;
   const content = await winner.getContent();
@@ -40,6 +41,7 @@ export async function downloadAndWriteSubtitle(
       detail: `descărcarea subtitrării de pe ${sourceLabel} (release „${winner.release}") a eșuat`,
       matchedCriteria,
       maxCriteria,
+      source: winner.source,
     };
   }
 
@@ -57,6 +59,7 @@ export async function downloadAndWriteSubtitle(
         detail: `${isPerfect ? "subtitrare perfectă" : "subtitrare"} descărcată de pe ${sourceLabel}, release „${winner.release}" (${matchNote})${encodingNote}`,
         matchedCriteria,
         maxCriteria,
+        source: winner.source,
       };
     }
     console.warn(
@@ -67,6 +70,7 @@ export async function downloadAndWriteSubtitle(
       detail: `subtitrare aproximativă descărcată de pe ${sourceLabel}, release „${winner.release}" (${matchedCriteria}/${maxCriteria} criterii — fără potrivire clară de sursă/rezoluție, verifică sincronizarea)${encodingNote}`,
       matchedCriteria,
       maxCriteria,
+      source: winner.source,
     };
   } catch (e) {
     console.warn(`[subtitles] scriere .srt eșuată (${destPath}):`, e);
@@ -75,6 +79,7 @@ export async function downloadAndWriteSubtitle(
       detail: `scrierea subtitrării descărcate pe disk a eșuat: ${e instanceof Error ? e.message : e}`,
       matchedCriteria,
       maxCriteria,
+      source: winner.source,
     };
   }
 }
