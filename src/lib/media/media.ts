@@ -339,8 +339,8 @@ const SUBTITLE_SOURCE_BY_OUTCOME: Record<string, string | null> = {
   srt_already_ok: "tracked_srt",
   renamed_srt: "tracked_srt",
   reencoded_srt: "tracked_srt",
-  downloaded_opensubtitles: "opensubtitles",
-  downloaded_opensubtitles_approximate: "opensubtitles",
+  downloaded: "opensubtitles",
+  downloaded_approximate: "opensubtitles",
   season_corrected: "season_aggregate",
   season_already_ok: "season_aggregate",
 };
@@ -351,8 +351,8 @@ const HAS_ROMANIAN_OUTCOMES = new Set([
   "srt_already_ok",
   "renamed_srt",
   "reencoded_srt",
-  "downloaded_opensubtitles",
-  "downloaded_opensubtitles_approximate",
+  "downloaded",
+  "downloaded_approximate",
   "season_corrected",
   "season_already_ok",
 ]);

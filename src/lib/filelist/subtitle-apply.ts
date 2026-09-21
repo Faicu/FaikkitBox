@@ -55,7 +55,7 @@ export async function downloadAndWriteSubtitle(
         ? "potrivire perfectă"
         : `potrivire sursă+rezoluție confirmată, ${matchedCriteria}/${maxCriteria} criterii`;
       return {
-        outcome: "downloaded_opensubtitles",
+        outcome: "downloaded",
         detail: `${isPerfect ? "subtitrare perfectă" : "subtitrare"} descărcată de pe ${sourceLabel}, release „${winner.release}" (${matchNote})${encodingNote}`,
         matchedCriteria,
         maxCriteria,
@@ -66,7 +66,7 @@ export async function downloadAndWriteSubtitle(
       `[subtitles] subtitrare aproximativă salvată (verifică sincronizarea) → ${destPath}`,
     );
     return {
-      outcome: "downloaded_opensubtitles_approximate",
+      outcome: "downloaded_approximate",
       detail: `subtitrare aproximativă descărcată de pe ${sourceLabel}, release „${winner.release}" (${matchedCriteria}/${maxCriteria} criterii — fără potrivire clară de sursă/rezoluție, verifică sincronizarea)${encodingNote}`,
       matchedCriteria,
       maxCriteria,

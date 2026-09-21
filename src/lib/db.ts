@@ -852,5 +852,61 @@ function applyCleanups(database: DatabaseSync): void {
       }
       database.exec("PRAGMA user_version = 28");
     }
+
+    if (version < 29) {
+      // v29: outcome-urile de descărcare a subtitrării nu mai pretind sursa.
+      //
+      // Se numeau `downloaded_opensubtitles(_approximate)` de pe vremea când
+      // OpenSubtitles era singura sursă. După adăugarea subs.ro numele a
+      // rămas, iar eticheta scurtă din jurnal (derivată din outcome) anunța
+      // „descărcată de pe OpenSubtitles" peste un detaliu care spunea corect
+      // subs.ro. Acum sursa e un câmp separat (`source`), iar outcome-ul e
+      // neutru: `downloaded` / `downloaded_approximate`.
+      //
+      // Înlocuirea de text merge pe blob-ul JSON din `activity.meta` (unde
+      // outcome-urile stau în meta.items[] și meta.byOutcome[]). Prefixul
+      // comun face ca `_approximate` să se rescrie corect din aceeași
+      // înlocuire.
+      const renamed = database
+        .prepare(
+          `UPDATE activity SET meta = REPLACE(meta, 'downloaded_opensubtitles', 'downloaded')
+            WHERE type = 'subtitle_fix' AND meta LIKE '%downloaded_opensubtitles%'`,
+        )
+        .run();
+      if (renamed.changes > 0) {
+        console.log(`[db] Migrare v29: ${renamed.changes} intrări de jurnal cu outcome redenumit`);
+      }
+
+      // Titlul deja scris în jurnal (și trimis ca push) al descărcărilor de
+      // pe subs.ro conține textul greșit, înghețat la momentul scrierii.
+      // Îl corectăm doar acolo unde detaliul din meta confirmă subs.ro.
+      const retitled = database
+        .prepare(
+          `UPDATE activity
+              SET message = REPLACE(message, 'descărcată de pe OpenSubtitles', 'descărcată de pe subs.ro')
+            WHERE type = 'subtitle_fix'
+              AND message LIKE '%descărcată de pe OpenSubtitles%'
+              AND meta LIKE '%de pe subs.ro%'`,
+        )
+        .run();
+      if (retitled.changes > 0) {
+        console.log(`[db] Migrare v29: ${retitled.changes} titluri de jurnal corectate la subs.ro`);
+      }
+
+      // Aceeași confuzie s-a scris și în `media.subtitle_source`: orice
+      // descărcare ajungea acolo ca „opensubtitles". Sursa reală se poate
+      // recupera din `subtitle_detail`, care a conținut dintotdeauna numele
+      // corect al sursei („descărcată de pe subs.ro").
+      const fixed = database
+        .prepare(
+          `UPDATE media SET subtitle_source = 'subsro'
+            WHERE subtitle_source = 'opensubtitles' AND subtitle_detail LIKE '%de pe subs.ro%'`,
+        )
+        .run();
+      if (fixed.changes > 0) {
+        console.log(`[db] Migrare v29: ${fixed.changes} titluri cu sursa corectată la subs.ro`);
+      }
+      database.exec("PRAGMA user_version = 29");
+    }
   }
 }

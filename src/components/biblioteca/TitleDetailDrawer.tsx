@@ -43,6 +43,7 @@ import type { PlexTitleDetail } from "@/lib/services/plex-browse";
 import { correctSubtitleForMedia, deleteSubtitleForMedia } from "@/lib/filelist.functions";
 import { setShowWatch, checkShowNow } from "@/lib/media/media.functions";
 import { formatMs, formatBytes, formatSpeed, formatEta } from "@/lib/format";
+import { subtitleSourceDisplay } from "@/lib/filelist/subtitle-outcomes";
 import { Progress } from "@/components/ui/progress";
 import { StatusBadge } from "./StatusBadge";
 import {
@@ -508,7 +509,10 @@ export function TitleDetailDrawer({
                             ),
                           ),
                         ],
-                        d.tech.subtitleSource && ["Sursă subtitrare", d.tech.subtitleSource],
+                        d.tech.subtitleSource && [
+                          "Sursă subtitrare",
+                          subtitleSourceDisplay(d.tech.subtitleSource),
+                        ],
                         d.tech.subtitleDetail && ["Detaliu subtitrare", d.tech.subtitleDetail],
                         d.tech.subtitleCheckedAt && [
                           "Subtitrare verificată",

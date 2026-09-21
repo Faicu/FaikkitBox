@@ -11,8 +11,8 @@ export type SubtitleOutcome =
   | "srt_already_ok"
   | "renamed_srt"
   | "reencoded_srt"
-  | "downloaded_opensubtitles"
-  | "downloaded_opensubtitles_approximate"
+  | "downloaded"
+  | "downloaded_approximate"
   | "multiple_srt_skipped"
   | "season_pack_skipped"
   | "no_imdb"
@@ -31,8 +31,8 @@ export type SubtitleOutcome =
 export const CORRECTED_OUTCOMES: SubtitleOutcome[] = [
   "renamed_srt",
   "reencoded_srt",
-  "downloaded_opensubtitles",
-  "downloaded_opensubtitles_approximate",
+  "downloaded",
+  "downloaded_approximate",
   "season_corrected",
 ];
 
@@ -47,7 +47,7 @@ export const OK_OUTCOMES: SubtitleOutcome[] = [
   "season_already_ok",
 ];
 
-export const APPROXIMATE_OUTCOMES: SubtitleOutcome[] = ["downloaded_opensubtitles_approximate"];
+export const APPROXIMATE_OUTCOMES: SubtitleOutcome[] = ["downloaded_approximate"];
 
 // Etichetă scurtă per outcome — folosită pentru linia din Jurnal Activități
 // și corpul notificării push la o descărcare unică (rezumatul complet, cu
@@ -58,9 +58,8 @@ export const SHORT_LABELS: Record<SubtitleOutcome, string> = {
   srt_already_ok: "avea deja .srt corect denumit și codat",
   renamed_srt: "subtitrare corectată (.srt redenumit pentru Plex)",
   reencoded_srt: "subtitrare corectată (encoding UTF-8)",
-  downloaded_opensubtitles: "subtitrare descărcată de pe OpenSubtitles",
-  downloaded_opensubtitles_approximate:
-    "subtitrare aproximativă descărcată — verifică sincronizarea",
+  downloaded: "subtitrare descărcată automat",
+  downloaded_approximate: "subtitrare aproximativă descărcată — verifică sincronizarea",
   multiple_srt_skipped: "mai multe .srt găsite, am sărit peste",
   season_pack_skipped: "pachet de episoade, am sărit peste",
   no_imdb: "fără subtitrare și fără IMDb id pentru căutare",
@@ -72,10 +71,10 @@ export const SHORT_LABELS: Record<SubtitleOutcome, string> = {
   season_no_subtitle_found: "unele episoade fără subtitrare găsită (vezi detalii)",
 };
 
-// Sursa externă de la care a venit subtitrarea descărcată. Outcome-ul
-// (`downloaded_opensubtitles`) a rămas cu numele istoric, de pe vremea când
-// OpenSubtitles era singura sursă, deci nu mai e el cel care spune sursa —
-// câmpul ăsta e.
+// Sursa externă de la care a venit subtitrarea descărcată. Outcome-ul nu o
+// mai spune (se numea `downloaded_opensubtitles` de pe vremea când
+// OpenSubtitles era singura sursă — redenumit la migrarea v29) — câmpul ăsta
+// e singurul care o zice.
 export type SubtitleSource = "opensubtitles" | "subsro";
 
 export const SUBTITLE_SOURCE_LABELS: Record<SubtitleSource, string> = {
@@ -89,8 +88,23 @@ export const SUBTITLE_SOURCE_LABELS: Record<SubtitleSource, string> = {
 export function shortLabelFor(outcome: SubtitleOutcome, source?: SubtitleSource | null): string {
   if (!source) return SHORT_LABELS[outcome];
   const label = SUBTITLE_SOURCE_LABELS[source];
-  if (outcome === "downloaded_opensubtitles") return `subtitrare descărcată de pe ${label}`;
-  if (outcome === "downloaded_opensubtitles_approximate")
+  if (outcome === "downloaded") return `subtitrare descărcată de pe ${label}`;
+  if (outcome === "downloaded_approximate")
     return `subtitrare aproximativă descărcată de pe ${label} — verifică sincronizarea`;
   return SHORT_LABELS[outcome];
+}
+
+// Eticheta afișată pentru `media.subtitle_source` (Bibliotecă → detalii
+// tehnice). Valorile din DB sunt slug-uri, nu text pentru ochi.
+export const SUBTITLE_SOURCE_DISPLAY: Record<string, string> = {
+  opensubtitles: "OpenSubtitles",
+  subsro: "subs.ro",
+  embedded: "încorporată în fișier",
+  audio_ro: "audio în română",
+  tracked_srt: ".srt din torrent",
+  season_aggregate: "per episod (pachet de sezon)",
+};
+
+export function subtitleSourceDisplay(source: string): string {
+  return SUBTITLE_SOURCE_DISPLAY[source] ?? source;
 }
