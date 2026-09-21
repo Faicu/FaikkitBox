@@ -143,7 +143,7 @@ export async function renegotiateLink(): Promise<RenegotiateResult> {
     // revină (2-5s), iar cererea HTTP curentă circulă chiar pe ea. Executat
     // inline, răspunsul n-ar mai ajunge niciodată la telefon și butonul ar
     // părea că a eșuat, deși comanda a mers. Cu întârzierea asta, răspunsul
-    // pleacă înainte ca legătura să pice. Același tipar ca la deploy_app.
+    // pleacă înainte ca legătura să pice.
     await execFileAsync(
       "sudo",
       [

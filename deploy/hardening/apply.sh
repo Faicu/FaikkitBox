@@ -20,7 +20,7 @@ usermod -d "$HOME_DIR" "$USER_NAME"
 id -nG faicu | tr ' ' '\n' | grep -qx media || usermod -aG media faicu
 
 echo "== 2/6 home + cheia SSH pentru git =="
-# Butonul "Push pe GitHub" și deploy_app folosesc remote-ul SSH al repo-ului.
+# Butonul "Push pe GitHub" folosește remote-ul SSH al repo-ului.
 # Contul de serviciu are nevoie de o cheie proprie; recomandarea e o cheie de
 # deploy NOUĂ, adăugată în GitHub → Settings → Deploy keys (cu drept de scriere),
 # nu o copie a cheii personale din /root/.ssh.
