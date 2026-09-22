@@ -116,20 +116,24 @@ export function TitleDetailDrawer({
     // indexării Plex — se oprește automat când trece la "in_library" (vezi
     // și plexLibraryBrowseQuery).
     //
-    // Serialele merg pe un puls mult mai lent, din două motive. Întâi, n-au
-    // ce câștiga din cel rapid: buildDetailFromMediaRow calculează progresul
-    // qBittorrent doar pentru filme/episoade, deci pentru un serial cele
-    // 2.5s reinterogau ceva ce se schimbă abia când Plex indexează un episod
-    // — o chestiune de minute. Apoi, statusul unui serial e agregat din
-    // episoadele lui și rămâne "downloading" cât timp măcar unul n-a ajuns
-    // în Plex: un episod blocat definitiv (torrent șters din qBittorrent)
-    // ținea pulsul de 2.5s pornit la nesfârșit, cât timp drawer-ul e deschis.
+    // Serialele merg pe un puls lent când n-au ce câștiga din cel rapid:
+    // statusul unui serial e agregat din episoadele lui și rămâne
+    // "downloading" cât timp măcar unul n-a ajuns în Plex, deci un episod
+    // blocat definitiv (torrent șters din qBittorrent) ținea pulsul de 2.5s
+    // pornit la nesfârșit, cât timp drawer-ul e deschis.
     refetchInterval: (query) => {
       const d = query.state.data;
       if (d?.status !== "ok") return false;
       const { status, type } = d.detail;
       if (status !== "downloading" && status !== "processing") return false;
-      return type === "tv_show" ? 15_000 : 2500;
+      if (type !== "tv_show") return 2500;
+      // Pulsul rapid are rost la un serial doar cât măcar un episod chiar
+      // ține un procent care urcă; dacă toate sunt doar în așteptarea
+      // indexării Plex (sau blocate, fără torrent în qBittorrent), rămâne
+      // pulsul lent — vezi comentariul de mai sus.
+      return d.detail.episodes.some((e) => e.status === "downloading" && e.progress != null)
+        ? 2500
+        : 15_000;
     },
   });
   const d = detail.data?.status === "ok" ? detail.data.detail : null;
@@ -695,6 +699,15 @@ export function TitleDetailDrawer({
                                 )
                               ) : (
                                 <CircleDashed className="h-3 w-3 shrink-0 animate-pulse text-blue-400" />
+                              )}
+                              {/* Procentul stă lângă iconiță doar cât timp
+                                  episodul chiar se descarcă; după ce torrentul
+                                  s-a terminat ("processing") nu mai are ce
+                                  arăta, aștepți doar indexarea Plex. */}
+                              {ep.status === "downloading" && ep.progress != null && (
+                                <span className="shrink-0 text-[10px] font-medium tabular-nums text-blue-400">
+                                  {ep.progress.toFixed(0)}%
+                                </span>
                               )}
                               {/* Un pachet de sezon încă neterminat e un
                                   singur rând cu episode NULL — se desface în

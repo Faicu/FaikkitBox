@@ -394,6 +394,10 @@ export interface ShowEpisodeEntry {
   status: "in_library" | "downloading" | "processing";
   watchedByMe: boolean;
   isSeasonPack: boolean;
+  // Procentul din qBittorrent, doar cât episodul e în descărcare. Null și
+  // când torrentul nu mai e în qBittorrent (șters manual) — rândul rămâne
+  // atunci fără procent, nu blocat la 0%.
+  progress: number | null;
 }
 
 export interface PlexTitleDetail {
@@ -545,7 +549,8 @@ async function buildDetailFromMediaRow(
     ? (db
         .prepare(
           `SELECT id, season, episode, original_title, title, episode_title,
-                  plex_rating_key, plex_added_at, added_at, completed_at, is_season_pack
+                  plex_rating_key, plex_added_at, added_at, completed_at, is_season_pack,
+                  torrent_hash
              FROM media WHERE parent_id = ?
              ORDER BY season, episode`,
         )
@@ -561,6 +566,7 @@ async function buildDetailFromMediaRow(
         added_at: string;
         completed_at: string | null;
         is_season_pack: number;
+        torrent_hash: string | null;
       }>)
     : [];
 
@@ -622,6 +628,11 @@ async function buildDetailFromMediaRow(
   if (isShow) {
     const { isItemWatched } = await import("./plex");
     const myIndex = myPlexUsername ? allWatchedIndexes[myPlexUsername] : undefined;
+    // O singură cerere la qBittorrent pentru toate episoadele încă nesosite
+    // în Plex, nu una per rând.
+    const epProgress = await fetchQbitProgress(
+      epRows.filter((e) => !e.plex_rating_key && e.torrent_hash).map((e) => e.torrent_hash!),
+    );
     episodes = epRows.map((e) => {
       const epTitle = e.original_title || e.title;
       return {
@@ -643,6 +654,10 @@ async function buildDetailFromMediaRow(
             })
           : false,
         isSeasonPack: !!e.is_season_pack,
+        progress:
+          !e.plex_rating_key && e.torrent_hash && epProgress.has(e.torrent_hash)
+            ? Math.round(epProgress.get(e.torrent_hash)!.progress * 1000) / 10
+            : null,
       };
     });
   }
