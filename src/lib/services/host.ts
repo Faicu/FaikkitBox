@@ -52,9 +52,7 @@ interface DiskSnapshot {
 }
 const prevDiskStats: Record<string, DiskSnapshot> = {};
 
-async function readProcDiskstats(
-  devices: string[],
-): Promise<Record<string, { rSec: number; wSec: number }>> {
+async function readProcDiskstats(): Promise<Record<string, { rSec: number; wSec: number }>> {
   try {
     const { readFile } = await import("node:fs/promises");
     const raw = await readFile("/proc/diskstats", "utf8");
@@ -62,7 +60,6 @@ async function readProcDiskstats(
     for (const line of raw.trim().split("\n")) {
       const parts = line.trim().split(/\s+/);
       const name = parts[2];
-      if (!devices.includes(name)) continue;
       result[name] = {
         rSec: Number(parts[5]), // sectoare citite cumulative (1 sector = 512 bytes)
         wSec: Number(parts[9]), // sectoare scrise cumulative
@@ -128,17 +125,10 @@ async function collectHostData(): Promise<HostData> {
               .catch(() => [] as Awaited<ReturnType<typeof si.dockerContainers>>),
           SWR,
         ),
-        readProcDiskstats(["nvme0n1", "nvme1n1", "sda"]),
+        readProcDiskstats(),
       ]);
 
     const loadAvg = os.loadavg() as [number, number, number];
-
-    // Mapping mount → device pentru serverul faikkitbox
-    const MOUNT_TO_DEV: Record<string, string> = {
-      "/": "nvme1n1",
-      "/media/ssd2tb": "nvme0n1",
-      "/media/hddextern": "sda",
-    };
 
     // Calculez viteze per disc din /proc/diskstats cumulative
     const now = Date.now();
@@ -158,7 +148,10 @@ async function collectHostData(): Promise<HostData> {
     const disks = fsSize
       .filter((f) => f.size > 0)
       .map((f) => {
-        const dev = MOUNT_TO_DEV[f.mount];
+        // Device-ul vine direct din fsSize ("/dev/nvme0n1p2" → "nvme0n1p2"),
+        // iar /proc/diskstats are rânduri și pentru partiții. O mapare scrisă
+        // de mână inversase cele două NVMe (numerotarea lor nu e stabilă).
+        const dev = f.fs.startsWith("/dev/") ? f.fs.slice(5) : undefined;
         const io = dev ? diskSpeeds[dev] : undefined;
         return {
           mount: f.mount,
