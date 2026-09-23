@@ -11,11 +11,11 @@ import { nitro } from "nitro/vite";
 // ---------------------------------------------------------------------------
 // Headere de securitate, pe toate răspunsurile.
 //
-// CSP e deocamdată Report-Only: SSR-ul TanStack Start injectează script și
-// stiluri inline, iar o politică strictă aplicată direct ar albi pagina. În
-// modul ăsta browserul raportează în consolă ce ar fi blocat, fără să strice
-// nimic — când lista de încălcări e curată, `-Report-Only` se poate scoate din
-// numele headerului.
+// CSP-ul e aplicat din 23 sept. 2026, după trei zile în Report-Only fără
+// încălcări. `'unsafe-inline'` rămâne în script-src/style-src: SSR-ul TanStack
+// Start injectează script și stiluri inline, iar fără el pagina ar ieși albă.
+// Dacă o sursă nouă e blocată, încălcarea apare în consola browserului; pentru
+// depanare, `-Report-Only` pus la loc în numele headerului oprește blocarea.
 //
 // Sursele externe reale: postere TMDB, embed-uri YouTube (Descoperă), iar
 // `connect-src` acoperă și SSE-ul de pe /api/deploy-sha (same-origin).
@@ -36,7 +36,7 @@ const CSP = [
 ].join("; ");
 
 const SECURITY_HEADERS = {
-  "Content-Security-Policy-Report-Only": CSP,
+  "Content-Security-Policy": CSP,
   // Dublează `frame-ancestors` pentru browserele care încă nu-l respectă —
   // fără el, aplicația poate fi pusă într-un iframe pe un site străin și
   // butoanele de ștergere apăsate prin clickjacking.
