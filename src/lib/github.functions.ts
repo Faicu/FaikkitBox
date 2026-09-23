@@ -208,7 +208,30 @@ export interface GitHubSyncStatus {
   latestSha: string;
   latestShortSha: string;
   isSynced: boolean;
+  // Commit-uri pe GitHub care nu rulează încă aici.
   commitsBehind: number;
+  // Commit-uri locale, încă nepublicate (push-ul se face manual, din Tehnic).
+  commitsAhead: number;
+}
+
+// Numărătoarea vine din git (origin/<branch> după un fetch best-effort), nu din
+// lista de commit-uri de pe GitHub: acolo commit-ul local nepublicat nu apare
+// deloc, iar căutarea lui în listă dădea mereu "1 în urmă", indiferent câte
+// commit-uri erau de fapt — și în direcția greșită (serverul era înainte).
+function gitCounts(): { branch: string; ahead: number; behind: number } {
+  const branch = execSync("git rev-parse --abbrev-ref HEAD", { encoding: "utf8" }).trim();
+  try {
+    execFileSync("git", ["fetch", "--quiet", "origin", branch], { timeout: 8000 });
+  } catch {
+    // fără rețea sau fără acces — continuăm cu ce știm local
+  }
+  const ahead = Number(
+    execSync(`git rev-list origin/${branch}..HEAD --count`, { encoding: "utf8" }).trim(),
+  );
+  const behind = Number(
+    execSync(`git rev-list HEAD..origin/${branch} --count`, { encoding: "utf8" }).trim(),
+  );
+  return { branch, ahead, behind };
 }
 
 export const getGitHubSyncStatus = createServerFn({ method: "GET" }).handler(
@@ -218,18 +241,9 @@ export const getGitHubSyncStatus = createServerFn({ method: "GET" }).handler(
     const { requireAdmin } = await import("./auth/admin.server");
     await requireAdmin();
     try {
+      const { branch, ahead, behind } = gitCounts();
       const deployedSha = execSync("git rev-parse HEAD", { encoding: "utf8" }).trim();
-
-      const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/commits?per_page=30`, {
-        headers: githubHeaders(),
-        signal: AbortSignal.timeout(8000),
-      });
-      if (!res.ok) throw new Error(`GitHub API ${res.status}`);
-      const commits: GitHubApiCommit[] = await res.json();
-
-      const latestSha = String(commits[0]?.sha ?? "");
-      const idx = commits.findIndex((c) => c.sha === deployedSha);
-      const commitsBehind = idx === -1 ? (latestSha !== deployedSha ? 1 : 0) : idx;
+      const latestSha = execSync(`git rev-parse origin/${branch}`, { encoding: "utf8" }).trim();
 
       return {
         status: "ok",
@@ -238,8 +252,9 @@ export const getGitHubSyncStatus = createServerFn({ method: "GET" }).handler(
           deployedShortSha: deployedSha.slice(0, 7),
           latestSha,
           latestShortSha: latestSha.slice(0, 7),
-          isSynced: deployedSha === latestSha,
-          commitsBehind,
+          isSynced: ahead === 0 && behind === 0,
+          commitsBehind: behind,
+          commitsAhead: ahead,
         },
       };
     } catch (e) {
@@ -263,18 +278,7 @@ export const getGitPushStatus = createServerFn({ method: "GET" }).handler(
     const { requireAdmin } = await import("./auth/admin.server");
     await requireAdmin();
     try {
-      const branch = execSync("git rev-parse --abbrev-ref HEAD", { encoding: "utf8" }).trim();
-      try {
-        execFileSync("git", ["fetch", "--quiet", "origin", branch], { timeout: 8000 });
-      } catch {
-        // fără rețea sau fără acces — continuăm cu ce știm local
-      }
-      const ahead = Number(
-        execSync(`git rev-list origin/${branch}..HEAD --count`, { encoding: "utf8" }).trim(),
-      );
-      const behind = Number(
-        execSync(`git rev-list HEAD..origin/${branch} --count`, { encoding: "utf8" }).trim(),
-      );
+      const { branch, ahead, behind } = gitCounts();
       return { status: "ok", data: { ahead, behind, branch } };
     } catch (e) {
       return { status: "error", error: e instanceof Error ? e.message : String(e) };

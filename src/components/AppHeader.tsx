@@ -93,6 +93,14 @@ export function AppHeader({ title, subtitle, right }: Props) {
             (() => {
               const s = sync.data.data;
               const orange = updateAvailable || !s.isSynced;
+              const plural = (n: number) => (n === 1 ? "1 commit" : `${n} commit-uri`);
+              const syncText = [
+                s.commitsAhead > 0 &&
+                  `${plural(s.commitsAhead)} ${s.commitsAhead === 1 ? "nepublicat" : "nepublicate"}`,
+                s.commitsBehind > 0 && `${plural(s.commitsBehind)} în urmă`,
+              ]
+                .filter(Boolean)
+                .join(" · ");
               return (
                 <button
                   type="button"
@@ -102,7 +110,7 @@ export function AppHeader({ title, subtitle, right }: Props) {
                         ? "Actualizare detectată — reîncărcare în curs..."
                         : s.isSynced
                           ? "GitHub: sincronizat"
-                          : `GitHub: ${s.commitsBehind} commit${s.commitsBehind !== 1 ? "s" : ""} în urmă`,
+                          : `GitHub: ${syncText}`,
                       {
                         description: `deployed ${s.deployedShortSha} · github ${s.latestShortSha}`,
                         icon: (
@@ -124,7 +132,7 @@ export function AppHeader({ title, subtitle, right }: Props) {
                       ? "Actualizare disponibilă"
                       : s.isSynced
                         ? "Sincronizat cu GitHub"
-                        : `${s.commitsBehind} commits în urmă`
+                        : syncText
                   }
                 >
                   <GitBranch className="h-3.5 w-3.5" />
