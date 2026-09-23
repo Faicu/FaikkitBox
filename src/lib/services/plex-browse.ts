@@ -28,6 +28,9 @@ export interface PlexBrowseItem {
   title: string;
   type: "movie" | "tv_show";
   show: string | null;
+  // Titlul original (de regulă în engleză) — doar pentru căutarea din listă,
+  // ca "Dune" să găsească și un titlu salvat în română.
+  originalTitle: string | null;
   // Gata de folosit direct ca src de <img> — link TMDB, salvat în `media`.
   thumbUrl: string | null;
   // Pentru seriale: episodul cel mai recent adăugat, nu momentul în care a
@@ -208,6 +211,7 @@ export const getPlexLibraryBrowse = createServerFn({ method: "GET" }).handler(
             title: r.title,
             type: "movie",
             show: null,
+            originalTitle: r.original_title,
             thumbUrl: r.poster_path,
             addedAt: rowAddedAt(r),
             watchedByMe: false,
@@ -235,6 +239,7 @@ export const getPlexLibraryBrowse = createServerFn({ method: "GET" }).handler(
           title: "",
           type: "tv_show",
           show: r.title,
+          originalTitle: r.original_title ?? episodes.find((e) => e.original_title)?.original_title ?? null,
           // Rândul-părinte are de regulă posterul serialului; dacă lipsește
           // (seriale vechi din backfill), cădem pe al primului episod.
           thumbUrl: r.poster_path ?? episodes.find((e) => e.poster_path)?.poster_path ?? null,

@@ -59,7 +59,7 @@ export function groupBySeason(episodes: ShowEpisodeEntry[]): SeasonGroup[] {
 export function matchesQuery(item: PlexBrowseItem, q: string): boolean {
   if (!q) return true;
   const n = norm(q);
-  return norm(item.title).includes(n) || (!!item.show && norm(item.show).includes(n));
+  return [item.title, item.show, item.originalTitle].some((t) => !!t && norm(t).includes(n));
 }
 
 const STALE_UNWATCHED_SECONDS = 90 * 24 * 60 * 60; // 3 luni
