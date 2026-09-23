@@ -2,7 +2,12 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Box, ChevronRight } from "lucide-react";
 
-import { activityLogQuery, commitsFromDbQuery, showWatchStatusQuery } from "@/lib/queries";
+import {
+  activityLogQuery,
+  commitsFromDbQuery,
+  showWatchStatusQuery,
+  wantedMoviesQuery,
+} from "@/lib/queries";
 import { relativeTime } from "../utils";
 import { PLUGINS, type PluginInfo } from "../plugins";
 import { PluginDetailDrawer } from "../PluginDetailDrawer";
@@ -11,6 +16,7 @@ export function PluginStatusSection() {
   const { data: log } = useQuery(activityLogQuery);
   const { data: commitsData } = useQuery(commitsFromDbQuery);
   const { data: watch } = useQuery(showWatchStatusQuery);
+  const { data: wanted } = useQuery(wantedMoviesQuery);
   const [openPlugin, setOpenPlugin] = useState<PluginInfo | null>(null);
 
   function lastActivity(type: string | null): string | null {
@@ -45,9 +51,12 @@ export function PluginStatusSection() {
     const n = watch.shows.length;
     const shows =
       n === 0 ? "niciun serial urmărit" : `${n} ${n === 1 ? "serial urmărit" : "seriale urmărite"}`;
+    const f = wanted?.length ?? 0;
+    const movies =
+      f === 0 ? "niciun film așteptat" : `${f} ${f === 1 ? "film așteptat" : "filme așteptate"}`;
     const m = watch.missingTitles.length;
-    if (m === 0) return shows;
-    return `${shows} · ${m} ${m === 1 ? "episod fără nume" : "episoade fără nume"}`;
+    if (m === 0) return `${shows} · ${movies}`;
+    return `${shows} · ${movies} · ${m} ${m === 1 ? "episod fără nume" : "episoade fără nume"}`;
   }
 
   return (
