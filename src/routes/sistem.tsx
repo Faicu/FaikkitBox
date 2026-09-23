@@ -223,8 +223,10 @@ function HostPage() {
                       />
                       {hasIO && (
                         <div className="flex gap-3 pl-0 text-[11px] tabular-nums">
-                          <span className="text-sky-400">↓ {formatSpeed(d.readBps ?? 0)}</span>
-                          <span className="text-emerald-400">↑ {formatSpeed(d.writeBps ?? 0)}</span>
+                          {/* ↓ = scriere (intră pe disc, ca un download), ↑ = citire (iese
+                              de pe disc, ca un upload) — aceeași convenție ca la rețea. */}
+                          <span className="text-sky-400">↓ {formatSpeed(d.writeBps ?? 0)}</span>
+                          <span className="text-emerald-400">↑ {formatSpeed(d.readBps ?? 0)}</span>
                         </div>
                       )}
                     </div>
