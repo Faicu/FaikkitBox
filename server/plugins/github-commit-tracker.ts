@@ -10,69 +10,9 @@ export default function () {
 }
 
 async function syncOnStart() {
-  const repo = process.env.GITHUB_REPO ?? "Faicu/FaikkitBox";
-  const token = process.env.GITHUB_TOKEN;
-
   try {
-    const headers: Record<string, string> = {
-      Accept: "application/vnd.github+json",
-      "X-GitHub-Api-Version": "2022-11-28",
-    };
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-
-    const res = await fetch(`https://api.github.com/repos/${repo}/commits?per_page=20`, {
-      headers,
-      signal: AbortSignal.timeout(10_000),
-    });
-    if (!res.ok) return;
-
-    type GithubCommit = {
-      sha?: string;
-      commit?: { message?: string; author?: { name?: string; date?: string } };
-      author?: { login?: string };
-      html_url?: string;
-    };
-    const raw: GithubCommit[] = await res.json();
-    if (!Array.isArray(raw)) return;
-
-    const { getDb } = await import("../../src/lib/db");
-    const { notifyGithubCommits } = await import("../../src/lib/notifications/notifications");
-
-    const db = getDb();
-    const stmt = db.prepare(
-      `INSERT OR IGNORE INTO commits (sha, short_sha, message, author, date, url, fetched_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    );
-    const now = new Date().toISOString();
-    const fresh: Array<{ author: string; message: string }> = [];
-
-    for (const c of raw) {
-      const sha = String(c.sha ?? "");
-      if (!sha) continue;
-
-      const message = String(c.commit?.message ?? "").split("\n")[0];
-      const author = c.commit?.author?.name ?? c.author?.login ?? "necunoscut";
-      const date = c.commit?.author?.date ?? now;
-      const url = c.html_url ?? `https://github.com/${repo}/commit/${sha}`;
-
-      // INSERT OR IGNORE returnează changes=0 dacă sha există deja
-      const result = stmt.run(sha, sha.slice(0, 7), message, author, date, url, now);
-
-      // Commit nou (nu era în DB) — se strânge, notificarea pleacă o dată,
-      // la finalul lotului. La o pornire după mai multe commit-uri nepublicate
-      // altfel ar fi plecat câte un push pentru fiecare.
-      if (result.changes > 0) {
-        console.log(`[github-commit-tracker] Commit nou detectat (${sha.slice(0, 7)})`);
-        fresh.push({ author, message });
-      }
-    }
-
-    if (fresh.length > 0) {
-      console.log(`[github-commit-tracker] ${fresh.length} commit-uri noi, trimit push...`);
-      await notifyGithubCommits(fresh).catch((err) => {
-        console.warn("[github-commit-tracker] Trimitere push eșuată:", err);
-      });
-    }
+    const { syncCommitsFromGitHub } = await import("../../src/lib/github-commits.server");
+    await syncCommitsFromGitHub();
   } catch (err) {
     console.warn("[github-commit-tracker] Sync eșuat la pornire:", err);
   }

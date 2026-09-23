@@ -84,59 +84,15 @@ function githubHeaders(): Record<string, string> {
   return h;
 }
 
-async function upsertCommits(commits: GitHubCommit[]): Promise<void> {
-  try {
-    const { getDb } = await import("./db");
-    const { notifyGithubCommits } = await import("./notifications/notifications");
-    const db = getDb();
-    const now = new Date().toISOString();
-    const fresh: Array<{ author: string; message: string }> = [];
-
-    // INSERT OR IGNORE (nu REPLACE) — ca să putem detecta commit-urile chiar noi
-    // și să trimitem notificare push, indiferent care sursă (webhook, sync la
-    // pornire sau acest polling periodic) le descoperă prima.
-    const stmt = db.prepare(
-      `INSERT OR IGNORE INTO commits (sha, short_sha, message, author, date, url, fetched_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    );
-    for (const c of commits) {
-      const result = stmt.run(c.sha, c.shortSha, c.message, c.author, c.date, c.url, now);
-      if (result.changes > 0) fresh.push({ author: c.author, message: c.message });
-    }
-    // O singură notificare pentru tot lotul, nu una per commit.
-    await notifyGithubCommits(fresh).catch((err) => {
-      console.warn("[github] Trimitere push eșuată:", err);
-    });
-  } catch (e) {
-    console.warn("[github] Upsert commits eșuat:", e);
-  }
-}
-
 // Fetch GitHub + upsert în DB (rulat periodic din React Query)
 export const getRecentCommits = createServerFn({ method: "GET" }).handler(
   async (): Promise<GitHubCommitsResult> => {
     const { requireAdmin } = await import("./auth/admin.server");
     await requireAdmin();
     try {
-      const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/commits?per_page=20`, {
-        headers: githubHeaders(),
-        signal: AbortSignal.timeout(8000),
-      });
-      if (!res.ok) throw new Error(`GitHub API a răspuns ${res.status}`);
-      const raw: GitHubApiCommit[] = await res.json();
-      if (!Array.isArray(raw)) throw new Error("Răspuns neașteptat de la GitHub API");
-
-      const commits: GitHubCommit[] = raw.map((c) => ({
-        sha: String(c.sha ?? ""),
-        shortSha: String(c.sha ?? "").slice(0, 7),
-        message: String(c.commit?.message ?? "").split("\n")[0],
-        author: c.commit?.author?.name ?? c.author?.login ?? "necunoscut",
-        date: c.commit?.author?.date ?? c.commit?.committer?.date ?? "",
-        url: c.html_url ?? `https://github.com/${GITHUB_REPO}/commit/${c.sha}`,
-      }));
-
-      // Salvează în DB — acumulează istoric nelimitat
-      await upsertCommits(commits);
+      // Salvează în DB — acumulează istoric nelimitat (vezi github-commits.server).
+      const { syncCommitsFromGitHub } = await import("./github-commits.server");
+      const commits = await syncCommitsFromGitHub();
 
       return { status: "ok", commits };
     } catch (e) {
