@@ -14,6 +14,9 @@ export interface GitHubCommitsResult {
   status: "ok" | "error";
   error?: string;
   commits: GitHubCommit[];
+  // Doar din getCommitsFromDb: câte sunt în DB în total — lista e plafonată
+  // la 500, deci lungimea ei nu mai e totalul.
+  total?: number;
 }
 
 export interface GitHubCommitFile {
@@ -173,7 +176,11 @@ export const getCommitsFromDb = createServerFn({ method: "GET" }).handler(
         url: r.url,
       }));
 
-      return { status: "ok", commits };
+      const { total } = db.prepare("SELECT COUNT(*) AS total FROM commits").get() as {
+        total: number;
+      };
+
+      return { status: "ok", commits, total };
     } catch (e) {
       return { status: "error", error: e instanceof Error ? e.message : String(e), commits: [] };
     }

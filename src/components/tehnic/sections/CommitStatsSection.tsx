@@ -43,7 +43,7 @@ export function CommitStatsSection() {
   });
 
   const commits = commitsData?.status === "ok" ? commitsData.commits : [];
-  const total = commits.length;
+  const total = commitsData?.total ?? commits.length;
 
   const todayStr = new Date().toISOString().slice(0, 10);
   const today = commits.filter((c) => c.date.startsWith(todayStr)).length;
