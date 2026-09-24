@@ -73,6 +73,7 @@ export const checkTitleForWizard = createServerFn({ method: "GET" })
 
     const [plexRes, filelistRes] = await Promise.all([
       checkPlexHasTitleInternal({
+        tmdbId: data.tmdbId,
         title: data.title,
         originalTitle,
         mediaType: data.mediaType,
@@ -109,7 +110,11 @@ export const checkTitleForWizard = createServerFn({ method: "GET" })
       const [plexResults, schema, airstamps] = await Promise.all([
         Promise.allSettled(
           seasons.map((s) =>
-            getPlexEpisodesInSeasonInternal({ showTitle: originalTitle, season: s.seasonNumber }),
+            getPlexEpisodesInSeasonInternal({
+              tmdbId: data.tmdbId,
+              showTitle: originalTitle,
+              season: s.seasonNumber,
+            }),
           ),
         ),
         getTmdbAllSeasonsInternal(

@@ -60,6 +60,7 @@ const LINK: PlexItemLink = {
 function insertRow(row: {
   mediaType: "movie" | "episode";
   hash: string;
+  tmdbId?: number | null;
   title?: string;
   originalTitle?: string | null;
   season?: number | null;
@@ -70,12 +71,14 @@ function insertRow(row: {
   return Number(
     db
       .prepare(
-        `INSERT INTO media (media_type, title, original_title, season, episode, is_season_pack,
-                            plex_rating_key, torrent_name, torrent_hash, completed_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
+        `INSERT INTO media (media_type, tmdb_id, title, original_title, season, episode,
+                            is_season_pack, plex_rating_key, torrent_name, torrent_hash,
+                            completed_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
       )
       .run(
         row.mediaType,
+        row.tmdbId === undefined ? 438631 : row.tmdbId,
         row.title ?? "Dune",
         row.originalTitle ?? null,
         row.season ?? null,
@@ -104,9 +107,9 @@ describe("resolveMediaPlexLinkByTorrentHash", () => {
 
     // Calea de pe disk și numele torrentului ajung la Plex — din ele se alege
     // versiunea noastră când filmul există în mai multe calități.
+    // ID-ul TMDB decide potrivirea; titlurile servesc doar la căutare.
     expect(findPlexMovieLink).toHaveBeenCalledWith(
-      "Dune",
-      "Dune: Part Two",
+      { tmdbId: 438631, titles: ["Dune", "Dune: Part Two"] },
       "/media/Dune.Part.Two.2024.2160p.mkv",
       "Dune.Part.Two.2024.2160p",
     );
@@ -125,13 +128,18 @@ describe("resolveMediaPlexLinkByTorrentHash", () => {
 
     await media.resolveMediaPlexLinkByTorrentHash("h1");
 
-    expect(findPlexMovieLink).toHaveBeenCalledWith("Dune", "Dune", null, expect.anything());
+    expect(findPlexMovieLink).toHaveBeenCalledWith(
+      { tmdbId: 438631, titles: ["Dune", "Dune"] },
+      null,
+      expect.anything(),
+    );
   });
 
   it("leagă un episod după serial, sezon și episod", async () => {
     const id = insertRow({
       mediaType: "episode",
       hash: "h1",
+      tmdbId: 95396,
       title: "Severance",
       season: 2,
       episode: 5,
@@ -139,7 +147,12 @@ describe("resolveMediaPlexLinkByTorrentHash", () => {
     findPlexEpisodeLink.mockResolvedValue(LINK);
 
     expect(await media.resolveMediaPlexLinkByTorrentHash("h1")).toBe(true);
-    expect(findPlexEpisodeLink).toHaveBeenCalledWith("Severance", 2, 5);
+    // Pe rândul de episod, tmdb_id e al serialului.
+    expect(findPlexEpisodeLink).toHaveBeenCalledWith(
+      { tmdbId: 95396, titles: ["Severance"] },
+      2,
+      5,
+    );
     expect(getRow(id).plex_rating_key).toBe("rk-42");
   });
 

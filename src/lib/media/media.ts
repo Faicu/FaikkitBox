@@ -539,7 +539,7 @@ export async function resolveMediaPlexLinkByTorrentHash(torrentHash: string): Pr
   // rând deja legat ar masca pachetul care încă are treabă.
   const row = db
     .prepare(
-      `SELECT id, media_type, title, original_title, season, episode, plex_rating_key,
+      `SELECT id, media_type, tmdb_id, title, original_title, season, episode, plex_rating_key,
               torrent_name
          FROM media WHERE torrent_hash = ?
         ORDER BY plex_rating_key IS NOT NULL, id LIMIT 1`,
@@ -548,6 +548,7 @@ export async function resolveMediaPlexLinkByTorrentHash(torrentHash: string): Pr
     | {
         id: number;
         media_type: string;
+        tmdb_id: number | null;
         title: string;
         original_title: string | null;
         season: number | null;
@@ -567,13 +568,17 @@ export async function resolveMediaPlexLinkByTorrentHash(torrentHash: string): Pr
       ? // Calea reală de pe disk, ca legarea să ia calitatea versiunii corecte
         // când filmul există în Plex în mai multe versiuni.
         await findPlexMovieLink(
-          row.title,
-          row.original_title ?? row.title,
+          { tmdbId: row.tmdb_id, titles: [row.title, row.original_title ?? row.title] },
           await contentPathForTorrent(torrentHash),
           row.torrent_name,
         )
       : row.media_type === "episode" && row.season != null && row.episode != null
-        ? await findPlexEpisodeLink(row.title, row.season, row.episode)
+        ? await findPlexEpisodeLink(
+            // Pe rândurile de episod, tmdb_id e al SERIALULUI (vezi upsertMediaEntry).
+            { tmdbId: row.tmdb_id, titles: [row.title] },
+            row.season,
+            row.episode,
+          )
         : null;
   if (!link) return false;
 
@@ -763,7 +768,7 @@ export async function resolveSeasonPackPlexLinks(torrentHash: string): Promise<b
   if (!row || row.season == null) return false;
 
   const { findPlexSeasonLinks } = await import("../services/plex-library");
-  const links = await findPlexSeasonLinks(row.title, row.season);
+  const links = await findPlexSeasonLinks({ tmdbId: row.tmdb_id, titles: [row.title] }, row.season);
   if (!links || links.size === 0) return false;
 
   const expected = await airedEpisodeCountForSeason(row.tmdb_id, row.season);

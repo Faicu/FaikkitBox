@@ -150,6 +150,8 @@ describe("resolveSeasonPackPlexLinks", () => {
     tmdbAired(10);
 
     expect(await media.resolveSeasonPackPlexLinks(HASH)).toBe(false);
+    // Serialul se caută după ID-ul lui TMDB, nu după titlu.
+    expect(findPlexSeasonLinks).toHaveBeenCalledWith({ tmdbId: 95396, titles: ["Severance"] }, 2);
 
     const eps = episodeRows().filter((r) => r.is_season_pack === 0);
     expect(eps.map((r) => r.episode)).toEqual([1, 2, 3]);

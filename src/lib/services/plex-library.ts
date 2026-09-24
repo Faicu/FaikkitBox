@@ -30,90 +30,106 @@ export interface ShowStatusData {
   next: ShowEpisodeInfo | null;
 }
 
-// Cache scurt pentru key-ul secțiunii TV Shows, ca să nu interogăm
-// /library/sections la fiecare căutare de fallback.
-let showSectionCache: { url: string; key: string; expiresAt: number } | null = null;
+// Cache scurt pentru key-urile secțiunilor (filme / seriale), ca să nu
+// interogăm /library/sections la fiecare căutare de fallback.
+const sectionCache = new Map<string, { url: string; key: string; expiresAt: number }>();
 
-async function findShowSectionKey(
+async function findSectionKey(
   url: string,
   headers: Record<string, string>,
+  type: "movie" | "show",
 ): Promise<string | undefined> {
-  if (showSectionCache && showSectionCache.url === url && showSectionCache.expiresAt > Date.now()) {
-    return showSectionCache.key;
-  }
+  const cached = sectionCache.get(type);
+  if (cached && cached.url === url && cached.expiresAt > Date.now()) return cached.key;
   const sections = await fetchJson<PlexApiResponse>(`${url}/library/sections`, { headers }, 8000);
   const dirs = sections?.MediaContainer?.Directory ?? [];
-  const showSection = dirs.find((d) => d.type === "show");
-  if (!showSection?.key) return undefined;
-  showSectionCache = { url, key: showSection.key, expiresAt: Date.now() + 5 * 60 * 1000 };
-  return showSection.key;
+  const section = dirs.find((d) => d.type === type);
+  if (!section?.key) return undefined;
+  sectionCache.set(type, { url, key: section.key, expiresAt: Date.now() + 5 * 60 * 1000 });
+  return section.key;
 }
 
-async function findShowByTitle(
+// Ce știm despre titlul căutat. `tmdbId` e reperul sigur; titlurile servesc
+// doar la căutare — și, când ID-ul lipsește, la potrivirea exactă.
+export interface PlexLookup {
+  tmdbId: number | null;
+  titles: string[];
+}
+
+function hasTmdbId(item: PlexMetadataItem, tmdbId: number): boolean {
+  return (item.Guid ?? []).some((g) => g.id === `tmdb://${tmdbId}`);
+}
+
+// Potrivirea unui item Plex cu titlul căutat.
+//
+// Cu ID TMDB, doar ID-ul decide. Titlul nu e un reper: biblioteca Plex e în
+// română („Imperiul Mafiei" pentru MobLand, „Străina" pentru Outlander), deci
+// titlul găsit diferă des de cel căutat, iar potrivirea „conține" sau „primul
+// rezultat" lega, la titluri scurte sau fără rezultat bun, alt serial (You →
+// Younger) — fără nicio eroare, doar cu alt ratingKey pe rând.
+//
+// Fără ID (o descărcare pe care TMDB n-a recunoscut-o, cu numele lansării pe
+// post de titlu), doar potrivirea exactă: mai bine nelegat decât legat greșit.
+function matchesLookup(item: PlexMetadataItem, lookup: PlexLookup): boolean {
+  if (lookup.tmdbId != null) return hasTmdbId(item, lookup.tmdbId);
+  const wanted = new Set(lookup.titles.filter(Boolean).map(normalizeShowTitle));
+  return [item.title, item.originalTitle].some(
+    (t) => t != null && wanted.has(normalizeShowTitle(String(t))),
+  );
+}
+
+// Găsește item-ul Plex (film sau serial) pentru un titlu: întâi prin căutare,
+// apoi, dacă nu apare acolo, în lista completă a secțiunii — căutarea Plex nu
+// găsește mereu după titlul original (ex. „Élite" nu dă nimic, deși serialul
+// e în bibliotecă ca „Elita"). `includeGuids=1` e obligatoriu: fără el, Plex
+// nu întoarce `Guid` deloc.
+async function findItem(
   url: string,
   headers: Record<string, string>,
-  showTitle: string,
+  type: "movie" | "show",
+  lookup: PlexLookup,
 ): Promise<PlexMetadataItem | undefined> {
-  const normalizedTarget = normalizeShowTitle(showTitle);
-
-  const search = await fetchJson<PlexApiResponse>(
-    `${url}/search?query=${encodeURIComponent(showTitle)}&type=2`,
-    { headers },
-    8000,
-  );
-  const searchShows = (search?.MediaContainer?.Metadata ?? []).filter(
-    (r: PlexMetadataItem) => r.type === "show",
-  );
-  let show: PlexMetadataItem | undefined =
-    searchShows.find(
-      (r: PlexMetadataItem) => normalizeShowTitle(String(r.title ?? "")) === normalizedTarget,
-    ) ??
-    searchShows.find((r: PlexMetadataItem) =>
-      normalizeShowTitle(String(r.title ?? "")).includes(normalizedTarget),
-    ) ??
-    searchShows.find((r: PlexMetadataItem) =>
-      normalizedTarget.includes(normalizeShowTitle(String(r.title ?? ""))),
-    ) ??
-    searchShows[0];
-
-  if (!show) {
-    const sectionKey = await findShowSectionKey(url, headers);
-    if (!sectionKey) return undefined;
-    const allShows = await fetchJson<PlexApiResponse>(
-      `${url}/library/sections/${sectionKey}/all?type=2`,
+  const plexType = type === "movie" ? 1 : 2;
+  const queries = [
+    ...new Set(lookup.titles.filter(Boolean).flatMap((t) => [t, normalizeShowTitle(t)])),
+  ];
+  for (const q of queries) {
+    const search = await fetchJson<PlexApiResponse>(
+      `${url}/search?query=${encodeURIComponent(q)}&type=${plexType}&includeGuids=1`,
       { headers },
-      10000,
+      8000,
     );
-    const libShows = (allShows?.MediaContainer?.Metadata ?? []).filter(
-      (r: PlexMetadataItem) => r.type === "show",
+    const found = (search?.MediaContainer?.Metadata ?? []).find(
+      (r) => r.type === type && matchesLookup(r, lookup),
     );
-    show =
-      libShows.find(
-        (r: PlexMetadataItem) => normalizeShowTitle(String(r.title ?? "")) === normalizedTarget,
-      ) ??
-      libShows.find((r: PlexMetadataItem) =>
-        normalizeShowTitle(String(r.title ?? "")).includes(normalizedTarget),
-      ) ??
-      libShows.find((r: PlexMetadataItem) =>
-        normalizedTarget.includes(normalizeShowTitle(String(r.title ?? ""))),
-      );
+    if (found) return found;
   }
-  return show;
+
+  const sectionKey = await findSectionKey(url, headers, type);
+  if (!sectionKey) return undefined;
+  const all = await fetchJson<PlexApiResponse>(
+    `${url}/library/sections/${sectionKey}/all?type=${plexType}&includeGuids=1`,
+    { headers },
+    10000,
+  );
+  return (all?.MediaContainer?.Metadata ?? []).find(
+    (r) => r.type === type && matchesLookup(r, lookup),
+  );
 }
 
-// Găsește serialul după titlu și întoarce lista brută de episoade dintr-un
-// sezon dat — comun pentru episodesInSeason și hasEpisode.
+// Găsește serialul și întoarce lista brută de episoade dintr-un sezon dat —
+// comun pentru episodesInSeason și legarea episoadelor.
 async function findSeasonEpisodes(
   url: string,
   headers: Record<string, string>,
-  showTitle: string,
+  show: PlexLookup,
   season: number,
 ): Promise<PlexMetadataItem[] | null> {
-  const show = await findShowByTitle(url, headers, showTitle);
-  if (!show) return null;
+  const found = await findItem(url, headers, "show", show);
+  if (!found) return null;
 
   const seasons = await fetchJson<PlexApiResponse>(
-    `${url}/library/metadata/${show.ratingKey}/children`,
+    `${url}/library/metadata/${found.ratingKey}/children`,
     { headers },
     8000,
   );
@@ -132,10 +148,10 @@ async function findSeasonEpisodes(
 async function episodesInSeason(
   url: string,
   headers: Record<string, string>,
-  showTitle: string,
+  show: PlexLookup,
   season: number,
 ): Promise<{ num: number; quality: string | null; watched: boolean }[]> {
-  const episodesMd = await findSeasonEpisodes(url, headers, showTitle, season);
+  const episodesMd = await findSeasonEpisodes(url, headers, show, season);
   if (!episodesMd) return [];
   return episodesMd
     .filter((e: PlexMetadataItem) => Number(e.index) > 0)
@@ -149,30 +165,18 @@ async function episodesInSeason(
 async function findByTitle(
   url: string,
   headers: Record<string, string>,
-  title: string,
-  originalTitle: string,
+  lookup: PlexLookup,
   mediaType: "movie" | "tv",
 ): Promise<{ found: boolean; qualities: string[] }> {
-  const plexType = mediaType === "movie" ? 1 : 2;
-  for (const q of [title, originalTitle, normalizeShowTitle(title)].filter(Boolean)) {
-    const search = await fetchJson<PlexApiResponse>(
-      `${url}/search?query=${encodeURIComponent(q)}&type=${plexType}`,
-      { headers },
-      8000,
-    );
-    const results = search?.MediaContainer?.Metadata ?? [];
-    if (results.length > 0) {
-      // Toate versiunile, nu doar prima: un film poate fi în bibliotecă
-      // simultan la 4K HDR și 1080p, iar wizard-ul trebuie să știe ambele ca
-      // să nu-ți ofere ceva ce deja ai.
-      const ratingKey = results[0]?.ratingKey;
-      const full = ratingKey
-        ? ((await fetchItemWithStreams(url, headers, String(ratingKey))) ?? results[0])
-        : results[0];
-      return { found: true, qualities: plexQualitiesFromItem(full) };
-    }
-  }
-  return { found: false, qualities: [] };
+  const found = await findItem(url, headers, mediaType === "movie" ? "movie" : "show", lookup);
+  if (!found) return { found: false, qualities: [] };
+  // Toate versiunile, nu doar prima: un film poate fi în bibliotecă simultan
+  // la 4K HDR și 1080p, iar wizard-ul trebuie să știe ambele ca să nu-ți
+  // ofere ceva ce deja ai.
+  const full = found.ratingKey
+    ? ((await fetchItemWithStreams(url, headers, String(found.ratingKey))) ?? found)
+    : found;
+  return { found: true, qualities: plexQualitiesFromItem(full) };
 }
 
 // Item-ul complet, cu stream-urile fiecărei versiuni.
@@ -246,8 +250,8 @@ export function versionLinkFromItem(
   };
 }
 
-// Găsește ratingKey-ul + calitatea/durata unui film deja apărut în Plex —
-// folosit ca să legăm un rând din tabela `media` de item-ul lui real din
+// Găsește ratingKey-ul + calitatea/durata unui film deja apărut în Plex (după
+// ID-ul TMDB — vezi findItem, de ce nu după titlu) — folosit ca să legăm un rând din tabela `media` de item-ul lui real din
 // Plex, o singură dată, cache-uit permanent acolo (vezi media.ts).
 // `contentPath` (calea reală de pe disk, din qBittorrent) identifică fișierul
 // NOSTRU printre versiunile item-ului Plex (vezi plexMediaForPath). Fără el —
@@ -255,8 +259,7 @@ export function versionLinkFromItem(
 // item-ului, deci corect), dar calitatea rămâne null: mai bine lipsă decât
 // preluată de la altă versiune.
 export async function findPlexMovieLink(
-  title: string,
-  originalTitle: string,
+  movie: PlexLookup,
   contentPath: string | null = null,
   torrentName: string | null = null,
 ): Promise<PlexItemLink | null> {
@@ -266,19 +269,10 @@ export async function findPlexMovieLink(
   try {
     const headers = { Accept: "application/json", "X-Plex-Token": token };
     const { url } = await discoverPlexUrl(token, base);
-    for (const q of [title, originalTitle].filter(Boolean)) {
-      const search = await fetchJson<PlexApiResponse>(
-        `${url}/search?query=${encodeURIComponent(q)}&type=1`,
-        { headers },
-        8000,
-      );
-      const found = (search?.MediaContainer?.Metadata ?? []).find((r) => r.type === "movie");
-      if (found?.ratingKey) {
-        const item = (await fetchItemWithStreams(url, headers, String(found.ratingKey))) ?? found;
-        return versionLinkFromItem(item, contentPath, torrentName);
-      }
-    }
-    return null;
+    const found = await findItem(url, headers, "movie", movie);
+    if (!found?.ratingKey) return null;
+    const item = (await fetchItemWithStreams(url, headers, String(found.ratingKey))) ?? found;
+    return versionLinkFromItem(item, contentPath, torrentName);
   } catch {
     return null;
   }
@@ -287,7 +281,7 @@ export async function findPlexMovieLink(
 // Echivalentul de mai sus, pentru un episod anume — reutilizează
 // findSeasonEpisodes (aceeași sursă ca getPlexEpisodesInSeason).
 export async function findPlexEpisodeLink(
-  showTitle: string,
+  show: PlexLookup,
   season: number,
   episode: number,
 ): Promise<PlexItemLink | null> {
@@ -297,7 +291,7 @@ export async function findPlexEpisodeLink(
   try {
     const headers = { Accept: "application/json", "X-Plex-Token": token };
     const { url } = await discoverPlexUrl(token, base);
-    const episodesMd = await findSeasonEpisodes(url, headers, showTitle, season);
+    const episodesMd = await findSeasonEpisodes(url, headers, show, season);
     const item = episodesMd?.find((e) => Number(e.index) === episode);
     if (item?.ratingKey) {
       return {
@@ -318,7 +312,7 @@ export async function findPlexEpisodeLink(
 // unic "pachet" trebuie desfăcut în câte un rând per episod, fiecare cu
 // propriul ratingKey.
 export async function findPlexSeasonLinks(
-  showTitle: string,
+  show: PlexLookup,
   season: number,
 ): Promise<Map<number, PlexItemLink> | null> {
   const token = process.env.PLEX_TOKEN;
@@ -327,7 +321,7 @@ export async function findPlexSeasonLinks(
   try {
     const headers = { Accept: "application/json", "X-Plex-Token": token };
     const { url } = await discoverPlexUrl(token, base);
-    const episodesMd = await findSeasonEpisodes(url, headers, showTitle, season);
+    const episodesMd = await findSeasonEpisodes(url, headers, show, season);
     if (!episodesMd) return null;
     const links = new Map<number, PlexItemLink>();
     for (const e of episodesMd) {
@@ -355,6 +349,7 @@ export async function findPlexSeasonLinks(
 // nu le-a mai chemat nimeni, așa că au fost șterse.
 
 export async function checkPlexHasTitleInternal(data: {
+  tmdbId: number;
   title: string;
   originalTitle: string;
   mediaType: "movie" | "tv";
@@ -368,8 +363,7 @@ export async function checkPlexHasTitleInternal(data: {
     return await findByTitle(
       discovered.url,
       headers,
-      data.title,
-      data.originalTitle,
+      { tmdbId: data.tmdbId, titles: [data.title, data.originalTitle] },
       data.mediaType,
     );
   } catch {
@@ -378,6 +372,7 @@ export async function checkPlexHasTitleInternal(data: {
 }
 
 export async function getPlexEpisodesInSeasonInternal(data: {
+  tmdbId: number;
   showTitle: string;
   season: number;
 }): Promise<{ num: number; quality: string | null; watched: boolean }[]> {
@@ -387,7 +382,12 @@ export async function getPlexEpisodesInSeasonInternal(data: {
   try {
     const headers = { Accept: "application/json", "X-Plex-Token": token };
     const discovered = await discoverPlexUrl(token, base);
-    return await episodesInSeason(discovered.url, headers, data.showTitle, data.season);
+    return await episodesInSeason(
+      discovered.url,
+      headers,
+      { tmdbId: data.tmdbId, titles: [data.showTitle] },
+      data.season,
+    );
   } catch {
     return [];
   }

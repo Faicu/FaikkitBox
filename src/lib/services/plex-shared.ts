@@ -67,6 +67,8 @@ export interface PlexMetadataItem {
   ratingKey?: string;
   key?: string;
   title?: string;
+  // Titlul original, când Plex afișează altul (biblioteca e în română).
+  originalTitle?: string;
   type?: string;
   index?: number;
   parentIndex?: number;
