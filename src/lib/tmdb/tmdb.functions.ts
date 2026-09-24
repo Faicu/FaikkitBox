@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { tmdbFetch } from "./tmdb-client";
+import { interleaveSearchResults } from "./search-merge";
 
 interface TmdbApiSearchResult {
   id: number;
@@ -105,11 +106,17 @@ export const searchTmdb = createServerFn({ method: "GET" })
     const q = data.query.trim();
     if (!q) return [];
     try {
-      // Potrivirea (query-ul, ordinea, ce rezultate ies) rămâne pe apelul
-      // en-US, ca înainte — doar titlul afișat/salvat e suprascris cu
-      // traducerea ro-RO, unde există (altfel rămâne titlul englez). Fără
-      // asta, titlul din wizard ajungea nemodificat în `media.title` și
-      // apărea englezesc peste tot în aplicație (Bibliotecă, notificări).
+      // TMDB potrivește query-ul pe titlurile din limba cererii, deci cele
+      // două apeluri dau liste DIFERITE, nu aceeași listă tradusă: „elita" pe
+      // en-US nu găsește Élite (acolo e „Elite"), pe ro-RO îl pune primul.
+      // Le intercalăm (ro, en, ro, en…), ca primul rezultat din fiecare limbă
+      // să ajungă mereu în primele două — căutările în română găsesc titlul
+      // românesc, iar cele în engleză nu-și pierd rezultatul bun.
+      //
+      // Titlul afișat/salvat e cel ro-RO unde există (altfel rămâne cel
+      // englez). Fără asta, titlul din wizard ajungea nemodificat în
+      // `media.title` și apărea englezesc peste tot în aplicație (Bibliotecă,
+      // notificări).
       const [json, roJson] = await Promise.all([
         tmdbFetch<TmdbApiSearchResponse>(
           `/search/multi?query=${encodeURIComponent(q)}&include_adult=false&language=en-US&page=1`,
@@ -119,32 +126,29 @@ export const searchTmdb = createServerFn({ method: "GET" })
         ).catch(() => null),
       ]);
       const roByKey = new Map((roJson?.results ?? []).map((r) => [`${r.media_type}:${r.id}`, r]));
-      const results = json.results ?? [];
-      return results
-        .filter((r) => r.media_type === "movie" || r.media_type === "tv")
-        .slice(0, 8)
-        .map((r) => {
-          const roR = roByKey.get(`${r.media_type}:${r.id}`);
-          const enTitle =
+      const merged = interleaveSearchResults(roJson?.results ?? [], json.results ?? []);
+      return merged.slice(0, 8).map((r) => {
+        const roR = roByKey.get(`${r.media_type}:${r.id}`);
+        const enTitle =
+          r.media_type === "movie"
+            ? (r.title ?? r.original_title ?? "")
+            : (r.name ?? r.original_name ?? "");
+        const roTitle = roR ? (r.media_type === "movie" ? roR.title : roR.name) : null;
+        return {
+          id: r.id,
+          mediaType: r.media_type as "movie" | "tv",
+          title: roTitle?.trim() || enTitle,
+          originalTitle:
             r.media_type === "movie"
-              ? (r.title ?? r.original_title ?? "")
-              : (r.name ?? r.original_name ?? "");
-          const roTitle = roR ? (r.media_type === "movie" ? roR.title : roR.name) : null;
-          return {
-            id: r.id,
-            mediaType: r.media_type as "movie" | "tv",
-            title: roTitle?.trim() || enTitle,
-            originalTitle:
-              r.media_type === "movie"
-                ? (r.original_title ?? r.title ?? "")
-                : (r.original_name ?? r.name ?? ""),
-            year:
-              r.media_type === "movie"
-                ? (r.release_date ?? "").slice(0, 4) || null
-                : (r.first_air_date ?? "").slice(0, 4) || null,
-            posterUrl: r.poster_path ? `https://image.tmdb.org/t/p/w92${r.poster_path}` : null,
-          };
-        });
+              ? (r.original_title ?? r.title ?? "")
+              : (r.original_name ?? r.name ?? ""),
+          year:
+            r.media_type === "movie"
+              ? (r.release_date ?? "").slice(0, 4) || null
+              : (r.first_air_date ?? "").slice(0, 4) || null,
+          posterUrl: r.poster_path ? `https://image.tmdb.org/t/p/w92${r.poster_path}` : null,
+        };
+      });
     } catch {
       return [];
     }
