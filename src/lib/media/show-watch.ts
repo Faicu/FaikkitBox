@@ -706,9 +706,9 @@ const PLACEHOLDER_GRACE_MS = 14 * 24 * 60 * 60 * 1000;
 // episodul n-are (încă) nume propriu.
 const GENERIC_EPISODE_TITLE = /^episo(?:dul|de)\s*\d+$/i;
 
-// Detaliile episoadelor, de la TMDB: numele, descrierea și imaginea
-// episodului, plus posterul sezonului (pe `poster_path`, locul posterului
-// vertical din notificări și miniaturi). Totul cerut în română, cu engleza ca
+// Detaliile episoadelor, de la TMDB: numele, descrierea, imaginea și data
+// difuzării episodului, plus posterul sezonului (pe `poster_path`, locul
+// posterului vertical din notificări și miniaturi). Totul cerut în română, cu engleza ca
 // rezervă pentru ce lipsește (getTmdbAllSeasonsInternal cu `details`).
 //
 // Două feluri de rulare, ambele pe un singur serial:
@@ -765,6 +765,7 @@ export async function syncEpisodeDetails(opts: {
         SET episode_title = COALESCE(?, episode_title),
             episode_overview = COALESCE(NULLIF(?, ''), episode_overview),
             episode_still = COALESCE(NULLIF(?, ''), episode_still),
+            episode_air_date = COALESCE(NULLIF(?, ''), episode_air_date),
             poster_path = COALESCE(NULLIF(?, ''), poster_path)
       WHERE id = ?`,
   );
@@ -807,6 +808,7 @@ export async function syncEpisodeDetails(opts: {
       title,
       found.overview ?? null,
       found.stillUrl ?? null,
+      found.airDate ?? null,
       season?.posterUrl ?? null,
       r.id,
     );

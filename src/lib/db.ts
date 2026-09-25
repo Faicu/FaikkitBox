@@ -168,6 +168,10 @@ export function getDb(): DatabaseSync {
       -- ei. Ținute la zi de syncEpisodeDetails (show-watch.ts).
       episode_overview TEXT,
       episode_still TEXT,
+      -- Data difuzării episodului (YYYY-MM-DD, TMDB). year e, pe episoade,
+      -- anul premierei SERIALULUI — un episod din sezonul 8 ar apărea cu anul
+      -- sezonului 1. Tot de syncEpisodeDetails.
+      episode_air_date TEXT,
       -- Urmărire episoade noi — au sens DOAR pe rândul-părinte 'tv_show'.
       -- Stau aici, pe rândul serialului, nu într-o tabelă separată: prima
       -- implementare (pinned_items, ștearsă în v14) ținea urmărirea într-o
@@ -965,6 +969,19 @@ function applyCleanups(database: DatabaseSync): void {
           WHERE episode_still LIKE '%/t/p/w300/%'`,
       );
       database.exec("PRAGMA user_version = 32");
+    }
+
+    if (version < 33) {
+      // v33: data difuzării per episod (vezi definiția tabelei).
+      try {
+        database.exec("ALTER TABLE media ADD COLUMN episode_air_date TEXT");
+      } catch {
+        // coloana există deja (bază nouă, creată direct cu schema curentă)
+      }
+      // Ca la v31: episoadele existente primesc data la prima rulare a
+      // plugin-ului, nu peste 12 ore.
+      database.exec("UPDATE media SET meta_refreshed_at = NULL WHERE media_type = 'tv_show'");
+      database.exec("PRAGMA user_version = 33");
     }
   }
 }

@@ -119,3 +119,12 @@ export function nextEpisodeWhen(
 // etichete ca detectTorrentQuality. Folosite de drawer-ul serialului și de cel
 // al filmului așteptat.
 export const WATCH_QUALITIES = ["4K HDR", "4K", "1080p HDR", "1080p", "720p", "SD"];
+
+// Data difuzării unui episod (YYYY-MM-DD, TMDB), scurt: „6 ian. 2026”.
+// Miezul nopții local, nu UTC — altfel data ar putea sări cu o zi.
+export function airDateLabel(airDate: string | null): string | null {
+  if (!airDate) return null;
+  const d = new Date(`${airDate}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString("ro-RO", { day: "numeric", month: "short", year: "numeric" });
+}

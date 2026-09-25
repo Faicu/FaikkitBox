@@ -3,9 +3,10 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-// Detaliile episoadelor (nume, descriere, imagine, posterul sezonului), pe o
-// bază SQLite reală și temporară, cu TMDB simulat. Calea bazei se setează
-// ÎNAINTE de orice import al lui db.ts (vezi season-pack-link.test.ts).
+// Detaliile episoadelor (nume, descriere, imagine, data difuzării, posterul
+// sezonului), pe o bază SQLite reală și temporară, cu TMDB simulat. Calea
+// bazei se setează ÎNAINTE de orice import al lui db.ts (vezi
+// season-pack-link.test.ts).
 const dir = mkdtempSync(join(tmpdir(), "faikkitbox-test-"));
 const dbFile = join(dir, "test.db");
 process.env.FAIKKITBOX_DB_PATH = dbFile;
@@ -82,7 +83,8 @@ function tmdbSeason1(
 const get = (id: number) =>
   db
     .prepare(
-      `SELECT episode_title, episode_overview, episode_still, poster_path, overview_ro
+      `SELECT episode_title, episode_overview, episode_still, poster_path, overview_ro,
+              episode_air_date
          FROM media WHERE id = ?`,
     )
     .get(id) as Record<string, string | null>;
@@ -91,7 +93,7 @@ describe("syncEpisodeDetails", () => {
   it("completează numele, descrierea, imaginea și posterul sezonului", async () => {
     const parent = show();
     const e = episode(parent, 5);
-    tmdbSeason1([[5, "Stingerea", "Descrierea episodului", STILL]]);
+    tmdbSeason1([[5, "Stingerea", "Descrierea episodului", STILL, "2026-01-06"]]);
 
     await watch.syncEpisodeDetails({ parentId: parent });
 
@@ -102,6 +104,7 @@ describe("syncEpisodeDetails", () => {
       poster_path: SEASON_POSTER,
       // Descrierea serialului rămâne neatinsă — e rezerva din UI.
       overview_ro: "Descrierea serialului",
+      episode_air_date: "2026-01-06",
     });
     expect(seasons).toHaveBeenCalledWith(95350, [1], { details: true });
   });

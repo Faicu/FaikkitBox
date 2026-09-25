@@ -51,6 +51,7 @@ import {
   groupBySeason,
   nextEpisodeWhen,
   displayEpisodeTitle,
+  airDateLabel,
   WATCH_QUALITIES,
 } from "./utils";
 
@@ -321,7 +322,11 @@ export function TitleDetailDrawer({
                 </DrawerDescription>
               )}
               {/* Titlul original, anul și IMDb pe un rând: toate trei spun
-                  „care titlu e ăsta”, nu „ce fișier am”. */}
+                  „care titlu e ăsta”, nu „ce fișier am”. La episod, anul și
+                  IMDb-ul sunt ale serialului (premiera, pagina serialului), iar
+                  genurile există doar la nivel de serial pe TMDB — acolo le
+                  vezi, cu „Înapoi la serial”. Episodul își arată în schimb
+                  data difuzării. */}
               {d && (
                 <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11px]">
                   {d.originalTitle &&
@@ -330,12 +335,17 @@ export function TitleDetailDrawer({
                         {d.originalTitle}
                       </span>
                     )}
-                  {d.year && (
+                  {d.type === "episode" && airDateLabel(d.airDate) && (
+                    <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 font-medium text-muted-foreground">
+                      difuzat {airDateLabel(d.airDate)}
+                    </span>
+                  )}
+                  {d.type !== "episode" && d.year && (
                     <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 font-medium text-muted-foreground">
                       {d.year}
                     </span>
                   )}
-                  {d.imdbId && (
+                  {d.type !== "episode" && d.imdbId && (
                     <a
                       href={`https://www.imdb.com/title/${d.imdbId}/`}
                       target="_blank"
@@ -395,7 +405,7 @@ export function TitleDetailDrawer({
               )}
               {/* Text simplu, nu pastile: e informație secundară, iar
                   pastilele ocupau un rând întreg. */}
-              {d && d.genres.length > 0 && (
+              {d && d.type !== "episode" && d.genres.length > 0 && (
                 <div className="mt-1.5 text-[11px] leading-snug text-muted-foreground">
                   {d.genres.join(" · ")}
                 </div>

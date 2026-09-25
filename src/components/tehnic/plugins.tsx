@@ -77,7 +77,7 @@ export const PLUGINS: PluginInfo[] = [
         summary: "Împrospătează din TMDB toate serialele, inclusiv pe cele neurmărite.",
         points: [
           "Serialul: status (încheiat / în producție), titlul românesc și cel original, anul, descrierea, genurile, posterul și următorul episod anunțat.",
-          "Odată cu serialul, și toate episoadele lui: numele, descrierea, cadrul din episod și posterul sezonului.",
+          "Odată cu serialul, și toate episoadele lui: numele, descrierea, data difuzării, cadrul din episod și posterul sezonului.",
           "Totul e cerut în română la fiecare trecere; ce TMDB n-are încă în română rămâne în engleză până apare traducerea.",
           "Statusul contează și la serialele neurmărite: decide dacă ți se oferă butonul de urmărire.",
         ],

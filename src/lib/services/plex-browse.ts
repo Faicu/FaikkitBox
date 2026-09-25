@@ -419,6 +419,9 @@ export interface PlexTitleDetail {
   thumbUrl: string | null;
   // Doar pe episoade: un cadru din episod (orizontal), de la TMDB.
   stillUrl: string | null;
+  // Doar pe episoade: data difuzării (YYYY-MM-DD). `year` e, pe episoade,
+  // anul serialului.
+  airDate: string | null;
   addedAt: number;
   durationMs: number;
   year: number | null;
@@ -522,6 +525,7 @@ interface MediaRow {
   episode_title: string | null;
   episode_overview: string | null;
   episode_still: string | null;
+  episode_air_date: string | null;
   tv_status: string | null;
   auto_download: number;
   auto_download_quality: string | null;
@@ -721,6 +725,7 @@ async function buildDetailFromMediaRow(
     episode: row.episode,
     thumbUrl: row.poster_path,
     stillUrl: isEpisode ? row.episode_still : null,
+    airDate: isEpisode ? row.episode_air_date : null,
     addedAt: Math.floor(new Date(`${row.added_at.replace(" ", "T")}Z`).getTime() / 1000),
     durationMs: row.duration_ms ?? 0,
     year: row.year,
@@ -792,7 +797,7 @@ export const getPlexTitleDetail = createServerFn({ method: "GET" })
            category_name, size, freeleech, internal, save_path, added_via,
            plex_rating_key, is_season_pack, requested_by_user_id, added_at, completed_at,
            subtitle_source, subtitle_detail, subtitle_checked_at, episode_title,
-           episode_overview, episode_still,
+           episode_overview, episode_still, episode_air_date,
            tv_status, auto_download, auto_download_quality, auto_download_fallback_quality,
            auto_download_from, watch_last_checked_at,
            next_episode, next_episode_air_date, next_episode_airstamp
