@@ -811,6 +811,7 @@ export async function resolveSeasonPackPlexLinks(torrentHash: string): Promise<b
   // repetă trecerile până la acoperirea completă.
   const findByRatingKey = db.prepare(`SELECT id FROM media WHERE plex_rating_key = ?`);
 
+  let inserted = 0;
   for (const [episodeNum, link] of links) {
     const existing = (findExisting.get(row.parent_id, row.season, episodeNum, row.id) ??
       findByRatingKey.get(link.ratingKey)) as { id: number } | undefined;
@@ -860,6 +861,16 @@ export async function resolveSeasonPackPlexLinks(torrentHash: string): Promise<b
       link.quality,
       link.durationMs,
     );
+    inserted++;
+  }
+
+  // Numele episoadelor tocmai create — același motiv ca la descărcarea unui
+  // episod individual (vezi fillEpisodeTitlesForShow). Doar când chiar s-au
+  // creat rânduri: funcția e chemată și dintr-o buclă la 10 secunde, iar o
+  // trecere fără nimic nou n-are ce cere de la TMDB.
+  if (inserted > 0) {
+    const { fillEpisodeTitlesForShow } = await import("./show-watch");
+    fillEpisodeTitlesForShow(row.parent_id);
   }
 
   if (!isComplete) {

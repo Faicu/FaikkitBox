@@ -557,12 +557,17 @@ export const GENERIC_EPISODE_TITLE = /^episo(?:dul|de)\s*\d+$/i;
 
 // Umple `episode_title` pentru episoadele care încă n-au unul.
 //
+// Cu `parentId`, doar pentru serialul acela — varianta chemată imediat după
+// ce se scrie rândul unui episod (vezi fillEpisodeTitlesForShow), ca numele
+// să apară odată cu episodul, nu la următorul ciclu al plugin-ului (până la
+// 10 minute mai târziu).
+//
 // Aceeași abordare declarativă ca restul fișierului: nu ținem minte ce am
 // completat, ci întrebăm de fiecare dată ce lipsește. Rularea e un no-op
 // ieftin (un singur SELECT) când nu lipsește nimic, se auto-repară după un
 // restart, și prinde din mers atât episoadele descărcate acum, cât și cele
 // existente dinaintea coloanei.
-export async function fillMissingEpisodeTitles(): Promise<number> {
+export async function fillMissingEpisodeTitles(opts: { parentId?: number } = {}): Promise<number> {
   const db = getDb();
   const missing = db
     .prepare(
@@ -573,9 +578,10 @@ export async function fillMissingEpisodeTitles(): Promise<number> {
           AND e.episode_title IS NULL
           AND e.season IS NOT NULL
           AND e.episode IS NOT NULL
-          AND p.tmdb_id IS NOT NULL`,
+          AND p.tmdb_id IS NOT NULL
+          AND (? IS NULL OR e.parent_id = ?)`,
     )
-    .all() as unknown as Array<{
+    .all(opts.parentId ?? null, opts.parentId ?? null) as unknown as Array<{
     id: number;
     season: number;
     episode: number;
@@ -633,6 +639,17 @@ export async function fillMissingEpisodeTitles(): Promise<number> {
   }
   if (filled > 0) console.log(`[show-watch] Completate ${filled} nume de episoade`);
   return filled;
+}
+
+// Numele episoadelor unui serial, imediat după ce i s-a scris un episod nou
+// (descărcare pornită din wizard, căutare manuală sau urmărire; desfacerea
+// unui pachet de sezon). Rulează în fundal: descărcarea nu așteaptă după TMDB,
+// iar o eroare aici nu contează — plugin-ul reîncearcă oricum la 10 minute.
+export function fillEpisodeTitlesForShow(parentId: number | null): void {
+  if (parentId == null) return;
+  fillMissingEpisodeTitles({ parentId }).catch((e) =>
+    console.warn(`[show-watch] Nume de episoade necompletate pentru serialul ${parentId}:`, e),
+  );
 }
 
 // ---------------------------------------------------------------------------

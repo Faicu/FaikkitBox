@@ -553,7 +553,7 @@ async function finishFilelistDownload(ctx: {
     addedVia: "manual" as const,
   };
   try {
-    upsertMediaEntry({
+    const mediaId = upsertMediaEntry({
       ...(mediaPayload ?? fallbackPayload),
       torrentName: params.torrentName,
       torrentHash: torrentHash ?? null,
@@ -565,6 +565,16 @@ async function finishFilelistDownload(ctx: {
       savePath,
       requestedByUserId: params.requestedByUserId ?? null,
     });
+    // Numele episodului acum, nu la următorul ciclu al plugin-ului. Pentru
+    // un pachet de sezon nu e nimic de completat încă — episoadele lui apar
+    // abia la desfacere (resolveSeasonPackPlexLinks), care cheamă același lucru.
+    if (!isMovie) {
+      const { getDb } = await import("../db");
+      const parent = getDb().prepare("SELECT parent_id FROM media WHERE id = ?").get(mediaId) as
+        { parent_id: number | null } | undefined;
+      const { fillEpisodeTitlesForShow } = await import("../media/show-watch");
+      fillEpisodeTitlesForShow(parent?.parent_id ?? null);
+    }
   } catch (e) {
     console.warn("[filelist] Nu am putut scrie în tabela media:", e);
   }
