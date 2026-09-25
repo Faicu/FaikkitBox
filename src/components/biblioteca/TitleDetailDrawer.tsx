@@ -440,13 +440,13 @@ export function TitleDetailDrawer({
           {d && (
             <>
               {/* Cadrul episodului (TMDB, orizontal): în partea care se
-                  derulează, nu în antet — acolo, fix și pe toată lățimea,
-                  acoperea ecranul pe desktop. Lățimea plafonată îl ține la o
-                  mărime rezonabilă pe desktop; pe telefon ocupă lățimea. */}
+                  derulează, nu în antet — acolo, fix, ocupa prea mult ecran.
+                  Pe toată lățimea drawer-ului, care e oricum plafonată pe
+                  desktop (vezi DrawerContent). */}
               {d.type === "episode" && d.stillUrl && (
                 <img
                   src={d.stillUrl}
-                  className="aspect-video w-full max-w-md rounded-xl object-cover bg-muted"
+                  className="aspect-video w-full rounded-xl object-cover bg-muted"
                   loading="lazy"
                   alt=""
                 />

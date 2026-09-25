@@ -34,11 +34,19 @@ const DrawerContent = React.forwardRef<
     {/* sm:max-w-2xl + sm:mx-auto: pe ecrane mari drawer-ul nu mai ține toată
         lățimea (pe desktop ajungea la ~1500px — text pe rânduri foarte lungi,
         imagini întinse), ci rămâne o „foaie" centrată, ca pe telefon. Cu
-        inset-x-0 și margini auto, elementul fix se centrează singur. */}
+        inset-x-0 și margini auto, elementul fix se centrează singur.
+
+        overflow-x-clip, nu overflow-x-hidden: taie la fel conținutul lat
+        (protecția din 2b1d49a, pe telefon), dar `hidden` pe o axă face
+        cealaltă axă `auto` — drawer-ul devenea derulabil pe verticală, iar
+        stratul pe care vaul îl pune sub el (::after, 200% din înălțime, contra
+        golului la tras) intra în zona de derulat: 3× înălțimea, cu o a doua
+        bară de derulare vizibilă pe desktop. `clip` nu creează zonă de
+        derulare. */}
     <DrawerPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed inset-x-0 bottom-0 z-50 mt-24 flex h-auto flex-col overflow-x-hidden rounded-t-[10px] border bg-background sm:mx-auto sm:max-w-2xl",
+        "fixed inset-x-0 bottom-0 z-50 mt-24 flex h-auto flex-col overflow-x-clip rounded-t-[10px] border bg-background sm:mx-auto sm:max-w-2xl",
         className,
       )}
       {...props}
