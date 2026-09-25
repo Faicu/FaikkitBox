@@ -55,7 +55,7 @@ export const PLUGINS: PluginInfo[] = [
     id: "show-watcher",
     label: "Urmărire Seriale și Filme",
     description: "Descărcare automată episoade noi și filme așteptate",
-    cadence: "verificat din 10 în 10 min · fiecare parte cu ritmul ei",
+    cadence: "verificat din 10 în 10 min",
     details: "Face patru lucruri la fiecare tic, fiecare cu ritmul lui.",
     steps: [
       {
