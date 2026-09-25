@@ -158,9 +158,16 @@ export function getDb(): DatabaseSync {
       -- Titlul episodului (doar pe rândurile 'episode'): coloana title ține
       -- titlul SERIALULUI și pe rândurile de episod, deci numele episodului
       -- n-avea unde sta. Se completează din TMDB, o dată, de
-      -- fillMissingEpisodeTitles — nu se cere live la fiecare deschidere de
+      -- syncEpisodeDetails — nu se cere live la fiecare deschidere de
       -- drawer, ca Biblioteca să rămână doar SELECT-uri.
       episode_title TEXT,
+      -- Descrierea și imaginea episodului (doar pe rândurile 'episode'):
+      -- overview_ro e, pe episoade, o copie a descrierii SERIALULUI, iar
+      -- poster_path e posterul sezonului (vertical, folosit în notificări și
+      -- miniaturi). Imaginea episodului e un cadru orizontal, deci are coloana
+      -- ei. Ținute la zi de syncEpisodeDetails (show-watch.ts).
+      episode_overview TEXT,
+      episode_still TEXT,
       -- Urmărire episoade noi — au sens DOAR pe rândul-părinte 'tv_show'.
       -- Stau aici, pe rândul serialului, nu într-o tabelă separată: prima
       -- implementare (pinned_items, ștearsă în v14) ținea urmărirea într-o
@@ -687,7 +694,7 @@ function applyCleanups(database: DatabaseSync): void {
       // titlul serialului, deci numele episodului nu exista nicăieri în
       // aplicație — era rezolvat din TMDB doar ca să intre în textul unei
       // notificări (buildTorrentDisplayName) și aruncat imediat după.
-      // Completarea efectivă e treaba lui fillMissingEpisodeTitles.
+      // Completarea efectivă e treaba lui syncEpisodeDetails.
       try {
         database.exec("ALTER TABLE media ADD COLUMN episode_title TEXT");
         console.log("[db] Migrare v20: adăugat media.episode_title");
@@ -930,6 +937,24 @@ function applyCleanups(database: DatabaseSync): void {
         }
       }
       database.exec("PRAGMA user_version = 30");
+    }
+
+    if (version < 31) {
+      // v31: descrierea și imaginea per episod (vezi definiția tabelei).
+      for (const sql of [
+        "ALTER TABLE media ADD COLUMN episode_overview TEXT",
+        "ALTER TABLE media ADD COLUMN episode_still TEXT",
+      ]) {
+        try {
+          database.exec(sql);
+        } catch {
+          // coloana există deja (bază nouă, creată direct cu schema curentă)
+        }
+      }
+      // Serialele devin scadente la reîmprospătare, ca episoadele existente să
+      // primească detaliile la prima rulare a plugin-ului, nu peste 12 ore.
+      database.exec("UPDATE media SET meta_refreshed_at = NULL WHERE media_type = 'tv_show'");
+      database.exec("PRAGMA user_version = 31");
     }
   }
 }

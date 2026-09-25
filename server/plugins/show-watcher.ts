@@ -21,7 +21,7 @@ const NEW_MOVIE_POLL_MS = 30 * 1000;
 // Gardă de suprapunere: o rulare atinge TMDB, TVmaze, Filelist și qBittorrent
 // pentru mai multe seriale, deci poate depăși intervalul de 10 minute.
 // checkShow are propria protecție per serial (inProgress), dar
-// fillMissingEpisodeTitles și refreshShowMetadata n-au niciuna — două rulări
+// syncEpisodeDetails și refreshShowMetadata n-au niciuna — două rulări
 // suprapuse ar cere de două ori aceleași sezoane de la TMDB.
 let running = false;
 
@@ -29,12 +29,12 @@ async function run(): Promise<void> {
   if (running) return;
   running = true;
   try {
-    const { checkDueShows, fillMissingEpisodeTitles, refreshShowMetadata } =
+    const { checkDueShows, syncEpisodeDetails, refreshShowMetadata } =
       await import("../../src/lib/media/show-watch");
     // Numele episoadelor înainte: e un no-op ieftin (un SELECT) când nu
     // lipsește niciunul, și înseamnă că un episod abia descărcat își capătă
     // numele în cel mult un ciclu, fără să depindă de urmărire.
-    await fillMissingEpisodeTitles();
+    await syncEpisodeDetails();
     // Status + următorul episod, pentru toate serialele (la 12h fiecare) —
     // nu doar pentru cele urmărite, fiindcă tv_status decide dacă vezi
     // butonul de urmărire, deci trebuie corect mai ales acolo unde încă n-ai

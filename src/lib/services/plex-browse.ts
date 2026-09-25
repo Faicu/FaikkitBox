@@ -394,7 +394,7 @@ export interface ShowEpisodeEntry {
   season: number | null;
   episode: number | null;
   // Null cât timp completarea din TMDB n-a ajuns încă la episodul ăsta (vezi
-  // fillMissingEpisodeTitles) — UI-ul arată atunci doar codul SxxEyy.
+  // syncEpisodeDetails) — UI-ul arată atunci doar codul SxxEyy.
   episodeTitle: string | null;
   addedAt: number;
   status: "in_library" | "downloading" | "processing";
@@ -415,7 +415,10 @@ export interface PlexTitleDetail {
   season: number | null;
   episode: number | null;
   // Gata de folosit direct ca src de <img> — link TMDB, salvat în `media`.
+  // Pe episoade: posterul sezonului (vertical).
   thumbUrl: string | null;
+  // Doar pe episoade: un cadru din episod (orizontal), de la TMDB.
+  stillUrl: string | null;
   addedAt: number;
   durationMs: number;
   year: number | null;
@@ -517,6 +520,8 @@ interface MediaRow {
   subtitle_detail: string | null;
   subtitle_checked_at: string | null;
   episode_title: string | null;
+  episode_overview: string | null;
+  episode_still: string | null;
   tv_status: string | null;
   auto_download: number;
   auto_download_quality: string | null;
@@ -715,13 +720,16 @@ async function buildDetailFromMediaRow(
     season: row.season,
     episode: row.episode,
     thumbUrl: row.poster_path,
+    stillUrl: isEpisode ? row.episode_still : null,
     addedAt: Math.floor(new Date(`${row.added_at.replace(" ", "T")}Z`).getTime() / 1000),
     durationMs: row.duration_ms ?? 0,
     year: row.year,
     quality: row.quality,
     hasRomanianSubtitle: !!row.has_romanian_subtitle,
     hasRomanianAudio: !!row.has_romanian_audio,
-    summary: row.overview_ro,
+    // Pe episoade, descrierea episodului; a serialului doar ca rezervă, cât
+    // TMDB n-are niciuna pentru episod.
+    summary: isEpisode ? (row.episode_overview ?? row.overview_ro) : row.overview_ro,
     genres: JSON.parse(row.genres || "[]"),
     watchedByMe,
     watchedByMeAt,
@@ -784,6 +792,7 @@ export const getPlexTitleDetail = createServerFn({ method: "GET" })
            category_name, size, freeleech, internal, save_path, added_via,
            plex_rating_key, is_season_pack, requested_by_user_id, added_at, completed_at,
            subtitle_source, subtitle_detail, subtitle_checked_at, episode_title,
+           episode_overview, episode_still,
            tv_status, auto_download, auto_download_quality, auto_download_fallback_quality,
            auto_download_from, watch_last_checked_at,
            next_episode, next_episode_air_date, next_episode_airstamp

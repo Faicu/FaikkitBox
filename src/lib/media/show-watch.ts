@@ -200,24 +200,18 @@ async function writeShowMeta(
   // decât serialul din care face parte. `original_title` contează în plus:
   // e cheia de rezervă la potrivirea vizionărilor cu Plex, când istoricul
   // vine fără ratingKey.
-  // Descrierea, genurile și posterul episoadelor sunt tot copii ale celor ale
-  // serialului (upsertMediaEntry, desfacerea pachetelor), deci țin pasul cu ele.
+  // Descrierea și genurile episoadelor sunt tot copii ale celor ale serialului
+  // (upsertMediaEntry, desfacerea pachetelor), deci țin pasul cu ele. Posterul
+  // nu: pe episoade e posterul SEZONULUI, ținut de syncEpisodeDetails — scris
+  // și aici, cele două s-ar fi suprascris una pe alta la fiecare verificare.
   db.prepare(
     `UPDATE media
         SET title = COALESCE(NULLIF(?, ''), title),
             original_title = COALESCE(NULLIF(?, ''), original_title),
             overview_ro = COALESCE(NULLIF(?, ''), overview_ro),
-            genres = COALESCE(?, genres),
-            poster_path = COALESCE(NULLIF(?, ''), poster_path)
+            genres = COALESCE(?, genres)
       WHERE parent_id = ?`,
-  ).run(
-    details.title,
-    details.originalTitle,
-    details.overview ?? null,
-    genres,
-    details.posterUrl ?? null,
-    showId,
-  );
+  ).run(details.title, details.originalTitle, details.overview ?? null, genres, showId);
 }
 
 export interface ShowWatchOutcome {
@@ -703,11 +697,6 @@ export async function setShowWatchCore(input: SetShowWatchInput): Promise<void> 
 // Numele episoadelor
 // ---------------------------------------------------------------------------
 
-// Câte seriale completăm cel mult într-o rulare — cu getTmdbAllSeasonsInternal
-// e o singură cerere TMDB per serial, dar nu are rost să le luăm pe toate
-// deodată la prima pornire după migrare.
-const MAX_TITLE_SHOWS_PER_RUN = 5;
-
 // Cât timp mai sperăm că TMDB completează titlul unui episod deja difuzat,
 // înainte să acceptăm placeholder-ul lui generic ca răspuns final.
 const PLACEHOLDER_GRACE_MS = 14 * 24 * 60 * 60 * 1000;
@@ -716,100 +705,133 @@ const PLACEHOLDER_GRACE_MS = 14 * 24 * 60 * 60 * 1000;
 // episodul n-are (încă) nume propriu.
 export const GENERIC_EPISODE_TITLE = /^episo(?:dul|de)\s*\d+$/i;
 
-// Umple `episode_title` pentru episoadele care încă n-au unul.
+// Detaliile episoadelor, de la TMDB: numele, descrierea și imaginea
+// episodului, plus posterul sezonului (pe `poster_path`, locul posterului
+// vertical din notificări și miniaturi). Totul cerut în română, cu engleza ca
+// rezervă pentru ce lipsește (getTmdbAllSeasonsInternal cu `details`).
 //
-// Cu `parentId`, doar pentru serialul acela — varianta chemată imediat după
-// ce se scrie rândul unui episod (vezi fillEpisodeTitlesForShow), ca numele
-// să apară odată cu episodul, nu la următorul ciclu al plugin-ului (până la
-// 10 minute mai târziu).
+// Trei feluri de rulare:
+// - implicit (plugin-ul, la 10 minute): doar episoadele FĂRĂ nume — plasa
+//   pentru rândurile noi. Doar numele contează aici: un episod pentru care
+//   TMDB n-are descriere deloc ar fi fost altfel reinterogat la nesfârșit.
+// - `parentId` (imediat după ce se scrie un episod, vezi
+//   syncEpisodeDetailsForShow): episoadele acelui serial cărora le lipsește
+//   ceva — nume, descriere sau imagine — ca detaliile să apară odată cu
+//   episodul.
+// - `parentId` + `all` (reîmprospătarea serialului, la 12 ore): TOATE
+//   episoadele lui. Așa ajunge româna când apare pe TMDB: un nume salvat în
+//   engleză („Lights Out") e înlocuit cu cel românesc („Stingerea"), la cel
+//   mult 12 ore după ce apare. Înainte, un episod cu nume nu mai era
+//   verificat niciodată, deci engleza rămânea pe veci.
 //
-// Aceeași abordare declarativă ca restul fișierului: nu ținem minte ce am
-// completat, ci întrebăm de fiecare dată ce lipsește. Rularea e un no-op
-// ieftin (un singur SELECT) când nu lipsește nimic, se auto-repară după un
-// restart, și prinde din mers atât episoadele descărcate acum, cât și cele
-// existente dinaintea coloanei.
-export async function fillMissingEpisodeTitles(opts: { parentId?: number } = {}): Promise<number> {
+// Reguli la scriere: un nume se înlocuiește doar cu un nume real, niciodată
+// cu „Episodul N"; descrierea, imaginea și posterul — doar cu valori nevide.
+// Ce lipsește la TMDB nu șterge ce avem.
+export async function syncEpisodeDetails(
+  opts: { parentId?: number; all?: boolean } = {},
+): Promise<number> {
   const db = getDb();
-  const missing = db
+  const filter =
+    opts.parentId == null
+      ? "AND e.episode_title IS NULL"
+      : opts.all
+        ? "AND e.parent_id = ?"
+        : `AND e.parent_id = ?
+           AND (e.episode_title IS NULL OR e.episode_overview IS NULL OR e.episode_still IS NULL)`;
+  const rows = db
     .prepare(
-      `SELECT e.id, e.season, e.episode, p.tmdb_id AS tmdb_id
+      `SELECT e.id, e.season, e.episode, e.episode_title, p.tmdb_id AS tmdb_id
          FROM media e
          JOIN media p ON p.id = e.parent_id
         WHERE e.media_type = 'episode'
-          AND e.episode_title IS NULL
           AND e.season IS NOT NULL
           AND e.episode IS NOT NULL
           AND p.tmdb_id IS NOT NULL
-          AND (? IS NULL OR e.parent_id = ?)`,
+          ${filter}`,
     )
-    .all(opts.parentId ?? null, opts.parentId ?? null) as unknown as Array<{
+    .all(...(opts.parentId == null ? [] : [opts.parentId])) as unknown as Array<{
     id: number;
     season: number;
     episode: number;
+    episode_title: string | null;
     tmdb_id: number;
   }>;
-  if (missing.length === 0) return 0;
+  if (rows.length === 0) return 0;
 
-  const byShow = new Map<number, typeof missing>();
-  for (const row of missing) {
+  const byShow = new Map<number, typeof rows>();
+  for (const row of rows) {
     const list = byShow.get(row.tmdb_id);
     if (list) list.push(row);
     else byShow.set(row.tmdb_id, [row]);
   }
 
   const { getTmdbAllSeasonsInternal } = await import("../tmdb/tmdb.functions");
-  const update = db.prepare("UPDATE media SET episode_title = ? WHERE id = ?");
-  let filled = 0;
+  const update = db.prepare(
+    `UPDATE media
+        SET episode_title = COALESCE(?, episode_title),
+            episode_overview = COALESCE(NULLIF(?, ''), episode_overview),
+            episode_still = COALESCE(NULLIF(?, ''), episode_still),
+            poster_path = COALESCE(NULLIF(?, ''), poster_path)
+      WHERE id = ?`,
+  );
+  let changed = 0;
 
-  for (const [tmdbId, rows] of [...byShow].slice(0, MAX_TITLE_SHOWS_PER_RUN)) {
-    const seasons = [...new Set(rows.map((r) => r.season))].sort((a, b) => a - b);
-    const schema = await getTmdbAllSeasonsInternal(tmdbId, seasons).catch(() => []);
-    const titles = new Map<string, { title: string; airDate: string | null }>();
-    for (const s of schema) {
-      for (const ep of s.episodes) {
-        titles.set(`${s.seasonNumber}x${ep.episodeNum}`, { title: ep.title, airDate: ep.airDate });
-      }
-    }
-    for (const r of rows) {
-      const found = titles.get(`${r.season}x${r.episode}`);
+  for (const [tmdbId, showRows] of byShow) {
+    const seasons = [...new Set(showRows.map((r) => r.season))].sort((a, b) => a - b);
+    const schema = await getTmdbAllSeasonsInternal(tmdbId, seasons, { details: true }).catch(
+      () => [],
+    );
+    const bySeason = new Map(schema.map((s) => [s.seasonNumber, s]));
+    for (const r of showRows) {
+      const season = bySeason.get(r.season);
+      const found = season?.episodes.find((e) => e.episodeNum === r.episode);
       if (!found) continue;
-      // "Episodul 8" e placeholder-ul pe care TMDB îl întoarce cât timp n-are
-      // încă titlul real — frecvent în primele ore după difuzare, dar și
-      // permanent pentru emisiuni ale căror episoade n-au titluri (reality
-      // show-uri, televiziune locală).
-      //
-      // Pentru un episod difuzat recent sărim peste, ca să reîncercăm când
-      // TMDB îl completează. Pentru unul difuzat demult acceptăm
-      // placeholder-ul: TMDB n-o să-l mai schimbe, iar altfel rândul rămâne
-      // "lipsă" pe veci și îl reinterogăm la fiecare 10 minute la nesfârșit
-      // (găsit la "Insula Iubirii" S10, unde TMDB n-are titluri deloc).
-      // UI-ul ascunde oricum numele generice, deci nu se vede nimic urât.
+
+      let title: string | null = found.title;
       if (GENERIC_EPISODE_TITLE.test(found.title)) {
-        // Fără dată de difuzare la TMDB nu avem cum aștepta un moment anume,
-        // deci acceptăm placeholder-ul direct — altfel bucla ar fi infinită
-        // din alt motiv decât cel de mai sus. Un episod nedifuzat nici n-ar
-        // avea rând în `media`: acolo ajunge doar ce e deja descărcat.
-        const stillWorthWaiting =
-          found.airDate != null &&
-          Date.now() - new Date(found.airDate).getTime() <= PLACEHOLDER_GRACE_MS;
-        if (stillWorthWaiting) continue;
+        if (r.episode_title) {
+          // Avem deja un nume (real sau placeholder acceptat) — un placeholder
+          // nou nu-l înlocuiește.
+          title = null;
+        } else {
+          // "Episodul 8" e placeholder-ul pe care TMDB îl întoarce cât timp
+          // n-are încă titlul real — frecvent în primele ore după difuzare,
+          // dar și permanent pentru emisiuni ale căror episoade n-au titluri
+          // (reality show-uri, televiziune locală). Pentru un episod difuzat
+          // recent îl lăsăm gol, ca plugin-ul să reîncerce; pentru unul
+          // difuzat demult (sau fără dată la TMDB) îl acceptăm — altfel
+          // rândul ar rămâne „lipsă" pe veci și l-am reinteroga la fiecare
+          // 10 minute (găsit la "Insula Iubirii" S10). UI-ul ascunde oricum
+          // numele generice.
+          const stillWorthWaiting =
+            found.airDate != null &&
+            Date.now() - new Date(found.airDate).getTime() <= PLACEHOLDER_GRACE_MS;
+          if (stillWorthWaiting) title = null;
+        }
       }
-      update.run(found.title, r.id);
-      filled++;
+
+      const res = update.run(
+        title,
+        found.overview ?? null,
+        found.stillUrl ?? null,
+        season?.posterUrl ?? null,
+        r.id,
+      );
+      if (res.changes > 0) changed++;
     }
   }
-  if (filled > 0) console.log(`[show-watch] Completate ${filled} nume de episoade`);
-  return filled;
+  return changed;
 }
 
-// Numele episoadelor unui serial, imediat după ce i s-a scris un episod nou
-// (descărcare pornită din wizard, căutare manuală sau urmărire; desfacerea
-// unui pachet de sezon). Rulează în fundal: descărcarea nu așteaptă după TMDB,
-// iar o eroare aici nu contează — plugin-ul reîncearcă oricum la 10 minute.
-export function fillEpisodeTitlesForShow(parentId: number | null): void {
+// Detaliile episoadelor unui serial, imediat după ce i s-a scris un episod
+// nou (descărcare pornită din wizard, căutare manuală sau urmărire;
+// desfacerea unui pachet de sezon). Rulează în fundal: descărcarea nu
+// așteaptă după TMDB, iar o eroare aici nu contează — plugin-ul și
+// reîmprospătarea de 12 ore reîncearcă oricum.
+export function syncEpisodeDetailsForShow(parentId: number | null): void {
   if (parentId == null) return;
-  fillMissingEpisodeTitles({ parentId }).catch((e) =>
-    console.warn(`[show-watch] Nume de episoade necompletate pentru serialul ${parentId}:`, e),
+  syncEpisodeDetails({ parentId }).catch((e) =>
+    console.warn(`[show-watch] Detalii de episod necompletate pentru serialul ${parentId}:`, e),
   );
 }
 
@@ -866,6 +888,8 @@ export async function refreshShowMetadata(): Promise<number> {
         continue;
       }
       await writeShowMeta(row.id, row.imdb_id, details);
+      // Toate episoadele serialului, odată cu el — vezi syncEpisodeDetails.
+      await syncEpisodeDetails({ parentId: row.id, all: true });
       refreshed++;
     } catch (e) {
       touch.run(row.id);

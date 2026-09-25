@@ -296,8 +296,18 @@ export function TitleDetailDrawer({
               <ArrowLeft className="h-3 w-3" /> Înapoi la serial
             </button>
           )}
+          {/* Episodul are un cadru propriu de la TMDB (orizontal) — arătat mare,
+              deasupra, în locul posterului mic al sezonului. */}
+          {d?.type === "episode" && d.stillUrl && (
+            <img
+              src={d.stillUrl}
+              className="mb-1 aspect-video w-full rounded-xl object-cover bg-muted"
+              loading="lazy"
+              alt=""
+            />
+          )}
           <div className="flex items-start gap-3">
-            {d?.thumbUrl && (
+            {d?.thumbUrl && !(d.type === "episode" && d.stillUrl) && (
               <img
                 src={d.thumbUrl}
                 className="h-20 w-14 shrink-0 rounded-lg object-cover bg-muted"

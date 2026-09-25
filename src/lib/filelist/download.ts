@@ -572,8 +572,8 @@ async function finishFilelistDownload(ctx: {
       const { getDb } = await import("../db");
       const parent = getDb().prepare("SELECT parent_id FROM media WHERE id = ?").get(mediaId) as
         { parent_id: number | null } | undefined;
-      const { fillEpisodeTitlesForShow } = await import("../media/show-watch");
-      fillEpisodeTitlesForShow(parent?.parent_id ?? null);
+      const { syncEpisodeDetailsForShow } = await import("../media/show-watch");
+      syncEpisodeDetailsForShow(parent?.parent_id ?? null);
     }
   } catch (e) {
     console.warn("[filelist] Nu am putut scrie în tabela media:", e);

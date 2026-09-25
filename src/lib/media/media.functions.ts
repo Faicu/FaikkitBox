@@ -131,7 +131,7 @@ export const getShowWatchStatus = createServerFn({ method: "GET" }).handler(
       )
       .all() as unknown as WatchedShowSummary[];
 
-    // Aceeași condiție ca fillMissingEpisodeTitles — stare tranzitorie, de
+    // Aceeași condiție ca syncEpisodeDetails — stare tranzitorie, de
     // obicei goală; apare între descărcarea unui episod și următorul ciclu,
     // sau cât timp TMDB încă n-a publicat titlul. Plafonat, ca un serial
     // proaspăt adăugat să nu trimită sute de rânduri către UI.

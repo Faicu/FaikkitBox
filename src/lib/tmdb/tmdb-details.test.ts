@@ -102,3 +102,70 @@ describe("getTmdbDetailsInternal — titlu și descriere", () => {
     expect((await tmdb.getTmdbDetailsInternal(76669, "tv")).title).toBe("Elite");
   });
 });
+
+describe("getTmdbAllSeasonsInternal — detaliile episoadelor", () => {
+  // Răspunsul TMDB cu append_to_response=season/8: `ro` la cererea ro-RO,
+  // `en` la cea implicită.
+  function seasons8(ro: Record<string, unknown>, en: Record<string, unknown>) {
+    tmdbFetch.mockImplementation(async (path: string) => ({
+      "season/8": path.includes("language=ro-RO") ? ro : en,
+    }));
+  }
+
+  it("cu `details`: descrierea în română, altfel în engleză; imaginea și posterul sezonului", async () => {
+    seasons8(
+      {
+        poster_path: "/sezon8-ro.jpg",
+        episodes: [
+          { episode_number: 1, name: "Episodul 1", overview: "", still_path: "/e1.jpg" },
+          { episode_number: 2, name: "Profeții", overview: "Descriere RO", still_path: null },
+        ],
+      },
+      {
+        episodes: [
+          { episode_number: 1, name: "Soul of a Rebel", overview: "English overview" },
+          { episode_number: 2, name: "Prophecies", overview: "English 2" },
+        ],
+      },
+    );
+
+    const [s] = await tmdb.getTmdbAllSeasonsInternal(56570, [8], { details: true });
+
+    expect(s.posterUrl).toBe("https://image.tmdb.org/t/p/w342/sezon8-ro.jpg");
+    expect(s.episodes[0]).toMatchObject({
+      title: "Soul of a Rebel",
+      overview: "English overview",
+      stillUrl: "https://image.tmdb.org/t/p/w300/e1.jpg",
+    });
+    expect(s.episodes[1]).toMatchObject({
+      title: "Profeții",
+      overview: "Descriere RO",
+      stillUrl: null,
+    });
+  });
+
+  it("nume românesc, dar descriere lipsă în română: cere engleza doar pentru descriere", async () => {
+    seasons8(
+      { episodes: [{ episode_number: 1, name: "Stingerea", overview: "", still_path: null }] },
+      { episodes: [{ episode_number: 1, name: "Lights Out", overview: "English overview" }] },
+    );
+
+    const [s] = await tmdb.getTmdbAllSeasonsInternal(95350, [8], { details: true });
+
+    expect(s.episodes[0]).toMatchObject({ title: "Stingerea", overview: "English overview" });
+  });
+
+  it("fără `details` (wizard-ul): nici descrieri, nici imagini, nici cerere în engleză de dragul lor", async () => {
+    seasons8(
+      { episodes: [{ episode_number: 1, name: "Nume RO", overview: "", still_path: "/e1.jpg" }] },
+      {},
+    );
+
+    const [s] = await tmdb.getTmdbAllSeasonsInternal(56570, [8]);
+
+    expect(s.episodes[0]).not.toHaveProperty("overview");
+    expect(s.episodes[0]).not.toHaveProperty("stillUrl");
+    expect(s).not.toHaveProperty("posterUrl");
+    expect(tmdbFetch).toHaveBeenCalledTimes(1);
+  });
+});

@@ -83,10 +83,13 @@ interface TmdbApiEpisode {
   episode_number: number;
   name?: string;
   air_date?: string | null;
+  overview?: string;
+  still_path?: string | null;
 }
 
 interface TmdbApiSeason {
   episodes?: TmdbApiEpisode[];
+  poster_path?: string | null;
 }
 
 export interface TmdbSearchResult {
@@ -328,6 +331,11 @@ export interface TmdbEpisode {
   title: string;
   airDate: string | null;
   aired: boolean;
+  // Doar cu `details: true`. Descrierea episodului în română, altfel în
+  // engleză; null dacă TMDB n-are niciuna. Imaginea e un cadru din episod
+  // (orizontal), nu un poster.
+  overview?: string | null;
+  stillUrl?: string | null;
 }
 
 // Găsește titlul unui episod dintr-o listă deja încărcată (getTmdbSeasonEpisodes*)
@@ -407,6 +415,9 @@ export async function getTmdbSeasonEpisodesInternal(
 export interface TmdbSeasonSchema {
   seasonNumber: number;
   episodes: TmdbEpisode[];
+  // Doar cu `details: true` (vezi getTmdbAllSeasonsInternal). Posterul
+  // sezonului — românesc când TMDB are unul, altfel cel implicit.
+  posterUrl?: string | null;
 }
 
 // Schema completă (toate sezoanele, cu episoade+date de lansare) într-un
@@ -415,9 +426,14 @@ export interface TmdbSeasonSchema {
 // Wizard-ul ("Adaugă film/serial") are nevoie de toată schema dintr-o dată, ca
 // utilizatorul să vadă orice sezon extins fără să aștepte un request nou de
 // fiecare dată.
+// `details`: adaugă descrierea și imaginea fiecărui episod și posterul
+// sezonului — pentru Bibliotecă (show-watch.ts). Wizard-ul nu le cere: îi
+// trimite clientului schema TUTUROR sezoanelor, iar descrierile ar îngreuna
+// răspunsul degeaba.
 export async function getTmdbAllSeasonsInternal(
   tmdbId: number,
   seasonNumbers: number[],
+  opts: { details?: boolean } = {},
 ): Promise<TmdbSeasonSchema[]> {
   if (seasonNumbers.length === 0) return [];
   // Plafon de siguranță — peste el, un URL cu zeci de "season/N" ar deveni
@@ -441,7 +457,11 @@ export async function getTmdbAllSeasonsInternal(
     // logică per-episod ca getTmdbSeasonEpisodesInternal, doar aplicată o
     // singură dată pentru toate sezoanele, nu per-sezon).
     const needsEnFallback = [...roBySeason.values()].some((s) =>
-      (s.episodes ?? []).some((e) => isGenericEpisodePlaceholder(e.name, e.episode_number)),
+      (s.episodes ?? []).some(
+        (e) =>
+          isGenericEpisodePlaceholder(e.name, e.episode_number) ||
+          (opts.details && !e.overview?.trim()),
+      ),
     );
     const enBySeason = new Map<number, TmdbApiSeason>();
     if (needsEnFallback) {
@@ -463,6 +483,9 @@ export async function getTmdbAllSeasonsInternal(
       const season = roBySeason.get(n);
       const seasonEn = enBySeason.get(n);
       const enByNum = new Map((seasonEn?.episodes ?? []).map((e) => [e.episode_number, e.name]));
+      const enOverviewByNum = new Map(
+        (seasonEn?.episodes ?? []).map((e) => [e.episode_number, e.overview?.trim() || null]),
+      );
       const episodes: TmdbEpisode[] = (season?.episodes ?? []).map((e) => {
         const airDate = e.air_date ?? null;
         const enName = enByNum.get(e.episode_number)?.trim();
@@ -478,9 +501,25 @@ export async function getTmdbAllSeasonsInternal(
           title,
           airDate,
           aired: airDate ? airDate < todayStr : false,
+          ...(opts.details
+            ? {
+                overview: e.overview?.trim() || enOverviewByNum.get(e.episode_number) || null,
+                stillUrl: e.still_path ? `https://image.tmdb.org/t/p/w300${e.still_path}` : null,
+              }
+            : {}),
         };
       });
-      return { seasonNumber: n, episodes };
+      return {
+        seasonNumber: n,
+        episodes,
+        ...(opts.details
+          ? {
+              posterUrl: season?.poster_path
+                ? `https://image.tmdb.org/t/p/w342${season.poster_path}`
+                : null,
+            }
+          : {}),
+      };
     });
   } catch {
     return [];

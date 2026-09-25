@@ -10,13 +10,17 @@ const dir = mkdtempSync(join(tmpdir(), "faikkitbox-test-"));
 const dbFile = join(dir, "test.db");
 process.env.FAIKKITBOX_DB_PATH = dbFile;
 
-vi.mock("../tmdb/tmdb.functions", () => ({ getTmdbDetailsInternal: vi.fn() }));
+vi.mock("../tmdb/tmdb.functions", () => ({
+  getTmdbDetailsInternal: vi.fn(),
+  getTmdbAllSeasonsInternal: vi.fn(),
+}));
 vi.mock("../tvmaze/tvmaze.functions", () => ({ getTvmazeAirstampsInternal: vi.fn() }));
 
 let movies: typeof import("./movie-metadata");
 let shows: typeof import("./show-watch");
 let db: ReturnType<typeof import("../db").getDb>;
 let details: ReturnType<typeof vi.fn>;
+let seasons: ReturnType<typeof vi.fn>;
 
 beforeAll(async () => {
   db = (await import("../db")).getDb();
@@ -26,6 +30,7 @@ beforeAll(async () => {
   movies = await import("./movie-metadata");
   shows = await import("./show-watch");
   details = vi.mocked((await import("../tmdb/tmdb.functions")).getTmdbDetailsInternal);
+  seasons = vi.mocked((await import("../tmdb/tmdb.functions")).getTmdbAllSeasonsInternal);
 });
 
 beforeEach(async () => {
@@ -214,20 +219,45 @@ describe("refreshShowMetadata — toate detaliile", () => {
     ...over,
   });
 
-  it("serialul și episoadele lui primesc descrierea, genurile și posterul românesc", async () => {
+  it("serialul și episoadele lui primesc descrierea, genurile și posterele românești", async () => {
     const { showId, episodeId } = show();
     details.mockResolvedValue(tmdbShow());
+    const SEASON3 = "https://image.tmdb.org/t/p/w342/sezon3.jpg";
+    seasons.mockResolvedValue([
+      {
+        seasonNumber: 3,
+        posterUrl: SEASON3,
+        episodes: [
+          {
+            episodeNum: 1,
+            title: "Carla",
+            overview: "Episodul RO",
+            stillUrl: null,
+            airDate: "2020-03-13",
+            aired: true,
+          },
+        ],
+      },
+    ]);
 
     await shows.refreshShowMetadata();
 
-    for (const id of [showId, episodeId]) {
-      expect(row(id)).toMatchObject({
-        title: "Elita",
-        overview_ro: "Descriere RO",
-        genres: '["Dramă","Crimă"]',
-        poster_path: POSTER_RO,
-      });
-    }
+    expect(row(showId)).toMatchObject({
+      title: "Elita",
+      overview_ro: "Descriere RO",
+      genres: '["Dramă","Crimă"]',
+      poster_path: POSTER_RO,
+    });
+    // Episodul: aceeași descriere și aceleași genuri ale serialului (rezerva
+    // din UI), dar posterul SEZONULUI, nu al serialului.
+    expect(row(episodeId)).toMatchObject({
+      title: "Elita",
+      overview_ro: "Descriere RO",
+      genres: '["Dramă","Crimă"]',
+      poster_path: SEASON3,
+    });
+    // Episoadele se reîmprospătează odată cu serialul, toate.
+    expect(seasons).toHaveBeenCalledWith(76669, [3], { details: true });
   });
 
   it("un TMDB căzut nu mai șterge următorul episod anunțat", async () => {

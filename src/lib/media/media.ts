@@ -865,12 +865,12 @@ export async function resolveSeasonPackPlexLinks(torrentHash: string): Promise<b
   }
 
   // Numele episoadelor tocmai create — același motiv ca la descărcarea unui
-  // episod individual (vezi fillEpisodeTitlesForShow). Doar când chiar s-au
+  // episod individual (vezi syncEpisodeDetailsForShow). Doar când chiar s-au
   // creat rânduri: funcția e chemată și dintr-o buclă la 10 secunde, iar o
   // trecere fără nimic nou n-are ce cere de la TMDB.
   if (inserted > 0) {
-    const { fillEpisodeTitlesForShow } = await import("./show-watch");
-    fillEpisodeTitlesForShow(row.parent_id);
+    const { syncEpisodeDetailsForShow } = await import("./show-watch");
+    syncEpisodeDetailsForShow(row.parent_id);
   }
 
   if (!isComplete) {
