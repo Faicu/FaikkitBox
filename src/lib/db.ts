@@ -956,5 +956,15 @@ function applyCleanups(database: DatabaseSync): void {
       database.exec("UPDATE media SET meta_refreshed_at = NULL WHERE media_type = 'tv_show'");
       database.exec("PRAGMA user_version = 31");
     }
+
+    if (version < 32) {
+      // v32: cadrele episoadelor la rezoluția originală — w300 era neclar pe
+      // lățimea unui telefon. Același fișier TMDB, doar altă mărime în URL.
+      database.exec(
+        `UPDATE media SET episode_still = REPLACE(episode_still, '/t/p/w300/', '/t/p/original/')
+          WHERE episode_still LIKE '%/t/p/w300/%'`,
+      );
+      database.exec("PRAGMA user_version = 32");
+    }
   }
 }

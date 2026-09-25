@@ -135,7 +135,7 @@ describe("getTmdbAllSeasonsInternal — detaliile episoadelor", () => {
     expect(s.episodes[0]).toMatchObject({
       title: "Soul of a Rebel",
       overview: "English overview",
-      stillUrl: "https://image.tmdb.org/t/p/w300/e1.jpg",
+      stillUrl: "https://image.tmdb.org/t/p/original/e1.jpg",
     });
     expect(s.episodes[1]).toMatchObject({
       title: "Profeții",

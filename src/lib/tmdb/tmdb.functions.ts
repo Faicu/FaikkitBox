@@ -504,7 +504,11 @@ export async function getTmdbAllSeasonsInternal(
           ...(opts.details
             ? {
                 overview: e.overview?.trim() || enOverviewByNum.get(e.episode_number) || null,
-                stillUrl: e.still_path ? `https://image.tmdb.org/t/p/w300${e.still_path}` : null,
+                // Originalul, nu w300: TMDB are pentru cadre doar 92/185/300 px sau
+                // originalul, iar 300 px e neclar pe lățimea unui telefon.
+                stillUrl: e.still_path
+                  ? `https://image.tmdb.org/t/p/original${e.still_path}`
+                  : null,
               }
             : {}),
         };
