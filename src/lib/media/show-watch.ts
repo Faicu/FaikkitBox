@@ -363,16 +363,20 @@ async function checkShowInner(showId: number): Promise<ShowWatchOutcome> {
 
   const { downloadFilelistCore } = await import("../filelist/download");
   const covered = new Set<string>();
+  // Ce a adus urmărirea în verificarea asta — reperul până la care avansează
+  // poziția de start (vezi watch-position.ts).
+  const downloadedNow: EpisodeKey[] = [];
 
   for (const c of candidates) {
     if (result.downloaded.length >= MAX_DOWNLOADS_PER_RUN) break;
     const p = c.parsed!;
     // Nu porni două torrente care acoperă același episod în aceeași rulare
     // (ex. episodul individual și pachetul sezonului lui).
-    const coversNow =
+    const coversNowKeys: EpisodeKey[] =
       p.episode != null
-        ? [formatEpisodeKey({ season: p.season, episode: p.episode })]
-        : missing.filter((k) => k.season === p.season).map(formatEpisodeKey);
+        ? [{ season: p.season, episode: p.episode }]
+        : missing.filter((k) => k.season === p.season);
+    const coversNow = coversNowKeys.map(formatEpisodeKey);
     if (coversNow.every((k) => covered.has(k))) continue;
 
     const dl = await downloadFilelistCore({
@@ -415,11 +419,39 @@ async function checkShowInner(showId: number): Promise<ShowWatchOutcome> {
       continue;
     }
     for (const k of coversNow) covered.add(k);
+    downloadedNow.push(...coversNowKeys);
     result.downloaded.push(
       p.episode == null
         ? `Sezonul ${p.season} (pachet)`
         : formatEpisodeKey({ season: p.season, episode: p.episode }),
     );
+  }
+
+  // Poziția de start avansează peste ce tocmai a adus urmărirea, ca un episod
+  // văzut și șters apoi din Bibliotecă să nu fie redescărcat (vezi
+  // watch-position.ts pentru regulă și de ce se oprește la primul gol).
+  if (downloadedNow.length > 0) {
+    const { advancedWatchFrom } = await import("./watch-position");
+    const next = advancedWatchFrom({
+      from,
+      aired,
+      covered: aired.filter(
+        (k) =>
+          ownedKeys.has(formatEpisodeKey(k)) ||
+          pendingPackSeasons.has(k.season) ||
+          covered.has(formatEpisodeKey(k)),
+      ),
+      downloadedNow,
+    });
+    if (next && (!from || ord(next) > ord(from))) {
+      db.prepare("UPDATE media SET auto_download_from = ? WHERE id = ?").run(
+        formatEpisodeKey(next),
+        showId,
+      );
+      console.log(
+        `[show-watch] "${row.title}" — poziția de start: ${row.auto_download_from ?? "început"} → ${formatEpisodeKey(next)}`,
+      );
+    }
   }
 
   // Fără notificare proprie aici: downloadFilelistCore loghează deja
