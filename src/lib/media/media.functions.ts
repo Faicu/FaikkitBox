@@ -80,7 +80,7 @@ export const checkShowNow = createServerFn({ method: "POST" })
       try {
         await requireShowManage(data.mediaId);
         const { checkShow } = await import("./show-watch");
-        return { ok: true, outcome: await checkShow(data.mediaId, { skipCache: true }) };
+        return { ok: true, outcome: await checkShow(data.mediaId) };
       } catch (e) {
         return { ok: false, error: e instanceof Error ? e.message : String(e) };
       }
@@ -256,10 +256,7 @@ export const checkMovieNow = createServerFn({ method: "POST" })
       try {
         await requireMovieWatchOwner({ mediaId: data.mediaId });
         const { checkMovie } = await import("./movie-watch");
-        // skipCache: un „verifică acum" apăsat de om trebuie să întrebe chiar
-        // Filelist. Fără asta ar putea răspunde din cache-ul de 10 minute al
-        // wizard-ului și ar raporta „verificat" fără să fi verificat.
-        return { ok: true, outcome: await checkMovie(data.mediaId, { skipCache: true }) };
+        return { ok: true, outcome: await checkMovie(data.mediaId) };
       } catch (e) {
         return { ok: false, error: e instanceof Error ? e.message : String(e) };
       }

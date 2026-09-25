@@ -86,25 +86,19 @@ export function pickCandidates<
 // porni de două ori același torrent.
 const inProgress = new Set<number>();
 
-export async function checkMovie(
-  movieId: number,
-  opts: { skipCache?: boolean } = {},
-): Promise<MovieWatchOutcome> {
+export async function checkMovie(movieId: number): Promise<MovieWatchOutcome> {
   if (inProgress.has(movieId)) {
     return { mediaId: movieId, title: "?", downloaded: null, skipped: "verificare deja în curs" };
   }
   inProgress.add(movieId);
   try {
-    return await checkMovieInner(movieId, opts);
+    return await checkMovieInner(movieId);
   } finally {
     inProgress.delete(movieId);
   }
 }
 
-async function checkMovieInner(
-  movieId: number,
-  opts: { skipCache?: boolean },
-): Promise<MovieWatchOutcome> {
+async function checkMovieInner(movieId: number): Promise<MovieWatchOutcome> {
   const db = getDb();
   const row = db
     .prepare(
@@ -159,7 +153,6 @@ async function checkMovieInner(
     originalTitle: row.literal_title || row.original_title || row.title,
     imdbId: row.imdb_id,
     mediaType: "movie",
-    skipCache: opts.skipCache,
   });
   if (search.status !== "ok") {
     stamp();
@@ -241,14 +234,11 @@ function safeGenres(raw: string): string[] {
 
 // Prima verificare a unui film abia adăugat, la un minut după adăugare.
 //
-// Separată de bucla de 12h din două motive. Întâi, ritmul: fără ea, un film
-// nou aștepta până la 10 minute (cadența de poll a plugin-ului) și rândul
-// arăta „neverificat" tot timpul ăsta, ca și cum urmărirea ar fi moartă.
-//
-// Al doilea, și mai important: ocolește cache-ul Filelist. Wizard-ul tocmai a
-// căutat același IMDb ca să-ți poată spune „nu există încă la calitatea X",
-// iar cache-ul ăla ține 10 minute — exact cât ciclul plugin-ului. O verificare
-// care nimerește în el ar scrie un timestamp fără să fi întrebat pe nimeni.
+// Separată de bucla de 12h din cauza ritmului: fără ea, un film nou aștepta
+// până la 10 minute (cadența de poll a plugin-ului) și rândul arăta
+// „neverificat" tot timpul ăsta, ca și cum urmărirea ar fi moartă. (Cache-ul
+// Filelist al wizard-ului nu mai e o problemă: urmărirea nu-l citește
+// niciodată — vezi checkFilelistForItemInternal.)
 //
 // Minutul de așteptare nu e arbitrar: e cât să nu repetăm căutarea wizard-ului
 // în aceeași suflare, dar destul de scurt cât rândul să se completeze cât încă
@@ -267,7 +257,7 @@ export async function checkNewMovies(): Promise<void> {
 
   for (const { id } of fresh) {
     try {
-      const outcome = await checkMovie(id, { skipCache: true });
+      const outcome = await checkMovie(id);
       console.log(
         `[movie-watch] prima verificare "${outcome.title}" — ${outcome.downloaded ?? outcome.skipped}`,
       );
@@ -283,8 +273,7 @@ export async function checkNewMovies(): Promise<void> {
 //
 // Rândurile cu watch_last_checked_at NULL sunt lăsate intenționat pe seama lui
 // checkNewMovies: dacă ar intra și aici, un poll care se nimerește la câteva
-// secunde după adăugare ar face verificarea prea devreme și, mai rău, cu
-// cache-ul wizard-ului încă valid.
+// secunde după adăugare ar face verificarea prea devreme.
 export async function checkDueMovies(): Promise<void> {
   const db = getDb();
   const due = db

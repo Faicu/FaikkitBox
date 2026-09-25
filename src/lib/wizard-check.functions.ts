@@ -79,6 +79,7 @@ export const checkTitleForWizard = createServerFn({ method: "GET" })
         mediaType: data.mediaType,
       }),
       checkFilelistForItemInternal({
+        useCache: true,
         title: data.title,
         originalTitle,
         imdbId: details.imdbId,

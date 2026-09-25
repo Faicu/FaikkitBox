@@ -198,16 +198,7 @@ const inProgress = new Set<number>();
 // Verifică un singur serial și pornește descărcările lipsă. Exportată separat
 // de bucla periodică fiindcă butonul "Verifică acum" din drawer o cheamă
 // direct, pentru serialul deschis.
-//
-// `skipCache`: căutarea pe Filelist are un cache de 10 minute (vezi
-// checkFilelistForItemInternal). „Verifică acum" îl ocolește — altfel,
-// apăsat la scurt timp după ce serialul a fost deschis în wizard, ar primi
-// rezultatul de atunci și ar raporta „nimic nou" fără să fi întrebat Filelist.
-// La fel ca la filme (checkMovie).
-export async function checkShow(
-  showId: number,
-  opts: { skipCache?: boolean } = {},
-): Promise<ShowWatchOutcome> {
+export async function checkShow(showId: number): Promise<ShowWatchOutcome> {
   if (inProgress.has(showId)) {
     return {
       showId,
@@ -219,16 +210,13 @@ export async function checkShow(
   }
   inProgress.add(showId);
   try {
-    return await checkShowInner(showId, opts);
+    return await checkShowInner(showId);
   } finally {
     inProgress.delete(showId);
   }
 }
 
-async function checkShowInner(
-  showId: number,
-  opts: { skipCache?: boolean },
-): Promise<ShowWatchOutcome> {
+async function checkShowInner(showId: number): Promise<ShowWatchOutcome> {
   const db = getDb();
   const row = db
     .prepare(
@@ -318,7 +306,6 @@ async function checkShowInner(
     originalTitle: row.literal_title || row.original_title || row.title,
     imdbId: row.imdb_id,
     mediaType: "tv",
-    skipCache: opts.skipCache,
   });
   if (search.status !== "ok" || search.torrents.length === 0) {
     stamp();
