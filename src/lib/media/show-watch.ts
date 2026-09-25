@@ -44,7 +44,7 @@ const ITEM_INTERVAL_MS = 3 * 60 * 60 * 1000; // 3 ore — cadența reală per se
 // qBittorrent deodată; restul vin la ciclurile următoare.
 const MAX_DOWNLOADS_PER_RUN = 3;
 
-export function formatEpisodeKey(k: EpisodeKey): string {
+function formatEpisodeKey(k: EpisodeKey): string {
   return `S${String(k.season).padStart(2, "0")}E${String(k.episode).padStart(2, "0")}`;
 }
 
@@ -704,7 +704,7 @@ const PLACEHOLDER_GRACE_MS = 14 * 24 * 60 * 60 * 1000;
 
 // "Episodul 8" / "Episode 8" — titlul generic pe care TMDB îl întoarce când
 // episodul n-are (încă) nume propriu.
-export const GENERIC_EPISODE_TITLE = /^episo(?:dul|de)\s*\d+$/i;
+const GENERIC_EPISODE_TITLE = /^episo(?:dul|de)\s*\d+$/i;
 
 // Detaliile episoadelor, de la TMDB: numele, descrierea și imaginea
 // episodului, plus posterul sezonului (pe `poster_path`, locul posterului

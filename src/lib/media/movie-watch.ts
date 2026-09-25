@@ -80,9 +80,11 @@ function hasReleased(releaseDate: string | null, now: Date = new Date()): boolea
 // Calitate exactă, nu „cel puțin": aceeași semantică cu urmărirea serialelor
 // (show-watch.ts), unde e tot `detectTorrentQuality(...) === calitatea cerută`.
 // Dacă ai cerut 1080p, un 4K de 60GB n-ar fi o surpriză plăcută.
-export function pickCandidates<
-  T extends { name: string; seeders: number; matchedByImdb?: boolean },
->(torrents: T[], wantedQuality: string, detect: (name: string) => string): T[] {
+function pickCandidates<T extends { name: string; seeders: number; matchedByImdb?: boolean }>(
+  torrents: T[],
+  wantedQuality: string,
+  detect: (name: string) => string,
+): T[] {
   return torrents
     .filter((t) => t.matchedByImdb !== false)
     .filter((t) => detect(t.name) === wantedQuality)
