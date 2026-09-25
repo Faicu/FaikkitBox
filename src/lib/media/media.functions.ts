@@ -80,7 +80,7 @@ export const checkShowNow = createServerFn({ method: "POST" })
       try {
         await requireShowManage(data.mediaId);
         const { checkShow } = await import("./show-watch");
-        return { ok: true, outcome: await checkShow(data.mediaId) };
+        return { ok: true, outcome: await checkShow(data.mediaId, { skipCache: true }) };
       } catch (e) {
         return { ok: false, error: e instanceof Error ? e.message : String(e) };
       }
