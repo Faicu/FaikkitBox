@@ -27,6 +27,7 @@
 //    jurnal de evenimente.
 // ---------------------------------------------------------------------------
 
+import { airedEpisodeKeys } from "./aired-episodes";
 import { getDb } from "../db";
 
 const ITEM_INTERVAL_MS = 3 * 60 * 60 * 1000; // 3 ore — cadența reală per serial
@@ -80,6 +81,8 @@ async function getAiredEpisodes(
   tmdbId: number,
   fromSeason: number,
   details: TmdbShowDetails | null,
+  // Și episoadele cu data de azi — vezi aired-episodes.ts.
+  includeToday = false,
 ): Promise<EpisodeKey[]> {
   const { getTmdbAllSeasonsInternal } = await import("../tmdb/tmdb.functions");
   const seasonNumbers = (details?.seasons ?? [])
@@ -87,11 +90,11 @@ async function getAiredEpisodes(
     .filter((n) => n >= Math.max(1, fromSeason));
   if (seasonNumbers.length === 0) return [];
   const schema = await getTmdbAllSeasonsInternal(tmdbId, seasonNumbers).catch(() => []);
-  return schema.flatMap((s) =>
-    s.episodes
-      .filter((e) => e.aired)
-      .map((e) => ({ season: s.seasonNumber, episode: e.episodeNum })),
-  );
+  // Aceeași zi ca în tmdb.functions.ts (UTC), ca regulile să nu se decaleze.
+  return airedEpisodeKeys(schema, {
+    includeToday,
+    today: new Date().toISOString().slice(0, 10),
+  });
 }
 
 type TmdbShowDetails = Awaited<
@@ -284,7 +287,7 @@ async function checkShowInner(showId: number): Promise<ShowWatchOutcome> {
   // Verificarea unui serial urmărit e și momentul în care îi împrospătăm
   // metadatele — datele sunt deja aici, ar fi risipă să le aruncăm.
   await writeShowMeta(row.id, details ? row.imdb_id : null, details);
-  const aired = await getAiredEpisodes(row.tmdb_id, from ? from.season : 1, details);
+  const aired = await getAiredEpisodes(row.tmdb_id, from ? from.season : 1, details, true);
   const missing = aired
     .filter((k) => !ownedKeys.has(formatEpisodeKey(k)))
     .filter((k) => !pendingPackSeasons.has(k.season))
