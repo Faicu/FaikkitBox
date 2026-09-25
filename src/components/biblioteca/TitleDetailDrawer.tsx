@@ -293,7 +293,7 @@ export function TitleDetailDrawer({
               <ArrowLeft className="h-3 w-3" /> Înapoi la serial
             </button>
           )}
-          {/* Tot ce descrie titlul stă lângă poster — insigne, IMDb, genuri —
+          {/* Tot ce descrie titlul stă lângă poster — an, IMDb, insigne, genuri —
               ca antetul fix să ocupe cât mai puțin; sub el, pe toată
               lățimea, rămâne doar starea temporară (descărcare/indexare). */}
           <div className="flex items-start gap-3">
@@ -320,13 +320,34 @@ export function TitleDetailDrawer({
                   {displayEpisodeTitle(d.title) ? ` · ${d.title}` : ""}
                 </DrawerDescription>
               )}
-              {d?.originalTitle &&
-                d.originalTitle !== (d.type === "movie" ? d.title : (d.show ?? d.title)) && (
-                  <div className="mt-0.5 truncate text-xs text-muted-foreground italic">
-                    {d.originalTitle}
-                  </div>
-                )}
+              {/* Titlul original, anul și IMDb pe un rând: toate trei spun
+                  „care titlu e ăsta”, nu „ce fișier am”. */}
               {d && (
+                <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11px]">
+                  {d.originalTitle &&
+                    d.originalTitle !== (d.type === "movie" ? d.title : (d.show ?? d.title)) && (
+                      <span className="min-w-0 truncate text-xs text-muted-foreground italic">
+                        {d.originalTitle}
+                      </span>
+                    )}
+                  {d.year && (
+                    <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 font-medium text-muted-foreground">
+                      {d.year}
+                    </span>
+                  )}
+                  {d.imdbId && (
+                    <a
+                      href={`https://www.imdb.com/title/${d.imdbId}/`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex shrink-0 items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 font-medium text-foreground hover:bg-muted/70 transition-colors"
+                    >
+                      <ExternalLink className="h-3 w-3" /> IMDb
+                    </a>
+                  )}
+                </div>
+              )}
+              {d && (d.type !== "tv_show" || d.durationMs > 0) && (
                 <div className="mt-1.5 flex flex-wrap items-center gap-1 text-[11px]">
                   {/* Calitatea, audio/subtitrarea și durata sunt proprietăți
                       ale unui FIȘIER. Rândul-părinte 'tv_show' nu are fișier,
@@ -369,21 +390,6 @@ export function TitleDetailDrawer({
                     <span className="flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 font-medium text-muted-foreground">
                       <Clock3 className="h-3 w-3" /> {formatMs(d.durationMs)}
                     </span>
-                  )}
-                  {d.year && (
-                    <span className="rounded-full bg-muted px-1.5 py-0.5 font-medium text-muted-foreground">
-                      {d.year}
-                    </span>
-                  )}
-                  {d.imdbId && (
-                    <a
-                      href={`https://www.imdb.com/title/${d.imdbId}/`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 font-medium text-foreground hover:bg-muted/70 transition-colors"
-                    >
-                      <ExternalLink className="h-3 w-3" /> IMDb
-                    </a>
                   )}
                 </div>
               )}
