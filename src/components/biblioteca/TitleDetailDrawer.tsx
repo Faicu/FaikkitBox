@@ -338,17 +338,11 @@ export function TitleDetailDrawer({
               )}
             </div>
           </div>
-        </DrawerHeader>
-
-        <div className="px-4 pb-6 space-y-3 overflow-y-auto overscroll-contain max-h-[65vh]">
-          {detail.isLoading && (
-            <div className="text-xs text-muted-foreground">Se încarcă detaliile…</div>
-          )}
-          {detail.data?.status === "error" && (
-            <div className="text-xs text-red-400">{detail.data.error}</div>
-          )}
+          {/* Tot ce descrie starea titlului stă în partea fixă, sub titlu —
+              insignele, progresul descărcării/indexării și genurile — ca să
+              rămână vizibil cât derulezi restul detaliilor. */}
           {d && (
-            <>
+            <div className="mt-2 space-y-2">
               <div className="flex flex-wrap items-center gap-2 text-xs">
                 {d.status !== "in_library" && (
                   <StatusBadge status={d.status} progress={d.progress} />
@@ -432,7 +426,19 @@ export function TitleDetailDrawer({
                   ))}
                 </div>
               )}
+            </div>
+          )}
+        </DrawerHeader>
 
+        <div className="min-h-0 flex-1 px-4 pb-6 space-y-3 overflow-y-auto overscroll-contain">
+          {detail.isLoading && (
+            <div className="text-xs text-muted-foreground">Se încarcă detaliile…</div>
+          )}
+          {detail.data?.status === "error" && (
+            <div className="text-xs text-red-400">{detail.data.error}</div>
+          )}
+          {d && (
+            <>
               {/* Cadrul episodului (TMDB, orizontal): în partea care se
                   derulează, nu în antet — acolo, fix și pe toată lățimea,
                   acoperea ecranul pe desktop. Lățimea plafonată îl ține la o
