@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -13,7 +13,6 @@ import {
   Clock3,
   Users,
   User,
-  Tag,
   Loader2,
   Trash2,
   Wrench,
@@ -294,17 +293,20 @@ export function TitleDetailDrawer({
               <ArrowLeft className="h-3 w-3" /> Înapoi la serial
             </button>
           )}
+          {/* Tot ce descrie titlul stă lângă poster — insigne, IMDb, genuri —
+              ca antetul fix să ocupe cât mai puțin; sub el, pe toată
+              lățimea, rămâne doar starea temporară (descărcare/indexare). */}
           <div className="flex items-start gap-3">
             {d?.thumbUrl && (
               <img
                 src={d.thumbUrl}
-                className="h-20 w-14 shrink-0 rounded-lg object-cover bg-muted"
+                className="h-[104px] w-[72px] shrink-0 rounded-lg object-cover bg-muted"
                 loading="lazy"
                 alt=""
               />
             )}
-            <div className="min-w-0">
-              <DrawerTitle className="flex items-center gap-2 text-base">
+            <div className="min-w-0 flex-1">
+              <DrawerTitle className="flex items-center gap-2 text-base leading-snug">
                 {d?.type === "movie" ? (
                   <Film className="h-4 w-4 text-amber-400 shrink-0" />
                 ) : (
@@ -313,7 +315,7 @@ export function TitleDetailDrawer({
                 {d ? (d.type === "movie" ? d.title : (d.show ?? d.title)) : "Se încarcă…"}
               </DrawerTitle>
               {d?.type === "episode" && (
-                <DrawerDescription className="text-left text-sm font-medium text-foreground leading-snug mt-1">
+                <DrawerDescription className="text-left text-sm font-medium text-foreground leading-snug mt-0.5">
                   {episodeCode(d.season, d.episode) ?? ""}
                   {displayEpisodeTitle(d.title) ? ` · ${d.title}` : ""}
                 </DrawerDescription>
@@ -324,72 +326,80 @@ export function TitleDetailDrawer({
                     {d.originalTitle}
                   </div>
                 )}
-              {d?.imdbId && (
-                <a
-                  href={`https://www.imdb.com/title/${d.imdbId}/`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-1 inline-flex w-fit items-center gap-1 rounded-full bg-muted/60 px-2 py-0.5 text-[11px] font-medium text-foreground hover:bg-muted transition-colors"
-                >
-                  <ExternalLink className="h-3 w-3" /> IMDb
-                </a>
+              {d && (
+                <div className="mt-1.5 flex flex-wrap items-center gap-1 text-[11px]">
+                  {/* Calitatea, audio/subtitrarea și durata sunt proprietăți
+                      ale unui FIȘIER. Rândul-părinte 'tv_show' nu are fișier,
+                      deci coloanele lui sunt goale prin construcție — iar
+                      has_romanian_subtitle = 0 pe el nu înseamnă "fără
+                      subtitrare RO", ci "întrebare fără sens la nivel de
+                      serial". Se aplică per episod, nu aici. */}
+                  {d.type !== "tv_show" && d.quality && (
+                    <span className="rounded-full bg-amber-500/15 text-amber-400 px-1.5 py-0.5 font-medium">
+                      {d.quality}
+                    </span>
+                  )}
+                  {d.type === "tv_show" ? null : d.hasRomanianAudio ? (
+                    <span className="flex items-center gap-1 rounded-full bg-emerald-500/15 text-emerald-400 px-1.5 py-0.5 font-medium">
+                      <Flag className="h-3 w-3" />
+                      Românesc
+                    </span>
+                  ) : (
+                    // Cât timp titlul e în descărcare, subtitrarea încă nu a
+                    // fost căutată/verificată — o insignă "doar engleză" ar fi
+                    // falsă, nu doar incompletă, de-aia o ascundem până se
+                    // termină.
+                    d.status !== "downloading" &&
+                    (d.hasRomanianSubtitle ? (
+                      <span className="flex items-center gap-1 rounded-full bg-emerald-500/15 text-emerald-400 px-1.5 py-0.5 font-medium">
+                        <Captions className="h-3 w-3" />
+                        Subtitrare RO
+                      </span>
+                    ) : (
+                      <span
+                        title="Fără subtitrare RO"
+                        className="flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 font-medium text-muted-foreground"
+                      >
+                        <CaptionsOff className="h-3 w-3" />
+                        Doar engleză
+                      </span>
+                    ))
+                  )}
+                  {d.durationMs > 0 && (
+                    <span className="flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 font-medium text-muted-foreground">
+                      <Clock3 className="h-3 w-3" /> {formatMs(d.durationMs)}
+                    </span>
+                  )}
+                  {d.year && (
+                    <span className="rounded-full bg-muted px-1.5 py-0.5 font-medium text-muted-foreground">
+                      {d.year}
+                    </span>
+                  )}
+                  {d.imdbId && (
+                    <a
+                      href={`https://www.imdb.com/title/${d.imdbId}/`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 font-medium text-foreground hover:bg-muted/70 transition-colors"
+                    >
+                      <ExternalLink className="h-3 w-3" /> IMDb
+                    </a>
+                  )}
+                </div>
+              )}
+              {/* Text simplu, nu pastile: e informație secundară, iar
+                  pastilele ocupau un rând întreg. */}
+              {d && d.genres.length > 0 && (
+                <div className="mt-1.5 text-[11px] leading-snug text-muted-foreground">
+                  {d.genres.join(" · ")}
+                </div>
               )}
             </div>
           </div>
-          {/* Tot ce descrie starea titlului stă în partea fixă, sub titlu —
-              insignele, progresul descărcării/indexării și genurile — ca să
-              rămână vizibil cât derulezi restul detaliilor. */}
-          {d && (
+          {d && d.status !== "in_library" && (
             <div className="mt-2 space-y-2">
-              <div className="flex flex-wrap items-center gap-2 text-xs">
-                {d.status !== "in_library" && (
-                  <StatusBadge status={d.status} progress={d.progress} />
-                )}
-                {/* Calitatea, audio/subtitrarea și durata sunt proprietăți ale
-                    unui FIȘIER. Rândul-părinte 'tv_show' nu are fișier, deci
-                    coloanele lui sunt goale prin construcție — iar
-                    has_romanian_subtitle = 0 pe el nu înseamnă "fără
-                    subtitrare RO", ci "întrebare fără sens la nivel de
-                    serial". Se aplică per episod, nu aici. */}
-                {d.type !== "tv_show" && d.quality && (
-                  <span className="rounded-full bg-amber-500/15 text-amber-400 px-2 py-0.5 font-medium">
-                    {d.quality}
-                  </span>
-                )}
-                {d.type === "tv_show" ? null : d.hasRomanianAudio ? (
-                  <span className="flex items-center gap-1 rounded-full bg-emerald-500/15 text-emerald-400 px-2 py-0.5 font-medium">
-                    <Flag className="h-3 w-3" />
-                    Românesc
-                  </span>
-                ) : (
-                  // Cât timp titlul e în descărcare, subtitrarea încă nu a fost
-                  // căutată/verificată — un badge "Fără subtitrare RO" ar fi fals,
-                  // nu doar incomplet, de-aia îl ascundem până se termină.
-                  d.status !== "downloading" && (
-                    <span
-                      className={`flex items-center gap-1 rounded-full px-2 py-0.5 font-medium ${
-                        d.hasRomanianSubtitle
-                          ? "bg-emerald-500/15 text-emerald-400"
-                          : "bg-muted text-muted-foreground"
-                      }`}
-                    >
-                      <Captions className="h-3 w-3" />
-                      {d.hasRomanianSubtitle
-                        ? "Subtitrare RO"
-                        : "Fără subtitrare RO (doar engleză)"}
-                    </span>
-                  )
-                )}
-                {d.durationMs > 0 && (
-                  <span className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 font-medium text-muted-foreground">
-                    <Clock3 className="h-3 w-3" /> {formatMs(d.durationMs)}
-                  </span>
-                )}
-                {d.year && (
-                  <span className="rounded-full bg-muted px-2 py-0.5 font-medium text-muted-foreground">
-                    {d.year}
-                  </span>
-                )}
+              <div className="flex text-xs">
+                <StatusBadge status={d.status} progress={d.progress} />
               </div>
 
               {d.status === "downloading" && d.progress != null && (
@@ -408,20 +418,6 @@ export function TitleDetailDrawer({
               {d.status === "processing" && (
                 <div className="text-[11px] text-muted-foreground">
                   Fișierul e descărcat complet — aștept ca Plex să îl indexeze.
-                </div>
-              )}
-
-              {d.genres.length > 0 && (
-                <div className="flex flex-wrap items-center gap-1.5 text-xs">
-                  <Tag className="h-3 w-3 text-muted-foreground shrink-0" />
-                  {d.genres.map((g) => (
-                    <span
-                      key={g}
-                      className="rounded-full bg-muted/60 px-2 py-0.5 text-[11px] text-foreground"
-                    >
-                      {g}
-                    </span>
-                  ))}
                 </div>
               )}
             </div>
@@ -444,65 +440,72 @@ export function TitleDetailDrawer({
               {d.type === "episode" && d.stillUrl && (
                 <img
                   src={d.stillUrl}
-                  className="aspect-video w-full rounded-xl object-cover bg-muted"
+                  className="aspect-[2/1] w-full rounded-xl object-cover bg-muted"
                   loading="lazy"
                   alt=""
                 />
               )}
 
-              {d.summary && (
-                <div className="text-xs text-muted-foreground leading-relaxed">{d.summary}</div>
-              )}
+              {d.summary && <ClampedSummary key={activeId} text={d.summary} />}
 
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                <span>Adăugat: {addedDate(d.addedAt)}</span>
-                <span className="flex items-center gap-1">
-                  <User className="h-3 w-3" /> {d.addedByUsername ?? "necunoscut"}
-                </span>
-              </div>
-
-              <div className="flex items-center gap-1.5 text-xs">
-                {d.watchedByMe ? (
-                  <Eye className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
-                ) : (
-                  <EyeOff className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                )}
-                <span>
-                  {d.type === "tv_show"
-                    ? // Pentru un serial, "ai văzut acest titlu" n-ar spune
-                      // nimic util — un episod din 36 e tot "văzut".
-                      `Ai văzut ${d.episodes.filter((e) => e.watchedByMe).length} din ${d.episodes.length} episoade`
-                    : d.watchedByMe
-                      ? d.watchedByMeAt
-                        ? `Ai văzut acest titlu · ${addedDate(d.watchedByMeAt)}`
-                        : "Ai văzut acest titlu"
-                      : "Nu ai văzut acest titlu"}
-                </span>
-              </div>
-
-              <div className="text-xs">
-                <div className="mb-1 flex items-center gap-1 text-muted-foreground">
-                  <Users className="h-3.5 w-3.5" /> Alți utilizatori care au văzut
-                </div>
-                {d.watchedByOthers.length > 0 ? (
-                  <div className="flex flex-col gap-1">
-                    {d.watchedByOthers.map((u) => (
-                      <div
-                        key={u.username}
-                        className="flex items-center justify-between gap-2 rounded-lg bg-muted/60 px-2 py-1"
-                      >
-                        <span className="text-[11px] font-medium text-foreground">
-                          {u.username}
-                        </span>
-                        <span className="text-[10px] text-muted-foreground">
-                          {addedDate(u.viewedAt)}
-                        </span>
+              {/* Cine l-a adus și cine l-a văzut — un singur card cu rânduri,
+                  în loc de patru-cinci rânduri separate, fiecare cu titlul lui. */}
+              <div className="rounded-xl border border-border/60 bg-muted/30 divide-y divide-border/50 text-xs">
+                <InfoRow icon={<User className="h-3.5 w-3.5" />} label="Adăugat">
+                  {addedDate(d.addedAt)} · {d.addedByUsername ?? "necunoscut"}
+                </InfoRow>
+                {/* Bara stă în același rând cu „Tu”, nu separată de linie. */}
+                <div>
+                  <InfoRow
+                    icon={
+                      d.watchedByMe ? (
+                        <Eye className="h-3.5 w-3.5 text-emerald-400" />
+                      ) : (
+                        <EyeOff className="h-3.5 w-3.5" />
+                      )
+                    }
+                    label="Tu"
+                  >
+                    {d.type === "tv_show"
+                      ? // Pentru un serial, "văzut" n-ar spune nimic util — un
+                        // episod din 36 e tot "văzut".
+                        `${d.episodes.filter((e) => e.watchedByMe).length} din ${d.episodes.length} episoade`
+                      : d.watchedByMe
+                        ? d.watchedByMeAt
+                          ? `văzut ${addedDate(d.watchedByMeAt)}`
+                          : "văzut"
+                        : "nevăzut"}
+                  </InfoRow>
+                  {d.type === "tv_show" && d.episodes.length > 0 && (
+                    <div className="px-3 pb-2.5">
+                      <div className="h-1 overflow-hidden rounded-full bg-muted">
+                        <div
+                          className="h-full rounded-full bg-emerald-400/80"
+                          style={{
+                            width: `${(d.episodes.filter((e) => e.watchedByMe).length / d.episodes.length) * 100}%`,
+                          }}
+                        />
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-muted-foreground">Nimeni altcineva încă</div>
-                )}
+                    </div>
+                  )}
+                </div>
+                <InfoRow icon={<Users className="h-3.5 w-3.5" />} label="Alții">
+                  {d.watchedByOthers.length === 0 ? (
+                    <span className="text-muted-foreground">nimeni încă</span>
+                  ) : (
+                    <span className="flex flex-col items-end gap-0.5">
+                      {d.watchedByOthers.map((u) => (
+                        <span key={u.username}>
+                          <span className="font-medium">{u.username}</span>
+                          <span className="text-[10px] text-muted-foreground">
+                            {" "}
+                            · {addedDate(u.viewedAt)}
+                          </span>
+                        </span>
+                      ))}
+                    </span>
+                  )}
+                </InfoRow>
               </div>
 
               {d.tech && (
@@ -882,6 +885,54 @@ export function TitleDetailDrawer({
         </div>
       </DrawerContent>
     </Drawer>
+  );
+}
+
+function InfoRow({
+  icon,
+  label,
+  children,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3 px-3 py-2">
+      <span className="flex shrink-0 items-center gap-1.5 text-muted-foreground">
+        {icon}
+        {label}
+      </span>
+      <span className="min-w-0 text-right text-foreground">{children}</span>
+    </div>
+  );
+}
+
+// Descrierea, tăiată la trei rânduri. „mai mult” apare doar dacă chiar a
+// tăiat ceva — măsurat după randare, nu ghicit după numărul de caractere.
+function ClampedSummary({ text }: { text: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [clamped, setClamped] = useState(false);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (el && !expanded) setClamped(el.scrollHeight > el.clientHeight + 1);
+  }, [text, expanded]);
+  return (
+    <div className="text-xs text-muted-foreground leading-relaxed">
+      <div ref={ref} className={expanded ? "" : "line-clamp-3"}>
+        {text}
+      </div>
+      {(clamped || expanded) && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="mt-0.5 font-medium text-foreground/80 hover:text-foreground transition-colors"
+        >
+          {expanded ? "mai puțin" : "mai mult"}
+        </button>
+      )}
+    </div>
   );
 }
 
