@@ -331,13 +331,15 @@ export function TitleDetailDrawer({
                 <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11px]">
                   {d.originalTitle &&
                     d.originalTitle !== (d.type === "movie" ? d.title : (d.show ?? d.title)) && (
-                      <span className="min-w-0 truncate text-xs text-muted-foreground italic">
+                      // pr-1: `truncate` taie tot ce iese din cutie, inclusiv
+                      // aplecarea ultimei litere italice.
+                      <span className="min-w-0 truncate pr-1 text-xs text-muted-foreground italic">
                         {d.originalTitle}
                       </span>
                     )}
                   {d.type === "episode" && airDateLabel(d.airDate) && (
                     <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 font-medium text-muted-foreground">
-                      difuzat {airDateLabel(d.airDate)}
+                      {airDateLabel(d.airDate)}
                     </span>
                   )}
                   {d.type !== "episode" && d.year && (
