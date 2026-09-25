@@ -177,34 +177,6 @@ export function PluginDetailDrawer({
                   )}
                 </div>
 
-                <div className="rounded-2xl glass-card p-3 text-xs">
-                  <div className="mb-2 flex items-center gap-1.5 text-muted-foreground">
-                    <Activity className="h-3.5 w-3.5" /> Episoade fără nume
-                  </div>
-                  {watch.missingTitles.length === 0 ? (
-                    <div className="text-emerald-400">Toate completate.</div>
-                  ) : (
-                    <>
-                      <div className="flex flex-wrap gap-1 stagger-in">
-                        {watch.missingTitles.map((m) => (
-                          <span
-                            key={`${m.show}-${m.code}`}
-                            className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] text-amber-400"
-                          >
-                            {m.show} {m.code}
-                          </span>
-                        ))}
-                      </div>
-                      {/* Fără explicație, lista pare o defecțiune. De obicei nu
-                          e: TMDB pur și simplu n-a publicat încă titlul. */}
-                      <div className="mt-2 text-[10px] leading-relaxed text-muted-foreground">
-                        TMDB n-are încă un titlu pentru ele. Se reîncearcă la fiecare ciclu; după 14
-                        zile de la difuzare acceptăm numele generic și nu mai interogăm.
-                      </div>
-                    </>
-                  )}
-                </div>
-
                 <div className="rounded-2xl glass-card divide-y divide-border/50 text-xs">
                   <Row
                     icon={<RefreshCw className="h-3.5 w-3.5" />}

@@ -144,20 +144,23 @@ describe("syncEpisodeDetails", () => {
     });
   });
 
-  it("plugin-ul (fără parentId) ia doar episoadele fără nume", async () => {
+  it("după o descărcare (fără `all`), nu atinge episoadele deja complete", async () => {
     const parent = show();
-    const named = episode(parent, 1, "Are nume");
-    const unnamed = episode(parent, 2);
+    const complete = episode(parent, 1, "Are nume");
+    db.prepare("UPDATE media SET episode_overview = 'Veche', episode_still = ? WHERE id = ?").run(
+      STILL,
+      complete,
+    );
+    const fresh = episode(parent, 2);
     tmdbSeason1([
-      [1, "Alt nume", "d1", STILL],
+      [1, "Alt nume", "Altă descriere", STILL],
       [2, "Nume nou", "d2", STILL],
     ]);
 
-    await watch.syncEpisodeDetails();
+    await watch.syncEpisodeDetails({ parentId: parent });
 
-    expect(get(named).episode_title).toBe("Are nume");
-    expect(get(named).episode_overview).toBeNull();
-    expect(get(unnamed).episode_title).toBe("Nume nou");
+    expect(get(complete)).toMatchObject({ episode_title: "Are nume", episode_overview: "Veche" });
+    expect(get(fresh).episode_title).toBe("Nume nou");
   });
 
   it("după o descărcare (parentId), completează și episoadele fără descriere", async () => {
@@ -198,7 +201,7 @@ describe("syncEpisodeDetails", () => {
     const e = episode(parent, 1);
     tmdbSeason1([[1, "Episodul 1", null, null, "2025-01-01"]]);
 
-    await watch.syncEpisodeDetails();
+    await watch.syncEpisodeDetails({ parentId: parent });
 
     expect(get(e).episode_title).toBe("Episodul 1");
   });

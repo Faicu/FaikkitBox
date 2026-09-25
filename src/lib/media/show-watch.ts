@@ -710,10 +710,7 @@ export const GENERIC_EPISODE_TITLE = /^episo(?:dul|de)\s*\d+$/i;
 // vertical din notificări și miniaturi). Totul cerut în română, cu engleza ca
 // rezervă pentru ce lipsește (getTmdbAllSeasonsInternal cu `details`).
 //
-// Trei feluri de rulare:
-// - implicit (plugin-ul, la 10 minute): doar episoadele FĂRĂ nume — plasa
-//   pentru rândurile noi. Doar numele contează aici: un episod pentru care
-//   TMDB n-are descriere deloc ar fi fost altfel reinterogat la nesfârșit.
+// Două feluri de rulare, ambele pe un singur serial:
 // - `parentId` (imediat după ce se scrie un episod, vezi
 //   syncEpisodeDetailsForShow): episoadele acelui serial cărora le lipsește
 //   ceva — nume, descriere sau imagine — ca detaliile să apară odată cu
@@ -724,20 +721,22 @@ export const GENERIC_EPISODE_TITLE = /^episo(?:dul|de)\s*\d+$/i;
 //   mult 12 ore după ce apare. Înainte, un episod cu nume nu mai era
 //   verificat niciodată, deci engleza rămânea pe veci.
 //
+// (Până pe 26 sept. 2026 mai era un pas la 10 minute pentru episoadele fără
+// nume. Scos la cererea userului: cele două rulări de mai sus îl acoperă, iar
+// singurul lui câștig — numele real în cel mult 10 minute când, la
+// descărcare, TMDB avea doar „Episodul N" — nu merita un pas separat.)
+//
 // Reguli la scriere: un nume se înlocuiește doar cu un nume real, niciodată
 // cu „Episodul N"; descrierea, imaginea și posterul — doar cu valori nevide.
 // Ce lipsește la TMDB nu șterge ce avem.
-export async function syncEpisodeDetails(
-  opts: { parentId?: number; all?: boolean } = {},
-): Promise<number> {
+export async function syncEpisodeDetails(opts: {
+  parentId: number;
+  all?: boolean;
+}): Promise<number> {
   const db = getDb();
-  const filter =
-    opts.parentId == null
-      ? "AND e.episode_title IS NULL"
-      : opts.all
-        ? "AND e.parent_id = ?"
-        : `AND e.parent_id = ?
-           AND (e.episode_title IS NULL OR e.episode_overview IS NULL OR e.episode_still IS NULL)`;
+  const filter = opts.all
+    ? ""
+    : "AND (e.episode_title IS NULL OR e.episode_overview IS NULL OR e.episode_still IS NULL)";
   const rows = db
     .prepare(
       `SELECT e.id, e.season, e.episode, e.episode_title, p.tmdb_id AS tmdb_id
@@ -747,9 +746,10 @@ export async function syncEpisodeDetails(
           AND e.season IS NOT NULL
           AND e.episode IS NOT NULL
           AND p.tmdb_id IS NOT NULL
+          AND e.parent_id = ?
           ${filter}`,
     )
-    .all(...(opts.parentId == null ? [] : [opts.parentId])) as unknown as Array<{
+    .all(opts.parentId) as unknown as Array<{
     id: number;
     season: number;
     episode: number;
@@ -798,11 +798,10 @@ export async function syncEpisodeDetails(
           // n-are încă titlul real — frecvent în primele ore după difuzare,
           // dar și permanent pentru emisiuni ale căror episoade n-au titluri
           // (reality show-uri, televiziune locală). Pentru un episod difuzat
-          // recent îl lăsăm gol, ca plugin-ul să reîncerce; pentru unul
-          // difuzat demult (sau fără dată la TMDB) îl acceptăm — altfel
-          // rândul ar rămâne „lipsă" pe veci și l-am reinteroga la fiecare
-          // 10 minute (găsit la "Insula Iubirii" S10). UI-ul ascunde oricum
-          // numele generice.
+          // recent îl lăsăm gol, ca reîmprospătarea să reîncerce; pentru unul
+          // difuzat demult (sau fără dată la TMDB) îl acceptăm — nu mai are
+          // rost să-l așteptăm (găsit la "Insula Iubirii" S10, unde TMDB n-are
+          // titluri deloc). UI-ul ascunde oricum numele generice.
           const stillWorthWaiting =
             found.airDate != null &&
             Date.now() - new Date(found.airDate).getTime() <= PLACEHOLDER_GRACE_MS;
@@ -826,8 +825,8 @@ export async function syncEpisodeDetails(
 // Detaliile episoadelor unui serial, imediat după ce i s-a scris un episod
 // nou (descărcare pornită din wizard, căutare manuală sau urmărire;
 // desfacerea unui pachet de sezon). Rulează în fundal: descărcarea nu
-// așteaptă după TMDB, iar o eroare aici nu contează — plugin-ul și
-// reîmprospătarea de 12 ore reîncearcă oricum.
+// așteaptă după TMDB, iar o eroare aici nu contează — reîmprospătarea de 12
+// ore reîncearcă oricum.
 export function syncEpisodeDetailsForShow(parentId: number | null): void {
   if (parentId == null) return;
   syncEpisodeDetails({ parentId }).catch((e) =>

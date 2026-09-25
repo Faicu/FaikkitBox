@@ -43,10 +43,7 @@ export function PluginStatusSection() {
     return lastActivity(p.activityType);
   }
 
-  // Filmele așteptate și numele de episoade lipsă apar doar când există.
-  // Numele de episoade lipsă apar în descriere doar cât timp chiar lipsesc —
-  // stare tranzitorie, între descărcarea unui episod și următorul ciclu. Când
-  // e 0 (cazul normal), rândul nu spune nimic despre ele.
+  // Filmele așteptate apar doar când există.
   function descriptionFor(p: PluginInfo): string {
     if (p.id !== "show-watcher" || !watch) return p.description;
     const n = watch.shows.length;
@@ -55,8 +52,6 @@ export function PluginStatusSection() {
     const parts = [shows];
     const f = wanted?.length ?? 0;
     if (f > 0) parts.push(`${f} ${f === 1 ? "film așteptat" : "filme așteptate"}`);
-    const m = watch.missingTitles.length;
-    if (m > 0) parts.push(`${m} ${m === 1 ? "episod fără nume" : "episoade fără nume"}`);
     return parts.join(" · ");
   }
 

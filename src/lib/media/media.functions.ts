@@ -103,17 +103,11 @@ export interface WatchedShowSummary {
   nextEpisodeAirDate: string | null;
 }
 
-export interface MissingTitleSummary {
-  show: string;
-  code: string;
-}
-
 export const getShowWatchStatus = createServerFn({ method: "GET" }).handler(
   async (): Promise<{
     lastCheckedAt: string | null;
     lastMetaRefreshAt: string | null;
     shows: WatchedShowSummary[];
-    missingTitles: MissingTitleSummary[];
   }> => {
     const { requireAuth } = await import("../auth/admin.server");
     await requireAuth();
@@ -131,24 +125,11 @@ export const getShowWatchStatus = createServerFn({ method: "GET" }).handler(
       )
       .all() as unknown as WatchedShowSummary[];
 
-    // Aceeași condiție ca syncEpisodeDetails — stare tranzitorie, de
-    // obicei goală; apare între descărcarea unui episod și următorul ciclu,
-    // sau cât timp TMDB încă n-a publicat titlul. Plafonat, ca un serial
-    // proaspăt adăugat să nu trimită sute de rânduri către UI.
-    const missingTitles = db
-      .prepare(
-        `SELECT p.title AS show, e.season, e.episode
-           FROM media e JOIN media p ON p.id = e.parent_id
-          WHERE e.media_type = 'episode' AND e.episode_title IS NULL
-            AND e.season IS NOT NULL AND e.episode IS NOT NULL
-            AND p.tmdb_id IS NOT NULL
-          ORDER BY p.title, e.season, e.episode
-          LIMIT 30`,
-      )
-      .all() as unknown as Array<{ show: string; season: number; episode: number }>;
-
     const meta = db
-      .prepare("SELECT MAX(meta_refreshed_at) AS last FROM media WHERE media_type = 'tv_show'")
+      // Seriale și filme — reîmprospătarea le acoperă pe amândouă.
+      .prepare(
+        "SELECT MAX(meta_refreshed_at) AS last FROM media WHERE media_type IN ('tv_show', 'movie')",
+      )
       .get() as { last: string | null };
 
     return {
@@ -158,10 +139,6 @@ export const getShowWatchStatus = createServerFn({ method: "GET" }).handler(
       ),
       lastMetaRefreshAt: meta?.last ?? null,
       shows,
-      missingTitles: missingTitles.map((m) => ({
-        show: m.show,
-        code: `S${String(m.season).padStart(2, "0")}E${String(m.episode).padStart(2, "0")}`,
-      })),
     };
   },
 );

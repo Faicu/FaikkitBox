@@ -21,7 +21,7 @@ const NEW_MOVIE_POLL_MS = 30 * 1000;
 // Gardă de suprapunere: o rulare atinge TMDB, TVmaze, Filelist și qBittorrent
 // pentru mai multe seriale, deci poate depăși intervalul de 10 minute.
 // checkShow are propria protecție per serial (inProgress), dar
-// syncEpisodeDetails și refreshShowMetadata n-au niciuna — două rulări
+// refreshShowMetadata și refreshMovieMetadata n-au niciuna — două rulări
 // suprapuse ar cere de două ori aceleași sezoane de la TMDB.
 let running = false;
 
@@ -29,16 +29,12 @@ async function run(): Promise<void> {
   if (running) return;
   running = true;
   try {
-    const { checkDueShows, syncEpisodeDetails, refreshShowMetadata } =
-      await import("../../src/lib/media/show-watch");
-    // Numele episoadelor înainte: e un no-op ieftin (un SELECT) când nu
-    // lipsește niciunul, și înseamnă că un episod abia descărcat își capătă
-    // numele în cel mult un ciclu, fără să depindă de urmărire.
-    await syncEpisodeDetails();
-    // Status + următorul episod, pentru toate serialele (la 12h fiecare) —
-    // nu doar pentru cele urmărite, fiindcă tv_status decide dacă vezi
-    // butonul de urmărire, deci trebuie corect mai ales acolo unde încă n-ai
-    // pornit-o.
+    const { checkDueShows, refreshShowMetadata } = await import("../../src/lib/media/show-watch");
+    // Detaliile tuturor serialelor și ale episoadelor lor, la 12h fiecare
+    // (vezi refreshShowMetadata) — nu doar pentru cele urmărite, fiindcă
+    // tv_status decide dacă vezi butonul de urmărire, deci trebuie corect mai
+    // ales acolo unde încă n-ai pornit-o. (Numele episoadelor nu mai au pas
+    // propriu la 10 minute: se completează la descărcare și odată cu serialul.)
     await refreshShowMetadata();
     // La fel pentru filme: titlu, an, descriere, genuri, poster (vezi
     // movie-metadata.ts) — filmele n-aveau deloc reîmprospătare.
