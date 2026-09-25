@@ -176,6 +176,14 @@ export function getDb(): DatabaseSync {
       -- serial cu 7 sezoane din care ai 2.
       auto_download_from TEXT,
       watch_last_checked_at TEXT,
+      -- Calitatea de rezervă a urmăririi (seriale și filme): se descarcă doar
+      -- dacă principala lipsește la două verificări la rând, la cel puțin 3
+      -- ore distanță (vezi fallback-quality.ts). NULL = fără rezervă.
+      auto_download_fallback_quality TEXT,
+      -- JSON { țintă: momentul ISO în care s-a găsit prima dată DOAR rezerva },
+      -- ținta fiind „S02E03", „S02 pachet" sau „film". Pe rând, nu în memorie,
+      -- ca așteptarea să supraviețuiască unei reporniri.
+      watch_fallback_seen TEXT,
       -- Metadate de serial reîmprospătate periodic din TMDB (vezi
       -- refreshShowMetadata). tv_status era scris o singură dată, la prima
       -- descărcare, și rămânea așa pe veci: un serial încheiat continua să
@@ -907,6 +915,21 @@ function applyCleanups(database: DatabaseSync): void {
         console.log(`[db] Migrare v29: ${fixed.changes} titluri cu sursa corectată la subs.ro`);
       }
       database.exec("PRAGMA user_version = 29");
+    }
+
+    if (version < 30) {
+      // v30: calitatea de rezervă a urmăririi (vezi definiția tabelei).
+      for (const sql of [
+        "ALTER TABLE media ADD COLUMN auto_download_fallback_quality TEXT",
+        "ALTER TABLE media ADD COLUMN watch_fallback_seen TEXT",
+      ]) {
+        try {
+          database.exec(sql);
+        } catch {
+          // coloana există deja (bază nouă, creată direct cu schema curentă)
+        }
+      }
+      database.exec("PRAGMA user_version = 30");
     }
   }
 }

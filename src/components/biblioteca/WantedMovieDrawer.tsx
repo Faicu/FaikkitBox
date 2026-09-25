@@ -62,6 +62,23 @@ export function WantedMovieDrawer({
     }
   }
 
+  async function setFallback(fallbackQuality: string | null) {
+    if (!d?.tmdbId) return;
+    setBusy(true);
+    try {
+      const res = await setMovieWatchFn({
+        data: { tmdbId: d.tmdbId, enabled: true, quality: d.quality, fallbackQuality },
+      }).catch((e) => ({ ok: false as const, error: e instanceof Error ? e.message : String(e) }));
+      if (!res.ok) {
+        toast.error("Nu am putut schimba calitatea de rezervă", { description: res.error });
+        return;
+      }
+      refresh();
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function checkNow() {
     if (!d) return;
     setBusy(true);
@@ -159,9 +176,34 @@ export function WantedMovieDrawer({
 
             <div className="rounded-2xl glass-card p-3 text-[11px] leading-relaxed text-muted-foreground">
               Se caută pe Filelist strict după IMDb ({d.imdbId ?? "lipsă"}), la calitatea{" "}
-              {d.quality}. Prima verificare vine la un minut după adăugare, apoi din 12 în 12 ore.
-              Când filmul apare, descărcarea pornește singură și urmărirea se oprește.
+              {d.quality}.
+              {d.fallbackQuality
+                ? ` Dacă ${d.quality} lipsește la două verificări (la minimum 3 ore distanță), se ia ${d.fallbackQuality}.`
+                : ""}{" "}
+              Prima verificare vine la un minut după adăugare, apoi din 12 în 12 ore. Când filmul
+              apare, descărcarea pornește singură și urmărirea se oprește.
             </div>
+
+            {d.canManage && (
+              <div className="flex items-center gap-2 rounded-2xl glass-card px-3 py-2 text-xs">
+                <span className="flex-1 text-muted-foreground">Calitate de rezervă</span>
+                <select
+                  value={d.fallbackQuality ?? ""}
+                  onChange={(e) => setFallback(e.target.value || null)}
+                  disabled={busy}
+                  className="rounded-lg border border-border bg-muted/40 px-1.5 py-0.5 text-[11px] outline-none focus:ring-1 focus:ring-primary"
+                >
+                  <option value="">Fără</option>
+                  {["4K HDR", "4K", "1080p HDR", "1080p", "720p", "SD"]
+                    .filter((q) => q !== d.quality)
+                    .map((q) => (
+                      <option key={q} value={q}>
+                        {q}
+                      </option>
+                    ))}
+                </select>
+              </div>
+            )}
 
             {/* Butoanele stau aici, nu în rândul din listă: acolo erau trei
                 ținte de atins într-un rând de câțiva milimetri. */}

@@ -234,3 +234,142 @@ describe("checkShow", () => {
     expect(download).not.toHaveBeenCalled();
   });
 });
+
+describe("checkShow — calitatea de rezervă", () => {
+  const seen = () =>
+    (
+      db.prepare("SELECT watch_fallback_seen s FROM media WHERE id = ?").get(showId) as {
+        s: string | null;
+      }
+    ).s;
+  // Mută notițele în trecut, ca și cum prima verificare ar fi fost acum `hours` ore.
+  const ageSeen = (hours: number) => {
+    const obj = JSON.parse(seen()!) as Record<string, string>;
+    for (const k of Object.keys(obj)) {
+      obj[k] = new Date(Date.now() - hours * 3_600_000).toISOString();
+    }
+    db.prepare("UPDATE media SET watch_fallback_seen = ? WHERE id = ?").run(
+      JSON.stringify(obj),
+      showId,
+    );
+  };
+  const withFallback = (q: string | null) =>
+    db.prepare("UPDATE media SET auto_download_fallback_quality = ? WHERE id = ?").run(q, showId);
+
+  beforeEach(() => tmdbSeason2(daysAgo(7), TODAY));
+
+  it("fără rezervă setată, un 720p singur nu se descarcă niciodată", async () => {
+    onFilelist("MobLand.S02E02.720p.WEB-DL");
+
+    const out = await watch.checkShow(showId);
+
+    expect(download).not.toHaveBeenCalled();
+    expect(out.skipped).toBe("niciun torrent 1080p pentru episoadele lipsă");
+    expect(seen()).toBeNull();
+  });
+
+  it("prima dată când găsește doar rezerva: nu descarcă, notează și explică", async () => {
+    withFallback("720p");
+    onFilelist("MobLand.S02E02.720p.WEB-DL");
+
+    const out = await watch.checkShow(showId);
+
+    expect(download).not.toHaveBeenCalled();
+    expect(Object.keys(JSON.parse(seen()!))).toEqual(["S02E02"]);
+    expect(out.skipped).toContain("doar 720p pentru S02E02");
+  });
+
+  it("„Verifică acum” apăsat imediat după: încă nu descarcă", async () => {
+    withFallback("720p");
+    onFilelist("MobLand.S02E02.720p.WEB-DL");
+    await watch.checkShow(showId);
+    ageSeen(0.5);
+
+    await watch.checkShow(showId);
+
+    expect(download).not.toHaveBeenCalled();
+  });
+
+  it("la o verificare de peste 3 ore, cu principala tot lipsă: ia rezerva", async () => {
+    withFallback("720p");
+    onFilelist("MobLand.S02E02.720p.WEB-DL");
+    await watch.checkShow(showId);
+    ageSeen(3);
+
+    const out = await watch.checkShow(showId);
+
+    expect(downloadedNames()).toEqual(["MobLand.S02E02.720p.WEB-DL"]);
+    expect(out.downloaded).toEqual(["S02E02 (720p, rezervă)"]);
+    expect(seen()).toBeNull();
+  });
+
+  it("dacă între timp a apărut principala, ia principala", async () => {
+    withFallback("720p");
+    onFilelist("MobLand.S02E02.720p.WEB-DL");
+    await watch.checkShow(showId);
+    ageSeen(3);
+    onFilelist("MobLand.S02E02.720p.WEB-DL", "MobLand.S02E02.1080p.WEB-DL");
+
+    await watch.checkShow(showId);
+
+    expect(downloadedNames()).toEqual(["MobLand.S02E02.1080p.WEB-DL"]);
+    expect(seen()).toBeNull();
+  });
+
+  it("principala găsită din prima: rezerva nici nu e notată", async () => {
+    withFallback("720p");
+    onFilelist("MobLand.S02E02.720p.WEB-DL", "MobLand.S02E02.1080p.WEB-DL");
+
+    await watch.checkShow(showId);
+
+    expect(downloadedNames()).toEqual(["MobLand.S02E02.1080p.WEB-DL"]);
+    expect(seen()).toBeNull();
+  });
+
+  it("un pachet în calitatea principală acoperă episodul: rezerva lui e ignorată", async () => {
+    withFallback("720p");
+    onFilelist("MobLand.S02E02.720p.WEB-DL", "MobLand.S02.1080p.WEB-DL");
+
+    await watch.checkShow(showId);
+
+    expect(downloadedNames()).toEqual(["MobLand.S02.1080p.WEB-DL"]);
+    expect(seen()).toBeNull();
+  });
+
+  it("o rezervă gata care n-a putut porni rămâne gata la verificarea următoare", async () => {
+    withFallback("720p");
+    onFilelist("MobLand.S02E02.720p.WEB-DL");
+    await watch.checkShow(showId);
+    ageSeen(3);
+    download.mockResolvedValueOnce({ status: "error", error: "qBittorrent indisponibil" });
+    await watch.checkShow(showId);
+
+    // Imediat după, fără nicio așteptare nouă.
+    await watch.checkShow(showId);
+
+    expect(download).toHaveBeenCalledTimes(2);
+    expect(downloadedNames()[1]).toBe("MobLand.S02E02.720p.WEB-DL");
+  });
+
+  it("schimbarea calităților golește notițele", async () => {
+    withFallback("720p");
+    onFilelist("MobLand.S02E02.720p.WEB-DL");
+    await watch.checkShow(showId);
+
+    await watch.setShowWatchCore({
+      mediaId: showId,
+      enabled: true,
+      quality: "1080p",
+      fallbackQuality: "1080p HDR",
+    });
+
+    expect(seen()).toBeNull();
+    expect(
+      (
+        db
+          .prepare("SELECT auto_download_fallback_quality q FROM media WHERE id = ?")
+          .get(showId) as { q: string }
+      ).q,
+    ).toBe("1080p HDR");
+  });
+});

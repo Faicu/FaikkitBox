@@ -54,6 +54,9 @@ import {
   displayEpisodeTitle,
 } from "./utils";
 
+// Calitățile care se pot urmări — aceleași etichete ca detectTorrentQuality.
+const WATCH_QUALITIES = ["4K HDR", "4K", "1080p HDR", "1080p", "720p", "SD"];
+
 // Drawer-ul de detalii al unui titlu din Bibliotecă — complet independent de
 // listă: primește doar mediaId, își gestionează singur toată starea (query
 // de detalii, corectare/ștergere subtitrare). Cere listei doar două lucruri,
@@ -163,7 +166,10 @@ export function TitleDetailDrawer({
     invalidateAfterMutation();
   }
 
-  async function setWatchQuality(quality: string) {
+  // Calitatea principală și cea de rezervă se trimit mereu împreună: o
+  // principală schimbată pe aceeași valoare ca rezerva lasă serialul fără
+  // rezervă (două calități identice n-au sens — vezi effectiveFallback).
+  async function setWatchQualities(quality: string, fallbackQuality: string | null) {
     if (!d) return;
     setSavingWatch(true);
     // Schimbarea calității pe un serial deja urmărit nu trebuie să mute
@@ -175,7 +181,12 @@ export function TitleDetailDrawer({
     // calitatea părea schimbată până la următorul refetch, care o dădea
     // înapoi fără nicio explicație.
     const res = await setShowWatchFn({
-      data: { mediaId: d.mediaId, enabled: true, quality },
+      data: {
+        mediaId: d.mediaId,
+        enabled: true,
+        quality,
+        fallbackQuality: fallbackQuality === quality ? null : fallbackQuality,
+      },
     }).catch((e) => ({ ok: false as const, error: e instanceof Error ? e.message : String(e) }));
     setSavingWatch(false);
     if (!res.ok) {
@@ -634,11 +645,16 @@ export function TitleDetailDrawer({
                             <span className="text-[11px] text-muted-foreground">Calitate</span>
                             <select
                               value={d.autoDownloadQuality ?? "1080p"}
-                              onChange={(e) => setWatchQuality(e.target.value)}
+                              onChange={(e) =>
+                                setWatchQualities(
+                                  e.target.value,
+                                  d.autoDownloadFallbackQuality ?? null,
+                                )
+                              }
                               disabled={savingWatch}
                               className="rounded-lg border border-border bg-muted/40 px-1.5 py-0.5 text-[11px] outline-none focus:ring-1 focus:ring-primary"
                             >
-                              {["4K HDR", "4K", "1080p HDR", "1080p", "720p", "SD"].map((q) => (
+                              {WATCH_QUALITIES.map((q) => (
                                 <option key={q} value={q}>
                                   {q}
                                 </option>
@@ -658,7 +674,33 @@ export function TitleDetailDrawer({
                               Verifică acum
                             </button>
                           </div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[11px] text-muted-foreground">Rezervă</span>
+                            <select
+                              value={d.autoDownloadFallbackQuality ?? ""}
+                              onChange={(e) =>
+                                setWatchQualities(
+                                  d.autoDownloadQuality ?? "1080p",
+                                  e.target.value || null,
+                                )
+                              }
+                              disabled={savingWatch}
+                              className="rounded-lg border border-border bg-muted/40 px-1.5 py-0.5 text-[11px] outline-none focus:ring-1 focus:ring-primary"
+                            >
+                              <option value="">Fără</option>
+                              {WATCH_QUALITIES.filter(
+                                (q) => q !== (d.autoDownloadQuality ?? "1080p"),
+                              ).map((q) => (
+                                <option key={q} value={q}>
+                                  {q}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
                           <div className="text-[10px] text-muted-foreground">
+                            {d.autoDownloadFallbackQuality
+                              ? `Dacă ${d.autoDownloadQuality ?? "1080p"} lipsește la două verificări (la minimum 3 ore distanță), se ia ${d.autoDownloadFallbackQuality}. `
+                              : ""}
                             {d.autoDownloadFrom
                               ? `De după ${d.autoDownloadFrom}. `
                               : "Recuperează tot ce lipsește. "}

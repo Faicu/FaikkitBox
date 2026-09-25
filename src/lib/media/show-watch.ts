@@ -28,6 +28,12 @@
 // ---------------------------------------------------------------------------
 
 import { airedEpisodeKeys } from "./aired-episodes";
+import {
+  effectiveFallback,
+  fallbackReady,
+  parseFallbackSeen,
+  type FallbackSeen,
+} from "./fallback-quality";
 import { getDb } from "../db";
 
 const ITEM_INTERVAL_MS = 3 * 60 * 60 * 1000; // 3 ore — cadența reală per serial
@@ -63,6 +69,8 @@ interface ShowRow {
   poster_path: string | null;
   tv_status: string | null;
   auto_download_quality: string | null;
+  auto_download_fallback_quality: string | null;
+  watch_fallback_seen: string | null;
   auto_download_from: string | null;
   requested_by_user_id: number | null;
 }
@@ -221,7 +229,8 @@ async function checkShowInner(showId: number): Promise<ShowWatchOutcome> {
   const row = db
     .prepare(
       `SELECT id, title, original_title, literal_title, imdb_id, tmdb_id, poster_path,
-              tv_status, auto_download_quality, auto_download_from, requested_by_user_id
+              tv_status, auto_download_quality, auto_download_fallback_quality,
+              watch_fallback_seen, auto_download_from, requested_by_user_id
          FROM media WHERE id = ? AND media_type = 'tv_show'`,
     )
     .get(showId) as unknown as ShowRow | undefined;
@@ -235,6 +244,13 @@ async function checkShowInner(showId: number): Promise<ShowWatchOutcome> {
   // aceeași zi oricâte ore treceau — urmărirea rula o dată pe zi, nu la 3 ore.
   const stamp = () =>
     db.prepare("UPDATE media SET watch_last_checked_at = datetime('now') WHERE id = ?").run(showId);
+  // Notițele calității de rezervă (vezi fallback-quality.ts). Se rescriu la
+  // fiecare verificare care a ajuns să compare calitățile: rămân doar țintele
+  // la care încă se așteaptă principala.
+  const saveFallbackSeen = (seen: FallbackSeen) =>
+    db
+      .prepare("UPDATE media SET watch_fallback_seen = ? WHERE id = ?")
+      .run(Object.keys(seen).length > 0 ? JSON.stringify(seen) : null, showId);
 
   if (!row)
     return { showId, title: "?", missing: [], downloaded: [], skipped: "serial inexistent" };
@@ -296,6 +312,7 @@ async function checkShowInner(showId: number): Promise<ShowWatchOutcome> {
   result.missing = missing.map(formatEpisodeKey);
 
   if (missing.length === 0) {
+    saveFallbackSeen({});
     stamp();
     return result;
   }
@@ -308,6 +325,9 @@ async function checkShowInner(showId: number): Promise<ShowWatchOutcome> {
     mediaType: "tv",
   });
   if (search.status !== "ok" || search.torrents.length === 0) {
+    // La o eroare Filelist notițele rămân: nu știm nimic nou, iar ștergerea
+    // lor ar reporni de la zero așteptarea după principală.
+    if (search.status === "ok") saveFallbackSeen({});
     stamp();
     result.skipped =
       search.status === "ok" ? "niciun torrent pe Filelist" : (search.error ?? "eroare Filelist");
@@ -332,11 +352,14 @@ async function checkShowInner(showId: number): Promise<ShowWatchOutcome> {
   );
 
   const missingKeys = new Set(missing.map(formatEpisodeKey));
-  const candidates = search.torrents
+  const relevant = search.torrents
     .filter((t) => t.matchedByImdb)
-    .filter((t) => detectTorrentQuality(t.name) === wantedQuality)
     .filter((t) => !alreadyFetched.has(t.name))
-    .map((t) => ({ torrent: t, parsed: parseSeasonEpisodeFromName(t.name) }))
+    .map((t) => ({
+      torrent: t,
+      parsed: parseSeasonEpisodeFromName(t.name),
+      quality: detectTorrentQuality(t.name),
+    }))
     .filter((c) => c.parsed != null)
     .filter((c) => {
       const p = c.parsed!;
@@ -346,18 +369,66 @@ async function checkShowInner(showId: number): Promise<ShowWatchOutcome> {
       // aduce și episoade deja deținute — singura excepție e pachetul din
       // care avem deja tot, care n-ar aduce nimic nou.
       return missing.some((k) => k.season === p.season);
-    })
-    // Episoadele individuale au prioritate față de pachete la aceeași
-    // calitate (mai puțin trafic pentru același rezultat), apoi seederi.
+    });
+
+  // Episoadele lipsă pe care le-ar aduce un torrent (un pachet = tot ce
+  // lipsește din sezonul lui).
+  const coversOf = (p: { season: number; episode: number | null }): EpisodeKey[] =>
+    p.episode != null
+      ? [{ season: p.season, episode: p.episode }]
+      : missing.filter((k) => k.season === p.season);
+  // Ținta din notițele rezervei: episodul, sau pachetul sezonului.
+  const targetOf = (p: { season: number; episode: number | null }) =>
+    p.episode != null
+      ? formatEpisodeKey({ season: p.season, episode: p.episode })
+      : `S${String(p.season).padStart(2, "0")} pachet`;
+
+  const primary = relevant.filter((c) => c.quality === wantedQuality);
+
+  // Calitatea de rezervă (vezi fallback-quality.ts): contează doar pentru
+  // ținte pe care principala nu le acoperă deloc — nici ca episod, nici prin
+  // pachetul sezonului. Prima dată se notează și se așteaptă; se descarcă abia
+  // la o verificare de peste cel puțin 3 ore, dacă principala tot lipsește.
+  const fallbackQuality = effectiveFallback(wantedQuality, row.auto_download_fallback_quality);
+  const primaryCovers = new Set(primary.flatMap((c) => coversOf(c.parsed!).map(formatEpisodeKey)));
+  const prevSeen = parseFallbackSeen(row.watch_fallback_seen);
+  const nextSeen: FallbackSeen = {};
+  const waiting = new Set<string>();
+  const readyFallback: typeof relevant = [];
+  if (fallbackQuality) {
+    const now = Date.now();
+    for (const c of relevant) {
+      if (c.quality !== fallbackQuality) continue;
+      if (coversOf(c.parsed!).some((k) => primaryCovers.has(formatEpisodeKey(k)))) continue;
+      const target = targetOf(c.parsed!);
+      const decision = fallbackReady(target, prevSeen, now);
+      if (decision.ready) {
+        readyFallback.push(c);
+      } else {
+        nextSeen[target] = decision.firstSeen;
+        waiting.add(target);
+      }
+    }
+  }
+  saveFallbackSeen(nextSeen);
+
+  const candidates = [...primary, ...readyFallback]
+    // Episoadele individuale au prioritate față de pachete (mai puțin trafic
+    // pentru același rezultat), apoi principala față de rezervă, apoi seederi.
     .sort((a, b) => {
       const aPack = a.parsed!.episode == null ? 1 : 0;
       const bPack = b.parsed!.episode == null ? 1 : 0;
-      return aPack - bPack || b.torrent.seeders - a.torrent.seeders;
+      const aFallback = a.quality === wantedQuality ? 0 : 1;
+      const bFallback = b.quality === wantedQuality ? 0 : 1;
+      return aPack - bPack || aFallback - bFallback || b.torrent.seeders - a.torrent.seeders;
     });
 
   if (candidates.length === 0) {
     stamp();
-    result.skipped = `niciun torrent ${wantedQuality} pentru episoadele lipsă`;
+    result.skipped =
+      waiting.size > 0
+        ? `doar ${fallbackQuality} pentru ${[...waiting].join(", ")} — dacă ${wantedQuality} nu apare, se descarcă ${fallbackQuality} la o verificare de peste 3 ore`
+        : `niciun torrent ${wantedQuality} pentru episoadele lipsă`;
     return result;
   }
 
@@ -372,10 +443,7 @@ async function checkShowInner(showId: number): Promise<ShowWatchOutcome> {
     const p = c.parsed!;
     // Nu porni două torrente care acoperă același episod în aceeași rulare
     // (ex. episodul individual și pachetul sezonului lui).
-    const coversNowKeys: EpisodeKey[] =
-      p.episode != null
-        ? [{ season: p.season, episode: p.episode }]
-        : missing.filter((k) => k.season === p.season);
+    const coversNowKeys = coversOf(p);
     const coversNow = coversNowKeys.map(formatEpisodeKey);
     if (coversNow.every((k) => covered.has(k))) continue;
 
@@ -420,11 +488,27 @@ async function checkShowInner(showId: number): Promise<ShowWatchOutcome> {
     }
     for (const k of coversNow) covered.add(k);
     downloadedNow.push(...coversNowKeys);
-    result.downloaded.push(
+    const label =
       p.episode == null
         ? `Sezonul ${p.season} (pachet)`
-        : formatEpisodeKey({ season: p.season, episode: p.episode }),
+        : formatEpisodeKey({ season: p.season, episode: p.episode });
+    result.downloaded.push(
+      c.quality === wantedQuality ? label : `${label} (${c.quality}, rezervă)`,
     );
+  }
+
+  // O rezervă „gata" care n-a pornit acum (descărcare eșuată, sau limita de
+  // descărcări pe verificare) rămâne gata și la verificarea următoare — nu
+  // reîncepe așteptarea de 3 ore.
+  const unstarted = readyFallback.filter(
+    (c) => !coversOf(c.parsed!).every((k) => covered.has(formatEpisodeKey(k))),
+  );
+  if (unstarted.length > 0) {
+    for (const c of unstarted) {
+      const target = targetOf(c.parsed!);
+      nextSeen[target] = prevSeen[target];
+    }
+    saveFallbackSeen(nextSeen);
   }
 
   // Poziția de start avansează peste ce tocmai a adus urmărirea, ca un episod
@@ -499,6 +583,9 @@ export interface SetShowWatchInput {
   mediaId: number;
   enabled: boolean;
   quality?: string;
+  // Calitatea de rezervă (vezi fallback-quality.ts). `undefined` = lasă
+  // neschimbată; `null` = fără rezervă.
+  fallbackQuality?: string | null;
   // "forward" (implicit) = doar episoadele care apar de-acum înainte;
   // "backfill" = și tot ce lipsește deja din istoric. Distincția contează:
   // pentru un serial cu 7 sezoane din care ai 2, "backfill" înseamnă câteva
@@ -526,8 +613,17 @@ export async function setShowWatchCore(input: SetShowWatchInput): Promise<void> 
     .prepare("SELECT auto_download FROM media WHERE id = ? AND media_type = 'tv_show'")
     .get(input.mediaId) as { auto_download: number } | undefined;
   if (current?.auto_download) {
-    db.prepare("UPDATE media SET auto_download_quality = ? WHERE id = ?").run(
+    // Notițele rezervei se golesc la orice schimbare de calitate: erau despre
+    // perechea veche (principală, rezervă), iar așteptarea reîncepe corect.
+    db.prepare(
+      `UPDATE media SET auto_download_quality = ?,
+              auto_download_fallback_quality = CASE WHEN ? THEN ? ELSE auto_download_fallback_quality END,
+              watch_fallback_seen = NULL
+        WHERE id = ?`,
+    ).run(
       input.quality ?? "1080p",
+      input.fallbackQuality !== undefined ? 1 : 0,
+      input.fallbackQuality ?? null,
       input.mediaId,
     );
     return;
@@ -564,10 +660,11 @@ export async function setShowWatchCore(input: SetShowWatchInput): Promise<void> 
   }
 
   db.prepare(
-    `UPDATE media SET auto_download = 1, auto_download_quality = ?, auto_download_from = ?,
-                      watch_last_checked_at = NULL
+    `UPDATE media SET auto_download = 1, auto_download_quality = ?,
+                      auto_download_fallback_quality = ?, auto_download_from = ?,
+                      watch_last_checked_at = NULL, watch_fallback_seen = NULL
        WHERE id = ? AND media_type = 'tv_show'`,
-  ).run(input.quality ?? "1080p", from, input.mediaId);
+  ).run(input.quality ?? "1080p", input.fallbackQuality ?? null, from, input.mediaId);
 }
 
 // ---------------------------------------------------------------------------

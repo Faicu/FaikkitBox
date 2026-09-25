@@ -21,6 +21,12 @@
 //    fi confundat cu un film pe care chiar îl ai.
 // ---------------------------------------------------------------------------
 
+import {
+  effectiveFallback,
+  fallbackReady,
+  parseFallbackSeen,
+  type FallbackSeen,
+} from "./fallback-quality";
 import { getDb } from "../db";
 
 // 12h, nu 3h ca la seriale. Un episod are oră de difuzare anunțată și apare pe
@@ -49,6 +55,8 @@ interface MovieRow {
   overview_ro: string | null;
   genres: string;
   auto_download_quality: string | null;
+  auto_download_fallback_quality: string | null;
+  watch_fallback_seen: string | null;
   requested_by_user_id: number | null;
 }
 
@@ -103,7 +111,8 @@ async function checkMovieInner(movieId: number): Promise<MovieWatchOutcome> {
   const row = db
     .prepare(
       `SELECT id, title, original_title, literal_title, imdb_id, tmdb_id, year,
-              poster_path, overview_ro, genres, auto_download_quality, requested_by_user_id
+              poster_path, overview_ro, genres, auto_download_quality,
+              auto_download_fallback_quality, watch_fallback_seen, requested_by_user_id
          FROM media
         WHERE id = ? AND media_type = 'movie'
           AND torrent_hash IS NULL AND plex_rating_key IS NULL`,
@@ -162,7 +171,43 @@ async function checkMovieInner(movieId: number): Promise<MovieWatchOutcome> {
 
   const wantedQuality = row.auto_download_quality || "1080p";
   const { detectTorrentQuality } = await import("./torrent-quality");
-  const candidates = pickCandidates(search.torrents, wantedQuality, detectTorrentQuality);
+  let candidates = pickCandidates(search.torrents, wantedQuality, detectTorrentQuality);
+
+  // Calitatea de rezervă (vezi fallback-quality.ts): doar dacă principala
+  // lipsește. Prima dată se notează și se așteaptă; se descarcă abia la o
+  // verificare de peste cel puțin 3 ore, dacă principala tot lipsește.
+  const fallbackQuality = effectiveFallback(wantedQuality, row.auto_download_fallback_quality);
+  const saveFallbackSeen = (seen: FallbackSeen) =>
+    db
+      .prepare("UPDATE media SET watch_fallback_seen = ? WHERE id = ?")
+      .run(Object.keys(seen).length > 0 ? JSON.stringify(seen) : null, movieId);
+  let usingFallback = false;
+  if (candidates.length === 0 && fallbackQuality) {
+    const fallbackCandidates = pickCandidates(
+      search.torrents,
+      fallbackQuality,
+      detectTorrentQuality,
+    );
+    if (fallbackCandidates.length > 0) {
+      const decision = fallbackReady(
+        "film",
+        parseFallbackSeen(row.watch_fallback_seen),
+        Date.now(),
+      );
+      if (!decision.ready) {
+        saveFallbackSeen({ film: decision.firstSeen });
+        stamp();
+        result.skipped = `doar ${fallbackQuality} — dacă ${wantedQuality} nu apare, se descarcă ${fallbackQuality} la o verificare de peste 3 ore`;
+        return result;
+      }
+      candidates = fallbackCandidates;
+      usingFallback = true;
+    }
+  }
+  // Principala a apărut, sau nu mai e nici rezerva: nimic de așteptat. Când
+  // se folosește rezerva, notița rămâne: la o descărcare eșuată, verificarea
+  // următoare o ia din nou fără să mai aștepte.
+  if (!usingFallback) saveFallbackSeen({});
 
   if (candidates.length === 0) {
     stamp();
@@ -219,7 +264,7 @@ async function checkMovieInner(movieId: number): Promise<MovieWatchOutcome> {
   // Fără notificare proprie: downloadFilelistCore loghează torrent_added și
   // trimite push-ul, iar addedVia "auto" îi pune titlul „🤖 Descărcare
   // Automată". Un push în plus de aici ar dubla fiecare film.
-  result.downloaded = best.name;
+  result.downloaded = usingFallback ? `${best.name} (${fallbackQuality}, rezervă)` : best.name;
   return result;
 }
 
@@ -308,6 +353,9 @@ export interface SetMovieWatchInput {
   tmdbId: number;
   enabled: boolean;
   quality?: string;
+  // Calitatea de rezervă (vezi fallback-quality.ts). `undefined` = lasă
+  // neschimbată; `null` = fără rezervă.
+  fallbackQuality?: string | null;
   // Metadatele vin de la apelant (wizard-ul le are deja din TMDB) și se
   // folosesc doar la crearea rândului.
   imdbId?: string | null;
@@ -359,10 +407,18 @@ export async function setMovieWatchCore(input: SetMovieWatchInput): Promise<void
     // Deja urmărit: singurul lucru care se schimbă e calitatea. Cadența se
     // resetează, ca schimbarea să fie verificată la următorul ciclu și nu
     // peste 12 ore.
+    // Notițele rezervei se golesc: erau despre perechea veche de calități.
     db.prepare(
       `UPDATE media SET auto_download = 1, auto_download_quality = ?,
-              watch_last_checked_at = NULL WHERE id = ?`,
-    ).run(quality, existing!.id);
+              auto_download_fallback_quality = CASE WHEN ? THEN ? ELSE auto_download_fallback_quality END,
+              watch_fallback_seen = NULL, watch_last_checked_at = NULL
+        WHERE id = ?`,
+    ).run(
+      quality,
+      input.fallbackQuality !== undefined ? 1 : 0,
+      input.fallbackQuality ?? null,
+      existing!.id,
+    );
     return;
   }
 
@@ -370,8 +426,8 @@ export async function setMovieWatchCore(input: SetMovieWatchInput): Promise<void
     `INSERT INTO media (
        media_type, imdb_id, tmdb_id, title, original_title, literal_title, year,
        overview_ro, genres, poster_path, added_via, requested_by_user_id,
-       auto_download, auto_download_quality
-     ) VALUES ('movie',?,?,?,?,?,?,?,?,?,'watch',?,1,?)`,
+       auto_download, auto_download_quality, auto_download_fallback_quality
+     ) VALUES ('movie',?,?,?,?,?,?,?,?,?,'watch',?,1,?,?)`,
   ).run(
     input.imdbId ?? null,
     input.tmdbId,
@@ -384,6 +440,7 @@ export async function setMovieWatchCore(input: SetMovieWatchInput): Promise<void
     input.posterPath ?? null,
     input.requestedByUserId ?? null,
     quality,
+    input.fallbackQuality ?? null,
   );
 }
 
@@ -458,6 +515,8 @@ export interface WantedMovieDetail {
   overview: string | null;
   genres: string[];
   quality: string;
+  // Calitatea de rezervă; null = fără (vezi fallback-quality.ts).
+  fallbackQuality: string | null;
   addedAt: string;
   lastCheckedAt: string | null;
   requestedByUserId: number | null;
@@ -473,7 +532,7 @@ export function getWantedMovieDetailCore(mediaId: number): WantedMovieDetail | n
     .prepare(
       `SELECT m.id, m.tmdb_id, m.imdb_id, m.title, m.original_title, m.year,
               m.poster_path, m.overview_ro, m.genres, m.auto_download_quality,
-              m.added_at, m.watch_last_checked_at, m.requested_by_user_id,
+              m.auto_download_fallback_quality, m.added_at, m.watch_last_checked_at, m.requested_by_user_id,
               u.username AS requested_by_username
          FROM media m
          LEFT JOIN users u ON u.id = m.requested_by_user_id
@@ -492,6 +551,7 @@ export function getWantedMovieDetailCore(mediaId: number): WantedMovieDetail | n
         overview_ro: string | null;
         genres: string;
         auto_download_quality: string | null;
+        auto_download_fallback_quality: string | null;
         added_at: string;
         watch_last_checked_at: string | null;
         requested_by_user_id: number | null;
@@ -510,6 +570,7 @@ export function getWantedMovieDetailCore(mediaId: number): WantedMovieDetail | n
     overview: r.overview_ro,
     genres: safeGenres(r.genres),
     quality: r.auto_download_quality || "1080p",
+    fallbackQuality: r.auto_download_fallback_quality,
     addedAt: r.added_at,
     lastCheckedAt: r.watch_last_checked_at,
     requestedByUserId: r.requested_by_user_id,
