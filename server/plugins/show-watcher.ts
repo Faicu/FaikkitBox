@@ -33,8 +33,7 @@ async function run(): Promise<void> {
     // Detaliile tuturor serialelor și ale episoadelor lor, la 12h fiecare
     // (vezi refreshShowMetadata) — nu doar pentru cele urmărite, fiindcă
     // tv_status decide dacă vezi butonul de urmărire, deci trebuie corect mai
-    // ales acolo unde încă n-ai pornit-o. (Numele episoadelor nu mai au pas
-    // propriu la 10 minute: se completează la descărcare și odată cu serialul.)
+    // ales acolo unde încă n-ai pornit-o.
     await refreshShowMetadata();
     // La fel pentru filme: titlu, an, descriere, genuri, poster (vezi
     // movie-metadata.ts) — filmele n-aveau deloc reîmprospătare.

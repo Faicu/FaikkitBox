@@ -125,8 +125,8 @@ export const getShowWatchStatus = createServerFn({ method: "GET" }).handler(
       )
       .all() as unknown as WatchedShowSummary[];
 
+    // Seriale și filme — reîmprospătarea le acoperă pe amândouă.
     const meta = db
-      // Seriale și filme — reîmprospătarea le acoperă pe amândouă.
       .prepare(
         "SELECT MAX(meta_refreshed_at) AS last FROM media WHERE media_type IN ('tv_show', 'movie')",
       )

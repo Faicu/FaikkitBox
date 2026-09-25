@@ -229,8 +229,8 @@ export async function getTmdbDetailsInternal(
       }
       // Fără titlu românesc (nici traducere, nici titlu alternativ RO): engleza
       // înaintea originalului — un film spaniol sau coreean e mai lizibil
-      // „în engleză" decât în limba lui. La fel alege și wizard-ul la adăugare
-      // (searchTmdb), deci titlul nu se mai schimbă la prima reîmprospătare.
+      // „în engleză" decât în limba lui. (Și searchTmdb, din wizard, cade tot
+      // pe engleză când lipsește româna.)
       if (shouldTryRomanianAka(title, movie.original_title, movie.original_language)) {
         title = (await enMovie())?.title?.trim() || title;
       }
@@ -426,6 +426,7 @@ export interface TmdbSeasonSchema {
 // Wizard-ul ("Adaugă film/serial") are nevoie de toată schema dintr-o dată, ca
 // utilizatorul să vadă orice sezon extins fără să aștepte un request nou de
 // fiecare dată.
+//
 // `details`: adaugă descrierea și imaginea fiecărui episod și posterul
 // sezonului — pentru Bibliotecă (show-watch.ts). Wizard-ul nu le cere: îi
 // trimite clientului schema TUTUROR sezoanelor, iar descrierile ar îngreuna

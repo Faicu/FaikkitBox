@@ -14,7 +14,11 @@ import {
   piecesOverlap,
   writeFileWithRetry,
 } from "./subtitle-encoding";
-import { SUBTITLE_SOURCE_LABELS, type SubtitleOutcome, type SubtitleSource } from "./subtitle-outcomes";
+import {
+  SUBTITLE_SOURCE_LABELS,
+  type SubtitleOutcome,
+  type SubtitleSource,
+} from "./subtitle-outcomes";
 import type { SubtitleWinner } from "./subtitle-sources";
 
 // Descarcă și scrie pe disc subtitrarea aleasă de resolveBestSubtitle,

@@ -157,9 +157,9 @@ export function getDb(): DatabaseSync {
       duration_ms INTEGER,
       -- Titlul episodului (doar pe rândurile 'episode'): coloana title ține
       -- titlul SERIALULUI și pe rândurile de episod, deci numele episodului
-      -- n-avea unde sta. Se completează din TMDB, o dată, de
-      -- syncEpisodeDetails — nu se cere live la fiecare deschidere de
-      -- drawer, ca Biblioteca să rămână doar SELECT-uri.
+      -- n-avea unde sta. Se completează din TMDB de syncEpisodeDetails (la
+      -- descărcare, apoi la 12 ore) — nu se cere live la fiecare deschidere
+      -- de drawer, ca Biblioteca să rămână doar SELECT-uri.
       episode_title TEXT,
       -- Descrierea și imaginea episodului (doar pe rândurile 'episode'):
       -- overview_ro e, pe episoade, o copie a descrierii SERIALULUI, iar

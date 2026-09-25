@@ -52,10 +52,8 @@ import {
   groupBySeason,
   nextEpisodeWhen,
   displayEpisodeTitle,
+  WATCH_QUALITIES,
 } from "./utils";
-
-// Calitățile care se pot urmări — aceleași etichete ca detectTorrentQuality.
-const WATCH_QUALITIES = ["4K HDR", "4K", "1080p HDR", "1080p", "720p", "SD"];
 
 // Drawer-ul de detalii al unui titlu din Bibliotecă — complet independent de
 // listă: primește doar mediaId, își gestionează singur toată starea (query

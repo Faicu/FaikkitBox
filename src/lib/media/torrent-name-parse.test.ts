@@ -38,9 +38,11 @@ describe("parseSeasonEpisodeFromName", () => {
     expect(parseSeasonEpisodeFromName("Show S03E10 1080p")).toEqual({ season: 3, episode: 10 });
   });
 
-  // Probleme cunoscute, lăsate deocamdată ca atare (decizia userului, 24 sept.
-  // 2026). `it.fails` trece cât timp comportamentul e cel greșit de acum —
-  // când se repară parserul, testul începe să pice și trebuie trecut pe `it`.
+  // Limite cunoscute ale parserului, lăsate intenționat așa (decizia userului,
+  // 24 sept. 2026): nu apar în practică — în istoric nu există niciun torrent
+  // cu mai multe episoade sau sezoane, iar urmărirea nu le alege. Testele
+  // rămân ca documentație. `it.fails` trece cât timp comportamentul e cel de
+  // acum; dacă parserul se schimbă vreodată, testul pică și trebuie trecut pe `it`.
   it.fails("un fișier cu mai multe episoade (S01E01E02) nu e doar episodul 1", () => {
     expect(parseSeasonEpisodeFromName("Show.S01E01E02.1080p")).not.toEqual({
       season: 1,

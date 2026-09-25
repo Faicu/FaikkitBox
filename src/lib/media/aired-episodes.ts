@@ -13,6 +13,8 @@
 // „apărut" înseamnă „deja trecut, nu-l mai descărca", iar un episod de azi
 // ar fi fost sărit dacă urmărirea se pornea chiar în ziua lui.
 
+import type { EpisodeKey } from "./watch-position";
+
 interface SeasonSchema {
   seasonNumber: number;
   episodes: Array<{ episodeNum: number; airDate: string | null; aired: boolean }>;
@@ -21,7 +23,7 @@ interface SeasonSchema {
 export function airedEpisodeKeys(
   schema: SeasonSchema[],
   opts: { includeToday: boolean; today: string },
-): Array<{ season: number; episode: number }> {
+): EpisodeKey[] {
   return schema.flatMap((s) =>
     s.episodes
       .filter((e) => e.aired || (opts.includeToday && e.airDate != null && e.airDate <= opts.today))

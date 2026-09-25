@@ -14,6 +14,7 @@ import {
 import { getWantedMovieDetail, setMovieWatch, checkMovieNow } from "@/lib/media/media.functions";
 import { Orb } from "@/components/ui/orb";
 import { relativeTime } from "@/components/tehnic/utils";
+import { WATCH_QUALITIES } from "./utils";
 
 // Detaliile unui film așteptat. Drawer propriu, nu TitleDetailDrawer: acela e
 // construit în jurul Plex-ului, episoadelor și subtitrărilor, care aici nu
@@ -194,13 +195,11 @@ export function WantedMovieDrawer({
                   className="rounded-lg border border-border bg-muted/40 px-1.5 py-0.5 text-[11px] outline-none focus:ring-1 focus:ring-primary"
                 >
                   <option value="">Fără</option>
-                  {["4K HDR", "4K", "1080p HDR", "1080p", "720p", "SD"]
-                    .filter((q) => q !== d.quality)
-                    .map((q) => (
-                      <option key={q} value={q}>
-                        {q}
-                      </option>
-                    ))}
+                  {WATCH_QUALITIES.filter((q) => q !== d.quality).map((q) => (
+                    <option key={q} value={q}>
+                      {q}
+                    </option>
+                  ))}
                 </select>
               </div>
             )}

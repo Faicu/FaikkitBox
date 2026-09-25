@@ -31,16 +31,16 @@ Construit cu [TanStack Start](https://tanstack.com/start) (React 19 + TanStack R
 
 ## Funcționalități
 
-| Pagină | Acces | Ce arată |
-|---|---|---|
-| **Acasă** (`/`) | Public | Singura pagină accesibilă fără cont. Status live Plex (sesiuni, biblioteci, top vizionate, recent adăugate). Buton **„Adaugă film/serial"** (necesită cont aprobat) — wizard ghidat: căutare TMDB → verificare automată Plex + Filelist → alegere calitate/sezon/episod → confirmare și descărcare. Căutare manuală Filelist (admin). Vizitatorilor neautentificați li se arată un CTA cu butoane **Înregistrare**/**Autentificare**. |
-| **Descoperă** (`/descopera`) | Cont aprobat | Explorare TMDB (grid + feed video) cu status Plex și Filelist per titlu — deschide wizard-ul de adăugare direct pe titlul selectat. |
-| **Bibliotecă** (`/biblioteca`) | Cont aprobat | Tot ce e descărcat prin aplicație sau deja existent în Plex (backfill) — căutare, grupare pe serial, detalii per titlu (calitate, subtitrare RO, cine a văzut), corectare/ștergere subtitrare, ștergere completă (admin/cel care a adăugat). Deasupra listei, **filmele așteptate** (urmărire pornită, încă negăsite pe Filelist). Pentru seriale, comutator de **urmărire episoade noi**. |
-| **qBittorrent** (`/qbit`) | Cont aprobat | Viteze download/upload, torrente active/total, filtre pe stări, căutare în listă, pauză/reluare (global sau individual), ștergere torrent + fișiere. |
-| **Immich** | Admin | Număr fișiere, spațiu ocupat, coadă de joburi active. |
-| **Sistem** | Admin | CPU, memorie, swap, uptime, discuri (viteze read/write), rețea, senzori temperatură, top procese și top I/O disc, aplicații monitorizate, mentenanță (update Ubuntu, restart servicii), reglaj pentru ritmul statisticilor live (1s…30s, per dispozitiv). |
-| **Tehnic** | Admin | Control serviciu Plex (restart/actualizare), speedtest (test nou + istoric grafic, plus starea legăturii Ethernet cu buton de renegociere), status plugin-uri server (clicabile, cu drawer de detalii), backup-ul bazei de date, abonamentele push înregistrate, statistici commit-uri, jurnal de activitate, **widget Erori aplicație** (vezi mai jos), push manual către GitHub. |
-| **Utilizatori** (`/users`) | Admin | Cereri de aprobare cont, listă conturi (admin + obișnuite), click pe orice cont deschide detalii complete (contact, legătură Plex, descărcări inițiate, activitate Plex, istoric autentificări). |
+| Pagină                         | Acces        | Ce arată                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ------------------------------ | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Acasă** (`/`)                | Public       | Singura pagină accesibilă fără cont. Status live Plex (sesiuni, biblioteci, top vizionate, recent adăugate). Buton **„Adaugă film/serial"** (necesită cont aprobat) — wizard ghidat: căutare TMDB → verificare automată Plex + Filelist → alegere calitate/sezon/episod → confirmare și descărcare. Căutare manuală Filelist (admin). Vizitatorilor neautentificați li se arată un CTA cu butoane **Înregistrare**/**Autentificare**. |
+| **Descoperă** (`/descopera`)   | Cont aprobat | Explorare TMDB (grid + feed video) cu status Plex și Filelist per titlu — deschide wizard-ul de adăugare direct pe titlul selectat.                                                                                                                                                                                                                                                                                                   |
+| **Bibliotecă** (`/biblioteca`) | Cont aprobat | Tot ce e descărcat prin aplicație sau deja existent în Plex (backfill) — căutare, grupare pe serial, detalii per titlu (calitate, subtitrare RO, cine a văzut), corectare/ștergere subtitrare, ștergere completă (admin/cel care a adăugat). Deasupra listei, **filmele așteptate** (urmărire pornită, încă negăsite pe Filelist). Pentru seriale, comutator de **urmărire episoade noi**.                                            |
+| **qBittorrent** (`/qbit`)      | Cont aprobat | Viteze download/upload, torrente active/total, filtre pe stări, căutare în listă, pauză/reluare (global sau individual), ștergere torrent + fișiere.                                                                                                                                                                                                                                                                                  |
+| **Immich**                     | Admin        | Număr fișiere, spațiu ocupat, coadă de joburi active.                                                                                                                                                                                                                                                                                                                                                                                 |
+| **Sistem**                     | Admin        | CPU, memorie, swap, uptime, discuri (viteze read/write), rețea, senzori temperatură, top procese și top I/O disc, aplicații monitorizate, mentenanță (update Ubuntu, restart servicii), reglaj pentru ritmul statisticilor live (1s…30s, per dispozitiv).                                                                                                                                                                             |
+| **Tehnic**                     | Admin        | Control serviciu Plex (restart/actualizare), speedtest (test nou + istoric grafic, plus starea legăturii Ethernet cu buton de renegociere), status plugin-uri server (clicabile, cu drawer de detalii), backup-ul bazei de date, abonamentele push înregistrate, statistici commit-uri, jurnal de activitate, **widget Erori aplicație** (vezi mai jos), push manual către GitHub.                                                    |
+| **Utilizatori** (`/users`)     | Admin        | Cereri de aprobare cont, listă conturi (admin + obișnuite), click pe orice cont deschide detalii complete (contact, legătură Plex, descărcări inițiate, activitate Plex, istoric autentificări).                                                                                                                                                                                                                                      |
 
 Alte capabilități transversale:
 
@@ -56,10 +56,10 @@ Alte capabilități transversale:
 
 Sistem cu două roluri, o singură tabelă `users` (nu conturi separate pentru admin/user):
 
-| Rol | Cum se obține | Acces |
-|---|---|---|
-| **Admin** | Creat manual de un alt admin, din pagina Utilizatori (`addAdminUser`). Aprobat automat (`status='approved'`). | Toate paginile. |
-| **User obișnuit** | Auto-înregistrare publică (`/register`) + aprobare manuală de admin. | Acasă (public oricum), Descoperă, Bibliotecă, qBittorrent (fără căutarea manuală Filelist și alegerea manuală a torrentului, admin-only) — vezi tabelul de mai sus. |
+| Rol               | Cum se obține                                                                                                 | Acces                                                                                                                                                               |
+| ----------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Admin**         | Creat manual de un alt admin, din pagina Utilizatori (`addAdminUser`). Aprobat automat (`status='approved'`). | Toate paginile.                                                                                                                                                     |
+| **User obișnuit** | Auto-înregistrare publică (`/register`) + aprobare manuală de admin.                                          | Acasă (public oricum), Descoperă, Bibliotecă, qBittorrent (fără căutarea manuală Filelist și alegerea manuală a torrentului, admin-only) — vezi tabelul de mai sus. |
 
 **Înregistrare** (`registerUser`, `src/lib/auth/registration.functions.ts`) — formular Username/Parolă/Email/Telefon (WhatsApp). Username-ul **sau** email-ul introdus trebuie să corespundă unui cont din biblioteca Plex (`matchPlexAccount`, `src/lib/auth/plex-users.server.ts` — interoghează `plex.tv/api/users`, parsat manual din XML, cache 5 min; API-ul ignoră `Accept: application/json`), altfel cererea e respinsă direct, cu mesaj clar. Contul creat intră cu `status='pending'` — nu poate face login până nu e aprobat. Fiecare cerere nouă generează automat o intrare `account_request` în Jurnalul de activitate + notificare push.
 
@@ -70,18 +70,18 @@ Sistem cu două roluri, o singură tabelă `users` (nu conturi separate pentru a
 **Doi guarzi de rută**, exportați din `src/lib/auth/admin-route-guard.ts`:
 
 ```ts
-requireAdminBeforeLoad   // doar admin — qBit (parțial), Immich, Sistem, Tehnic, Utilizatori
-requireAuthBeforeLoad    // orice cont aprobat — Descoperă, Bibliotecă
+requireAdminBeforeLoad; // doar admin — qBit (parțial), Immich, Sistem, Tehnic, Utilizatori
+requireAuthBeforeLoad; // orice cont aprobat — Descoperă, Bibliotecă
 ```
 
 ...și echivalentul lor la nivel de server function, în `admin.server.ts`:
 
 ```ts
-requireAdmin()   // aruncă 401 dacă session.data.admin nu e true
-requireAuth()    // aruncă 401 dacă session.data.userId lipsește (orice rol aprobat trece)
+requireAdmin(); // aruncă 401 dacă session.data.admin nu e true
+requireAuth(); // aruncă 401 dacă session.data.userId lipsește (orice rol aprobat trece)
 ```
 
-**Important:** guard-ul de rută protejează doar navigarea. Fiecare server function apelată de o pagină trebuie să aibă *și ea* `requireAdmin()`/`requireAuth()` — altfel poate fi apelată direct, ocolind complet pagina. Când adaugi o funcție nouă, verifică ce pagină o folosește și alege guard-ul potrivit; dacă e folosită din mai multe pagini cu niveluri de acces diferite, ia nivelul cel mai permisiv dintre ele care rămâne totuși sigur.
+**Important:** guard-ul de rută protejează doar navigarea. Fiecare server function apelată de o pagină trebuie să aibă _și ea_ `requireAdmin()`/`requireAuth()` — altfel poate fi apelată direct, ocolind complet pagina. Când adaugi o funcție nouă, verifică ce pagină o folosește și alege guard-ul potrivit; dacă e folosită din mai multe pagini cu niveluri de acces diferite, ia nivelul cel mai permisiv dintre ele care rămâne totuși sigur.
 
 **Legătura cu Plex** (`plex_account_id`/`plex_username`/`plex_email` pe fiecare cont) alimentează pagina de detalii din Utilizatori: activitate Plex recentă (`getPlexUserHistory`, auto-populează cache-ul dacă e rece, nu depinde pasiv de polling-ul de pe Acasă) și „cine a văzut" per titlu în Bibliotecă.
 
@@ -89,15 +89,19 @@ requireAuth()    // aruncă 401 dacă session.data.userId lipsește (orice rol a
 
 ## Adăugare și urmărire titluri
 
-Wizard-ul de adăugare (`AddMediaWizard.tsx`) — accesibil din butonul „Adaugă film/serial" de pe Acasă, sau direct dintr-un titlu deja deschis în Descoperă (`SceneViewer.tsx`) — face totul într-un flux: căutare TMDB → verificare Plex + Filelist → alegere calitate (1080p implicit, restul ascunse sub un toggle, admin-only) → confirmare și descărcare. Verificarea e **o singură cerere** către server (`checkTitleForWizard`, `src/lib/wizard-check.functions.ts`), care agregă acolo TMDB + Plex + Filelist + `media` + TVmaze; înainte erau zece dus-întors făcute de pe telefon, în trei valuri — munca în sine durează ~1s pe server, costul real erau rundele înmulțite cu latența mobilă. Pentru seriale, fiecare sezon/episod arată statusul lui (în Plex / se descarcă / disponibil pe Filelist / indisponibil / nelansat încă), iar descărcarea respectă ce oferă efectiv Filelist — pachet de sezon întreg sau episod individual, nu presupune una din ele. Dacă titlul e deja în Plex, ecranul spune explicit dacă alegerea ta e un *upgrade* sau un *downgrade* — o a doua descărcare e un al doilea fișier, nu o înlocuire. Vezi [Calități și versiuni multiple](#calități-și-versiuni-multiple).
+Wizard-ul de adăugare (`AddMediaWizard.tsx`) — accesibil din butonul „Adaugă film/serial" de pe Acasă, sau direct dintr-un titlu deja deschis în Descoperă (`SceneViewer.tsx`) — face totul într-un flux: căutare TMDB → verificare Plex + Filelist → alegere calitate (1080p implicit, restul ascunse sub un toggle, admin-only) → confirmare și descărcare. Verificarea e **o singură cerere** către server (`checkTitleForWizard`, `src/lib/wizard-check.functions.ts`), care agregă acolo TMDB + Plex + Filelist + `media` + TVmaze; înainte erau zece dus-întors făcute de pe telefon, în trei valuri — munca în sine durează ~1s pe server, costul real erau rundele înmulțite cu latența mobilă. Pentru seriale, fiecare sezon/episod arată statusul lui (în Plex / se descarcă / disponibil pe Filelist / indisponibil / nelansat încă), iar descărcarea respectă ce oferă efectiv Filelist — pachet de sezon întreg sau episod individual, nu presupune una din ele. Dacă titlul e deja în Plex, ecranul spune explicit dacă alegerea ta e un _upgrade_ sau un _downgrade_ — o a doua descărcare e un al doilea fișier, nu o înlocuire. Vezi [Calități și versiuni multiple](#calități-și-versiuni-multiple).
+
+**Căutarea TMDB din wizard** (`searchTmdb`) face două cereri, ro-RO și en-US, și **le intercalează** (`interleaveSearchResults`, `src/lib/tmdb/search-merge.ts`). TMDB potrivește query-ul pe titlurile din limba cererii, deci listele diferă: „elita" pe en-US nu găsește _Élite_, pe ro-RO îl pune primul. Intercalate, primul rezultat din fiecare limbă ajunge mereu în primele două.
 
 Wizard-ul a fost refactorizat complet în sept. 2026: componenta a scăzut de la 1268 la 265 de linii, starea stă într-un `useReducer` cu pașii ca uniune discriminată (stări care logic nu pot coexista nu mai pot coexista nici în tip), derivările sunt funcții pure cu teste, iar fiecare pas e componenta lui — vezi `src/components/principala/wizard/` în [`STRUCTURE.md`](./STRUCTURE.md).
 
-**Bibliotecă** (`/biblioteca`) arată tot ce există efectiv — descărcat prin aplicație sau deja în Plex dinainte de acest sistem (backfill) — citit direct din tabela `media`, fără cereri Plex/TMDB live la navigare. Fiecare titlu are un drawer de detalii cu subtitrare RO, cine a văzut, și acțiuni (corectare/ștergere subtitrare, ștergere completă) pentru cel care l-a adăugat sau pentru admin.
+**Bibliotecă** (`/biblioteca`) arată tot ce există efectiv — descărcat prin aplicație sau deja în Plex dinainte de acest sistem (backfill) — citit direct din tabela `media`, fără cereri Plex/TMDB live la navigare. Fiecare titlu are un drawer de detalii cu subtitrare RO, cine a văzut, și acțiuni (corectare/ștergere subtitrare, ștergere completă) pentru cel care l-a adăugat sau pentru admin. Episoadele au detalii proprii — nume, descriere, un cadru din episod (`episode_overview`, `episode_still`) și posterul sezonului pe `poster_path` — nu copii ale celor ale serialului.
+
+**Detaliile se țin singure la zi** (plugin-ul `show-watcher`, la 12h per titlu, fără limită pe rulare): `refreshShowMetadata` pentru seriale și, odată cu fiecare serial, toate episoadele lui (`syncEpisodeDetails`); `refreshMovieMetadata` (`src/lib/media/movie-metadata.ts`) pentru filme. Totul se cere **în română la fiecare trecere**, cu engleza ca rezervă pentru ce lipsește — deci ce nu exista încă în română la adăugare se corectează singur când apare traducerea pe TMDB (la o cerere ro-RO, TMDB întoarce și posterul românesc, când există). Fiecare câmp se scrie separat și doar cu o valoare nevidă: ce lipsește la TMDB nu șterge ce avem. Titlul fără traducere: titlul alternativ românesc, apoi engleza, apoi originalul; producțiile românești își păstrează originalul. Detaliile unui episod nou se cer imediat după descărcare (`syncEpisodeDetailsForShow`), nu la următoarea reîmprospătare.
 
 ### Descărcare de pe Filelist
 
-Căutarea „există pe Filelist?" e **unificată** într-o singură sursă de adevăr (`checkFilelistForItemInternal`, `src/lib/filelist/filelist-client.ts` — singurul loc care vorbește direct cu `api.php`/`download.php`), folosită atât de wizard cât și de căutarea manuală (`FilelistSection`, admin, de pe Acasă). Orchestrarea unei descărcări (upload qBittorrent, scriere în `media`, notificări, polling) rămâne în `download.ts`, care consumă doar clientul.
+Căutarea „există pe Filelist?" e **unificată** într-o singură sursă de adevăr (`checkFilelistForItemInternal`, `src/lib/filelist/filelist-client.ts` — singurul loc care vorbește direct cu `api.php`/`download.php`), folosită de wizard, de căutarea manuală (`FilelistSection`, admin, de pe Acasă) și de urmărirea automată. Are un cache de 10 minute, **citit doar de wizard** (`useCache: true`) — acolo cruță limita orară a contului când răsfoiești aceleași titluri. Urmărirea întreabă mereu Filelist direct: un răspuns din cache ar raporta „nimic nou" pe baza unei căutări vechi. Orchestrarea unei descărcări (upload qBittorrent, scriere în `media`, notificări, polling) rămâne în `download.ts`, care consumă doar clientul.
 
 Caută **strict după IMDb id** — fallback-ul pe titlu a fost eliminat deliberat (confirmat de suportul Filelist: căutarea pe titlu dă rezultate nesigure). Fără IMDb id găsit pentru un titlu, nu se face niciun apel către Filelist.
 
@@ -125,6 +129,10 @@ O descărcare pornită din aplicație e urmărită de o buclă de polling care t
 Ambele sunt plugin-uri explicite, nu efecte secundare la nivel de modul: un `setTimeout` scris în corpul unui modul rulează doar dacă cineva importă modulul, iar asta depinde de grafuri de import care se schimbă la refactorizări.
 
 Conținutul (titlu + text) notificărilor de torrent adăugat/complet trăiește în `src/lib/notifications/notifications.ts` — sursă unică, nu recalculat inline la fiecare loc care trimite o notificare.
+
+### Potrivirea cu Plex — după ID-ul TMDB
+
+Legarea unui rând `media` de item-ul lui Plex și verificările din wizard („e deja în Plex?", ce episoade ai) aleg item-ul **după `tmdb://` din Guid-urile Plex**, nu după titlu (`findItem`, `src/lib/services/plex-library.ts`; parametrul e un `PlexLookup { tmdbId, titles }`). Biblioteca Plex e în română („Imperiul Mafiei" pentru _MobLand_, „Străina" pentru _Outlander_), deci titlul găsit diferă des de cel căutat, iar vechea potrivire pe titlu (exact → „conține" → primul rezultat) lega în tăcere alt titlu (_You_ → _Younger_, _Dune_ 1984 în loc de 2021). Titlurile servesc doar ca termeni de căutare; dacă ID-ul nu apare nici în lista completă a secțiunii, titlul e considerat absent. Fără `tmdb_id`: doar potrivire exactă de titlu. `includeGuids=1` e obligatoriu — fără el Plex nu întoarce `Guid`.
 
 ---
 
@@ -155,13 +163,17 @@ Două module simetrice, ambele conduse de plugin-ul `server/plugins/show-watcher
 
 **Seriale** (`src/lib/media/show-watch.ts`) — un serial cu urmărirea pornită își descarcă singur episoadele noi. Mecanismul e **declarativ, nu diferențial**: TMDB spune ce episoade au fost difuzate, `media WHERE parent_id = ?` spune ce avem, diferența e ce trebuie descărcat. Rularea e idempotentă — se auto-repară după restart, nu ratează nimic dacă un ciclu pică, și nu poate descărca de două ori, fiindcă verifică realitatea, nu un jurnal de evenimente. Activarea nu trage retroactiv tot istoricul: se pornește de la o poziție aleasă (`auto_download_from`, ex. `S03E05`).
 
+- **Episodul lansat azi** contează ca apărut la decizia de descărcare (`aired-episodes.ts`) — TMDB dă doar data, iar regula lui (`data < azi`) l-ar fi amânat o zi. Poziția de start la activare rămâne pe regula strictă, ca un episod de azi să nu fie sărit.
+- **Poziția de start avansează** după episoadele aduse de urmărire (`watch-position.ts`), peste cele consecutive acoperite, și se oprește la primul gol — ca un episod văzut și șters din Bibliotecă să nu fie redescărcat, fără să fie sărit unul care încă nu e pe Filelist.
+- **Calitatea de rezervă** (opțională, `auto_download_fallback_quality`, și la filme): dacă apare doar rezerva, verificarea o notează (`watch_fallback_seen`) și nu descarcă; o ia la o verificare de peste cel puțin 3 ore, dacă principala tot lipsește (`fallback-quality.ts`). „Verifică acum" apăsat imediat după nu o grăbește.
+
 **Filme** (`src/lib/media/movie-watch.ts`) — un film încă inexistent pe Filelist la calitatea cerută poate fi pus pe urmărire din wizard; e recăutat periodic până apare. Două diferențe intenționate față de seriale: urmărirea unui film **se stinge singură** la prima descărcare reușită (altfel ar căuta la nesfârșit ceva ce deja ai), iar un film urmărit **nu e un film deținut** — rândul lui din `media` n-are `torrent_hash` și n-are `plex_rating_key`, ceea ce îl face automat invizibil în Bibliotecă, în reconcilierea Plex și în reluarea descărcărilor, fără nicio modificare acolo. Apare doar în secțiunea „Filme așteptate".
 
-**Unde stă starea.** Urmărirea sunt patru coloane pe rândul-părinte din `media` (`auto_download`, `auto_download_quality`, `auto_download_from`, `watch_last_checked_at`), nu o tabelă paralelă. Prima încercare (`pinned_items` + `pinned_watch_*`, eliminată în migrarea v14) ținea urmărirea într-o structură legată de `media` doar prin `tmdb_id`, și de-acolo veneau toate bug-urile ei: rânduri duplicate, dedublare între două liste, descărcare de N ori pentru N useri care fixaseră același titlu. Rândul `tv_show` e deja unic per serial și deja legat de episoade prin `parent_id`.
+**Unde stă starea.** Urmărirea e un set de coloane pe rândul-părinte din `media` (`auto_download`, `auto_download_quality`, `auto_download_fallback_quality`, `auto_download_from`, `watch_last_checked_at`, `watch_fallback_seen`), nu o tabelă paralelă. Prima încercare (`pinned_items` + `pinned_watch_*`, eliminată în migrarea v14) ținea urmărirea într-o structură legată de `media` doar prin `tmdb_id`, și de-acolo veneau toate bug-urile ei: rânduri duplicate, dedublare între două liste, descărcare de N ori pentru N useri care fixaseră același titlu. Rândul `tv_show` e deja unic per serial și deja legat de episoade prin `parent_id`.
 
 **Cadența** per titlu — 3h la seriale, 12h la filme — stă în DB, pe `watch_last_checked_at`, nu într-un timer în memorie care s-ar reseta la fiecare restart. Bucla plugin-ului doar întreabă periodic cine a expirat (la 10 min, plus un poll de 30s pentru filmele tocmai adăugate, ca prima verificare să cadă la ~1 minut după adăugare).
 
-Tot în ticul acestui plugin: completarea numelor de episoade lipsă din TMDB (`fillMissingEpisodeTitles`) și reîmprospătarea metadatelor de serial (`refreshShowMetadata` — `tv_status`, următorul episod, plus ora exactă de la TVmaze, pe care TMDB n-o dă).
+Tot în ticul acestui plugin: reîmprospătarea detaliilor pentru seriale (cu episoadele lor) și filme — vezi Biblioteca, mai sus — inclusiv `tv_status`, următorul episod și ora lui exactă de la TVmaze, pe care TMDB n-o dă.
 
 ---
 
@@ -177,12 +189,12 @@ Tot în ticul acestui plugin: completarea numelor de episoade lipsă din TMDB (`
 
 Toate `console.warn`/`console.error` din **toată aplicația** — server functions, SSR, plugin-uri de fundal, cod client — sunt captate automat și afișate în widget-ul **„Erori aplicație"** din Tehnic, fără să fie nevoie de un apel manual la fiecare loc din cod.
 
-| Componentă | Rol |
-|---|---|
-| `src/lib/errors/console-capture.ts` | Suprascrie `console.error`/`console.warn` server-side, trimite spre `logError()`. Instalată idempotent din `server.ts` și fiecare plugin de fundal. |
+| Componentă                               | Rol                                                                                                                                                                                          |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/lib/errors/console-capture.ts`      | Suprascrie `console.error`/`console.warn` server-side, trimite spre `logError()`. Instalată idempotent din `server.ts` și fiecare plugin de fundal.                                          |
 | `src/lib/errors/client-error-capture.ts` | Echivalentul pentru browser, trimite spre `logClientError()` (server function, cu rate-limit per IP). Instalat din `__root.tsx`, alături de listenere `window.onerror`/`unhandledrejection`. |
-| `src/lib/errors/error-log.ts` | Nucleul: grupare, rate-limit, retenție, notificare. Server-only. |
-| `src/lib/errors/error-log.functions.ts` | Server functions (`getErrorLogs`, `clearErrorLogs`, `logClientError`) — fișierul subțire pe care îl importă clientul. |
+| `src/lib/errors/error-log.ts`            | Nucleul: grupare, rate-limit, retenție, notificare. Server-only.                                                                                                                             |
+| `src/lib/errors/error-log.functions.ts`  | Server functions (`getErrorLogs`, `clearErrorLogs`, `logClientError`) — fișierul subțire pe care îl importă clientul.                                                                        |
 
 **Grupare** — erori identice (sursă + nivel + mesaj) incrementează un contor (`×N`) pe același rând, în loc să umple jurnalul cu duplicate.
 
@@ -200,9 +212,9 @@ Avertismentele proprii ale Node.js (`ExperimentalWarning` etc.) sunt filtrate di
 
 ## Securitate
 
-- **Toate server function-urile cer autentificare**, cu două excepții intenționate: `getAdminStatus` (clientul trebuie să poată afla că *nu* e logat) și `getVapidPublicKey` (cheie publică prin definiție). Gardul e `requireAuth()` (orice cont aprobat) sau `requireAdmin()`, ca primă instrucțiune din handler — nu în client, unde poate fi ocolit.
+- **Toate server function-urile cer autentificare**, cu două excepții intenționate: `getAdminStatus` (clientul trebuie să poată afla că _nu_ e logat) și `getVapidPublicKey` (cheie publică prin definiție). Gardul e `requireAuth()` (orice cont aprobat) sau `requireAdmin()`, ca primă instrucțiune din handler — nu în client, unde poate fi ocolit.
 - **Sesiunile se validează în baza de date la fiecare cerere.** `requireAuth`/`requireAdmin` (și `/api/plex-thumb`, și `getAdminStatus`) verifică prin `liveAccount()` că rândul din `users` există și e `approved`, apoi citesc rolul de acolo. Cookie-ul e semnat și ține 7 zile, deci fără verificarea asta „revocă accesul" din pagina Utilizatori nu revoca nimic pentru sesiunile deja emise, iar o retrogradare din admin rămânea fără efect până la expirare. Statement-ul e pregătit o singură dată — verificarea rulează pe fiecare cerere, inclusiv pe fiecare poster.
-- **Headere de securitate** pe toate răspunsurile, din `routeRules` (`vite.config.ts`, constanta `SECURITY_HEADERS`): `X-Frame-Options: DENY` + `frame-ancestors 'none'` (clickjacking peste butoanele de ștergere), `nosniff`, `Referrer-Policy`, `Permissions-Policy`, HSTS. **CSP-ul e deocamdată `Report-Only`** — SSR-ul injectează script și stiluri inline, iar o politică aplicată direct ar albi pagina; se trece pe aplicat după ce consola browserului rămâne curată.
+- **Headere de securitate** pe toate răspunsurile, din `routeRules` (`vite.config.ts`, constanta `SECURITY_HEADERS`): `X-Frame-Options: DENY` + `frame-ancestors 'none'` (clickjacking peste butoanele de ștergere), `nosniff`, `Referrer-Policy`, `Permissions-Policy`, HSTS. **CSP aplicat** din 23 sept. 2026 (după trei zile în `Report-Only` fără încălcări); `'unsafe-inline'` rămâne pentru script și stiluri, fiindcă SSR-ul le injectează inline. O sursă externă nouă folosită în browser trebuie adăugată în `CSP`, altfel e blocată.
 - **Rate limiting** pe autentificare (15 încercări/IP și 8/utilizator la 15 min, contorul se stinge la login reușit) și pe înregistrare (6/IP pe oră). Înregistrarea interoghează lista de prieteni Plex, deci fără limită ar fi și un oracol de enumerare.
 - **`/api/plex-thumb`** acceptă o singură formă de cale, pe **listă albă** (`/library/metadata/<id>/<tip>/<ts>`), nu o filtrare de `..`. `fetch()` normalizează `/library/../x` la `/x` înainte de a emite cererea, deci un `startsWith("/library/")` era ocolibil și transforma ruta într-un proxy autentificat către întreg API-ul Plex. Blacklist-urile de path traversal se ocolesc; forma nu.
 - **Codul server nu ajunge în bundle-ul public.** Vezi regula `*.functions.ts` de mai jos. Verificare după orice refactor:
@@ -246,7 +258,7 @@ Pentru datele scumpe și lent-schimbătoare (`si.processes()`, statistici Docker
 - [Tailwind CSS v4](https://tailwindcss.com/) + [shadcn/ui](https://ui.shadcn.com/) (doar componentele efectiv folosite — dialog, drawer, progress, sonner, button)
 - [systeminformation](https://www.npmjs.com/package/systeminformation) — metrici sistem
 - SQLite nativ (`node:sqlite`, Node.js 22.5+) — fără ORM
-- [Vitest](https://vitest.dev/) — teste pe logica pură (urmărire seriale, reducer-ul și derivările wizard-ului, unirea vizionărilor recente, dimensionarea posterelor)
+- [Vitest](https://vitest.dev/) — teste pe logica pură (reducer-ul și derivările wizard-ului, unirea vizionărilor recente, dimensionarea posterelor, intercalarea căutării TMDB) și de integrare pe o bază SQLite temporară, cu serviciile externe simulate (urmărirea serialelor și a filmelor, legarea în Plex și pachetele de sezon, reîmprospătarea detaliilor). Testele de integrare setează `FAIKKITBOX_DB_PATH` înainte de import și verifică `db.location()`, ca să nu poată atinge baza reală
 - TypeScript, ESLint, Prettier
 
 ---
@@ -308,29 +320,29 @@ Copiază `.env.example` în `.env` și completează valorile:
 cp .env.example .env
 ```
 
-| Variabilă | Descriere |
-|---|---|
-| `ADMIN_USER` / `ADMIN_PASS` | Credențiale login admin dashboard |
-| `SESSION_SECRET` | Secret sesiune admin (min. 32 caractere, ex: `openssl rand -hex 32`) |
-| `PLEX_URL` / `PLEX_TOKEN` | URL și token server Plex |
-| `IMMICH_URL` / `IMMICH_API_KEY` | URL și cheie API Immich |
-| `QBIT_URL` / `QBIT_USERNAME` / `QBIT_PASSWORD` | URL și credențiale WebUI qBittorrent |
-| `FILELIST_USERNAME` / `FILELIST_PASSKEY` | Credențiale API FileList.io |
-| `TMDB_API_KEY` | Token Bearer JWT pentru API TMDB (themoviedb.org) |
-| `OPENSUBTITLES_API_KEY` | Cheie API OpenSubtitles.com, pentru subtitrare română automată când torrentul nu are niciuna (cont gratuit → profil → „API Consumers") |
-| `OPENSUBTITLES_USERNAME` / `OPENSUBTITLES_PASSWORD` | *(opțional)* Login OpenSubtitles, doar dacă limita de download anonimă devine insuficientă |
-| `SUBSRO_API_KEY` | Cheie API subs.ro, sursă de rezervă pentru subtitrări când OpenSubtitles nu are o potrivire exactă de sursă/rezoluție |
-| `MEDIA_MOVIES_PATH` / `MEDIA_SERIES_PATH` | Căi locale unde qBittorrent salvează filmele/serialele din Filelist |
-| `GITHUB_REPO` | Repo GitHub (ex: `Faicu/FaikkitBox`) pentru tracking commits |
-| `GITHUB_TOKEN` | *(opțional)* Token GitHub API pentru limită mai mare la request-uri |
-| `GITHUB_WEBHOOK_SECRET` | Secret pentru validarea webhook-urilor GitHub |
-| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | Chei VAPID pentru notificări web push |
-| `PLEX_COMPOSE_FILE` / `IMMICH_COMPOSE_FILE` | *(opțional)* Căi custom `docker-compose.yml` pentru butoanele de restart |
-| `SPEEDTEST_BIN` | *(opțional)* Cale completă binar `speedtest` (util dacă snap nu rulează din systemd) |
-| `PORT` | Port server (implicit `3000`) |
-| `NODE_ENV` | Mediu de rulare (`production` în producție) |
-| `NODE_OPTIONS` | *(opțional)* `--disable-warning=ExperimentalWarning` — suprimă avertismentul Node pentru `node:sqlite`, fără să ascundă alte avertismente (ex. deprecation la upgrade de Node) |
-| `FAIKKITBOX_DB_PATH` | *(opțional)* Cale custom pentru fișierul SQLite (implicit `/opt/faikkitbox/data/faikkitbox.db`) |
+| Variabilă                                                  | Descriere                                                                                                                                                                      |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `ADMIN_USER` / `ADMIN_PASS`                                | Credențiale login admin dashboard                                                                                                                                              |
+| `SESSION_SECRET`                                           | Secret sesiune admin (min. 32 caractere, ex: `openssl rand -hex 32`)                                                                                                           |
+| `PLEX_URL` / `PLEX_TOKEN`                                  | URL și token server Plex                                                                                                                                                       |
+| `IMMICH_URL` / `IMMICH_API_KEY`                            | URL și cheie API Immich                                                                                                                                                        |
+| `QBIT_URL` / `QBIT_USERNAME` / `QBIT_PASSWORD`             | URL și credențiale WebUI qBittorrent                                                                                                                                           |
+| `FILELIST_USERNAME` / `FILELIST_PASSKEY`                   | Credențiale API FileList.io                                                                                                                                                    |
+| `TMDB_API_KEY`                                             | Token Bearer JWT pentru API TMDB (themoviedb.org)                                                                                                                              |
+| `OPENSUBTITLES_API_KEY`                                    | Cheie API OpenSubtitles.com, pentru subtitrare română automată când torrentul nu are niciuna (cont gratuit → profil → „API Consumers")                                         |
+| `OPENSUBTITLES_USERNAME` / `OPENSUBTITLES_PASSWORD`        | _(opțional)_ Login OpenSubtitles, doar dacă limita de download anonimă devine insuficientă                                                                                     |
+| `SUBSRO_API_KEY`                                           | Cheie API subs.ro, sursă de rezervă pentru subtitrări când OpenSubtitles nu are o potrivire exactă de sursă/rezoluție                                                          |
+| `MEDIA_MOVIES_PATH` / `MEDIA_SERIES_PATH`                  | Căi locale unde qBittorrent salvează filmele/serialele din Filelist                                                                                                            |
+| `GITHUB_REPO`                                              | Repo GitHub (ex: `Faicu/FaikkitBox`) pentru tracking commits                                                                                                                   |
+| `GITHUB_TOKEN`                                             | _(opțional)_ Token GitHub API pentru limită mai mare la request-uri                                                                                                            |
+| `GITHUB_WEBHOOK_SECRET`                                    | Secret pentru validarea webhook-urilor GitHub                                                                                                                                  |
+| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | Chei VAPID pentru notificări web push                                                                                                                                          |
+| `PLEX_COMPOSE_FILE` / `IMMICH_COMPOSE_FILE`                | _(opțional)_ Căi custom `docker-compose.yml` pentru butoanele de restart                                                                                                       |
+| `SPEEDTEST_BIN`                                            | _(opțional)_ Cale completă binar `speedtest` (util dacă snap nu rulează din systemd)                                                                                           |
+| `PORT`                                                     | Port server (implicit `3000`)                                                                                                                                                  |
+| `NODE_ENV`                                                 | Mediu de rulare (`production` în producție)                                                                                                                                    |
+| `NODE_OPTIONS`                                             | _(opțional)_ `--disable-warning=ExperimentalWarning` — suprimă avertismentul Node pentru `node:sqlite`, fără să ascundă alte avertismente (ex. deprecation la upgrade de Node) |
+| `FAIKKITBOX_DB_PATH`                                       | _(opțional)_ Cale custom pentru fișierul SQLite (implicit `/opt/faikkitbox/data/faikkitbox.db`)                                                                                |
 
 > **Nu comite niciodată `.env` în git.**
 
@@ -421,9 +433,10 @@ Pentru liste ce se încarcă incremental (ex. `DiscoverGrid`), se folosește `us
 Vezi [`STRUCTURE.md`](./STRUCTURE.md) pentru lista completă, fișier cu fișier. Câteva invarianti importante de reținut:
 
 - **Filelist** — `categories.ts` are `isMovieCategory`/`MOVIE_CATEGORIES`/`SERIES_CATEGORIES`, **nu reimplementa** verificarea film/serial în altă parte. `checkFilelistForItemInternal` (`filelist/filelist-client.ts`) e **sursa unică** pentru „există pe Filelist?" — nu duplica logica de căutare/matching, și nu vorbi cu API-ul Filelist din altă parte. `plex-refresh.ts` e **singurul** punct care declanșează rescan Plex.
+- **Plex** — orice căutare a unui titlu în Plex trece prin `PlexLookup` (`tmdbId` + titluri) și `findItem`, adică după ID-ul TMDB — nu adăuga comparații pe titlu (vezi „Potrivirea cu Plex").
 - **Erori aplicație** — nu adăuga apeluri `logError()` manuale lângă un `console.warn`/`console.error` — captarea globală le prinde deja automat; ar produce intrări duplicate.
 - **TMDB** — `getTmdbDetails` întoarce și `literalTitle` (din `alternative_titles`, `type: "literal title"`) — folosește-l pentru orice căutare externă (Filelist), nu `originalTitle` brut, care rămâne în scriptul nativ pentru producții non-latine. TMDB cache-uiește răspunsuri per URL exact — cererile pentru episoade au cache-bust explicit, altfel un episod difuzat recent poate rămâne cu placeholder generic ore bune după ce TMDB are deja titlul real.
-- **`media` (db.ts)** — sursa unică de adevăr pentru bibliotecă. Conține conținut real (descărcat sau backfill din Plex), plus urmărirea, ca patru coloane pe rândul-părinte — **nu** ca tabelă paralelă: exact structura paralelă (`pinned_*`) a fost sursa unei clase întregi de bug-uri și a fost eliminată. Singura excepție de la „conținut real" e filmul urmărit, care are un rând fără `torrent_hash` și fără `plex_rating_key` — și tocmai de-asta rămâne invizibil peste tot unde se cere una dintre cele două coloane. Dacă ai nevoie de un flux nou de intenție/monitorizare, extinde rândul existent, nu crea o structură lângă el. Tabela `downloads` a fost eliminată în migrarea v25: nu mai există un jurnal separat de descărcări.
+- **`media` (db.ts)** — sursa unică de adevăr pentru bibliotecă. Conține conținut real (descărcat sau backfill din Plex), plus urmărirea, ca set de coloane pe rândul-părinte — **nu** ca tabelă paralelă: exact structura paralelă (`pinned_*`) a fost sursa unei clase întregi de bug-uri și a fost eliminată. Singura excepție de la „conținut real" e filmul urmărit, care are un rând fără `torrent_hash` și fără `plex_rating_key` — și tocmai de-asta rămâne invizibil peste tot unde se cere una dintre cele două coloane. Dacă ai nevoie de un flux nou de intenție/monitorizare, extinde rândul existent, nu crea o structură lângă el. Tabela `downloads` a fost eliminată în migrarea v25: nu mai există un jurnal separat de descărcări.
 - **`*.functions.ts` — fără importuri server statice.** Corpul unui handler `createServerFn` e eliminat din bundle-ul de client, deci un `await import("./x")` din interiorul lui rămâne pe server; un import static la vârful fișierului trage tot graful în bundle-ul public. De aceea logica stă în `media.ts` / `activity-log.ts` / `error-log.ts` / `filelist/download.ts` / `system/network-link.ts` / `system/speedtest.ts` / `system/db-backup.ts`, iar definițiile de server functions în perechile lor `*.functions.ts`. Nerespectarea regulii a servit public schema SQLite completă și a produs eroarea `(0 , n.dirname) is not a function`, rămasă luni de zile neexplicată.
 - **Munca de la pornirea serverului se declanșează din `server/plugins/`**, nu dintr-un `setTimeout` la nivel de modul. Un efect de modul rulează doar dacă cineva importă modulul, iar asta depinde de grafuri de import care se schimbă la refactorizări — două bug-uri identice au fost cauzate exact de asta (logarea pornirii/opririi rula abia la prima cerere HTTP; reluarea polling-urilor a încetat complet să mai ruleze după un refactor de bundle).
 - **Munca de pornire care atinge rețeaua nu are ce căuta într-o migrare.** Migrarea rulează sincron, în tranzacție, și e fatală la eșec — un apel Plex picat ar bloca pornirea. Pentru „o singură dată pe instalare, dar cu rețea", folosește tabela `one_time_jobs` și declanșează din plugin (vezi `redetectQualitiesOnce`).

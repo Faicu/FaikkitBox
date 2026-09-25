@@ -864,7 +864,7 @@ export async function resolveSeasonPackPlexLinks(torrentHash: string): Promise<b
     inserted++;
   }
 
-  // Numele episoadelor tocmai create — același motiv ca la descărcarea unui
+  // Detaliile episoadelor tocmai create — același motiv ca la descărcarea unui
   // episod individual (vezi syncEpisodeDetailsForShow). Doar când chiar s-au
   // creat rânduri: funcția e chemată și dintr-o buclă la 10 secunde, iar o
   // trecere fără nimic nou n-are ce cere de la TMDB.

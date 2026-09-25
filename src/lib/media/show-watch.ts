@@ -9,9 +9,10 @@
 //    `pinned_items`, per-utilizator, legate de `media` doar prin tmdb_id.
 //    De-acolo veneau bug-urile ei: rânduri duplicate, dedublare între două
 //    liste, un GROUP BY defensiv ca să nu descarce de N ori pentru N useri
-//    care fixaseră același serial. Acum urmărirea e patru coloane pe rândul
-//    'tv_show' din `media` — rând care e deja unic per serial și deja legat
-//    de episoade prin parent_id. Nu mai există nimic de corelat.
+//    care fixaseră același serial. Acum urmărirea e un set de coloane
+//    `auto_download*` / `watch_*` pe rândul 'tv_show' din `media` — rând care e
+//    deja unic per serial și deja legat de episoade prin parent_id. Nu mai
+//    există nimic de corelat.
 //
 // 2. Era diferențială, nu declarativă. Ținea `seen_torrent_ids` și
 //    `last_aired_key` și reacționa la "ce s-a schimbat de la ultima
@@ -34,6 +35,7 @@ import {
   parseFallbackSeen,
   type FallbackSeen,
 } from "./fallback-quality";
+import { advancedWatchFrom, type EpisodeKey } from "./watch-position";
 import { getDb } from "../db";
 
 const ITEM_INTERVAL_MS = 3 * 60 * 60 * 1000; // 3 ore — cadența reală per serial
@@ -41,8 +43,6 @@ const ITEM_INTERVAL_MS = 3 * 60 * 60 * 1000; // 3 ore — cadența reală per se
 // activat cu multe episoade lipsă nu trebuie să arunce 30 de torrente în
 // qBittorrent deodată; restul vin la ciclurile următoare.
 const MAX_DOWNLOADS_PER_RUN = 3;
-
-export type EpisodeKey = { season: number; episode: number };
 
 export function formatEpisodeKey(k: EpisodeKey): string {
   return `S${String(k.season).padStart(2, "0")}E${String(k.episode).padStart(2, "0")}`;
@@ -119,9 +119,10 @@ async function fetchShowDetails(tmdbId: number): Promise<TmdbShowDetails | null>
   return details?.title ? details : null;
 }
 
-// Scrie pe rândul-serial ce ține de titlu, nu de fișiere: statusul curent și
-// următorul episod anunțat. Ambele vin din același răspuns TMDB, deci sunt
-// gratuite oriunde avem deja `details` în mână.
+// Scrie pe rândul-serial ce ține de titlu, nu de fișiere: detaliile (titluri,
+// an, descriere, genuri, poster), statusul curent și următorul episod anunțat.
+// Toate vin din același răspuns TMDB, deci sunt gratuite oriunde avem deja
+// `details` în mână.
 //
 // Ora exactă vine din altă parte: TMDB dă doar data (air_date), fără oră, așa
 // că o luăm de la TVmaze — aceeași sursă folosită de wizard. `airstamp` e un
@@ -200,6 +201,7 @@ async function writeShowMeta(
   // decât serialul din care face parte. `original_title` contează în plus:
   // e cheia de rezervă la potrivirea vizionărilor cu Plex, când istoricul
   // vine fără ratingKey.
+  //
   // Descrierea și genurile episoadelor sunt tot copii ale celor ale serialului
   // (upsertMediaEntry, desfacerea pachetelor), deci țin pasul cu ele. Posterul
   // nu: pe episoade e posterul SEZONULUI, ținut de syncEpisodeDetails — scris
@@ -541,7 +543,6 @@ async function checkShowInner(showId: number): Promise<ShowWatchOutcome> {
   // văzut și șters apoi din Bibliotecă să nu fie redescărcat (vezi
   // watch-position.ts pentru regulă și de ce se oprește la primul gol).
   if (downloadedNow.length > 0) {
-    const { advancedWatchFrom } = await import("./watch-position");
     const next = advancedWatchFrom({
       from,
       aired,
@@ -758,13 +759,6 @@ export async function syncEpisodeDetails(opts: {
   }>;
   if (rows.length === 0) return 0;
 
-  const byShow = new Map<number, typeof rows>();
-  for (const row of rows) {
-    const list = byShow.get(row.tmdb_id);
-    if (list) list.push(row);
-    else byShow.set(row.tmdb_id, [row]);
-  }
-
   const { getTmdbAllSeasonsInternal } = await import("../tmdb/tmdb.functions");
   const update = db.prepare(
     `UPDATE media
@@ -774,50 +768,49 @@ export async function syncEpisodeDetails(opts: {
             poster_path = COALESCE(NULLIF(?, ''), poster_path)
       WHERE id = ?`,
   );
+  // Toate rândurile sunt ale aceluiași serial, deci o singură cerere TMDB
+  // (sezoanele deținute, prin append_to_response).
+  const seasons = [...new Set(rows.map((r) => r.season))].sort((a, b) => a - b);
+  const schema = await getTmdbAllSeasonsInternal(rows[0].tmdb_id, seasons, {
+    details: true,
+  }).catch(() => []);
+  const bySeason = new Map(schema.map((s) => [s.seasonNumber, s]));
   let changed = 0;
+  for (const r of rows) {
+    const season = bySeason.get(r.season);
+    const found = season?.episodes.find((e) => e.episodeNum === r.episode);
+    if (!found) continue;
 
-  for (const [tmdbId, showRows] of byShow) {
-    const seasons = [...new Set(showRows.map((r) => r.season))].sort((a, b) => a - b);
-    const schema = await getTmdbAllSeasonsInternal(tmdbId, seasons, { details: true }).catch(
-      () => [],
-    );
-    const bySeason = new Map(schema.map((s) => [s.seasonNumber, s]));
-    for (const r of showRows) {
-      const season = bySeason.get(r.season);
-      const found = season?.episodes.find((e) => e.episodeNum === r.episode);
-      if (!found) continue;
-
-      let title: string | null = found.title;
-      if (GENERIC_EPISODE_TITLE.test(found.title)) {
-        if (r.episode_title) {
-          // Avem deja un nume (real sau placeholder acceptat) — un placeholder
-          // nou nu-l înlocuiește.
-          title = null;
-        } else {
-          // "Episodul 8" e placeholder-ul pe care TMDB îl întoarce cât timp
-          // n-are încă titlul real — frecvent în primele ore după difuzare,
-          // dar și permanent pentru emisiuni ale căror episoade n-au titluri
-          // (reality show-uri, televiziune locală). Pentru un episod difuzat
-          // recent îl lăsăm gol, ca reîmprospătarea să reîncerce; pentru unul
-          // difuzat demult (sau fără dată la TMDB) îl acceptăm — nu mai are
-          // rost să-l așteptăm (găsit la "Insula Iubirii" S10, unde TMDB n-are
-          // titluri deloc). UI-ul ascunde oricum numele generice.
-          const stillWorthWaiting =
-            found.airDate != null &&
-            Date.now() - new Date(found.airDate).getTime() <= PLACEHOLDER_GRACE_MS;
-          if (stillWorthWaiting) title = null;
-        }
+    let title: string | null = found.title;
+    if (GENERIC_EPISODE_TITLE.test(found.title)) {
+      if (r.episode_title) {
+        // Avem deja un nume (real sau placeholder acceptat) — un placeholder
+        // nou nu-l înlocuiește.
+        title = null;
+      } else {
+        // "Episodul 8" e placeholder-ul pe care TMDB îl întoarce cât timp
+        // n-are încă titlul real — frecvent în primele ore după difuzare,
+        // dar și permanent pentru emisiuni ale căror episoade n-au titluri
+        // (reality show-uri, televiziune locală). Pentru un episod difuzat
+        // recent îl lăsăm gol, ca reîmprospătarea să reîncerce; pentru unul
+        // difuzat demult (sau fără dată la TMDB) îl acceptăm — nu mai are
+        // rost să-l așteptăm (găsit la "Insula Iubirii" S10, unde TMDB n-are
+        // titluri deloc). UI-ul ascunde oricum numele generice.
+        const stillWorthWaiting =
+          found.airDate != null &&
+          Date.now() - new Date(found.airDate).getTime() <= PLACEHOLDER_GRACE_MS;
+        if (stillWorthWaiting) title = null;
       }
-
-      const res = update.run(
-        title,
-        found.overview ?? null,
-        found.stillUrl ?? null,
-        season?.posterUrl ?? null,
-        r.id,
-      );
-      if (res.changes > 0) changed++;
     }
+
+    const res = update.run(
+      title,
+      found.overview ?? null,
+      found.stillUrl ?? null,
+      season?.posterUrl ?? null,
+      r.id,
+    );
+    if (res.changes > 0) changed++;
   }
   return changed;
 }

@@ -118,7 +118,7 @@ async function plexEmptyTrashBySection(sectionKey: string): Promise<void> {
 
 // Rescanează, apoi golește coșul de gunoi al secțiunii — un simplu refresh
 // doar marchează fișierele lipsă ca indisponibile, dar le ține în index;
-// fără emptyTrash, un titlu șters rămâne găsit de findByTitle (verificarea
+// fără emptyTrash, un titlu șters rămâne găsit de findWithQualities (verificarea
 // "deja în bibliotecă Plex" din wizard-ul de adăugare) mult după ce a fost
 // efectiv șters de pe disk. Folosit exclusiv de fluxurile de ștergere —
 // refreshPlexLibrary simplu rămâne suficient după descărcări noi.

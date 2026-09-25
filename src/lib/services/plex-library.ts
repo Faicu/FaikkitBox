@@ -10,8 +10,9 @@ import {
 } from "./plex-shared";
 
 // ---------------------------------------------------------------------------
-// Căutare titluri/episoade în biblioteca Plex — folosit de wizard (Acasă)
-// pentru a verifica dacă un film/episod e deja disponibil. Extras din fostul
+// Căutarea titlurilor/episoadelor în biblioteca Plex, după ID-ul TMDB (vezi
+// matchesLookup): pentru wizard („e deja în Plex?", ce episoade ai) și pentru
+// legarea rândurilor din `media` de item-ul lor Plex. Extras din fostul
 // plex.ts monolitic.
 // ---------------------------------------------------------------------------
 
@@ -162,7 +163,7 @@ async function episodesInSeason(
     }));
 }
 
-async function findByTitle(
+async function findWithQualities(
   url: string,
   headers: Record<string, string>,
   lookup: PlexLookup,
@@ -231,8 +232,8 @@ export interface PlexItemLink {
 // Ce scriem în `media` despre un item Plex: care versiune e a noastră, cu ce
 // calitate, durată și dată. Regula stă aici, într-un singur loc, fiindcă e
 // nevoie de ea din două direcții — la prima legare (findPlexMovieLink, care
-// caută item-ul după titlu) și la recalcularea unui rând deja legat (media.ts,
-// care pornește direct de la ratingKey).
+// caută item-ul după ID-ul TMDB) și la recalcularea unui rând deja legat
+// (media.ts, care pornește direct de la ratingKey).
 export function versionLinkFromItem(
   item: PlexMetadataItem,
   contentPath: string | null,
@@ -250,9 +251,10 @@ export function versionLinkFromItem(
   };
 }
 
-// Găsește ratingKey-ul + calitatea/durata unui film deja apărut în Plex (după
-// ID-ul TMDB — vezi findItem, de ce nu după titlu) — folosit ca să legăm un rând din tabela `media` de item-ul lui real din
-// Plex, o singură dată, cache-uit permanent acolo (vezi media.ts).
+// Găsește ratingKey-ul + calitatea/durata unui film deja apărut în Plex, după
+// ID-ul TMDB (vezi findItem) — folosit ca să legăm un rând din tabela `media`
+// de item-ul lui real din Plex, o singură dată, cache-uit permanent acolo
+// (vezi media.ts).
 // `contentPath` (calea reală de pe disk, din qBittorrent) identifică fișierul
 // NOSTRU printre versiunile item-ului Plex (vezi plexMediaForPath). Fără el —
 // sau când nu se potrivește nimic — legarea se face oricum (ratingKey-ul e al
@@ -360,7 +362,7 @@ export async function checkPlexHasTitleInternal(data: {
   try {
     const headers = { Accept: "application/json", "X-Plex-Token": token };
     const discovered = await discoverPlexUrl(token, base);
-    return await findByTitle(
+    return await findWithQualities(
       discovered.url,
       headers,
       { tmdbId: data.tmdbId, titles: [data.title, data.originalTitle] },

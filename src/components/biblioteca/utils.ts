@@ -114,3 +114,8 @@ export function nextEpisodeWhen(
   const head = relative ?? dayLabel;
   return { text: time ? `${head}, ${time}` : head, soon: days >= 0 && days <= 2 };
 }
+
+// Calitățile care se pot alege la urmărire (principală și rezervă) — aceleași
+// etichete ca detectTorrentQuality. Folosite de drawer-ul serialului și de cel
+// al filmului așteptat.
+export const WATCH_QUALITIES = ["4K HDR", "4K", "1080p HDR", "1080p", "720p", "SD"];

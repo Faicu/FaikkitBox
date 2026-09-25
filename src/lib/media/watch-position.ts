@@ -15,6 +15,7 @@
 // „poziția ajunge până la ultimul episod adus de urmărire", nu o reevaluare a
 // întregului serial.
 
+// Sursa unică a tipului — show-watch.ts și aired-episodes.ts îl importă de aici.
 export type EpisodeKey = { season: number; episode: number };
 
 const ord = (k: EpisodeKey) => k.season * 1000 + k.episode;

@@ -8,8 +8,8 @@ interface SearchHit {
 }
 
 // ro, en, ro, en… fără duplicate, doar filme și seriale. Când un titlu apare
-// în ambele liste, se păstrează varianta en-US, de pe care
-// searchTmdb citește anul, posterul și titlul original, ca înainte.
+// în ambele liste, se păstrează varianta en-US, de pe care searchTmdb citește
+// anul, posterul și titlul original, ca înainte.
 export function interleaveSearchResults<T extends SearchHit>(ro: T[], en: T[]): T[] {
   const isTitle = (r: T) => r.media_type === "movie" || r.media_type === "tv";
   const keyOf = (r: T) => `${r.media_type}:${r.id}`;

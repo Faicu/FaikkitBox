@@ -565,9 +565,10 @@ async function finishFilelistDownload(ctx: {
       savePath,
       requestedByUserId: params.requestedByUserId ?? null,
     });
-    // Numele episodului acum, nu la următorul ciclu al plugin-ului. Pentru
-    // un pachet de sezon nu e nimic de completat încă — episoadele lui apar
-    // abia la desfacere (resolveSeasonPackPlexLinks), care cheamă același lucru.
+    // Detaliile episodului (nume, descriere, imagine, posterul sezonului)
+    // acum, nu la reîmprospătarea de 12 ore a serialului. Pentru un pachet de
+    // sezon nu e nimic de completat încă — episoadele lui apar abia la
+    // desfacere (resolveSeasonPackPlexLinks), care cheamă același lucru.
     if (!isMovie) {
       const { getDb } = await import("../db");
       const parent = getDb().prepare("SELECT parent_id FROM media WHERE id = ?").get(mediaId) as
