@@ -212,15 +212,24 @@ export async function getTmdbDetailsInternal(
       const movie = await tmdbFetch<TmdbApiMovie>(
         `/movie/${id}?language=ro-RO&append_to_response=external_ids,alternative_titles`,
       );
+      // Varianta engleză se cere cel mult o dată, și doar dacă e nevoie de ea
+      // (descriere sau titlu lipsă în română).
+      let enMovieP: Promise<TmdbApiMovie | null> | null = null;
+      const enMovie = () =>
+        (enMovieP ??= tmdbFetch<TmdbApiMovie>(`/movie/${id}`).catch(() => null));
       let overview = movie.overview?.trim() || null;
-      if (!overview) {
-        const enMovie = await tmdbFetch<TmdbApiMovie>(`/movie/${id}`).catch(() => null);
-        overview = enMovie?.overview?.trim() || null;
-      }
+      if (!overview) overview = (await enMovie())?.overview?.trim() || null;
       let title = movie.title?.trim() || movie.original_title?.trim() || "";
       if (shouldTryRomanianAka(title, movie.original_title, movie.original_language)) {
         const { findRomanianAkaTitle } = await import("./tmdb-title-lookup");
         title = (await findRomanianAkaTitle("movie", id)) || title;
+      }
+      // Fără titlu românesc (nici traducere, nici titlu alternativ RO): engleza
+      // înaintea originalului — un film spaniol sau coreean e mai lizibil
+      // „în engleză" decât în limba lui. La fel alege și wizard-ul la adăugare
+      // (searchTmdb), deci titlul nu se mai schimbă la prima reîmprospătare.
+      if (shouldTryRomanianAka(title, movie.original_title, movie.original_language)) {
+        title = (await enMovie())?.title?.trim() || title;
       }
       return {
         id,
@@ -241,15 +250,19 @@ export async function getTmdbDetailsInternal(
       const show = await tmdbFetch<TmdbApiTvShow>(
         `/tv/${id}?language=ro-RO&append_to_response=external_ids,alternative_titles`,
       );
+      // Ca la filme: engleza se cere cel mult o dată, doar la nevoie.
+      let enShowP: Promise<TmdbApiTvShow | null> | null = null;
+      const enShow = () => (enShowP ??= tmdbFetch<TmdbApiTvShow>(`/tv/${id}`).catch(() => null));
       let overview = show.overview?.trim() || null;
-      if (!overview) {
-        const enShow = await tmdbFetch<TmdbApiTvShow>(`/tv/${id}`).catch(() => null);
-        overview = enShow?.overview?.trim() || null;
-      }
+      if (!overview) overview = (await enShow())?.overview?.trim() || null;
       let title = show.name?.trim() || show.original_name?.trim() || "";
       if (shouldTryRomanianAka(title, show.original_name, show.original_language)) {
         const { findRomanianAkaTitle } = await import("./tmdb-title-lookup");
         title = (await findRomanianAkaTitle("tv", id)) || title;
+      }
+      // Fără titlu românesc: engleza înaintea originalului (vezi filmele).
+      if (shouldTryRomanianAka(title, show.original_name, show.original_language)) {
+        title = (await enShow())?.name?.trim() || title;
       }
       const seasons = (show.seasons ?? [])
         .filter((s) => s.season_number > 0)

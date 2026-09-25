@@ -40,6 +40,10 @@ async function run(): Promise<void> {
     // butonul de urmărire, deci trebuie corect mai ales acolo unde încă n-ai
     // pornit-o.
     await refreshShowMetadata();
+    // La fel pentru filme: titlu, an, descriere, genuri, poster (vezi
+    // movie-metadata.ts) — filmele n-aveau deloc reîmprospătare.
+    const { refreshMovieMetadata } = await import("../../src/lib/media/movie-metadata");
+    await refreshMovieMetadata();
     await checkDueShows();
     // Filmele așteptate, la coadă și în aceeași buclă, nu într-un plugin
     // separat: ambele caută pe Filelist, iar două bucle independente ar

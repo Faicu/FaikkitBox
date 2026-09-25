@@ -109,9 +109,14 @@ type TmdbShowDetails = Awaited<
   ReturnType<typeof import("../tmdb/tmdb.functions").getTmdbDetailsInternal>
 >;
 
+// null și când TMDB „răspunde" gol: getTmdbDetailsInternal nu aruncă la o
+// eroare, ci întoarce un obiect cu titlul gol. Tratat ca răspuns valid, ar fi
+// șters următorul episod anunțat (`next_episode` se scrie direct, fără
+// COALESCE) până la reîmprospătarea următoare.
 async function fetchShowDetails(tmdbId: number): Promise<TmdbShowDetails | null> {
   const { getTmdbDetailsInternal } = await import("../tmdb/tmdb.functions");
-  return getTmdbDetailsInternal(tmdbId, "tv").catch(() => null);
+  const details = await getTmdbDetailsInternal(tmdbId, "tv").catch(() => null);
+  return details?.title ? details : null;
 }
 
 // Scrie pe rândul-serial ce ține de titlu, nu de fișiere: statusul curent și
@@ -151,13 +156,24 @@ async function writeShowMeta(
   //
   // COALESCE + NULLIF: nu suprascriem cu gol dacă TMDB răspunde incomplet —
   // mai bine un titlu vechi decât niciunul.
+  //
+  // Descrierea, genurile și posterul la fel (din 26 sept. 2026): sunt cerute
+  // în română la fiecare reîmprospătare, deci un serial adăugat înainte ca
+  // TMDB să aibă traducerea sau posterul românesc le primește singur, la cel
+  // mult 12 ore după ce apar pe TMDB. Fiecare câmp se scrie separat și doar
+  // cu o valoare nevidă — ce lipsește la TMDB nu șterge ce avem.
   const year = details.releaseDate ? Number(details.releaseDate.slice(0, 4)) : null;
+  const genres = (details.genres ?? []).length > 0 ? JSON.stringify(details.genres) : null;
   const db = getDb();
   db.prepare(
     `UPDATE media
         SET title = COALESCE(NULLIF(?, ''), title),
             original_title = COALESCE(NULLIF(?, ''), original_title),
+            literal_title = COALESCE(?, literal_title),
             year = COALESCE(?, year),
+            overview_ro = COALESCE(NULLIF(?, ''), overview_ro),
+            genres = COALESCE(?, genres),
+            poster_path = COALESCE(NULLIF(?, ''), poster_path),
             tv_status = COALESCE(?, tv_status),
             next_episode = ?,
             next_episode_air_date = ?,
@@ -167,7 +183,11 @@ async function writeShowMeta(
   ).run(
     details.title,
     details.originalTitle,
+    details.literalTitle ?? null,
     Number.isFinite(year) ? year : null,
+    details.overview ?? null,
+    genres,
+    details.posterUrl ?? null,
     details.tvStatus,
     next ? formatEpisodeKey({ season: next.seasonNumber, episode: next.episodeNumber }) : null,
     next?.airDate ?? null,
@@ -180,12 +200,24 @@ async function writeShowMeta(
   // decât serialul din care face parte. `original_title` contează în plus:
   // e cheia de rezervă la potrivirea vizionărilor cu Plex, când istoricul
   // vine fără ratingKey.
+  // Descrierea, genurile și posterul episoadelor sunt tot copii ale celor ale
+  // serialului (upsertMediaEntry, desfacerea pachetelor), deci țin pasul cu ele.
   db.prepare(
     `UPDATE media
         SET title = COALESCE(NULLIF(?, ''), title),
-            original_title = COALESCE(NULLIF(?, ''), original_title)
+            original_title = COALESCE(NULLIF(?, ''), original_title),
+            overview_ro = COALESCE(NULLIF(?, ''), overview_ro),
+            genres = COALESCE(?, genres),
+            poster_path = COALESCE(NULLIF(?, ''), poster_path)
       WHERE parent_id = ?`,
-  ).run(details.title, details.originalTitle, showId);
+  ).run(
+    details.title,
+    details.originalTitle,
+    details.overview ?? null,
+    genres,
+    details.posterUrl ?? null,
+    showId,
+  );
 }
 
 export interface ShowWatchOutcome {
@@ -785,11 +817,14 @@ export function fillEpisodeTitlesForShow(parentId: number | null): void {
 // Reîmprospătarea metadatelor de serial
 // ---------------------------------------------------------------------------
 
-const META_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12h per serial
-const MAX_META_SHOWS_PER_RUN = 5;
+// 12h per titlu, fără limită pe rulare: TMDB are limite generoase, iar o
+// limită ar întârzia corecțiile la o bibliotecă mare (decizia userului, 26 sept.
+// 2026). Aceeași cadență și pentru filme (movie-metadata.ts).
+export const META_INTERVAL_MS = 12 * 60 * 60 * 1000;
 
-// Ține la zi tv_status și următorul episod pentru TOATE serialele, nu doar
-// pentru cele urmărite.
+// Ține la zi tv_status, următorul episod și detaliile (titluri, an,
+// descriere, genuri, poster — vezi writeShowMeta) pentru TOATE serialele, nu
+// doar pentru cele urmărite.
 //
 // tv_status era scris o singură dată, la prima descărcare, și rămânea așa pe
 // veci. Conta: panoul de urmărire se ascunde exact pe `tv_status === 'Ended'`,
@@ -803,23 +838,23 @@ export async function refreshShowMetadata(): Promise<number> {
       `SELECT id, tmdb_id, imdb_id FROM media
          WHERE media_type = 'tv_show' AND tmdb_id IS NOT NULL
            AND (meta_refreshed_at IS NULL OR meta_refreshed_at <= datetime('now', ?))
-         ORDER BY meta_refreshed_at IS NOT NULL, meta_refreshed_at
-         LIMIT ?`,
+         ORDER BY meta_refreshed_at IS NOT NULL, meta_refreshed_at`,
     )
-    .all(
-      `-${Math.round(META_INTERVAL_MS / 1000)} seconds`,
-      MAX_META_SHOWS_PER_RUN,
-    ) as unknown as Array<{ id: number; tmdb_id: number; imdb_id: string | null }>;
+    .all(`-${Math.round(META_INTERVAL_MS / 1000)} seconds`) as unknown as Array<{
+    id: number;
+    tmdb_id: number;
+    imdb_id: string | null;
+  }>;
 
   // Marchează încercarea chiar și când TMDB n-a răspuns. `meta_refreshed_at`
   // se scrie altfel doar în writeShowMeta, deci un serial al cărui tmdb_id nu
-  // mai rezolvă (șters de pe TMDB, id greșit) rămânea cu NULL pe veci — iar
-  // ORDER BY-ul de mai sus pune NULL-urile primele. Cinci astfel de seriale
-  // ocupau permanent tot LIMIT-ul și blocau împrospătarea pentru TOATE
-  // celelalte, adică exact regresia pe care funcția asta există s-o prevină.
+  // mai rezolvă (șters de pe TMDB, id greșit) ar fi fost reîncercat la fiecare
+  // rulare, adică la 10 minute, la nesfârșit. (Pe vremea limitei de 5 pe
+  // rulare era mai rău: cinci astfel de seriale ocupau permanent tot LIMIT-ul
+  // și blocau împrospătarea pentru toate celelalte.)
   //
   // Costul e că o pană TMDB trecătoare amână serialele atinse cu încă 12h.
-  // Acceptabil: cadența nu e critică, iar alternativa e înfometarea totală.
+  // Acceptabil: cadența nu e critică.
   const touch = db.prepare("UPDATE media SET meta_refreshed_at = datetime('now') WHERE id = ?");
 
   let refreshed = 0;
