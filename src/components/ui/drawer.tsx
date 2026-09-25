@@ -31,10 +31,14 @@ const DrawerContent = React.forwardRef<
 >(({ className, children, ...props }, ref) => (
   <DrawerPortal>
     <DrawerOverlay />
+    {/* sm:max-w-2xl + sm:mx-auto: pe ecrane mari drawer-ul nu mai ține toată
+        lățimea (pe desktop ajungea la ~1500px — text pe rânduri foarte lungi,
+        imagini întinse), ci rămâne o „foaie" centrată, ca pe telefon. Cu
+        inset-x-0 și margini auto, elementul fix se centrează singur. */}
     <DrawerPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed inset-x-0 bottom-0 z-50 mt-24 flex h-auto flex-col overflow-x-hidden rounded-t-[10px] border bg-background",
+        "fixed inset-x-0 bottom-0 z-50 mt-24 flex h-auto flex-col overflow-x-hidden rounded-t-[10px] border bg-background sm:mx-auto sm:max-w-2xl",
         className,
       )}
       {...props}
