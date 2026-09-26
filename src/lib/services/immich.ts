@@ -11,6 +11,8 @@ export interface ImmichData {
   usageBytes?: number;
   usageByUser?: Array<{ userName: string; usage: number; photos: number; videos: number }>;
   activeJobs?: Array<{ name: string; active: number; waiting: number }>;
+  // Joburi terminate în ultimele 30s — vezi trackRecentJobs.
+  recentJobs?: Array<{ name: string; finishedAt: string }>;
   topUploaders?: Array<{
     userName: string;
     total: number;
@@ -29,6 +31,26 @@ let immichUploadsCache: {
   week: number | undefined;
   expiresAt: number;
 } | null = null;
+
+// Joburile Immich pentru câteva poze durează 2–5 secunde (miniaturi, text,
+// fețe — măsurat pe 26 sept. 2026), deci apăreau și dispăreau între două
+// reîmprospătări ale paginii. Un job care nu mai e activ rămâne afișat încă
+// 30s, ca „terminat”. Memoria e comună tuturor clienților (cererile trec prin
+// același cache), deci contează orice tab care a văzut jobul activ.
+const RECENT_JOB_MS = 30_000;
+const lastActiveAt = new Map<string, number>();
+
+function trackRecentJobs(activeNames: string[]): Array<{ name: string; finishedAt: string }> {
+  const now = Date.now();
+  for (const name of activeNames) lastActiveAt.set(name, now);
+  const recent: Array<{ name: string; finishedAt: string }> = [];
+  for (const [name, at] of lastActiveAt) {
+    if (activeNames.includes(name)) continue;
+    if (now - at > RECENT_JOB_MS) lastActiveAt.delete(name);
+    else recent.push({ name, finishedAt: new Date(at).toISOString() });
+  }
+  return recent;
+}
 
 // Cache partajat între toți clienții — vezi cachedAsync din ./shared.
 const IMMICH_TTL_MS = 800; // sub ritmul minim al clientului (1s) — vezi host.ts
@@ -190,6 +212,7 @@ async function collectImmichData(): Promise<ImmichData> {
             }))
             .filter((j) => j.active > 0 || j.waiting > 0)
         : [];
+      const recentJobs = trackRecentJobs(activeJobs.map((j) => j.name));
 
       const topUploaders = usageByUser
         .map((u) => ({
@@ -213,6 +236,7 @@ async function collectImmichData(): Promise<ImmichData> {
         usageBytes: Number(stats?.usage ?? 0),
         usageByUser,
         activeJobs,
+        recentJobs,
         topUploaders,
         jobQueueDepth,
         uploadsToday,

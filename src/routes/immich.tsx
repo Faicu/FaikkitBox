@@ -1,7 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { Images, Film, HardDrive, Activity, Upload, Trophy, ListChecks, Box } from "lucide-react";
+import {
+  Images,
+  Film,
+  HardDrive,
+  Activity,
+  Upload,
+  Trophy,
+  ListChecks,
+  Box,
+  CheckCircle2,
+} from "lucide-react";
 
 import { PageShell } from "@/components/PageShell";
 import { StatCard } from "@/components/StatCard";
@@ -15,6 +25,7 @@ import { PluginRow } from "@/components/tehnic/PluginRow";
 import { PluginDetailDrawer } from "@/components/tehnic/PluginDetailDrawer";
 import { requireAdminBeforeLoad } from "@/lib/auth/admin-route-guard";
 import { formatBytes } from "@/lib/format";
+import { relativeTime } from "@/components/tehnic/utils";
 
 export const Route = createFileRoute("/immich")({
   beforeLoad: requireAdminBeforeLoad,
@@ -79,21 +90,35 @@ function ImmichPage() {
           {/* Primul lucru din pagină, și doar când chiar există: un job în
               curs (miniaturi, fețe, transcodare) e informația care se
               schimbă; lipsa lui nu merită un rând. */}
-          {data.activeJobs && data.activeJobs.length > 0 && (
+          {((data.activeJobs?.length ?? 0) > 0 || (data.recentJobs?.length ?? 0) > 0) && (
             <section>
               <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Joburi active
+                Joburi
               </h2>
               <ul className="rounded-2xl glass-card divide-y divide-border stagger-in">
-                {data.activeJobs.map((j) => (
+                {data.activeJobs?.map((j) => (
                   <li key={j.name} className="flex items-center justify-between px-3 py-2 text-sm">
-                    <span className="flex items-center gap-2 capitalize">
+                    <span className="flex items-center gap-2">
                       {j.active > 0 && <span className="live-dot" aria-hidden />}
-                      {j.name.replace(/([A-Z])/g, " $1").trim()}
+                      {jobName(j.name)}
                     </span>
                     <span className="text-xs text-muted-foreground tabular-nums">
                       {j.active} active · {j.waiting} în așteptare
                     </span>
+                  </li>
+                ))}
+                {/* Terminate de curând: joburile pentru câteva poze durează
+                    secunde și altfel n-ar apuca să fie văzute. */}
+                {data.recentJobs?.map((j) => (
+                  <li
+                    key={j.name}
+                    className="flex items-center justify-between px-3 py-2 text-sm text-muted-foreground"
+                  >
+                    <span className="flex items-center gap-2">
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                      {jobName(j.name)}
+                    </span>
+                    <span className="text-xs">terminat {relativeTime(j.finishedAt)}</span>
                   </li>
                 ))}
               </ul>
@@ -229,4 +254,13 @@ function ImmichPage() {
       />
     </PageShell>
   );
+}
+
+// „thumbnailGeneration” → „Thumbnail generation” — numele cozilor Immich.
+function jobName(name: string): string {
+  const words = name
+    .replace(/([A-Z])/g, " $1")
+    .trim()
+    .toLowerCase();
+  return words.charAt(0).toUpperCase() + words.slice(1);
 }
