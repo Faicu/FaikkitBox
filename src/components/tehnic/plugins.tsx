@@ -8,6 +8,7 @@ import {
   PlugZap,
   DatabaseBackup,
   Upload,
+  Wrench,
   Tv,
   RefreshCw,
   Clapperboard,
@@ -160,6 +161,16 @@ export const PLUGINS: PluginInfo[] = [
     details:
       "Baza ține tot ce știe aplicația — bibliotecă, conturi, jurnal, abonamente push — și până acum nu exista niciun backup: nici script, nici cron. Un disc mort sau o migrare greșită însemna pierdere totală.\n\nCopierea se face cu VACUUM INTO, nu cu o copiere de fișier: baza rulează în mod WAL, deci un `cp` poate prinde un .db fără tranzacțiile încă necheckpoint-ate și poate da o copie coruptă. Se păstrează ultimele 14 copii.\n\nO copie se face doar dacă cea mai recentă e mai veche de 20h — altfel o zi cu cinci deploy-uri ar face cinci copii identice și ar împinge afară din rotație istoricul chiar util. Copiile stau lângă bază, pe același disc: te apără de o stricăciune logică, nu de un disc mort.",
     icon: <DatabaseBackup className="h-4 w-4 text-teal-400" />,
+    activityType: null,
+  },
+  {
+    id: "service-jobs",
+    label: "Acțiuni Servicii",
+    description: "Deblochează butoanele Restart/Update după o repornire",
+    cadence: "la pornire",
+    details:
+      "Butoanele Restart și Update (Plex, Immich, qBittorrent, Ubuntu) rulează în fundal, pe server, câte una odată. Dacă aplicația repornește în timpul unei acțiuni, acțiunea moare odată cu ea, dar în baza de date rămâne „în curs” — și ar bloca toate butoanele pe veci, cu „rulează deja”. La pornire, plugin-ul o marchează „întreruptă” și scrie asta în jurnal.",
+    icon: <Wrench className="h-4 w-4 text-orange-400" />,
     activityType: null,
   },
   {

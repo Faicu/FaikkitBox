@@ -271,6 +271,23 @@ export function getDb(): DatabaseSync {
     -- cere de acolo încolo, deci o repornire nu pierde nimic. pending: JSON cu
     -- încărcările încă în desfășurare, per utilizator Immich, scrise în jurnal
     -- abia când o verificare nu mai găsește nimic nou la el.
+    -- Acțiunile pe servicii (restart / update pentru Plex, Immich, qBittorrent,
+    -- Ubuntu) — src/lib/system/service-jobs.ts. Rulează în fundal, pe server;
+    -- pagina doar citește de aici starea și ieșirea, deci o cerere HTTP tăiată
+    -- (Cloudflare) sau un tab închis nu mai pierde nici rezultatul, nici
+    -- intrarea din jurnal.
+    CREATE TABLE IF NOT EXISTS service_jobs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      service TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      status TEXT NOT NULL,
+      started_at TEXT NOT NULL,
+      finished_at TEXT,
+      exit_code INTEGER,
+      output TEXT NOT NULL DEFAULT ''
+    );
+    CREATE INDEX IF NOT EXISTS idx_service_jobs_service ON service_jobs(service, id DESC);
+
     CREATE TABLE IF NOT EXISTS immich_upload_tracker (
       id INTEGER PRIMARY KEY CHECK (id = 1),
       checked_until TEXT NOT NULL,

@@ -1,11 +1,9 @@
-import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { PlayCircle } from "lucide-react";
 
 import { plexQuery } from "@/lib/queries";
-import { ServiceHeaderActions, CommandOutput } from "@/components/ServiceHeaderActions";
+import { ServiceHeaderActions, ServiceJobOutput } from "@/components/ServiceHeaderActions";
 import { useServiceRecovery } from "@/components/useServiceRecovery";
-import type { AgentCommand, AgentResult } from "@/lib/system/agent.functions";
 
 // Control pentru serviciul Plex (restart/actualizare) — mutat aici de pe
 // fosta pagină dedicată /plex (ștearsă, vezi planul de unificare: sesiunile/
@@ -17,9 +15,6 @@ export function PlexServiceCard() {
   const { data, isLoading } = useQuery(plexQuery);
   const status = isLoading ? "loading" : (data?.status ?? "error");
   const { recovering, startRecovery } = useServiceRecovery(data?.status);
-  const [lastCmd, setLastCmd] = useState<{ command: AgentCommand; result: AgentResult } | null>(
-    null,
-  );
 
   return (
     <div className="space-y-2">
@@ -40,15 +35,10 @@ export function PlexServiceCard() {
               </div>
             </div>
           </div>
-          <ServiceHeaderActions
-            service="plex"
-            status={status}
-            onRestart={startRecovery}
-            onCommandResult={(command, result) => setLastCmd({ command, result })}
-          />
+          <ServiceHeaderActions service="plex" status={status} onRestart={startRecovery} />
         </div>
       </div>
-      {lastCmd && <CommandOutput command={lastCmd.command} result={lastCmd.result} />}
+      <ServiceJobOutput service="plex" />
     </div>
   );
 }

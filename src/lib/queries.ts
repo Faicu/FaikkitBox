@@ -2,6 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 import { getPlex, getPlexSessions, getImmich, getQbit, getHost } from "./services.functions";
 import { getAdminStatus } from "./auth/admin.functions";
 import { getVersions } from "./system/versions.functions";
+import { getServiceJobs } from "./system/service-jobs.functions";
 import {
   getLastSpeedtest,
   getSpeedtestHistory,
@@ -124,6 +125,16 @@ export const adminStatusQuery = queryOptions({
   queryFn: () => getAdminStatus(),
   staleTime: 30_000,
   refetchOnWindowFocus: true,
+});
+
+// Acțiunile pe servicii (Restart / Update): des cât una rulează, ca ieșirea
+// să curgă live, rar în rest.
+export const serviceJobsQuery = queryOptions({
+  queryKey: ["serviceJobs"],
+  queryFn: () => getServiceJobs(),
+  refetchInterval: (q) => (q.state.data?.running ? 2_000 : 30_000),
+  staleTime: 1_000,
+  ...keepPrev,
 });
 
 export const versionsQuery = queryOptions({

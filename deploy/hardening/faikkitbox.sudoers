@@ -1,7 +1,7 @@
 # Drepturile sudo ale contului de serviciu `faikkitbox`.
 #
 # Se instalează în /etc/sudoers.d/faikkitbox (mod 0440, validat cu `visudo -c`).
-# Lista acoperă exact comenzile din src/lib/system/agent.functions.ts și
+# Lista acoperă exact comenzile din src/lib/system/service-jobs.ts și
 # src/lib/system/network-link.ts — nimic altceva. Dacă adaugi o comandă nouă în
 # pagina Tehnic, trebuie adăugată și aici, altfel eșuează cu "not allowed".
 #
@@ -11,19 +11,28 @@
 # reduce daunele accidentale, dar nu blochează un atacator decis. Scoaterea lui
 # FKB_APT de mai jos e singurul mod de a închide complet calea.
 
-Cmnd_Alias FKB_APT = /usr/bin/apt-get update, /usr/bin/apt-get -y upgrade
+# Upgrade fără întrebări: confold/confdef pentru fișierele de configurare,
+# DEBIAN_FRONTEND=noninteractive (păstrat prin env_keep) pentru debconf.
+# `:` și `=` se escapează în sudoers.
+Cmnd_Alias FKB_APT = /usr/bin/apt-get update, \
+                     /usr/bin/apt-get -y -o Dpkg\:\:Options\:\:\=--force-confdef -o Dpkg\:\:Options\:\:\=--force-confold upgrade
+Defaults!FKB_APT env_keep += "DEBIAN_FRONTEND"
 
 Cmnd_Alias FKB_SVC = /usr/bin/systemctl restart qbittorrent-nox
 
 Cmnd_Alias FKB_DNS = /usr/bin/resolvectl flush-caches
 
+# Butonul Restart de la Ubuntu — apare doar când /var/run/reboot-required
+# există, iar serverul verifică din nou înainte să-l ruleze.
+Cmnd_Alias FKB_REBOOT = /usr/bin/systemctl reboot
+
+# Update = pull (cu serviciul pornit), apoi recreare. La Plex, --force-recreate:
+# imaginea beta își instalează ultima versiune la pornirea containerului.
 Cmnd_Alias FKB_PLEX = /usr/bin/docker-compose -f /root/plex/docker-compose.yml restart, \
-                      /usr/bin/docker-compose -f /root/plex/docker-compose.yml down, \
                       /usr/bin/docker-compose -f /root/plex/docker-compose.yml pull, \
-                      /usr/bin/docker-compose -f /root/plex/docker-compose.yml up -d
+                      /usr/bin/docker-compose -f /root/plex/docker-compose.yml up -d --force-recreate
 
 Cmnd_Alias FKB_IMMICH = /usr/bin/docker-compose -f /root/immich-app/docker-compose.yml restart, \
-                        /usr/bin/docker-compose -f /root/immich-app/docker-compose.yml down, \
                         /usr/bin/docker-compose -f /root/immich-app/docker-compose.yml pull, \
                         /usr/bin/docker-compose -f /root/immich-app/docker-compose.yml up -d
 
@@ -32,4 +41,4 @@ Cmnd_Alias FKB_IMMICH = /usr/bin/docker-compose -f /root/immich-app/docker-compo
 Cmnd_Alias FKB_NET = /usr/sbin/ethtool enp2s0, \
                      /usr/bin/systemd-run --on-active=1s --unit=faikkitbox-relink --collect ethtool -r enp2s0
 
-faikkitbox ALL=(root) NOPASSWD: FKB_APT, FKB_SVC, FKB_DNS, FKB_PLEX, FKB_IMMICH, FKB_NET
+faikkitbox ALL=(root) NOPASSWD: FKB_APT, FKB_SVC, FKB_DNS, FKB_REBOOT, FKB_PLEX, FKB_IMMICH, FKB_NET

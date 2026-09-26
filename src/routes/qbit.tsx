@@ -21,12 +21,11 @@ import { PageShell } from "@/components/PageShell";
 import { StatCard } from "@/components/StatCard";
 import { Meter } from "@/components/Meter";
 import { ErrorCard } from "@/components/ErrorCard";
-import { ServiceHeaderActions, CommandOutput } from "@/components/ServiceHeaderActions";
+import { ServiceHeaderActions, ServiceJobOutput } from "@/components/ServiceHeaderActions";
 import { useServiceRecovery } from "@/components/useServiceRecovery";
 import { TehnicSubNav } from "@/components/tehnic/TehnicSubNav";
 import { qbitQuery } from "@/lib/queries";
 import { requireAdminBeforeLoad } from "@/lib/auth/admin-route-guard";
-import type { AgentCommand, AgentResult } from "@/lib/system/agent.functions";
 import { formatBytes, formatSpeed, formatEta } from "@/lib/format";
 import { qbitAction } from "@/lib/services.functions";
 
@@ -70,9 +69,6 @@ function QbitPage() {
   const action = useServerFn(qbitAction);
   const [openList, setOpenList] = useState<"downloading" | "seeding" | "paused" | null>(null);
   const [torrentSearch, setTorrentSearch] = useState("");
-  const [lastCmd, setLastCmd] = useState<{ command: AgentCommand; result: AgentResult } | null>(
-    null,
-  );
   const mutation = useMutation({
     mutationFn: (vars: { hashes: string[] | "all"; action: "pause" | "resume" | "delete" }) =>
       action({ data: vars }),
@@ -113,18 +109,11 @@ function QbitPage() {
           ? `v${data.version} · ${data.counts.total} torrente`
           : "Client torrent"
       }
-      right={
-        <ServiceHeaderActions
-          service="qbit"
-          status={status}
-          onRestart={startRecovery}
-          onCommandResult={(command, result) => setLastCmd({ command, result })}
-        />
-      }
+      right={<ServiceHeaderActions service="qbit" status={status} onRestart={startRecovery} />}
     >
       <TehnicSubNav />
 
-      {lastCmd && <CommandOutput command={lastCmd.command} result={lastCmd.result} />}
+      <ServiceJobOutput service="qbit" />
 
       {isLoading && (
         <div className="space-y-4">

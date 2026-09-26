@@ -63,7 +63,7 @@ const GITHUB_REPO = process.env.GITHUB_REPO ?? "Faicu/FaikkitBox";
 // forma "--output=/root/.ssh/authorized_keys" scrie liniștit în calea aia.
 // Serviciul rulează ca root, deci era o scriere arbitrară de fișier ca root,
 // pornind de la o sesiune de admin — exact genul de acces pe care restul
-// aplicației îl evită cu grijă (vezi lista albă din runAgentCommand, unde
+// aplicației îl evită cu grijă (vezi jobSteps din system/service-jobs.ts, unde
 // argumentele nu vin niciodată de la client).
 //
 // Verificat pe repo-ul ăsta: `git show --numstat --format= --output=/tmp/x`

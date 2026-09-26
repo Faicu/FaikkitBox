@@ -1,7 +1,5 @@
-import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
+import { useQuery } from "@tanstack/react-query";
 import {
   Cpu,
   MemoryStick,
@@ -10,11 +8,9 @@ import {
   Terminal,
   Boxes,
   HardDriveDownload,
-  PackageCheck,
   Bell,
   BellOff,
 } from "lucide-react";
-import { toast } from "sonner";
 import { usePushNotifications } from "@/hooks/use-push-notifications";
 
 import { PageShell } from "@/components/PageShell";
@@ -22,10 +18,8 @@ import { ServicePill } from "@/components/ServicePill";
 import { Meter } from "@/components/Meter";
 import { StatCard } from "@/components/StatCard";
 import { ErrorCard } from "@/components/ErrorCard";
-import { CommandOutput } from "@/components/ServiceHeaderActions";
+import { ServiceHeaderActions, ServiceJobOutput } from "@/components/ServiceHeaderActions";
 import { TehnicSubNav } from "@/components/tehnic/TehnicSubNav";
-import { logAgentActivity, runAgentCommand } from "@/lib/system/agent.functions";
-import type { AgentCommand, AgentResult } from "@/lib/system/agent.functions";
 import { hostQuery } from "@/lib/queries";
 import { requireAdminBeforeLoad } from "@/lib/auth/admin-route-guard";
 import { RefreshRateCard } from "@/components/sistem/RefreshRateCard";
@@ -47,34 +41,6 @@ function HostPage() {
   const liveUptime = useLiveCounter(data?.uptimeSec);
   const push = usePushNotifications();
 
-  const runCmd = useServerFn(runAgentCommand);
-  const logActivity = useServerFn(logAgentActivity);
-  const [lastCmd, setLastCmd] = useState<{ cmd: AgentCommand; result: AgentResult } | null>(null);
-
-  const upgrade = useMutation({
-    mutationFn: async () => {
-      const cmd: AgentCommand = "apt_full_upgrade";
-      const result = await runCmd({ data: { cmd } });
-      await logActivity({ data: { cmd, ok: result.ok } });
-      return { cmd, result };
-    },
-    onSuccess: (data) => setLastCmd(data),
-    onError: (err) => {
-      toast.error("Eroare la actualizare");
-      console.error(err);
-    },
-  });
-
-  function handleUpgrade() {
-    if (
-      !confirm(
-        "Actualizezi complet Ubuntu?\n\napt-get update + apt-get upgrade -y\n\nPoate dura câteva minute.",
-      )
-    )
-      return;
-    upgrade.mutate();
-  }
-
   return (
     <PageShell
       title="Sistem"
@@ -84,32 +50,28 @@ function HostPage() {
           : "Metrici sistem"
       }
       right={
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleUpgrade}
-            disabled={upgrade.isPending}
-            className="flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-400 active:scale-95 transition-all disabled:opacity-50"
-          >
-            <PackageCheck className="h-3.5 w-3.5" />
-            {upgrade.isPending ? "Se actualizează…" : "Update Ubuntu"}
-          </button>
-          {data?.status === "ok" && (data.uptimeSec ?? 9999) < 600 ? (
-            <span
-              title={`Server repornit recent — uptime ${Math.round((data.uptimeSec ?? 0) / 60)} min`}
-              className="flex items-center gap-1 rounded-full bg-amber-500/15 px-2.5 py-1 text-xs font-semibold text-amber-400"
-            >
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
-              Repornit recent
-            </span>
-          ) : (
-            <ServicePill status={status} />
-          )}
-        </div>
+        <ServiceHeaderActions
+          service="ubuntu"
+          status={status}
+          statusSlot={
+            data?.status === "ok" && (data.uptimeSec ?? 9999) < 600 ? (
+              <span
+                title={`Server repornit recent — uptime ${Math.round((data.uptimeSec ?? 0) / 60)} min`}
+                className="flex items-center gap-1 rounded-full bg-amber-500/15 px-2.5 py-1 text-xs font-semibold text-amber-400"
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
+                Repornit recent
+              </span>
+            ) : (
+              <ServicePill status={status} />
+            )
+          }
+        />
       }
     >
       <TehnicSubNav />
 
-      {lastCmd && <CommandOutput command={lastCmd.cmd} result={lastCmd.result} />}
+      <ServiceJobOutput service="ubuntu" />
 
       <PushNotificationsCard push={push} />
 

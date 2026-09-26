@@ -2,12 +2,15 @@ import { createServerFn } from "@tanstack/react-start";
 import { fetchJson as sharedFetchJson } from "../services/shared";
 
 export type ServiceVersion = {
-  name: "Plex" | "Immich" | "qBittorrent";
+  name: "Plex" | "Immich" | "qBittorrent" | "Ubuntu";
   current?: string;
   latest?: string;
   changelog?: string;
   upToDate?: boolean;
   error?: string;
+  // Doar Ubuntu: câte pachete ar instala Update și dacă sistemul cere reboot.
+  pending?: number;
+  rebootRequired?: boolean;
 };
 
 function normalize(v?: string) {
@@ -67,11 +70,16 @@ async function plexVersion(): Promise<ServiceVersion> {
     v.error = `Plex curent: ${(e as Error).message}`;
   }
   try {
-    const j = (await fetchJson("https://plex.tv/api/downloads/5.json")) as {
-      computer?: { Linux?: { version?: string } };
-      nas?: { Synology?: { version?: string } };
-    };
-    v.latest = j?.computer?.Linux?.version ?? j?.nas?.Synology?.version;
+    // Canalul beta (8), cu tokenul — exact întrebarea pe care o pune
+    // containerul la pornire (cont-init.d/50-plex-update din imaginea
+    // plexinc/pms-docker:beta). Canalul public, folosit înainte, rămânea în
+    // urma versiunii instalate și nu arăta niciodată actualizările beta.
+    const res = await fetch(
+      `https://plex.tv/downloads/details/5?build=linux-x86_64&channel=8&distro=debian&X-Plex-Token=${token ?? ""}`,
+      { signal: AbortSignal.timeout(8000) },
+    );
+    const xml = await res.text();
+    v.latest = /<Release[^>]*\sversion="([^"]+)"/.exec(xml)?.[1];
   } catch (e) {
     v.error = v.error ?? `Plex ultima: ${(e as Error).message}`;
   }
@@ -110,9 +118,27 @@ async function immichVersion(): Promise<ServiceVersion> {
   return v;
 }
 
+async function ubuntuVersion(): Promise<ServiceVersion> {
+  const v: ServiceVersion = { name: "Ubuntu" };
+  try {
+    const { readUbuntuStatus } = await import("./ubuntu-status");
+    const st = await readUbuntuStatus();
+    v.pending = st.pending;
+    v.rebootRequired = st.rebootRequired;
+    v.upToDate = st.pending === 0;
+  } catch (e) {
+    v.error = `Ubuntu: ${(e as Error).message}`;
+  }
+  return v;
+}
+
 export const getVersions = createServerFn({ method: "GET" }).handler(async () => {
   const { requireAdmin } = await import("../auth/admin.server");
   await requireAdmin();
-  const [plex, immich] = await Promise.all([plexVersion(), immichVersion()]);
-  return { plex, immich, fetchedAt: new Date().toISOString() };
+  const [plex, immich, ubuntu] = await Promise.all([
+    plexVersion(),
+    immichVersion(),
+    ubuntuVersion(),
+  ]);
+  return { plex, immich, ubuntu, fetchedAt: new Date().toISOString() };
 });

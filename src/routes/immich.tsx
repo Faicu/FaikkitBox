@@ -6,7 +6,7 @@ import { Images, Film, HardDrive, Activity, Upload, Trophy, ListChecks, Box } fr
 import { PageShell } from "@/components/PageShell";
 import { StatCard } from "@/components/StatCard";
 import { ErrorCard } from "@/components/ErrorCard";
-import { ServiceHeaderActions, CommandOutput } from "@/components/ServiceHeaderActions";
+import { ServiceHeaderActions, ServiceJobOutput } from "@/components/ServiceHeaderActions";
 import { useServiceRecovery } from "@/components/useServiceRecovery";
 import { TehnicSubNav } from "@/components/tehnic/TehnicSubNav";
 import { immichQuery, immichTrackerQuery } from "@/lib/queries";
@@ -15,7 +15,6 @@ import { PluginRow } from "@/components/tehnic/PluginRow";
 import { PluginDetailDrawer } from "@/components/tehnic/PluginDetailDrawer";
 import { requireAdminBeforeLoad } from "@/lib/auth/admin-route-guard";
 import { formatBytes } from "@/lib/format";
-import type { AgentCommand, AgentResult } from "@/lib/system/agent.functions";
 
 export const Route = createFileRoute("/immich")({
   beforeLoad: requireAdminBeforeLoad,
@@ -27,9 +26,6 @@ function ImmichPage() {
   const { data, isLoading } = useQuery(immichQuery);
   const status = isLoading ? "loading" : (data?.status ?? "error");
   const { recovering, startRecovery } = useServiceRecovery(data?.status);
-  const [lastCmd, setLastCmd] = useState<{ command: AgentCommand; result: AgentResult } | null>(
-    null,
-  );
   const { data: tracker } = useQuery(immichTrackerQuery);
   const [pluginOpen, setPluginOpen] = useState(false);
   // checked_until e ISO (Date.toISOString), deci direct utilizabil.
@@ -43,16 +39,11 @@ function ImmichPage() {
           ? `Fotografii & videoclipuri · v${data.version ?? ""}`
           : "Bibliotecă foto"
       }
-      right={
-        <ServiceHeaderActions
-          service="immich"
-          status={status}
-          onRestart={startRecovery}
-          onCommandResult={(command, result) => setLastCmd({ command, result })}
-        />
-      }
+      right={<ServiceHeaderActions service="immich" status={status} onRestart={startRecovery} />}
     >
       <TehnicSubNav />
+
+      <ServiceJobOutput service="immich" />
 
       {isLoading && (
         <div className="space-y-4">
@@ -85,6 +76,30 @@ function ImmichPage() {
 
       {data?.status === "ok" && (
         <>
+          {/* Primul lucru din pagină, și doar când chiar există: un job în
+              curs (miniaturi, fețe, transcodare) e informația care se
+              schimbă; lipsa lui nu merită un rând. */}
+          {data.activeJobs && data.activeJobs.length > 0 && (
+            <section>
+              <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Joburi active
+              </h2>
+              <ul className="rounded-2xl glass-card divide-y divide-border stagger-in">
+                {data.activeJobs.map((j) => (
+                  <li key={j.name} className="flex items-center justify-between px-3 py-2 text-sm">
+                    <span className="flex items-center gap-2 capitalize">
+                      {j.active > 0 && <span className="live-dot" aria-hidden />}
+                      {j.name.replace(/([A-Z])/g, " $1").trim()}
+                    </span>
+                    <span className="text-xs text-muted-foreground tabular-nums">
+                      {j.active} active · {j.waiting} în așteptare
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
           <div className="grid grid-cols-2 gap-2">
             <StatCard
               label="Total fișiere"
@@ -189,35 +204,6 @@ function ImmichPage() {
               </ul>
             </section>
           )}
-
-          {data.activeJobs && data.activeJobs.length > 0 && (
-            <section>
-              <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Joburi active
-              </h2>
-              <ul className="rounded-2xl glass-card divide-y divide-border stagger-in">
-                {data.activeJobs.map((j) => (
-                  <li key={j.name} className="flex items-center justify-between px-3 py-2 text-sm">
-                    <span className="flex items-center gap-2 capitalize">
-                      {j.active > 0 && <span className="live-dot" aria-hidden />}
-                      {j.name.replace(/([A-Z])/g, " $1").trim()}
-                    </span>
-                    <span className="text-xs text-muted-foreground tabular-nums">
-                      {j.active} active · {j.waiting} în așteptare
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-
-          {(!data.activeJobs || data.activeJobs.length === 0) && (
-            <div className="rounded-2xl glass-card p-3 text-sm text-muted-foreground">
-              Niciun job activ în fundal.
-            </div>
-          )}
-
-          {lastCmd && <CommandOutput command={lastCmd.command} result={lastCmd.result} />}
         </>
       )}
 
