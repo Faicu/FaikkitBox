@@ -57,6 +57,8 @@ export const PUSH_TITLES: Record<ActivityType, string> = {
   // Fără push (titlu gol): rulează de mai multe ori pe zi și e doar de
   // consultat, în Tehnic — vezi metadata-report.ts.
   metadata_refresh: "",
+  // Verificarea zilnică (update-check.ts); pagina vine din options.url.
+  update_available: "🆕 Actualizare disponibilă",
 };
 
 // Pagina spre care duce apăsarea notificării — implicit per tip; se poate
@@ -77,6 +79,7 @@ export const PUSH_URLS: Record<ActivityType, string> = {
   subtitle_fix: "/biblioteca",
   account_request: "/users",
   metadata_refresh: "/tehnic",
+  update_available: "/sistem",
 };
 
 // --- Server (activity-log.ts — start/stop) ----------------------------------

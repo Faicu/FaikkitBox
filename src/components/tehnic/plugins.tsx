@@ -166,12 +166,12 @@ export const PLUGINS: PluginInfo[] = [
   {
     id: "service-jobs",
     label: "Acțiuni Servicii",
-    description: "Deblochează butoanele Restart/Update după o repornire",
-    cadence: "la pornire",
+    description: "Verifică zilnic actualizările; deblochează butoanele după o repornire",
+    cadence: "la 24h (verificat din oră în oră) · curățare la pornire",
     details:
-      "Butoanele Restart și Update (Plex, Immich, qBittorrent, Ubuntu) rulează în fundal, pe server, câte una odată. Dacă aplicația repornește în timpul unei acțiuni, acțiunea moare odată cu ea, dar în baza de date rămâne „în curs” — și ar bloca toate butoanele pe veci, cu „rulează deja”. La pornire, plugin-ul o marchează „întreruptă” și scrie asta în jurnal.",
+      "Două lucruri.\n\nO dată la 24 de ore verifică dacă există actualizări pentru Plex (canalul beta) și Immich, pachete de instalat în Ubuntu sau o cerere de repornire a sistemului — aceleași verificări ca butoanele Update. Dacă găsește ceva, scrie o intrare în jurnal (filtrul Updates) și trimite o notificare push cu tot ce e disponibil. Reamintirea e zilnică: cât timp ceva rămâne neinstalat, apare din nou a doua zi. Momentul ultimei verificări stă în baza de date, așa că deploy-urile dese nu resetează ceasul; dacă nicio verificare nu reușește (fără rețea), se reîncearcă peste o oră.\n\nLa pornire, închide acțiunile Restart/Update rămase „în curs”: dacă aplicația repornește în timpul uneia, acțiunea moare odată cu ea, dar în baza de date ar rămâne „în curs” și ar bloca toate butoanele pe veci, cu „rulează deja”. O marchează „întreruptă” și scrie asta în jurnal.",
     icon: <Wrench className="h-4 w-4 text-orange-400" />,
-    activityType: null,
+    activityType: "update_available",
   },
   {
     id: "activity-boot",

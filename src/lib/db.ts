@@ -288,6 +288,15 @@ export function getDb(): DatabaseSync {
     );
     CREATE INDEX IF NOT EXISTS idx_service_jobs_service ON service_jobs(service, id DESC);
 
+    -- Verificarea zilnică a actualizărilor (src/lib/system/update-check.ts).
+    -- Momentul ultimei verificări stă aici, nu într-un timer: aplicația
+    -- repornește de mai multe ori pe zi, iar un ceas în memorie n-ar apuca
+    -- niciodată 24 de ore.
+    CREATE TABLE IF NOT EXISTS update_check (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      checked_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS immich_upload_tracker (
       id INTEGER PRIMARY KEY CHECK (id = 1),
       checked_until TEXT NOT NULL,

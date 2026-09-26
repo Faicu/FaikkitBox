@@ -27,7 +27,8 @@ export type ActivityType =
   | "app_error"
   | "subtitle_fix"
   | "account_request"
-  | "metadata_refresh";
+  | "metadata_refresh"
+  | "update_available";
 
 export type JsonValue = string | number | boolean | null | undefined;
 
