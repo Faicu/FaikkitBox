@@ -10,6 +10,7 @@ import {
   Tag,
   Film,
   ChevronDown,
+  History,
 } from "lucide-react";
 import { Orb } from "@/components/ui/orb";
 
@@ -20,7 +21,10 @@ import {
   DrawerTitle,
   DrawerDescription,
 } from "@/components/ui/drawer";
-import { showWatchStatusQuery, wantedMoviesQuery } from "@/lib/queries";
+import { activityLogQuery, showWatchStatusQuery, wantedMoviesQuery } from "@/lib/queries";
+import type { ActivityEntry } from "@/lib/activity-log.functions";
+import { MetaRefreshDetails } from "./MetaRefreshDetails";
+import { metaItems } from "./meta-items";
 import { relativeTime, formatDateTime } from "./utils";
 import { useFlashOnChange } from "@/hooks/use-flash-on-change";
 import { nextEpisodeWhen } from "@/components/biblioteca/utils";
@@ -41,6 +45,7 @@ export function PluginDetailDrawer({
 }) {
   const { data: watch } = useQuery({ ...showWatchStatusQuery, enabled: !!plugin });
   const { data: wanted } = useQuery({ ...wantedMoviesQuery, enabled: !!plugin });
+  const { data: log } = useQuery({ ...activityLogQuery, enabled: !!plugin });
   const wantedMovies = wanted ?? [];
   const isWatcher = plugin?.id === "show-watcher";
   // Explicația pentru „fără dovadă recentă” e aceeași la toate plugin-urile
@@ -201,6 +206,13 @@ export function PluginDetailDrawer({
                   )}
                 </div>
 
+                <MetaRefreshHistory
+                  key={plugin.id}
+                  entries={(Array.isArray(log) ? log : [])
+                    .filter((e) => e.type === "metadata_refresh")
+                    .slice(0, 10)}
+                />
+
                 <div className="rounded-2xl glass-card divide-y divide-border/50 text-xs">
                   <Row
                     icon={<RefreshCw className="h-3.5 w-3.5" />}
@@ -279,6 +291,64 @@ function PluginSteps({ intro, steps }: { intro: string; steps: PluginStep[] }) {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+// Ultimele rulări ale reîmprospătării de metadate, din jurnal. Inline, nu un
+// drawer peste drawer (overlay-urile imbricate îngheață ecranul — vezi
+// commit c76ce30); câte o rulare deschisă odată, ca la PluginSteps.
+function MetaRefreshHistory({ entries }: { entries: ActivityEntry[] }) {
+  const [open, setOpen] = useState<string | null>(null);
+  return (
+    <div className="overflow-hidden rounded-2xl glass-card text-xs">
+      <div className="flex items-center gap-1.5 px-3 pt-3 pb-2 text-muted-foreground">
+        <History className="h-3.5 w-3.5" /> Istoric reîmprospătări
+      </div>
+      {entries.length === 0 ? (
+        <div className="px-3 pb-3 text-muted-foreground">
+          Nicio rulare înregistrată încă. Apare aici după următoarea reîmprospătare.
+        </div>
+      ) : (
+        <div className="divide-y divide-border/50 border-t border-border/50">
+          {entries.map((e) => {
+            const isOpen = open === e.id;
+            const n = metaItems(e).length;
+            return (
+              <div key={e.id}>
+                <button
+                  type="button"
+                  onClick={() => setOpen(isOpen ? null : e.id)}
+                  aria-expanded={isOpen}
+                  className="flex w-full items-start gap-2 px-3 py-2 text-left transition-colors hover:bg-muted/30"
+                >
+                  <span className="min-w-0 flex-1 leading-relaxed">
+                    {e.message.replace(/^Metadate: /, "")}
+                  </span>
+                  <span
+                    className="shrink-0 text-[11px] text-muted-foreground"
+                    title={formatDateTime(e.timestamp)}
+                  >
+                    {relativeTime(e.timestamp)}
+                  </span>
+                  <ChevronDown
+                    className={`mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200 ${isOpen ? "rotate-180" : ""} ${n === 0 ? "opacity-40" : ""}`}
+                  />
+                </button>
+                <div
+                  className={`grid transition-[grid-template-rows] duration-200 ease-out ${isOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}
+                >
+                  <div className="overflow-hidden">
+                    <div className="px-3 pb-2.5">
+                      <MetaRefreshDetails entry={e} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

@@ -37,6 +37,7 @@ import {
 } from "./fallback-quality";
 import { advancedWatchFrom, type EpisodeKey } from "./watch-position";
 import { getDb } from "../db";
+import { diffFields, EPISODE_FIELDS, SHOW_FIELDS, type MetaReport } from "./metadata-report";
 
 const ITEM_INTERVAL_MS = 3 * 60 * 60 * 1000; // 3 ore — cadența reală per serial
 // Câte descărcări pornim cel mult într-o rulare per serial. Un serial abia
@@ -142,8 +143,8 @@ async function writeShowMeta(
   imdbId: string | null,
   details: TmdbShowDetails | null,
   opts: { markRefreshed: boolean },
-): Promise<void> {
-  if (!details) return;
+): Promise<string[]> {
+  if (!details) return [];
   const next = details.nextEpisode;
 
   let airstamp: string | null = null;
@@ -175,6 +176,11 @@ async function writeShowMeta(
   const year = details.releaseDate ? Number(details.releaseDate.slice(0, 4)) : null;
   const genres = (details.genres ?? []).length > 0 ? JSON.stringify(details.genres) : null;
   const db = getDb();
+  // Citit înainte și după, pentru jurnalul reîmprospătării (metadata-report.ts).
+  const readShow = db.prepare(
+    `SELECT ${Object.keys(SHOW_FIELDS).join(", ")} FROM media WHERE id = ?`,
+  );
+  const before = readShow.get(showId) as Record<string, unknown> | undefined;
   db.prepare(
     `UPDATE media
         SET title = COALESCE(NULLIF(?, ''), title),
@@ -224,6 +230,9 @@ async function writeShowMeta(
             genres = COALESCE(?, genres)
       WHERE parent_id = ?`,
   ).run(details.title, details.originalTitle, details.overview ?? null, genres, showId);
+
+  const after = readShow.get(showId) as Record<string, unknown> | undefined;
+  return diffFields(before, after, SHOW_FIELDS, ["title", "original_title", "next_episode"]);
 }
 
 export interface ShowWatchOutcome {
@@ -743,6 +752,8 @@ const GENERIC_EPISODE_TITLE = /^episo(?:dul|de)\s*\d+$/i;
 export async function syncEpisodeDetails(opts: {
   parentId: number;
   all?: boolean;
+  // Câte o linie per episod schimbat, pentru jurnalul reîmprospătării.
+  onEpisodeChange?: (line: string) => void;
 }): Promise<number> {
   const db = getDb();
   const filter = opts.all
@@ -786,6 +797,9 @@ export async function syncEpisodeDetails(opts: {
     details: true,
   }).catch(() => []);
   const bySeason = new Map(schema.map((s) => [s.seasonNumber, s]));
+  const readEpisode = db.prepare(
+    `SELECT ${Object.keys(EPISODE_FIELDS).join(", ")} FROM media WHERE id = ?`,
+  );
   let changed = 0;
   for (const r of rows) {
     const season = bySeason.get(r.season);
@@ -814,7 +828,8 @@ export async function syncEpisodeDetails(opts: {
       }
     }
 
-    const res = update.run(
+    const before = readEpisode.get(r.id) as Record<string, unknown> | undefined;
+    update.run(
       title,
       found.overview ?? null,
       found.stillUrl ?? null,
@@ -822,7 +837,18 @@ export async function syncEpisodeDetails(opts: {
       season?.posterUrl ?? null,
       r.id,
     );
-    if (res.changes > 0) changed++;
+    const fields = diffFields(
+      before,
+      readEpisode.get(r.id) as Record<string, unknown>,
+      EPISODE_FIELDS,
+      ["episode_title"],
+    );
+    if (fields.length > 0) {
+      changed++;
+      opts.onEpisodeChange?.(
+        `${formatEpisodeKey({ season: r.season, episode: r.episode })}: ${fields.join(", ")}`,
+      );
+    }
   }
   return changed;
 }
@@ -857,7 +883,7 @@ export const META_INTERVAL_MS = 12 * 60 * 60 * 1000;
 // deci un serial reînnoit după ce fusese marcat încheiat nu mai arăta
 // niciodată butonul — adică fix pentru serialele NEurmărite era cel mai
 // important să fie corect.
-export async function refreshShowMetadata(): Promise<number> {
+export async function refreshShowMetadata(report?: MetaReport): Promise<number> {
   const db = getDb();
   const due = db
     .prepare(
@@ -889,14 +915,29 @@ export async function refreshShowMetadata(): Promise<number> {
       const details = await fetchShowDetails(row.tmdb_id);
       if (!details) {
         touch.run(row.id);
+        if (report) report.failed++;
         continue;
       }
-      await writeShowMeta(row.id, row.imdb_id, details, { markRefreshed: true });
+      const fields = await writeShowMeta(row.id, row.imdb_id, details, { markRefreshed: true });
       // Toate episoadele serialului, odată cu el — vezi syncEpisodeDetails.
-      await syncEpisodeDetails({ parentId: row.id, all: true });
+      const episodes: string[] = [];
+      await syncEpisodeDetails({
+        parentId: row.id,
+        all: true,
+        onEpisodeChange: (line) => episodes.push(line),
+      });
       refreshed++;
+      if (report) {
+        report.shows++;
+        if (fields.length > 0 || episodes.length > 0) {
+          const t = db.prepare("SELECT title FROM media WHERE id = ?").get(row.id) as
+            { title: string } | undefined;
+          report.changes.push({ title: t?.title ?? "", kind: "show", fields, episodes });
+        }
+      }
     } catch (e) {
       touch.run(row.id);
+      if (report) report.failed++;
       console.warn(`[show-watch] Metadate neactualizate pentru serialul ${row.id}:`, e);
     }
   }

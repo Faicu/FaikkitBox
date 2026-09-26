@@ -26,7 +26,8 @@ export type ActivityType =
   | "qbit_action"
   | "app_error"
   | "subtitle_fix"
-  | "account_request";
+  | "account_request"
+  | "metadata_refresh";
 
 export type JsonValue = string | number | boolean | null | undefined;
 

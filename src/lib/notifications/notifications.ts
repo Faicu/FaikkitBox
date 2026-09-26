@@ -54,6 +54,9 @@ export const PUSH_TITLES: Record<ActivityType, string> = {
   // push per rulare, nu per torrent.
   subtitle_fix: "💬 Corecție Subtitrare",
   account_request: "🆕 Cerere Aprobare Cont",
+  // Fără push (titlu gol): rulează de mai multe ori pe zi și e doar de
+  // consultat, în Tehnic — vezi metadata-report.ts.
+  metadata_refresh: "",
 };
 
 // Pagina spre care duce apăsarea notificării — implicit per tip; se poate
@@ -73,6 +76,7 @@ export const PUSH_URLS: Record<ActivityType, string> = {
   app_error: "/tehnic",
   subtitle_fix: "/biblioteca",
   account_request: "/users",
+  metadata_refresh: "/tehnic",
 };
 
 // --- Server (activity-log.ts — start/stop) ----------------------------------

@@ -14,6 +14,7 @@ import {
   AlertTriangle,
   Captions,
   UserPlus,
+  DatabaseZap,
 } from "lucide-react";
 
 import { activityLogQuery, recentCommitsQuery, commitsFromDbQuery } from "@/lib/queries";
@@ -21,6 +22,8 @@ import type { ActivityEntry } from "@/lib/activity-log.functions";
 import type { GitHubCommit } from "@/lib/github.functions";
 import { CommitDrawer } from "../CommitDrawer";
 import { SubtitleFixDrawer } from "../SubtitleFixDrawer";
+import { MetaRefreshDrawer } from "../MetaRefreshDetails";
+import { metaItems } from "../meta-items";
 import { relativeTime } from "../utils";
 
 type TimelineItem =
@@ -32,6 +35,7 @@ const FILTER_GROUPS: { key: string; label: string }[] = [
   { key: "server", label: "Server" },
   { key: "plex", label: "Plex" },
   { key: "torrente", label: "Torrente" },
+  { key: "metadate", label: "Metadate" },
   { key: "immich", label: "Immich" },
   { key: "updates", label: "Updates" },
   { key: "commits", label: "Commits" },
@@ -54,6 +58,7 @@ const TYPE_TO_GROUP: Record<string, string> = {
   ubuntu_update: "updates",
   app_error: "erori",
   account_request: "conturi",
+  metadata_refresh: "metadate",
 };
 
 export function ActivityLogSection() {
@@ -64,6 +69,7 @@ export function ActivityLogSection() {
   const [filter, setFilter] = useState("all");
   const [selectedCommit, setSelectedCommit] = useState<GitHubCommit | null>(null);
   const [selectedSubtitleEntry, setSelectedSubtitleEntry] = useState<ActivityEntry | null>(null);
+  const [selectedMetaEntry, setSelectedMetaEntry] = useState<ActivityEntry | null>(null);
 
   const iconMap: Record<string, React.ReactNode> = {
     server_start: <Server className="h-3.5 w-3.5 text-emerald-400" />,
@@ -80,6 +86,7 @@ export function ActivityLogSection() {
     subtitle_fix: <Captions className="h-3.5 w-3.5 text-teal-400" />,
     app_error: <AlertTriangle className="h-3.5 w-3.5 text-red-400" />,
     account_request: <UserPlus className="h-3.5 w-3.5 text-amber-400" />,
+    metadata_refresh: <DatabaseZap className="h-3.5 w-3.5 text-emerald-400" />,
   };
 
   const timeline: TimelineItem[] = [
@@ -102,9 +109,13 @@ export function ActivityLogSection() {
       ? // "Toate" exclude intenționat evenimentele de server (pornire/oprire):
         // se produc la fiecare deploy, deci ar îneca activitatea reală
         // (vizionări, torrente, conturi) în zgomot. Rămân disponibile pe
-        // tab-ul lor dedicat, "Server".
+        // tab-ul lor dedicat, "Server". La fel reîmprospătările de metadate:
+        // rulează de mai multe ori pe zi, singure — tab-ul "Metadate".
         timeline.filter(
-          (item) => item.kind === "commit" || TYPE_TO_GROUP[item.entry.type] !== "server",
+          (item) =>
+            item.kind === "commit" ||
+            (TYPE_TO_GROUP[item.entry.type] !== "server" &&
+              TYPE_TO_GROUP[item.entry.type] !== "metadate"),
         )
       : timeline.filter((item) => {
           if (item.kind === "commit") return filter === "commits";
@@ -161,13 +172,22 @@ export function ActivityLogSection() {
                 entry.type === "subtitle_fix" &&
                 Array.isArray(entry.meta?.items) &&
                 (entry.meta.items as unknown[]).length > 0;
-              const Row = hasSubtitleDetails ? "button" : "div";
+              const hasMetaDetails =
+                entry.type === "metadata_refresh" && metaItems(entry).length > 0;
+              const clickable = hasSubtitleDetails || hasMetaDetails;
+              const Row = clickable ? "button" : "div";
               return (
                 <Row
                   key={entry.id}
-                  onClick={hasSubtitleDetails ? () => setSelectedSubtitleEntry(entry) : undefined}
+                  onClick={
+                    hasSubtitleDetails
+                      ? () => setSelectedSubtitleEntry(entry)
+                      : hasMetaDetails
+                        ? () => setSelectedMetaEntry(entry)
+                        : undefined
+                  }
                   className={`w-full flex items-start gap-2.5 px-3 py-2.5 text-left ${
-                    hasSubtitleDetails ? "hover:bg-muted/40 transition-colors cursor-pointer" : ""
+                    clickable ? "hover:bg-muted/40 transition-colors cursor-pointer" : ""
                   }`}
                 >
                   <div className="mt-0.5 shrink-0">
@@ -227,6 +247,9 @@ export function ActivityLogSection() {
           entry={selectedSubtitleEntry}
           onClose={() => setSelectedSubtitleEntry(null)}
         />
+      )}
+      {selectedMetaEntry && (
+        <MetaRefreshDrawer entry={selectedMetaEntry} onClose={() => setSelectedMetaEntry(null)} />
       )}
     </>
   );

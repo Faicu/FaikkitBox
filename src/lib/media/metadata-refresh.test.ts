@@ -16,6 +16,8 @@ vi.mock("../tmdb/tmdb.functions", () => ({
 }));
 vi.mock("../tvmaze/tvmaze.functions", () => ({ getTvmazeAirstampsInternal: vi.fn() }));
 
+import { newMetaReport, buildMetaRefreshMessage } from "./metadata-report";
+
 let movies: typeof import("./movie-metadata");
 let shows: typeof import("./show-watch");
 let db: ReturnType<typeof import("../db").getDb>;
@@ -272,5 +274,109 @@ describe("refreshShowMetadata — toate detaliile", () => {
     expect(r.next_episode).toBe("S09E01");
     expect(r.title).toBe("Élite");
     expect(r.meta_refreshed_at).not.toBeNull();
+  });
+});
+
+describe("jurnalul reîmprospătării (metadata-report)", () => {
+  it("un film: titlul schimbat apare cu valorile, restul doar ca nume de câmp", async () => {
+    mutiny();
+    details.mockResolvedValue(tmdbMovie());
+    const report = newMetaReport();
+
+    await movies.refreshMovieMetadata(report);
+
+    expect(report).toMatchObject({ movies: 1, shows: 0, failed: 0 });
+    expect(report.changes).toEqual([
+      {
+        title: "Trădare la nivel înalt",
+        kind: "movie",
+        fields: ["titlu „Mutiny” → „Trădare la nivel înalt”", "descriere", "genuri", "poster"],
+        episodes: [],
+      },
+    ]);
+  });
+
+  it("aceleași valori a doua oară: reîmprospătat, dar „nimic nou”", async () => {
+    mutiny();
+    details.mockResolvedValue(tmdbMovie());
+    await movies.refreshMovieMetadata();
+    db.exec("UPDATE media SET meta_refreshed_at = NULL");
+    const report = newMetaReport();
+
+    await movies.refreshMovieMetadata(report);
+
+    expect(report).toMatchObject({ movies: 1, changes: [] });
+    expect(buildMetaRefreshMessage(report)).toBe("Metadate: 1 film · nimic nou");
+  });
+
+  it("un serial: episodul cu nume real în locul lui „Episodul 1” (Insula Iubirii, 26 sept.)", async () => {
+    const showId = Number(
+      db
+        .prepare(
+          `INSERT INTO media (media_type, title, original_title, tmdb_id, overview_ro, genres,
+                              poster_path, tv_status)
+           VALUES ('tv_show', 'Elita', 'Élite', 76669, 'Descriere RO', '["Dramă","Crimă"]', ?,
+                   'Ended')`,
+        )
+        .run(POSTER_RO).lastInsertRowid,
+    );
+    db.prepare(
+      `INSERT INTO media (media_type, parent_id, title, season, episode, episode_title, poster_path)
+       VALUES ('episode', ?, 'Elita', 10, 1, 'Episodul 1', ?)`,
+    ).run(showId, POSTER_RO);
+    details.mockResolvedValue({
+      title: "Elita",
+      originalTitle: "Élite",
+      releaseDate: null,
+      tvStatus: "Ended",
+      nextEpisode: null,
+      seasons: [],
+      overview: "Descriere RO",
+      genres: ["Dramă", "Crimă"],
+      posterUrl: POSTER_RO,
+    });
+    seasons.mockResolvedValue([
+      {
+        seasonNumber: 10,
+        posterUrl: POSTER_RO,
+        episodes: [
+          {
+            episodeNum: 1,
+            title: "Lacrimi și promisiuni",
+            overview: "Cinci cupluri ajung în Thailanda",
+            stillUrl: null,
+            airDate: "2026-09-04",
+            aired: true,
+          },
+        ],
+      },
+    ]);
+    const report = newMetaReport();
+
+    await shows.refreshShowMetadata(report);
+
+    expect(report.shows).toBe(1);
+    expect(report.changes).toEqual([
+      {
+        title: "Elita",
+        kind: "show",
+        fields: [],
+        episodes: ["S10E01: nume „Episodul 1” → „Lacrimi și promisiuni”, descriere, dată difuzare"],
+      },
+    ]);
+  });
+
+  it("mesajul: numărători în română, cu „de” de la 20 în sus", () => {
+    expect(
+      buildMetaRefreshMessage({
+        shows: 2,
+        movies: 58,
+        failed: 1,
+        changes: [
+          { title: "A", kind: "show", fields: [], episodes: ["x", "y", "z"] },
+          { title: "B", kind: "movie", fields: ["poster"], episodes: [] },
+        ],
+      }),
+    ).toBe("Metadate: 2 seriale, 58 de filme · schimbări la 2 titluri (3 episoade) · 1 eșuat");
   });
 });

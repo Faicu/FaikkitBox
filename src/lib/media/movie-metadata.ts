@@ -18,8 +18,9 @@
 
 import { getDb } from "../db";
 import { META_INTERVAL_MS } from "./show-watch";
+import { diffFields, MOVIE_FIELDS, type MetaReport } from "./metadata-report";
 
-export async function refreshMovieMetadata(): Promise<number> {
+export async function refreshMovieMetadata(report?: MetaReport): Promise<number> {
   const db = getDb();
   const due = db
     .prepare(
@@ -56,6 +57,10 @@ export async function refreshMovieMetadata(): Promise<number> {
       WHERE id = ?`,
   );
 
+  const readMovie = db.prepare(
+    `SELECT ${Object.keys(MOVIE_FIELDS).join(", ")} FROM media WHERE id = ?`,
+  );
+
   const { getTmdbDetailsInternal } = await import("../tmdb/tmdb.functions");
   let refreshed = 0;
   for (const [tmdbId, ids] of byTmdb) {
@@ -64,10 +69,14 @@ export async function refreshMovieMetadata(): Promise<number> {
     const details = await getTmdbDetailsInternal(tmdbId, "movie").catch(() => null);
     if (!details?.title) {
       for (const id of ids) touch.run(id);
+      if (report) report.failed++;
       continue;
     }
     const year = details.releaseDate ? Number(details.releaseDate.slice(0, 4)) : null;
     const genres = (details.genres ?? []).length > 0 ? JSON.stringify(details.genres) : null;
+    // Versiunile aceluiași film primesc aceleași valori — jurnalul compară
+    // doar primul rând, ca filmul să apară o dată, nu o dată per versiune.
+    const before = readMovie.get(ids[0]) as Record<string, unknown> | undefined;
     for (const id of ids) {
       update.run(
         details.title,
@@ -82,6 +91,19 @@ export async function refreshMovieMetadata(): Promise<number> {
       );
     }
     refreshed++;
+    if (report) {
+      report.movies++;
+      const after = readMovie.get(ids[0]) as Record<string, unknown> | undefined;
+      const fields = diffFields(before, after, MOVIE_FIELDS, ["title", "original_title"]);
+      if (fields.length > 0) {
+        report.changes.push({
+          title: String(after?.title ?? ""),
+          kind: "movie",
+          fields,
+          episodes: [],
+        });
+      }
+    }
   }
   if (refreshed > 0)
     console.log(`[movie-metadata] Metadate reîmprospătate pentru ${refreshed} filme`);

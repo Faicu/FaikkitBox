@@ -34,11 +34,16 @@ async function run(): Promise<void> {
     // (vezi refreshShowMetadata) — nu doar pentru cele urmărite, fiindcă
     // tv_status decide dacă vezi butonul de urmărire, deci trebuie corect mai
     // ales acolo unde încă n-ai pornit-o.
-    await refreshShowMetadata();
+    // Seriale și filme adună în același raport: o rulare = o intrare în
+    // jurnal (vezi metadata-report.ts), scrisă doar dacă a fost ceva scadent.
+    const { newMetaReport, logMetaReport } = await import("../../src/lib/media/metadata-report");
+    const report = newMetaReport();
+    await refreshShowMetadata(report);
     // La fel pentru filme: titlu, an, descriere, genuri, poster (vezi
     // movie-metadata.ts) — filmele n-aveau deloc reîmprospătare.
     const { refreshMovieMetadata } = await import("../../src/lib/media/movie-metadata");
-    await refreshMovieMetadata();
+    await refreshMovieMetadata(report);
+    await logMetaReport(report);
     await checkDueShows();
     // Filmele așteptate, la coadă și în aceeași buclă, nu într-un plugin
     // separat: ambele caută pe Filelist, iar două bucle independente ar
