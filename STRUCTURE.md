@@ -46,19 +46,21 @@ convenție de folder (nu prin import explicit) — de-asta un grep normal nu le
 arată ca "folosite". La fel, `server/routes/api/*.ts` sunt rute HTTP montate
 automat pe calea din numele fișierului.
 
-| Fișier                             | Ce conține                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `plugins/activity-boot.ts`         | Pornește logarea ciclului de viață al serverului (pornire/oprire/cauză) la boot-ul Nitro. Există fiindcă blocul respectiv rula ca side-effect de modul și se executa abia la prima cerere HTTP — vezi `src/lib/activity-log.ts`.                                                                                                                                                                                                                                              |
-| `plugins/db-backup.ts`             | La +90s după pornire, apoi la 24h: copie a bazei prin `VACUUM INTO` în `data/backups/`, cu rotație la 14 fișiere. Sare peste rulare dacă ultima copie e mai nouă de 20h (altfel o zi cu multe deploy-uri ar goli rotația de istoric util).                                                                                                                                                                                                                                    |
-| `plugins/fast-shutdown.ts`         | Shutdown rapid și controlat la SIGTERM/SIGINT (fără el, Node așteaptă implicit să dreneze toate conexiunile, inclusiv SSE-ul de auto-reload).                                                                                                                                                                                                                                                                                                                                 |
-| `plugins/filelist-resume.ts`       | La +15s după pornire: reia buclele de polling ale descărcărilor neterminate, omorâte de restart. Fără el, un torrent care se termină după restart nu e observat niciodată (fără subtitrare, `completed_at`, notificare sau legare Plex).                                                                                                                                                                                                                                      |
-| `plugins/show-watcher.ts`          | Urmărirea serialelor și a filmelor așteptate, plus reîmprospătarea detaliilor (seriale cu episoadele lor, filme). Bucla rulează la 10 min (și la 30s pentru filmele tocmai adăugate), dar cadența reală per titlu — 3h la seriale, 12h la filme și la detalii — stă în DB (`watch_last_checked_at`, `meta_refreshed_at`), nu într-un timer în memorie care s-ar reseta la restart. Logica propriu-zisă: `src/lib/media/show-watch.ts`, `movie-watch.ts`, `movie-metadata.ts`. |
-| `plugins/github-commit-tracker.ts` | La pornire: sincronizează ultimele commit-uri din GitHub în DB, trimite push pentru cele noi (acoperă webhook-ul picat în timpul unui restart).                                                                                                                                                                                                                                                                                                                               |
-| `plugins/plex-link-reconciler.ts`  | La +45s, apoi la 10 min: reîncearcă legarea la Plex pentru titlurile descărcate complet în ultimele 72h care încă n-au `plex_rating_key` (plasă de siguranță pentru restarturile din fereastra de legare), plus o a doua trecere pentru filmele legate corect dar rămase fără calitate. Înaintea primei rulări declanșează o singură dată `redetectQualitiesOnce` (vezi `media.ts`), ca reconcilierul să lucreze deja pe etichete corecte.                                    |
-| `plugins/plex-session-tracker.ts`  | Urmărește sesiunile de vizionare Plex active (polling la 30s), loghează start/stop prin `activity-log.ts`.                                                                                                                                                                                                                                                                                                                                                                    |
-| `routes/api/deploy-sha.ts`         | Token de detectare restart (se schimbă la fiecare pornire a procesului) — clientul (`use-auto-reload.ts`) reîncarcă pagina când observă o valoare diferită.                                                                                                                                                                                                                                                                                                                   |
-| `routes/api/github-webhook.ts`     | Endpoint webhook GitHub (semnătură HMAC verificată) — push instant la commit nou, completează polling-ul din `github-commit-tracker.ts`.                                                                                                                                                                                                                                                                                                                                      |
-| `routes/api/plex-thumb.ts`         | Proxy autentificat pentru thumbnail-urile Plex (tokenul nu ajunge la client). Acceptă o singură formă de cale, pe listă albă, și verifică prin `isAccountLive` că sesiunea din cookie corespunde unui cont încă activ — vezi nota de securitate din fișier.                                                                                                                                                                                                                   |
+| Fișier                             | Ce conține                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `plugins/activity-boot.ts`         | Pornește logarea ciclului de viață al serverului (pornire/oprire/cauză) la boot-ul Nitro. Există fiindcă blocul respectiv rula ca side-effect de modul și se executa abia la prima cerere HTTP — vezi `src/lib/activity-log.ts`.                                                                                                                                                                                                                                                                                                                                                                        |
+| `plugins/db-backup.ts`             | La +90s după pornire, apoi la 24h: copie a bazei prin `VACUUM INTO` în `data/backups/`, cu rotație la 14 fișiere. Sare peste rulare dacă ultima copie e mai nouă de 20h (altfel o zi cu multe deploy-uri ar goli rotația de istoric util).                                                                                                                                                                                                                                                                                                                                                              |
+| `plugins/fast-shutdown.ts`         | Shutdown rapid și controlat la SIGTERM/SIGINT (fără el, Node așteaptă implicit să dreneze toate conexiunile, inclusiv SSE-ul de auto-reload).                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `plugins/filelist-resume.ts`       | La +15s după pornire: reia buclele de polling ale descărcărilor neterminate, omorâte de restart. Fără el, un torrent care se termină după restart nu e observat niciodată (fără subtitrare, `completed_at`, notificare sau legare Plex).                                                                                                                                                                                                                                                                                                                                                                |
+| `plugins/immich-upload-tracker.ts` | La +60s, apoi la 5 min: încărcările în Immich, trecute în jurnal (o încărcare = o intrare, cu push). Punctul de plecare și încărcările în curs stau în DB (`immich_upload_tracker`), deci o repornire nu pierde nimic. Logica: `src/lib/services/immich-uploads.ts`. Apare pe pagina Immich, nu în lista din Tehnic.                                                                                                                                                                                                                                                                                    |
+| `plugins/show-watcher.ts`          | Urmărirea serialelor și a filmelor așteptate, plus reîmprospătarea detaliilor (seriale cu episoadele lor, filme). Bucla rulează la 10 min (și la 30s pentru filmele tocmai adăugate), dar cadența reală per titlu — 3h la seriale, 12h la filme și la detalii — stă în DB (`watch_last_checked_at`, `meta_refreshed_at`), nu într-un timer în memorie care s-ar reseta la restart. Fiecare rulare a reîmprospătării scrie o intrare `metadata_refresh` în jurnal, cu ce s-a schimbat (`metadata-report.ts`). Logica propriu-zisă: `src/lib/media/show-watch.ts`, `movie-watch.ts`, `movie-metadata.ts`. |
+| `plugins/github-commit-tracker.ts` | La pornire: sincronizează ultimele commit-uri din GitHub în DB, trimite push pentru cele noi (acoperă webhook-ul picat în timpul unui restart).                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `plugins/plex-link-reconciler.ts`  | La +45s, apoi la 10 min: reîncearcă legarea la Plex pentru titlurile descărcate complet în ultimele 72h care încă n-au `plex_rating_key` (plasă de siguranță pentru restarturile din fereastra de legare), plus o a doua trecere pentru filmele legate corect dar rămase fără calitate. Înaintea primei rulări declanșează o singură dată `redetectQualitiesOnce` (vezi `media.ts`), ca reconcilierul să lucreze deja pe etichete corecte.                                                                                                                                                              |
+| `plugins/plex-session-tracker.ts`  | Urmărește sesiunile de vizionare Plex active (polling la 30s), loghează start/stop prin `activity-log.ts`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `plugins/service-jobs.ts`          | La pornire: închide acțiunile Restart/Update rămase „în curs” de la procesul anterior (altfel ar bloca butoanele). Din oră în oră: verificarea actualizărilor, efectivă o dată la 24h (ceasul în DB, `update_check`) — jurnal + push cât timp ceva rămâne neinstalat. Logica: `src/lib/system/service-jobs.ts`, `update-check.ts`.                                                                                                                                                                                                                                                                      |
+| `routes/api/deploy-sha.ts`         | Token de detectare restart (se schimbă la fiecare pornire a procesului) — clientul (`use-auto-reload.ts`) reîncarcă pagina când observă o valoare diferită.                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `routes/api/github-webhook.ts`     | Endpoint webhook GitHub (semnătură HMAC verificată) — push instant la commit nou, completează polling-ul din `github-commit-tracker.ts`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `routes/api/plex-thumb.ts`         | Proxy autentificat pentru thumbnail-urile Plex (tokenul nu ajunge la client). Acceptă o singură formă de cale, pe listă albă, și verifică prin `isAccountLive` că sesiunea din cookie corespunde unui cont încă activ — vezi nota de securitate din fișier.                                                                                                                                                                                                                                                                                                                                             |
 
 **Notă:** patru dintre plugin-uri (`activity-boot`, `filelist-resume`,
 `plex-link-reconciler`, `show-watcher`) există pentru că munca de la pornirea serverului
@@ -148,7 +150,7 @@ transversale, fără un singur domeniu clar.
 | `plex-refresh.ts`           | SINGURUL loc care ar trebui să declanșeze un rescan de bibliotecă Plex, după orice modificare pe disk.                                                                                                                                                                                                                                                         | `filelist/download.ts`, `filelist/log.ts`, `services/qbittorrent.ts`.                           |
 | `wizard-check.functions.ts` | `checkTitleForWizard` — verificarea completă a unui titlu într-o SINGURĂ cerere (TMDB + Plex + Filelist + `media` + TVmaze, agregate pe server). Înainte, ecranul de verificare făcea zece dus-întors de pe telefon, în trei valuri; munca în sine durează ~1s, costul erau rundele × latența mobilă. Stă la rădăcină fiindcă e transversal prin construcție.  | `wizard/use-wizard-data.ts`.                                                                    |
 | `github.functions.ts`       | Server functions GitHub — listă commit-uri, push manual din Tehnic (`pushToGitHub`), commit-uri locale nepublicate.                                                                                                                                                                                                                                            | `tehnic/sections/CommitStatsSection.tsx`.                                                       |
-| `format.ts`                 | Formatări reutilizate — bytes, viteză, durată, ETA.                                                                                                                                                                                                                                                                                                            | Aproape toate rutele/componentele cu date numerice.                                             |
+| `format.ts`                 | Formatări reutilizate — bytes, viteză, durată, ETA, numărători în română (`pluralRo`: „58 de filme”).                                                                                                                                                                                                                                                          | Aproape toate rutele/componentele cu date numerice.                                             |
 | `utils.ts`                  | `cn()` — helper Tailwind pentru merge de clase (clsx + tailwind-merge).                                                                                                                                                                                                                                                                                        | Toate componentele `ui/*` + majoritatea componentelor cu `className` condiționat.               |
 | `filelist.functions.ts`     | Barrel — reexportă din `filelist/*` (vezi mai jos).                                                                                                                                                                                                                                                                                                            | Componente client (nu pot importa direct din `filelist/download.ts`, care are cod server-only). |
 | `services.functions.ts`     | Barrel — reexportă din `services/*`.                                                                                                                                                                                                                                                                                                                           | Componente client.                                                                              |
@@ -190,6 +192,7 @@ transversale, fără un singur domeniu clar.
 | `show-watch.ts`                                                                | Urmărirea serialelor — descărcarea automată a episoadelor noi. Declarativă, nu diferențială: TMDB spune ce s-a difuzat (inclusiv episodul lansat azi), `media WHERE parent_id = ?` spune ce avem, diferența e ce se descarcă. Idempotentă, deci se auto-repară după restart și nu poate descărca de două ori. Starea stă în coloanele `auto_download*` / `watch_*` pe rândul `tv_show` din `media`, nu într-o tabelă paralelă — vezi comentariul din fișier pentru ce a mers prost la prima încercare (`pinned_*`, eliminată în v14). După descărcări, poziția de start avansează (`watch-position.ts`); calitatea de rezervă după `fallback-quality.ts`. Tot aici: `refreshShowMetadata` (detaliile serialului + next_episode + airstamp TVmaze) și `syncEpisodeDetails` (nume, descriere, cadru, posterul sezonului — la descărcare și la 12h). | `server/plugins/show-watcher.ts`, `media.functions.ts`, `media.ts`, `filelist/download.ts`.            |
 | `movie-watch.ts`                                                               | Urmărirea filmelor — același principiu, modul separat și mult mai mic (un film e o singură întrebare, „a apărut?"). Două diferențe intenționate: urmărirea unui film se stinge singură la prima descărcare reușită, iar un film urmărit nu e un film deținut — rândul lui din `media` n-are `torrent_hash` și n-are `plex_rating_key`, ceea ce îl face automat invizibil în Bibliotecă, în reconcilierea Plex și în reluarea descărcărilor, fără nicio modificare acolo. Cadență 12h, nu 3h. Calitatea de rezervă, ca la seriale.                                                                                                                                                                                                                                                                                                                 | `server/plugins/show-watcher.ts`, `media.functions.ts`.                                                |
 | `movie-metadata.ts`                                                            | `refreshMovieMetadata` — detaliile filmelor (titlu, original, an, descriere, genuri, poster) cerute în română la 12h, cu engleza ca rezervă; un câmp gol la TMDB nu șterge ce avem. Perechea pentru filme a lui `refreshShowMetadata`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | `server/plugins/show-watcher.ts`.                                                                      |
+| `metadata-report.ts`                                                           | Jurnalul reîmprospătării metadatelor: raportul unei rulări (ce titluri/episoade s-au schimbat, comparat valoare cu valoare, înainte și după), mesajul și intrarea `metadata_refresh`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | `show-watch.ts`, `movie-metadata.ts`, `server/plugins/show-watcher.ts`.                                |
 | `aired-episodes.ts`                                                            | Ce episoade consideră urmărirea ca apărute — `airedEpisodeKeys`, cu opțiunea de a include ziua de azi (TMDB dă doar data, iar `aired` al lui e strict „înainte de azi"). Funcție pură.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | `show-watch.ts`.                                                                                       |
 | `watch-position.ts`                                                            | `advancedWatchFrom` — cât avansează poziția de start după descărcările urmăririi: peste episoadele consecutive acoperite, până la ultimul adus, oprindu-se la primul gol. Funcție pură; tot aici, tipul `EpisodeKey`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | `show-watch.ts`, `aired-episodes.ts`.                                                                  |
 | `fallback-quality.ts`                                                          | Regula calității de rezervă: doar-rezervă la o verificare = se notează; se ia la o verificare de peste cel puțin 3h dacă principala tot lipsește. Funcții pure.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | `show-watch.ts`, `movie-watch.ts`.                                                                     |
@@ -226,17 +229,22 @@ transversale, fără un singur domeniu clar.
 
 ### src/lib/system/
 
-| Fișier                      | Ce conține                                                                                                                                                                                                                                     | Folosit de                                               |
-| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| `agent.functions.ts`        | Comenzi de sistem declanșate din UI (restart serviciu, actualizare) — server-only, cu whitelist strict de comenzi.                                                                                                                             | `ServiceHeaderActions.tsx`, `routes/sistem.tsx`.         |
-| `network-link.ts`           | Starea legăturii Ethernet (interfața rutei implicite, viteză negociată, maximul posibil pe ambele capete) + renegociere prin `ethtool -r`, rulat detașat fiindcă legătura cade câteva secunde. Server-only.                                    | `network-link.functions.ts`.                             |
-| `db-backup.ts`              | Backup-ul bazei — `runDbBackup` (VACUUM INTO + rotație la 14), `getBackupStatus`, `listBackups`. Server-only.                                                                                                                                  | `db-backup.functions.ts`, `server/plugins/db-backup.ts`. |
-| `db-backup.functions.ts`    | `getDbBackupStatus` / `runDbBackupNow` (admin).                                                                                                                                                                                                | `queries.ts`, `tehnic/sections/DbBackupCard.tsx`.        |
-| `network-link.functions.ts` | `getNetworkLink` / `renegotiateNetworkLink`.                                                                                                                                                                                                   | `queries.ts`, `tehnic/sections/NetworkLinkCard.tsx`.     |
-| `speedtest.ts`              | Implementarea speedtest-ului, server-only (`node:child_process`, `node:crypto`, DB). Rularea e DECUPLATĂ de cererea HTTP care o pornește — starea trăiește în modul, nu în request, ca minimizarea aplicației pe telefon să nu anuleze testul. | `speedtest.functions.ts`.                                |
-| `speedtest.functions.ts`    | Server functions subțiri peste `speedtest.ts` (pornire, stare, istoric).                                                                                                                                                                       | `queries.ts`, `tehnic/sections/SpeedtestChart.tsx`.      |
-| `versions.functions.ts`     | Verificare versiuni pachete/Ubuntu disponibile pentru actualizare.                                                                                                                                                                             | `routes/sistem.tsx`.                                     |
-| `update-signal.ts`          | Semnal simplu pentru "există update disponibil" (citit de UI).                                                                                                                                                                                 | `routes/sistem.tsx`.                                     |
+| Fișier                      | Ce conține                                                                                                                                                                                                                                                                                         | Folosit de                                                        |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `service-jobs.ts`           | Acțiunile Restart/Update pentru Plex, Immich, qBittorrent, Ubuntu — un singur mecanism: pornire imediată, rulare în fundal, stare și ieșire în `service_jobs`, jurnal scris de server, o acțiune odată. Comenzile trebuie să existe identic în `deploy/hardening/faikkitbox.sudoers`. Server-only. | `service-jobs.functions.ts`, `server/plugins/service-jobs.ts`.    |
+| `service-jobs.functions.ts` | `startServiceAction` / `getServiceJobs` (admin) + `runningFrom`.                                                                                                                                                                                                                                   | `ServiceHeaderActions.tsx`, `queries.ts`.                         |
+| `service-meta.ts`           | Tipurile și etichetele acțiunilor (`ServiceKey`, `jobLabel`, `shortVersion`) — fără importuri server, comune serverului și butoanelor.                                                                                                                                                             | `service-jobs.ts`, `update-check.ts`, `ServiceHeaderActions.tsx`. |
+| `ubuntu-status.ts`          | Pachetele de instalat (simularea exactă a `apt-get upgrade`) și cererea de repornire (`/var/run/reboot-required`). Fără sudo. Server-only.                                                                                                                                                         | `versions.ts`, `service-jobs.ts`.                                 |
+| `update-check.ts`           | Verificarea zilnică a actualizărilor (Plex, Immich, Ubuntu) — o intrare `update_available` + push cât timp ceva rămâne neinstalat.                                                                                                                                                                 | `server/plugins/service-jobs.ts`.                                 |
+| `versions.ts`               | Versiunea curentă și cea disponibilă: Plex pe canalul beta (cel instalat de container), Immich din GitHub, Ubuntu din `ubuntu-status.ts`. Un minut în cache, golit după orice acțiune pe servicii. Server-only.                                                                                    | `versions.functions.ts`, `update-check.ts`.                       |
+| `network-link.ts`           | Starea legăturii Ethernet (interfața rutei implicite, viteză negociată, maximul posibil pe ambele capete) + renegociere prin `ethtool -r`, rulat detașat fiindcă legătura cade câteva secunde. Server-only.                                                                                        | `network-link.functions.ts`.                                      |
+| `db-backup.ts`              | Backup-ul bazei — `runDbBackup` (VACUUM INTO + rotație la 14), `getBackupStatus`, `listBackups`. Server-only.                                                                                                                                                                                      | `db-backup.functions.ts`, `server/plugins/db-backup.ts`.          |
+| `db-backup.functions.ts`    | `getDbBackupStatus` / `runDbBackupNow` (admin).                                                                                                                                                                                                                                                    | `queries.ts`, `tehnic/sections/DbBackupCard.tsx`.                 |
+| `network-link.functions.ts` | `getNetworkLink` / `renegotiateNetworkLink`.                                                                                                                                                                                                                                                       | `queries.ts`, `tehnic/sections/NetworkLinkCard.tsx`.              |
+| `speedtest.ts`              | Implementarea speedtest-ului, server-only (`node:child_process`, `node:crypto`, DB). Rularea e DECUPLATĂ de cererea HTTP care o pornește — starea trăiește în modul, nu în request, ca minimizarea aplicației pe telefon să nu anuleze testul.                                                     | `speedtest.functions.ts`.                                         |
+| `speedtest.functions.ts`    | Server functions subțiri peste `speedtest.ts` (pornire, stare, istoric).                                                                                                                                                                                                                           | `queries.ts`, `tehnic/sections/SpeedtestChart.tsx`.               |
+| `versions.functions.ts`     | `getVersions` (admin) — fișierul subțire peste `versions.ts`.                                                                                                                                                                                                                                      | `queries.ts` (`versionsQuery`).                                   |
+| `update-signal.ts`          | Semnal simplu pentru "există update disponibil" (citit de UI).                                                                                                                                                                                                                                     | `routes/sistem.tsx`.                                              |
 
 ### src/lib/filelist/
 
@@ -262,21 +270,23 @@ transversale, fără un singur domeniu clar.
 
 ### src/lib/services/
 
-| Fișier                       | Ce conține                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Folosit de                                                              |
-| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `shared.ts`                  | Helpere HTTP comune (fetch cu timeout, tipuri de status partajate).                                                                                                                                                                                                                                                                                                                                                                                                               | Restul `services/*`.                                                    |
-| `plex-shared.ts`             | Tipuri + helpere partajate între modulele Plex (discover URL, calitate media, subtitrare încorporată RO). Extras din fostul `plex.ts` monolitic. Aici stau și cele trei funcții pe care se sprijină versiunile multiple ale unui film: `plexQualitiesFromItem` (TOATE calitățile unui item, nu doar `Media[0]`), `plexMediaForPath` (alege versiunea corectă după calea fișierului) și `mediaIsHdr` (HDR-ul citit din `colorTrc`/`DOVIPresent`, nu ghicit din numele fișierului). | `plex.ts`, `plex-library.ts`, `plex-browse.ts`.                         |
-| `plex.ts`                    | Status Plex principal — sesiuni active, biblioteci, istoric vizionări per user.                                                                                                                                                                                                                                                                                                                                                                                                   | `routes/index.tsx`, `plex-session-tracker.ts`.                          |
-| `plex-library.ts`            | Căutarea titlurilor/episoadelor în biblioteca Plex **după ID-ul TMDB** (`findItem`, parametru `PlexLookup`; `tmdb://` din Guid, cu `includeGuids=1`) — pentru wizard (`checkPlexHasTitleInternal`, `getPlexEpisodesInSeasonInternal`) și pentru legarea unui rând `media` de item-ul lui Plex (`findPlexMovieLink`, `findPlexEpisodeLink`, `findPlexSeasonLinks`, `versionLinkFromItem`). Biblioteca Plex e în română, deci titlul nu e un reper.                                 | `wizard-check.functions.ts`, `media.ts`.                                |
-| `plex-library-match.test.ts` | Teste pe potrivirea după ID-ul TMDB, cu un `fetch` fals care răspunde doar la rutele Plex știute.                                                                                                                                                                                                                                                                                                                                                                                 | —                                                                       |
-| `plex-browse.ts`             | Date pentru pagina Bibliotecă — listă + detalii per titlu, citite exclusiv din `media` (zero cereri Plex/TMDB live la navigare).                                                                                                                                                                                                                                                                                                                                                  | `routes/biblioteca.tsx`, `BibliotecaList.tsx`, `TitleDetailDrawer.tsx`. |
-| `qbittorrent.ts`             | Status/acțiuni qBittorrent pentru pagina `/qbit` (listă torrente, pauză/reia/șterge).                                                                                                                                                                                                                                                                                                                                                                                             | `routes/qbit.tsx`.                                                      |
-| `immich.ts`                  | Status/control serviciu Immich.                                                                                                                                                                                                                                                                                                                                                                                                                                                   | `routes/immich.tsx`.                                                    |
-| `host.ts`                    | Metrici sistem (CPU/RAM/disc/rețea, via `systeminformation`).                                                                                                                                                                                                                                                                                                                                                                                                                     | `routes/sistem.tsx`.                                                    |
-| `recent-watch-cache.ts`      | Scrierea în `recent_watch_cache`, sursa unică a widgetului „Vizionări recente". Are doi scriitori posibili pentru același rând — `plex-browse.ts` (vizionare completă din istoricul Plex) și `activity-log.ts` (progres parțial, la oprirea sesiunii) — iar logica de conflict stă aici, o singură dată: o vizionare completă câștigă mereu, indiferent de ordinea scrierilor.                                                                                                    | `plex-browse.ts`, `activity-log.ts`.                                    |
-| `recent-watch-merge.ts`      | Unirea episoadelor consecutive din „Vizionări recente", ca funcție pură. Separată de `plex-browse.ts` ca să fie testabilă fără DB/Plex.                                                                                                                                                                                                                                                                                                                                           | `plex-browse.ts`.                                                       |
-| `recent-watch-types.ts`      | Doar tipul `RecentWatch` — fișier curat, ca funcția pură și testele ei să nu tragă după ele `plex-browse.ts`.                                                                                                                                                                                                                                                                                                                                                                     | `recent-watch-merge.ts`, `plex-browse.ts`.                              |
-| `recent-watch-merge.test.ts` | Teste vitest pentru unire.                                                                                                                                                                                                                                                                                                                                                                                                                                                        | —                                                                       |
+| Fișier                        | Ce conține                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Folosit de                                                                |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `shared.ts`                   | Helpere HTTP comune (fetch cu timeout, tipuri de status partajate).                                                                                                                                                                                                                                                                                                                                                                                                               | Restul `services/*`.                                                      |
+| `plex-shared.ts`              | Tipuri + helpere partajate între modulele Plex (discover URL, calitate media, subtitrare încorporată RO). Extras din fostul `plex.ts` monolitic. Aici stau și cele trei funcții pe care se sprijină versiunile multiple ale unui film: `plexQualitiesFromItem` (TOATE calitățile unui item, nu doar `Media[0]`), `plexMediaForPath` (alege versiunea corectă după calea fișierului) și `mediaIsHdr` (HDR-ul citit din `colorTrc`/`DOVIPresent`, nu ghicit din numele fișierului). | `plex.ts`, `plex-library.ts`, `plex-browse.ts`.                           |
+| `plex.ts`                     | Status Plex principal — sesiuni active, biblioteci, istoric vizionări per user.                                                                                                                                                                                                                                                                                                                                                                                                   | `routes/index.tsx`, `plex-session-tracker.ts`.                            |
+| `plex-library.ts`             | Căutarea titlurilor/episoadelor în biblioteca Plex **după ID-ul TMDB** (`findItem`, parametru `PlexLookup`; `tmdb://` din Guid, cu `includeGuids=1`) — pentru wizard (`checkPlexHasTitleInternal`, `getPlexEpisodesInSeasonInternal`) și pentru legarea unui rând `media` de item-ul lui Plex (`findPlexMovieLink`, `findPlexEpisodeLink`, `findPlexSeasonLinks`, `versionLinkFromItem`). Biblioteca Plex e în română, deci titlul nu e un reper.                                 | `wizard-check.functions.ts`, `media.ts`.                                  |
+| `plex-library-match.test.ts`  | Teste pe potrivirea după ID-ul TMDB, cu un `fetch` fals care răspunde doar la rutele Plex știute.                                                                                                                                                                                                                                                                                                                                                                                 | —                                                                         |
+| `plex-browse.ts`              | Date pentru pagina Bibliotecă — listă + detalii per titlu, citite exclusiv din `media` (zero cereri Plex/TMDB live la navigare).                                                                                                                                                                                                                                                                                                                                                  | `routes/biblioteca.tsx`, `BibliotecaList.tsx`, `TitleDetailDrawer.tsx`.   |
+| `qbittorrent.ts`              | Status/acțiuni qBittorrent pentru pagina `/qbit` (listă torrente, pauză/reia/șterge).                                                                                                                                                                                                                                                                                                                                                                                             | `routes/qbit.tsx`.                                                        |
+| `immich.ts`                   | Statistici Immich pentru pagina `/immich` (versiune, fotografii/videoclipuri, spațiu, top încărcători, joburi active, încărcări azi/săptămâna asta).                                                                                                                                                                                                                                                                                                                              | `routes/immich.tsx`.                                                      |
+| `immich-uploads.ts`           | Încărcările în Immich trecute în jurnal: ce s-a încărcat de la ultima verificare (după momentul încărcării), cu starea în `immich_upload_tracker`; o încărcare = o intrare, Live Photos numărate o dată. Server-only.                                                                                                                                                                                                                                                             | `server/plugins/immich-upload-tracker.ts`, `immich-uploads.functions.ts`. |
+| `immich-uploads.functions.ts` | `getImmichTracker` — ultima verificare și încărcarea în curs, pentru pagina Immich.                                                                                                                                                                                                                                                                                                                                                                                               | `queries.ts` (`immichTrackerQuery`).                                      |
+| `host.ts`                     | Metrici sistem (CPU/RAM/disc/rețea, via `systeminformation`).                                                                                                                                                                                                                                                                                                                                                                                                                     | `routes/sistem.tsx`.                                                      |
+| `recent-watch-cache.ts`       | Scrierea în `recent_watch_cache`, sursa unică a widgetului „Vizionări recente". Are doi scriitori posibili pentru același rând — `plex-browse.ts` (vizionare completă din istoricul Plex) și `activity-log.ts` (progres parțial, la oprirea sesiunii) — iar logica de conflict stă aici, o singură dată: o vizionare completă câștigă mereu, indiferent de ordinea scrierilor.                                                                                                    | `plex-browse.ts`, `activity-log.ts`.                                      |
+| `recent-watch-merge.ts`       | Unirea episoadelor consecutive din „Vizionări recente", ca funcție pură. Separată de `plex-browse.ts` ca să fie testabilă fără DB/Plex.                                                                                                                                                                                                                                                                                                                                           | `plex-browse.ts`.                                                         |
+| `recent-watch-types.ts`       | Doar tipul `RecentWatch` — fișier curat, ca funcția pură și testele ei să nu tragă după ele `plex-browse.ts`.                                                                                                                                                                                                                                                                                                                                                                     | `recent-watch-merge.ts`, `plex-browse.ts`.                                |
+| `recent-watch-merge.test.ts`  | Teste vitest pentru unire.                                                                                                                                                                                                                                                                                                                                                                                                                                                        | —                                                                         |
 
 ### src/lib/tvmaze/
 
@@ -350,25 +360,27 @@ are legătură cu fostul sistem de fixare/urmărire (eliminat complet).
 
 ### src/components/tehnic/
 
-| Fișier                                  | Ce conține                                                                                                                                                                                                                                                                                                      |
-| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `TehnicSubNav.tsx`                      | Navigare între sub-secțiunile paginii Tehnic.                                                                                                                                                                                                                                                                   |
-| `CommitDrawer.tsx`                      | Drawer detalii commit (local sau GitHub).                                                                                                                                                                                                                                                                       |
-| `SubtitleFixDrawer.tsx`                 | Drawer rezultat corectare subtitrare.                                                                                                                                                                                                                                                                           |
-| `plugins.tsx`                           | Catalogul plugin-urilor de fundal — sursă unică pentru lista din Tehnic și pentru drawer-ul de detalii. Un rând per FIȘIER din `server/plugins/`, nu per funcționalitate: o intrare separată pentru un pas dintr-un tic (completarea numelor de episoade, de ex.) ar putea arăta „activ" deși plugin-ul e mort. |
-| `PluginDetailDrawer.tsx`                | Drawer per plugin — cadență, ultima rulare, de ce există (aproape toate au apărut ca reacție la un bug concret).                                                                                                                                                                                                |
-| `UserDetailDrawer.tsx`                  | Drawer detalii cont — contact, Plex, descărcări, istoric autentificări.                                                                                                                                                                                                                                         |
-| `Metric.tsx`, `StatCell.tsx`            | Piese mici de afișare valoare+etichetă.                                                                                                                                                                                                                                                                         |
-| `utils.ts`                              | Formatare dată/oră completă RO, `relativeTime`.                                                                                                                                                                                                                                                                 |
-| `sections/ActivityLogSection.tsx`       | Timeline activitate + commit-uri, cu filtre pe categorie.                                                                                                                                                                                                                                                       |
-| `sections/CommitStatsSection.tsx`       | Statistici commit-uri, listă commit-uri locale nepublicate, buton push manual.                                                                                                                                                                                                                                  |
-| `sections/ErrorLogSection.tsx`          | Listă erori capturate automat.                                                                                                                                                                                                                                                                                  |
-| `sections/PlexServiceCard.tsx`          | Control serviciu Plex (restart/actualizare).                                                                                                                                                                                                                                                                    |
-| `sections/PluginStatusSection.tsx`      | Status plugin-uri de fundal active (ultima rulare), clicabile → `PluginDetailDrawer`.                                                                                                                                                                                                                           |
-| `sections/PushSubscriptionsSection.tsx` | Abonamentele push înregistrate — dispozitiv identificat, dată, ștergere.                                                                                                                                                                                                                                        |
-| `sections/SpeedtestChart.tsx`           | Grafic istoric speedtest.                                                                                                                                                                                                                                                                                       |
-| `sections/DbBackupCard.tsx`             | Starea backup-urilor bazei (vechimea ultimei copii, număr, spațiu) + buton de backup manual. Verde/chihlimbariu după 36h de la ultima copie.                                                                                                                                                                    |
-| `sections/NetworkLinkCard.tsx`          | În drawer-ul Speedtest: viteza negociată a legăturii Ethernet (badge verde/chihlimbariu) + buton de renegociere. Rezolvă cazul recurent în care atingerea fizică a cablului lasă legătura pe 100 Mb/s.                                                                                                          |
+| Fișier                                  | Ce conține                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TehnicSubNav.tsx`                      | Navigare între sub-secțiunile paginii Tehnic.                                                                                                                                                                                                                                                                                                                                                                                            |
+| `CommitDrawer.tsx`                      | Drawer detalii commit (local sau GitHub).                                                                                                                                                                                                                                                                                                                                                                                                |
+| `SubtitleFixDrawer.tsx`                 | Drawer rezultat corectare subtitrare.                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `plugins.tsx`                           | Catalogul plugin-urilor de fundal — sursă unică pentru lista din Tehnic și pentru drawer-ul de detalii (`IMMICH_UPLOAD_PLUGIN` stă pe pagina Immich). Plugin-urile cu mai multe părți distincte le au în `steps`, afișate pliat. Un rând per FIȘIER din `server/plugins/`, nu per funcționalitate: o intrare separată pentru un pas dintr-un tic (completarea numelor de episoade, de ex.) ar putea arăta „activ" deși plugin-ul e mort. |
+| `PluginDetailDrawer.tsx`                | Drawer per plugin — cadență, ultima rulare, de ce există (aproape toate au apărut ca reacție la un bug concret); la show-watcher și istoricul reîmprospătărilor, la Immich ultimele încărcări.                                                                                                                                                                                                                                           |
+| `PluginRow.tsx`                         | Rândul unui plugin — comun listei din Tehnic și paginii Immich.                                                                                                                                                                                                                                                                                                                                                                          |
+| `MetaRefreshDetails.tsx`                | Detaliile unei intrări `metadata_refresh` (inline și ca drawer din jurnal). `meta-items.ts` — forma lui `meta.items`.                                                                                                                                                                                                                                                                                                                    |
+| `UserDetailDrawer.tsx`                  | Drawer detalii cont — contact, Plex, descărcări, istoric autentificări.                                                                                                                                                                                                                                                                                                                                                                  |
+| `Metric.tsx`, `StatCell.tsx`            | Piese mici de afișare valoare+etichetă.                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `utils.ts`                              | Formatare dată/oră completă RO, `relativeTime`.                                                                                                                                                                                                                                                                                                                                                                                          |
+| `sections/ActivityLogSection.tsx`       | Timeline activitate + commit-uri, cu filtre pe categorie.                                                                                                                                                                                                                                                                                                                                                                                |
+| `sections/CommitStatsSection.tsx`       | Statistici commit-uri, listă commit-uri locale nepublicate, buton push manual.                                                                                                                                                                                                                                                                                                                                                           |
+| `sections/ErrorLogSection.tsx`          | Listă erori capturate automat.                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `sections/PlexServiceCard.tsx`          | Control serviciu Plex (Restart/Update, prin `ServiceHeaderActions`).                                                                                                                                                                                                                                                                                                                                                                     |
+| `sections/PluginStatusSection.tsx`      | Status plugin-uri de fundal active (ultima rulare), clicabile → `PluginDetailDrawer`.                                                                                                                                                                                                                                                                                                                                                    |
+| `sections/PushSubscriptionsSection.tsx` | Abonamentele push înregistrate — dispozitiv identificat, dată, ștergere.                                                                                                                                                                                                                                                                                                                                                                 |
+| `sections/SpeedtestChart.tsx`           | Grafic istoric speedtest.                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `sections/DbBackupCard.tsx`             | Starea backup-urilor bazei (vechimea ultimei copii, număr, spațiu) + buton de backup manual. Verde/chihlimbariu după 36h de la ultima copie.                                                                                                                                                                                                                                                                                             |
+| `sections/NetworkLinkCard.tsx`          | În drawer-ul Speedtest: viteza negociată a legăturii Ethernet (badge verde/chihlimbariu) + buton de renegociere. Rezolvă cazul recurent în care atingerea fizică a cablului lasă legătura pe 100 Mb/s.                                                                                                                                                                                                                                   |
 
 ### src/components/sistem/
 
@@ -402,17 +414,17 @@ fost eliminate 2026-08-16, nefolosite niciodată.
 
 ### Rădăcină src/components/
 
-| Fișier                     | Ce conține                                                                                   |
-| -------------------------- | -------------------------------------------------------------------------------------------- |
-| `AppHeader.tsx`            | Header-ul global (logo, nav desktop).                                                        |
-| `BottomNav.tsx`            | Navigare mobil, jos.                                                                         |
-| `PageShell.tsx`            | Wrapper de layout comun per pagină.                                                          |
-| `ServiceHeaderActions.tsx` | Butoane acțiune (restart/update) + `ServicePill`/`CommandOutput` pentru carduri de serviciu. |
-| `ServicePill.tsx`          | Badge status serviciu (activ/oprit/eroare).                                                  |
-| `StatCard.tsx`             | Card metrică cu micro-flash la schimbare valoare.                                            |
-| `Meter.tsx`                | Bară/gauge simplă pentru procente (CPU/RAM/disc).                                            |
-| `ErrorCard.tsx`            | Card afișare eroare capturată.                                                               |
-| `useServiceRecovery.ts`    | Hook — detectează revenirea unui serviciu după restart, declanșează refetch.                 |
+| Fișier                     | Ce conține                                                                                                                            |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `AppHeader.tsx`            | Header-ul global (logo, nav desktop).                                                                                                 |
+| `BottomNav.tsx`            | Navigare mobil, jos.                                                                                                                  |
+| `PageShell.tsx`            | Wrapper de layout comun per pagină.                                                                                                   |
+| `ServiceHeaderActions.tsx` | Butoanele Restart/Update ale unui serviciu (Plex, Immich, qBittorrent, Ubuntu) + `ServiceJobOutput` — ieșirea live a ultimei acțiuni. |
+| `ServicePill.tsx`          | Badge status serviciu (activ/oprit/eroare).                                                                                           |
+| `StatCard.tsx`             | Card metrică cu micro-flash la schimbare valoare.                                                                                     |
+| `Meter.tsx`                | Bară/gauge simplă pentru procente (CPU/RAM/disc).                                                                                     |
+| `ErrorCard.tsx`            | Card afișare eroare capturată.                                                                                                        |
+| `useServiceRecovery.ts`    | Hook — detectează revenirea unui serviciu după restart, declanșează refetch.                                                          |
 
 ---
 
@@ -438,94 +450,97 @@ fost eliminate 2026-08-16, nefolosite niciodată.
 
 ## Analiză cantitativă
 
-Regenerată cu `node scripts/structure-stats.mjs --write` pe 2026-09-25 (linii,
+Regenerată cu `node scripts/structure-stats.mjs --write` pe 2026-09-26 (linii,
 funcții numite, fan-in rezolvat prin importurile `@/` și relative, inclusiv
 `import()` dinamic). Tabelul e integral generat — nu are rânduri actualizate
 manual, deci nu poate fi parțial vechi.
 
-**Total: 205 fișiere, ~33 650 linii, ~707 funcții**
+**Total: 223 fișiere, ~35 802 linii, ~762 funcții**
 
 (numărătoare aproximativă — funcții numite, `const x = (...) =>` și
 `createServerFn`, fără metode de clasă sau funcții anonime inline)
 
 ### Pe zonă
 
-| Zonă                                | Fișiere | Linii |
-| ----------------------------------- | ------: | ----: |
-| `src/routes/` (pagini)              |      11 | 2 908 |
-| `src/lib/` (rădăcină, transversale) |      14 | 3 123 |
-| `src/lib/auth/`                     |       9 |   908 |
-| `src/lib/tmdb/`                     |       9 | 1 372 |
-| `src/lib/media/`                    |      23 | 5 197 |
-| `src/lib/notifications/`            |       3 |   418 |
-| `src/lib/errors/`                   |       6 |   473 |
-| `src/lib/system/`                   |       9 | 1 050 |
-| `src/lib/filelist/`                 |      17 | 3 408 |
-| `src/lib/services/`                 |      14 | 4 051 |
-| `src/lib/tvmaze/`                   |       1 |    46 |
-| `src/components/` (toate)           |      70 | 9 486 |
-| `src/hooks/`                        |       4 |   289 |
-| `server/plugins/`                   |       8 |   359 |
-| `server/routes/api/`                |       3 |   191 |
-| altele                              |       4 |   371 |
+| Zonă                                | Fișiere |  Linii |
+| ----------------------------------- | ------: | -----: |
+| `src/routes/` (pagini)              |      11 |  2 873 |
+| `src/lib/` (rădăcină, transversale) |      15 |  3 153 |
+| `src/lib/auth/`                     |       9 |    908 |
+| `src/lib/tmdb/`                     |       9 |  1 372 |
+| `src/lib/media/`                    |      24 |  5 534 |
+| `src/lib/notifications/`            |       3 |    425 |
+| `src/lib/errors/`                   |       6 |    473 |
+| `src/lib/system/`                   |      17 |  1 825 |
+| `src/lib/filelist/`                 |      17 |  3 412 |
+| `src/lib/services/`                 |      17 |  4 388 |
+| `src/lib/tvmaze/`                   |       1 |     46 |
+| `src/components/` (toate)           |      73 | 10 108 |
+| `src/hooks/`                        |       4 |    289 |
+| `server/plugins/`                   |      10 |    434 |
+| `server/routes/api/`                |       3 |    191 |
+| altele                              |       4 |    371 |
 
 ### Fișiere-hub (fan-in mare)
 
 | Fișier                               | Fan-in | Linii |
 | ------------------------------------ | -----: | ----: |
 | `src/start.ts`                       |     52 |    26 |
-| `src/components/ui/button.tsx`       |     33 |    31 |
-| `src/server.ts`                      |     32 |    65 |
-| `src/lib/db.ts`                      |     31 |   971 |
-| `src/lib/auth/admin.server.ts`       |     26 |   111 |
-| `src/components/tehnic/utils.ts`     |     22 |    28 |
-| `src/components/ui/sonner.tsx`       |     22 |    25 |
-| `src/lib/filelist/log.ts`            |     22 |   151 |
-| `src/lib/utils.ts`                   |     22 |     7 |
-| `src/components/biblioteca/utils.ts` |     21 |   122 |
+| `src/lib/db.ts`                      |     37 |  1025 |
+| `src/components/ui/button.tsx`       |     34 |    31 |
+| `src/server.ts`                      |     34 |    65 |
+| `src/lib/auth/admin.server.ts`       |     27 |   111 |
+| `src/components/tehnic/utils.ts`     |     24 |    28 |
+| `src/lib/filelist/log.ts`            |     24 |   151 |
+| `src/lib/utils.ts`                   |     24 |     7 |
+| `src/components/biblioteca/utils.ts` |     23 |   131 |
+| `src/components/ui/sonner.tsx`       |     21 |    25 |
 | `src/lib/tmdb/tmdb.functions.ts`     |     21 |   533 |
-| `src/lib/queries.ts`                 |     20 |   265 |
+| `src/lib/queries.ts`                 |     20 |   287 |
 
-### Tabel complet, toate cele 205 de fișiere
+### Tabel complet, toate cele 223 de fișiere
 
 | Fișier                                                        | Linii | Funcții | Fan-in |
 | ------------------------------------------------------------- | ----: | ------: | -----: |
+| `src/lib/db.ts`                                               |  1025 |       4 |     37 |
+| `src/components/biblioteca/TitleDetailDrawer.tsx`             |  1021 |      11 |      1 |
 | `src/lib/media/media.ts`                                      |   977 |      19 |     18 |
-| `src/lib/db.ts`                                               |   971 |       4 |     31 |
-| `src/lib/services/plex-browse.ts`                             |   952 |       9 |      5 |
-| `src/components/biblioteca/TitleDetailDrawer.tsx`             |   950 |       9 |      1 |
-| `src/lib/media/show-watch.ts`                                 |   895 |      16 |      8 |
+| `src/lib/services/plex-browse.ts`                             |   957 |       9 |      5 |
+| `src/lib/media/show-watch.ts`                                 |   948 |      16 |      8 |
 | `src/lib/filelist/download.ts`                                |   772 |      11 |     11 |
-| `src/lib/activity-log.ts`                                     |   674 |      18 |     13 |
-| `src/lib/services/plex.ts`                                    |   616 |      14 |      8 |
-| `src/lib/media/movie-watch.ts`                                |   580 |      12 |      4 |
+| `src/lib/services/plex.ts`                                    |   616 |      14 |     11 |
+| `src/lib/activity-log.ts`                                     |   605 |      16 |     15 |
+| `src/lib/media/movie-watch.ts`                                |   582 |      12 |      4 |
 | `src/routes/index.tsx`                                        |   562 |       9 |      1 |
 | `src/lib/tmdb/tmdb.functions.ts`                              |   533 |      11 |     21 |
 | `src/lib/filelist/subtitles.ts`                               |   511 |       8 |      2 |
-| `src/routes/qbit.tsx`                                         |   497 |       3 |      6 |
+| `src/routes/qbit.tsx`                                         |   486 |       3 |     10 |
 | `src/lib/github.functions.ts`                                 |   452 |      11 |      5 |
+| `src/components/tehnic/PluginDetailDrawer.tsx`                |   451 |       6 |      2 |
 | `src/components/principala/wizard/ResultStep.tsx`             |   414 |       4 |      1 |
+| `src/lib/media/show-watch.test.ts`                            |   401 |      11 |      0 |
 | `src/lib/services/plex-library.ts`                            |   397 |      15 |      6 |
-| `src/lib/media/show-watch.test.ts`                            |   376 |      11 |      0 |
+| `src/lib/media/metadata-refresh.test.ts`                      |   383 |       5 |      0 |
 | `src/lib/services/plex-shared.ts`                             |   374 |      10 |      5 |
-| `src/routes/sistem.tsx`                                       |   366 |       3 |      3 |
+| `src/lib/system/service-jobs.ts`                              |   357 |      14 |      4 |
 | `src/routes/users.tsx`                                        |   351 |       7 |      5 |
 | `src/lib/services/plex-library-match.test.ts`                 |   338 |       8 |      0 |
 | `src/lib/system/speedtest.ts`                                 |   328 |       9 |      3 |
+| `src/routes/sistem.tsx`                                       |   328 |       2 |      4 |
 | `src/lib/media/season-pack-link.test.ts`                      |   327 |       9 |      0 |
 | `src/components/biblioteca/BibliotecaList.tsx`                |   302 |       3 |      1 |
 | `src/components/principala/wizard/SeasonAccordion.tsx`        |   301 |       7 |      2 |
 | `src/lib/tmdb/tmdb-title-lookup.ts`                           |   301 |       7 |      5 |
 | `src/lib/services/qbittorrent.ts`                             |   296 |       3 |      1 |
 | `src/components/filelist/FilelistSection.tsx`                 |   295 |       1 |      1 |
-| `src/lib/media/metadata-refresh.test.ts`                      |   277 |       5 |      0 |
+| `src/lib/queries.ts`                                          |   287 |       1 |     20 |
 | `src/lib/services/host.ts`                                    |   275 |       3 |      2 |
 | `src/components/tehnic/UserDetailDrawer.tsx`                  |   270 |       2 |      1 |
-| `src/routes/tehnic.tsx`                                       |   268 |       1 |      4 |
+| `src/routes/tehnic.tsx`                                       |   268 |       1 |      5 |
 | `src/components/principala/AddMediaWizard.tsx`                |   266 |       4 |      3 |
 | `src/routes/__root.tsx`                                       |   266 |       9 |      1 |
-| `src/lib/queries.ts`                                          |   265 |       1 |     20 |
 | `src/routeTree.gen.ts`                                        |   263 |       0 |      1 |
+| `src/components/tehnic/sections/ActivityLogSection.tsx`       |   260 |       1 |      1 |
 | `src/lib/filelist/filelist-client.ts`                         |   258 |       8 |      8 |
 | `src/lib/auth/users.functions.ts`                             |   257 |       4 |      2 |
 | `src/components/biblioteca/WantedMovieDrawer.tsx`             |   255 |       6 |      1 |
@@ -533,40 +548,42 @@ manual, deci nu poate fi parțial vechi.
 | `src/components/filelist/DownloadConfirmDialog.tsx`           |   249 |       3 |      2 |
 | `src/components/principala/wizard/WizardControls.tsx`         |   248 |       5 |      2 |
 | `src/components/principala/wizard/state.ts`                   |   245 |       1 |      6 |
-| `src/components/tehnic/PluginDetailDrawer.tsx`                |   244 |       3 |      1 |
 | `src/components/principala/wizard/derive-seasons.test.ts`     |   241 |       5 |      0 |
-| `src/components/tehnic/sections/ActivityLogSection.tsx`       |   234 |       1 |      1 |
-| `src/lib/services/immich.ts`                                  |   231 |       3 |      8 |
-| `src/lib/notifications/notifications.ts`                      |   226 |      10 |      5 |
+| `src/components/ServiceHeaderActions.tsx`                     |   237 |       5 |      4 |
+| `src/lib/notifications/notifications.ts`                      |   233 |      10 |      5 |
+| `src/routes/immich.tsx`                                       |   233 |       1 |     12 |
+| `src/lib/services/immich.ts`                                  |   226 |       3 |     12 |
 | `src/components/tehnic/sections/ErrorLogSection.tsx`          |   225 |       2 |      1 |
 | `src/lib/errors/error-log.ts`                                 |   225 |       9 |      4 |
 | `src/components/principala/wizard/use-wizard-download.ts`     |   222 |       6 |      1 |
-| `src/routes/immich.tsx`                                       |   219 |       1 |      8 |
 | `src/lib/filelist/subsro-client.ts`                           |   212 |      10 |      1 |
+| `src/lib/media/episode-details.test.ts`                       |   212 |       4 |      0 |
+| `src/components/tehnic/plugins.tsx`                           |   210 |       0 |      4 |
 | `src/components/tehnic/sections/PushSubscriptionsSection.tsx` |   210 |       3 |      1 |
-| `src/lib/media/episode-details.test.ts`                       |   209 |       4 |      0 |
 | `src/lib/media/plex-link-by-hash.test.ts`                     |   201 |       2 |      0 |
+| `src/lib/filelist/subtitle-apply.ts`                          |   197 |       4 |      1 |
 | `src/components/descopera/FeedView.tsx`                       |   195 |       2 |      1 |
 | `src/lib/filelist/release-scoring.ts`                         |   194 |       4 |      2 |
-| `src/lib/filelist/subtitle-apply.ts`                          |   193 |       4 |      1 |
 | `src/lib/filelist/opensubtitles-client.ts`                    |   192 |       6 |      3 |
 | `src/lib/tmdb/tmdb.discover.functions.ts`                     |   188 |       6 |      5 |
 | `src/components/principala/wizard/state.test.ts`              |   182 |       2 |      0 |
+| `src/lib/services/immich-uploads.ts`                          |   182 |       5 |      3 |
 | `src/routes/register.tsx`                                     |   181 |       1 |      3 |
 | `src/hooks/use-push-notifications.ts`                         |   174 |       5 |      1 |
 | `src/lib/filelist/subtitle-pipeline.ts`                       |   174 |       1 |      1 |
 | `src/lib/qbit-client.ts`                                      |   173 |      10 |     10 |
 | `src/lib/tmdb/tmdb-details.test.ts`                           |   172 |       2 |      0 |
 | `src/components/principala/wizard/derive-seasons.ts`          |   171 |       2 |      2 |
-| `src/lib/system/agent.functions.ts`                           |   170 |       3 |      5 |
 | `src/lib/media/movie-watch.test.ts`                           |   168 |       3 |      0 |
 | `src/lib/system/network-link.ts`                              |   165 |       6 |      1 |
+| `src/lib/system/service-jobs.test.ts`                         |   165 |       2 |      0 |
+| `src/lib/system/versions.ts`                                  |   163 |       8 |      5 |
 | `src/lib/media/unfinished-torrents.test.ts`                   |   161 |       1 |      0 |
 | `src/components/descopera/DiscoverGrid.tsx`                   |   160 |       3 |      1 |
 | `src/components/AppHeader.tsx`                                |   157 |       4 |      1 |
 | `src/components/principala/wizard/selection.test.ts`          |   157 |       1 |      0 |
 | `src/lib/auth/admin.functions.ts`                             |   157 |       5 |      5 |
-| `src/lib/filelist/log.ts`                                     |   151 |       1 |     22 |
+| `src/lib/filelist/log.ts`                                     |   151 |       1 |     24 |
 | `src/lib/media/plex-link-reconciler.test.ts`                  |   151 |       2 |      0 |
 | `src/lib/plex-refresh.ts`                                     |   149 |       9 |      3 |
 | `src/lib/wizard-check.functions.ts`                           |   149 |       1 |      1 |
@@ -576,34 +593,35 @@ manual, deci nu poate fi parțial vechi.
 | `src/components/tehnic/SubtitleFixDrawer.tsx`                 |   140 |       2 |      1 |
 | `src/lib/filelist/subtitle-checks.ts`                         |   140 |      10 |      2 |
 | `src/components/tehnic/sections/NetworkLinkCard.tsx`          |   139 |       2 |      1 |
+| `src/lib/services/immich-uploads.test.ts`                     |   136 |       3 |      0 |
+| `src/lib/services/shared.ts`                                  |   133 |       7 |     16 |
+| `src/components/biblioteca/utils.ts`                          |   131 |      12 |     23 |
 | `src/components/tehnic/sections/CommitStatsSection.tsx`       |   131 |       1 |      1 |
 | `src/lib/filelist/subtitle-outcomes.ts`                       |   127 |       2 |      7 |
-| `src/lib/services/shared.ts`                                  |   127 |       6 |     13 |
 | `src/lib/system/db-backup.ts`                                 |   127 |       8 |      3 |
-| `src/components/ServiceHeaderActions.tsx`                     |   125 |       2 |      4 |
+| `src/lib/media/metadata-report.ts`                            |   126 |       4 |      4 |
 | `src/lib/services/plex-quality.test.ts`                       |   125 |       0 |      0 |
-| `src/components/biblioteca/utils.ts`                          |   122 |      11 |     21 |
+| `src/lib/system/update-check.test.ts`                         |   120 |       3 |      0 |
 | `src/components/principala/wizard/selection.ts`               |   119 |       7 |      4 |
-| `src/components/tehnic/plugins.tsx`                           |   119 |       0 |      2 |
-| `src/lib/system/versions.functions.ts`                        |   119 |       6 |      2 |
 | `src/lib/filelist/subtitle-encoding.ts`                       |   118 |       6 |      2 |
 | `src/routes/login.tsx`                                        |   116 |       1 |      6 |
 | `src/lib/notifications/push.functions.ts`                     |   115 |       6 |      2 |
-| `src/lib/auth/admin.server.ts`                                |   111 |       7 |     26 |
+| `src/lib/media/movie-metadata.ts`                             |   112 |       1 |      2 |
+| `src/lib/auth/admin.server.ts`                                |   111 |       7 |     27 |
 | `src/components/filelist/use-download.ts`                     |   107 |       3 |      2 |
-| `src/components/tehnic/sections/PluginStatusSection.tsx`      |   107 |       6 |      1 |
 | `src/components/principala/wizard/use-wizard-data.ts`         |   104 |       3 |      1 |
 | `src/lib/media/watch-position.test.ts`                        |   103 |       1 |      0 |
 | `src/components/principala/wizard/ConfirmBulkStep.tsx`        |   100 |       1 |      1 |
 | `src/lib/github-commits.server.ts`                            |    98 |       4 |      2 |
 | `src/components/principala/SupportWidget.tsx`                 |    97 |       3 |      1 |
 | `src/components/biblioteca/WantedMoviesSection.tsx`           |    94 |       2 |      1 |
-| `src/components/ui/drawer.tsx`                                |    94 |       2 |     10 |
+| `src/components/ui/drawer.tsx`                                |    94 |       2 |     11 |
+| `server/plugins/show-watcher.ts`                              |    92 |       2 |      3 |
 | `src/components/tehnic/sections/DbBackupCard.tsx`             |    91 |       1 |      1 |
-| `src/lib/media/movie-metadata.ts`                             |    90 |       1 |      2 |
+| `src/lib/system/update-check.ts`                              |    91 |       2 |      2 |
 | `src/lib/filelist/subtitle-sources.ts`                        |    89 |       1 |      2 |
 | `src/lib/media/plex-link-reconciler.ts`                       |    88 |       1 |      3 |
-| `server/plugins/show-watcher.ts`                              |    87 |       2 |      3 |
+| `src/components/tehnic/sections/PluginStatusSection.tsx`      |    85 |       6 |      1 |
 | `src/lib/filelist/categories.ts`                              |    84 |       2 |      5 |
 | `src/lib/errors/console-capture.ts`                           |    83 |       5 |      4 |
 | `src/lib/services/recent-watch-merge.ts`                      |    83 |       3 |      2 |
@@ -613,8 +631,9 @@ manual, deci nu poate fi parțial vechi.
 | `src/lib/auth/registration.functions.ts`                      |    80 |       1 |      1 |
 | `src/components/BottomNav.tsx`                                |    77 |       1 |      1 |
 | `src/components/filelist/quality-utils.ts`                    |    77 |       3 |      5 |
+| `src/components/tehnic/MetaRefreshDetails.tsx`                |    77 |       2 |      2 |
 | `src/lib/auth/rate-limit.ts`                                  |    77 |       4 |      2 |
-| `src/lib/notifications/push.ts`                               |    77 |       2 |      4 |
+| `src/lib/notifications/push.ts`                               |    77 |       2 |      7 |
 | `src/components/principala/wizard/SearchStep.tsx`             |    76 |       1 |      1 |
 | `src/lib/services/recent-watch-cache.ts`                      |    76 |       2 |      2 |
 | `server/routes/api/plex-thumb.ts`                             |    76 |       0 |      0 |
@@ -624,8 +643,9 @@ manual, deci nu poate fi parțial vechi.
 | `src/lib/filelist/download.functions.ts`                      |    70 |       3 |      1 |
 | `server/plugins/plex-session-tracker.ts`                      |    68 |       1 |      1 |
 | `src/lib/filelist/filelist-cache.test.ts`                     |    67 |       1 |      0 |
-| `src/server.ts`                                               |    65 |       2 |     32 |
+| `src/server.ts`                                               |    65 |       2 |     34 |
 | `src/components/descopera/FilterTabs.tsx`                     |    64 |       2 |      1 |
+| `src/lib/format.ts`                                           |    64 |       7 |     15 |
 | `src/lib/errors/client-error-capture.ts`                      |    63 |       3 |      1 |
 | `src/components/filelist/quality-utils.test.ts`               |    62 |       0 |      0 |
 | `src/routes/descopera.tsx`                                    |    62 |       1 |      2 |
@@ -636,65 +656,75 @@ manual, deci nu poate fi parțial vechi.
 | `src/components/principala/wizard/PickStep.tsx`               |    56 |       1 |      1 |
 | `src/components/sistem/RefreshRateCard.tsx`                   |    56 |       1 |      1 |
 | `src/lib/filelist/types.ts`                                   |    56 |       0 |     19 |
-| `src/lib/format.ts`                                           |    56 |       6 |      9 |
-| `src/components/tehnic/sections/PlexServiceCard.tsx`          |    55 |       1 |      1 |
 | `src/components/Meter.tsx`                                    |    54 |       1 |      2 |
 | `src/hooks/use-auto-reload.ts`                                |    53 |       2 |      1 |
 | `src/lib/media/fallback-quality.ts`                           |    52 |       3 |      3 |
+| `src/lib/system/ubuntu-status.ts`                             |    51 |       2 |      3 |
 | `src/lib/media/watch-position.ts`                             |    50 |       3 |      3 |
 | `src/lib/tmdb/poster.test.ts`                                 |    50 |       0 |      0 |
 | `server/plugins/plex-link-reconciler.ts`                      |    49 |       2 |      2 |
 | `src/components/principala/wizard/types.ts`                   |    47 |       0 |     19 |
 | `server/plugins/db-backup.ts`                                 |    47 |       1 |      2 |
+| `src/components/tehnic/PluginRow.tsx`                         |    46 |       1 |      2 |
 | `src/lib/auth/admin-route-guard.ts`                           |    46 |       3 |      7 |
+| `src/lib/system/service-jobs.functions.ts`                    |    46 |       3 |      2 |
 | `src/lib/tmdb/search-merge.test.ts`                           |    46 |       1 |      0 |
 | `src/lib/tvmaze/tvmaze.functions.ts`                          |    46 |       1 |      6 |
+| `src/components/tehnic/sections/PlexServiceCard.tsx`          |    45 |       1 |      1 |
 | `src/lib/errors/error-log.functions.ts`                       |    43 |       3 |      4 |
 | `src/lib/system/network-link.functions.ts`                    |    43 |       2 |      2 |
 | `server/routes/api/deploy-sha.ts`                             |    43 |       2 |      1 |
 | `src/lib/media/aired-episodes.test.ts`                        |    41 |       0 |      0 |
 | `src/components/useServiceRecovery.ts`                        |    39 |       2 |      3 |
+| `src/lib/system/service-meta.ts`                              |    39 |       2 |      4 |
 | `src/components/ServicePill.tsx`                              |    37 |       1 |      3 |
+| `server/plugins/service-jobs.ts`                              |    37 |       1 |      3 |
 | `src/components/PageShell.tsx`                                |    36 |       1 |     10 |
 | `src/components/StatCard.tsx`                                 |    35 |       1 |      3 |
 | `src/components/principala/wizard/ConfirmStep.tsx`            |    34 |       1 |      1 |
 | `src/components/principala/wizard/DoneStep.tsx`               |    34 |       1 |      1 |
-| `src/lib/tmdb/poster.ts`                                      |    34 |       2 |      5 |
+| `src/lib/tmdb/poster.ts`                                      |    34 |       2 |      7 |
 | `src/components/biblioteca/StatusBadge.tsx`                   |    33 |       1 |      2 |
 | `src/components/tehnic/TehnicSubNav.tsx`                      |    33 |       1 |      5 |
 | `src/hooks/use-live-counter.ts`                               |    33 |       1 |      1 |
 | `src/lib/media/aired-episodes.ts`                             |    33 |       1 |      2 |
-| `src/components/ui/button.tsx`                                |    31 |       0 |     33 |
+| `server/plugins/immich-upload-tracker.ts`                     |    33 |       1 |      2 |
+| `src/components/ui/button.tsx`                                |    31 |       0 |     34 |
 | `src/lib/errors/error-page.ts`                                |    31 |       1 |      2 |
 | `src/lib/tmdb/search-merge.ts`                                |    30 |       3 |      2 |
 | `server/plugins/activity-boot.ts`                             |    30 |       0 |      1 |
 | `src/hooks/use-flash-on-change.ts`                            |    29 |       1 |      2 |
 | `server/plugins/fast-shutdown.ts`                             |    29 |       1 |      1 |
 | `server/plugins/filelist-resume.ts`                           |    29 |       0 |      1 |
-| `src/components/tehnic/utils.ts`                              |    28 |       2 |     22 |
+| `src/components/tehnic/utils.ts`                              |    28 |       2 |     24 |
 | `src/lib/errors/error-capture.ts`                             |    28 |       2 |      2 |
 | `src/lib/system/db-backup.functions.ts`                       |    27 |       2 |      2 |
 | `src/components/ui/progress.tsx`                              |    26 |       0 |      2 |
-| `src/lib/activity-log.functions.ts`                           |    26 |       1 |      3 |
+| `src/lib/activity-log.functions.ts`                           |    26 |       1 |      6 |
 | `src/lib/media/torrent-quality.ts`                            |    26 |       2 |      5 |
 | `src/start.ts`                                                |    26 |       0 |     52 |
 | `src/components/ui/orb.tsx`                                   |    25 |       1 |      9 |
-| `src/components/ui/sonner.tsx`                                |    25 |       1 |     22 |
+| `src/components/ui/sonner.tsx`                                |    25 |       1 |     21 |
 | `src/lib/auth/password.ts`                                    |    24 |       2 |      6 |
 | `src/routes/biblioteca.tsx`                                   |    20 |       1 |      4 |
 | `server/plugins/github-commit-tracker.ts`                     |    20 |       1 |      2 |
 | `src/lib/services/recent-watch-types.ts`                      |    19 |       0 |      3 |
+| `src/lib/system/ubuntu-status.test.ts`                        |    19 |       0 |      0 |
 | `src/components/tehnic/Metric.tsx`                            |    18 |       1 |      1 |
 | `src/components/tehnic/StatCell.tsx`                          |    18 |       1 |      1 |
 | `src/lib/tmdb/tmdb-client.ts`                                 |    18 |       2 |      4 |
 | `src/components/filelist/types.ts`                            |    17 |       0 |     19 |
 | `src/lib/media/torrent-name-parse.ts`                         |    17 |       1 |      5 |
 | `src/router.tsx`                                              |    17 |       1 |     18 |
+| `src/components/tehnic/meta-items.ts`                         |    15 |       1 |      3 |
+| `src/lib/format.test.ts`                                      |    15 |       0 |      0 |
 | `src/components/ErrorCard.tsx`                                |    14 |       1 |      3 |
 | `src/lib/system/update-signal.ts`                             |    14 |       2 |      3 |
 | `src/lib/filelist.functions.ts`                               |    13 |       0 |     19 |
+| `src/lib/services/immich-uploads.functions.ts`                |    13 |       1 |      1 |
+| `src/lib/system/versions.functions.ts`                        |    13 |       1 |      2 |
 | `src/lib/services.functions.ts`                               |     9 |       0 |      4 |
-| `src/lib/utils.ts`                                            |     7 |       1 |     22 |
+| `src/lib/utils.ts`                                            |     7 |       1 |     24 |
 
 ---
 

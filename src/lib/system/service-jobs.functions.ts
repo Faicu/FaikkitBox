@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import type { JobKind, ServiceJob, ServiceKey } from "./service-jobs";
+import type { JobKind, ServiceJob, ServiceKey } from "./service-meta";
 
 // Server functions subțiri, fără importuri server statice — service-jobs.ts
 // importă node:child_process și db.ts la vârf (vezi nota din
@@ -7,8 +7,6 @@ import type { JobKind, ServiceJob, ServiceKey } from "./service-jobs";
 
 const SERVICES: ServiceKey[] = ["plex", "immich", "qbit", "ubuntu"];
 const KINDS: JobKind[] = ["restart", "update"];
-
-export type { JobKind, ServiceJob, ServiceKey };
 
 export const startServiceAction = createServerFn({ method: "POST" })
   .validator((data: { service: ServiceKey; kind: JobKind }) => {
@@ -29,14 +27,19 @@ export const startServiceAction = createServerFn({ method: "POST" })
     }
   });
 
+// Ultima acțiune a fiecărui serviciu. Cea în curs (cel mult una) e mereu și
+// ultima a serviciului ei, deci se găsește tot aici — vezi runningFrom.
 export const getServiceJobs = createServerFn({ method: "GET" }).handler(
-  async (): Promise<{
-    latest: Partial<Record<ServiceKey, ServiceJob>>;
-    running: ServiceJob | null;
-  }> => {
+  async (): Promise<Partial<Record<ServiceKey, ServiceJob>>> => {
     const { requireAdmin } = await import("../auth/admin.server");
     await requireAdmin();
-    const { latestJobs, runningJob } = await import("./service-jobs");
-    return { latest: latestJobs(), running: runningJob() };
+    const { latestJobs } = await import("./service-jobs");
+    return latestJobs();
   },
 );
+
+export function runningFrom(
+  latest: Partial<Record<ServiceKey, ServiceJob>> | undefined,
+): ServiceJob | null {
+  return Object.values(latest ?? {}).find((j) => j?.status === "running") ?? null;
+}

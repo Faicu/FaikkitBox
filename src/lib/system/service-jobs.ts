@@ -22,28 +22,17 @@
 
 import { spawn } from "node:child_process";
 import { getDb } from "../db";
-
-export type ServiceKey = "plex" | "immich" | "qbit" | "ubuntu";
-export type JobKind = "restart" | "update";
-export type JobStatus = "running" | "ok" | "failed" | "interrupted";
-
-export interface ServiceJob {
-  id: number;
-  service: ServiceKey;
-  kind: JobKind;
-  status: JobStatus;
-  startedAt: string;
-  finishedAt: string | null;
-  exitCode: number | null;
-  output: string;
-}
-
-export const SERVICE_LABELS: Record<ServiceKey, string> = {
-  plex: "Plex",
-  immich: "Immich",
-  qbit: "qBittorrent",
-  ubuntu: "Ubuntu",
-};
+import { pluralRo } from "../format";
+import { VERSIONS_CACHE_KEY } from "./versions";
+import {
+  JOB_OUTPUT_VISIBLE_MS,
+  jobLabel,
+  SERVICE_LABELS,
+  type JobKind,
+  type JobStatus,
+  type ServiceJob,
+  type ServiceKey,
+} from "./service-meta";
 
 type Step = { argv: string[]; env?: Record<string, string> } | { sleepMs: number };
 
@@ -130,22 +119,43 @@ export function runningJob(): ServiceJob | null {
   return r ? rowToJob(r) : null;
 }
 
-// Ultima acțiune a fiecărui serviciu — ce afișează paginile.
+// Ultima acțiune a fiecărui serviciu — ce afișează paginile. Se cere la 2s
+// cât una rulează, deci ieșirea (până la 64 KB) pleacă doar cât e încă de
+// afișat.
 export function latestJobs(): Partial<Record<ServiceKey, ServiceJob>> {
   const rows = getDb()
     .prepare(
       `SELECT * FROM service_jobs WHERE id IN (SELECT MAX(id) FROM service_jobs GROUP BY service)`,
     )
     .all() as Record<string, unknown>[];
-  return Object.fromEntries(rows.map((r) => [r.service, rowToJob(r)]));
+  const now = Date.now();
+  return Object.fromEntries(
+    rows.map((r) => {
+      const job = rowToJob(r);
+      const stale =
+        job.finishedAt != null && now - new Date(job.finishedAt).getTime() >= JOB_OUTPUT_VISIBLE_MS;
+      return [job.service, stale ? { ...job, output: "" } : job];
+    }),
+  );
 }
 
-export function jobLabel(service: ServiceKey, kind: JobKind): string {
-  return `${kind === "restart" ? "Restart" : "Update"} ${SERVICE_LABELS[service]}`;
+// Istoricul complet stă în jurnal; aici contează doar ultimele acțiuni.
+const KEEP_JOBS = 50;
+
+// La finalul fiecărei acțiuni: tabela nu crește la nesfârșit, iar versiunile
+// se recitesc la următoarea cerere — butonul Update dispare singur.
+async function afterJob(): Promise<void> {
+  getDb()
+    .prepare(
+      `DELETE FROM service_jobs WHERE id NOT IN (SELECT id FROM service_jobs ORDER BY id DESC LIMIT ?)`,
+    )
+    .run(KEEP_JOBS);
+  const { invalidateCached } = await import("../services/shared");
+  invalidateCached(VERSIONS_CACHE_KEY);
 }
 
 // Mesajul din jurnal — același tipar pentru toate.
-export function jobMessage(
+function jobMessage(
   service: ServiceKey,
   kind: JobKind,
   status: JobStatus,
@@ -163,7 +173,9 @@ export function jobMessage(
           : `${name} a fost repornit`;
   } else if (service === "ubuntu") {
     const n = /(\d+) upgraded/.exec(output)?.[1];
-    msg = n ? `Ubuntu actualizat: ${n} ${n === "1" ? "pachet" : "pachete"}` : "Ubuntu actualizat";
+    msg = n
+      ? `Ubuntu actualizat: ${pluralRo(Number(n), "pachet", "pachete")}`
+      : "Ubuntu actualizat";
   } else {
     msg = `${name} a fost actualizat`;
   }
@@ -259,6 +271,7 @@ async function runSteps(id: number, service: ServiceKey, kind: JobKind, steps: S
     "UPDATE service_jobs SET status = ?, finished_at = ?, exit_code = ?, output = ? WHERE id = ?",
   ).run(status, new Date().toISOString(), exitCode, output, id);
   await logJob({ service, kind, status, output, exitCode });
+  await afterJob();
 }
 
 function runStep(
@@ -339,4 +352,5 @@ export async function markInterruptedJobs(): Promise<void> {
     );
     await logJob({ ...job, status: "interrupted" });
   }
+  if (rows.length > 0) await afterJob();
 }

@@ -107,6 +107,12 @@ export function cachedAsync<T>(
   return value;
 }
 
+// Pentru date schimbate de noi înșine (ex. versiunile după un update): ce era
+// în cache nu mai e adevărat, deci următorul apelant recalculează.
+export function invalidateCached(key: string): void {
+  asyncCache.delete(key);
+}
+
 export function errMsg(e: unknown): string {
   if (!e) return "unknown error";
   if (e instanceof Error) {

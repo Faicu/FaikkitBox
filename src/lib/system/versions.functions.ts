@@ -7,6 +7,6 @@ export type { ServiceVersion } from "./versions";
 export const getVersions = createServerFn({ method: "GET" }).handler(async () => {
   const { requireAdmin } = await import("../auth/admin.server");
   await requireAdmin();
-  const { readAllVersions } = await import("./versions");
-  return { ...(await readAllVersions()), fetchedAt: new Date().toISOString() };
+  const { readVersionsCached } = await import("./versions");
+  return { ...(await readVersionsCached()), fetchedAt: new Date().toISOString() };
 });

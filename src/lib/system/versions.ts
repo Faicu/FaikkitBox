@@ -5,10 +5,10 @@
 // butonul spun mereu același lucru.
 // ---------------------------------------------------------------------------
 
-import { fetchJson as sharedFetchJson } from "../services/shared";
+import { cachedAsync, fetchJson as sharedFetchJson } from "../services/shared";
 
 export type ServiceVersion = {
-  name: "Plex" | "Immich" | "qBittorrent" | "Ubuntu";
+  name: "Plex" | "Immich" | "Ubuntu";
   current?: string;
   latest?: string;
   changelog?: string;
@@ -58,7 +58,7 @@ function fetchJson(url: string, init?: RequestInit, timeoutMs = 8000): Promise<u
   );
 }
 
-export async function plexVersion(): Promise<ServiceVersion> {
+async function plexVersion(): Promise<ServiceVersion> {
   const base = process.env.PLEX_URL;
   const token = process.env.PLEX_TOKEN;
   const v: ServiceVersion = {
@@ -93,7 +93,7 @@ export async function plexVersion(): Promise<ServiceVersion> {
   return v;
 }
 
-export async function immichVersion(): Promise<ServiceVersion> {
+async function immichVersion(): Promise<ServiceVersion> {
   const base = process.env.IMMICH_URL;
   const key = process.env.IMMICH_API_KEY;
   const v: ServiceVersion = {
@@ -124,7 +124,7 @@ export async function immichVersion(): Promise<ServiceVersion> {
   return v;
 }
 
-export async function ubuntuVersion(): Promise<ServiceVersion> {
+async function ubuntuVersion(): Promise<ServiceVersion> {
   const v: ServiceVersion = { name: "Ubuntu" };
   try {
     const { readUbuntuStatus } = await import("./ubuntu-status");
@@ -149,4 +149,14 @@ export async function readAllVersions(): Promise<{
     ubuntuVersion(),
   ]);
   return { plex, immich, ubuntu };
+}
+
+// Butoanele Update cer versiunile la 5 minute din fiecare tab deschis, iar o
+// citire costă trei cereri externe plus o simulare apt (~1s). Un minut în
+// cache, comun tuturor; golit la finalul oricărei acțiuni pe servicii
+// (service-jobs.ts), ca butonul Update să nu mai apară după actualizare.
+export const VERSIONS_CACHE_KEY = "versions";
+
+export function readVersionsCached(): ReturnType<typeof readAllVersions> {
+  return cachedAsync(VERSIONS_CACHE_KEY, 60_000, readAllVersions);
 }

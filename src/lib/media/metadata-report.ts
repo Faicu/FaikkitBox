@@ -12,6 +12,8 @@
 // deci `changes` n-ar deosebi „nimic nou” de o schimbare reală.
 // ---------------------------------------------------------------------------
 
+import { pluralRo } from "../format";
+
 export interface MetaTitleChange {
   title: string;
   kind: "show" | "movie";
@@ -86,17 +88,10 @@ export const EPISODE_FIELDS: Record<string, string> = {
   poster_path: "poster sezon",
 };
 
-// „1 film”, „2 filme”, „58 de filme” — de la 20 în sus, cu „de”.
-function plural(n: number, one: string, many: string): string {
-  if (n === 1) return `1 ${one}`;
-  const rest = n % 100;
-  return n >= 20 && (rest === 0 || rest >= 20) ? `${n} de ${many}` : `${n} ${many}`;
-}
-
 export function buildMetaRefreshMessage(r: MetaReport): string {
   const done = [
-    r.shows > 0 && plural(r.shows, "serial", "seriale"),
-    r.movies > 0 && plural(r.movies, "film", "filme"),
+    r.shows > 0 && pluralRo(r.shows, "serial", "seriale"),
+    r.movies > 0 && pluralRo(r.movies, "film", "filme"),
   ].filter(Boolean);
   const parts: string[] = [];
   if (done.length > 0) {
@@ -104,8 +99,8 @@ export function buildMetaRefreshMessage(r: MetaReport): string {
     const changed =
       r.changes.length === 0
         ? "nimic nou"
-        : `schimbări la ${plural(r.changes.length, "titlu", "titluri")}` +
-          (eps > 0 ? ` (${plural(eps, "episod", "episoade")})` : "");
+        : `schimbări la ${pluralRo(r.changes.length, "titlu", "titluri")}` +
+          (eps > 0 ? ` (${pluralRo(eps, "episod", "episoade")})` : "");
     parts.push(`${done.join(", ")} · ${changed}`);
   }
   if (r.failed > 0) parts.push(`${r.failed} ${r.failed === 1 ? "eșuat" : "eșuate"}`);

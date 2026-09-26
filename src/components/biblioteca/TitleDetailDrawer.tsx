@@ -138,6 +138,8 @@ export function TitleDetailDrawer({
     },
   });
   const d = detail.data?.status === "ok" ? detail.data.detail : null;
+  const airedOn = d?.type === "episode" ? airDateLabel(d.airDate) : null;
+  const watchedEpisodes = d?.episodes.filter((e) => e.watchedByMe).length ?? 0;
 
   function invalidateAfterMutation() {
     queryClient.invalidateQueries({ queryKey: ["plexLibraryBrowse"] });
@@ -337,9 +339,9 @@ export function TitleDetailDrawer({
                         {d.originalTitle}
                       </span>
                     )}
-                  {d.type === "episode" && airDateLabel(d.airDate) && (
+                  {airedOn && (
                     <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 font-medium text-muted-foreground">
-                      {airDateLabel(d.airDate)}
+                      {airedOn}
                     </span>
                   )}
                   {d.type !== "episode" && d.year && (
@@ -487,7 +489,7 @@ export function TitleDetailDrawer({
                     {d.type === "tv_show"
                       ? // Pentru un serial, "văzut" n-ar spune nimic util — un
                         // episod din 36 e tot "văzut".
-                        `${d.episodes.filter((e) => e.watchedByMe).length} din ${d.episodes.length} episoade`
+                        `${watchedEpisodes} din ${d.episodes.length} episoade`
                       : d.watchedByMe
                         ? d.watchedByMeAt
                           ? `văzut ${addedDate(d.watchedByMeAt)}`
@@ -500,7 +502,7 @@ export function TitleDetailDrawer({
                         <div
                           className="h-full rounded-full bg-emerald-400/80"
                           style={{
-                            width: `${(d.episodes.filter((e) => e.watchedByMe).length / d.episodes.length) * 100}%`,
+                            width: `${(watchedEpisodes / d.episodes.length) * 100}%`,
                           }}
                         />
                       </div>

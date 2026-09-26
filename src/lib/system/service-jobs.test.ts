@@ -135,3 +135,30 @@ describe("acțiunile pe servicii", () => {
     expect(journal()[0].message).toBe("Update Immich — întrerupt de o repornire a aplicației");
   });
 });
+
+describe("ce trimite serverul paginilor", () => {
+  it("ieșirea unei acțiuni terminate de peste 30 de minute nu mai pleacă", async () => {
+    const old = new Date(Date.now() - 31 * 60_000).toISOString();
+    db.prepare(
+      `INSERT INTO service_jobs (service, kind, status, started_at, finished_at, output)
+       VALUES ('plex', 'restart', 'ok', ?, ?, 'ieșire veche')`,
+    ).run(old, old);
+
+    expect(jobs.latestJobs().plex?.output).toBe("");
+  });
+
+  it("tabela păstrează doar ultimele 50 de acțiuni", async () => {
+    const insert = db.prepare(
+      `INSERT INTO service_jobs (service, kind, status, started_at, finished_at)
+       VALUES ('qbit', 'restart', 'ok', ?, ?)`,
+    );
+    const t = new Date().toISOString();
+    for (let i = 0; i < 60; i++) insert.run(t, t);
+
+    const id = await jobs.startServiceJob("immich", "restart");
+    await finished(id);
+
+    const n = db.prepare("SELECT COUNT(*) n FROM service_jobs").get() as { n: number };
+    expect(n.n).toBe(50);
+  });
+});

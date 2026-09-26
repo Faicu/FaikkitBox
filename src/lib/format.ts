@@ -53,3 +53,11 @@ export function formatDurationHMS(sec: number): string {
 export function formatMs(ms: number): string {
   return formatDuration(Math.floor(ms / 1000));
 }
+
+// Numărătoare în română: „1 film”, „2 filme”, „58 de filme” — de la 20 în
+// sus (și nu 101–119), cu „de”.
+export function pluralRo(n: number, one: string, many: string): string {
+  if (n === 1) return `1 ${one}`;
+  const rest = n % 100;
+  return n >= 20 && (rest === 0 || rest >= 20) ? `${n} de ${many}` : `${n} ${many}`;
+}

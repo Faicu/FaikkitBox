@@ -48,13 +48,14 @@ export function PluginDetailDrawer({
   lastTs: string | null;
   onClose: () => void;
 }) {
-  const { data: watch } = useQuery({ ...showWatchStatusQuery, enabled: !!plugin });
-  const { data: wanted } = useQuery({ ...wantedMoviesQuery, enabled: !!plugin });
-  const { data: log } = useQuery({ ...activityLogQuery, enabled: !!plugin });
-  const wantedMovies = wanted ?? [];
+  // Datele în plus se cer doar pentru plugin-ul care le afișează.
   const isWatcher = plugin?.id === "show-watcher";
   const isImmich = plugin?.id === "immich-upload-tracker";
-  const { data: tracker } = useQuery({ ...immichTrackerQuery, enabled: isImmich });
+  const { data: watch } = useQuery({ ...showWatchStatusQuery, enabled: isWatcher });
+  const { data: wanted } = useQuery({ ...wantedMoviesQuery, enabled: isWatcher });
+  const { data: log } = useQuery({ ...activityLogQuery, enabled: isWatcher || isImmich });
+  const wantedMovies = wanted ?? [];
+  const entries = Array.isArray(log) ? log : [];
   // Explicația pentru „fără dovadă recentă” e aceeași la toate plugin-urile
   // fără timestamp — stă pliată sub iconița de ajutor, nu deschisă mereu.
   const [showWhy, setShowWhy] = useState(false);
@@ -125,44 +126,9 @@ export function PluginDetailDrawer({
             )}
 
             {isImmich && (
-              <div className="rounded-2xl glass-card p-3 text-xs">
-                <div className="mb-2 flex items-center gap-1.5 text-muted-foreground">
-                  <History className="h-3.5 w-3.5" /> Ultimele încărcări
-                </div>
-                {(tracker?.inProgress ?? 0) > 0 && (
-                  <div className="mb-1.5 rounded-lg bg-purple-500/10 px-2 py-1.5 text-[11px] text-purple-300">
-                    Încărcare în curs — {tracker!.inProgress} până acum. Intră în jurnal când se
-                    termină.
-                  </div>
-                )}
-                {(() => {
-                  const uploads = (Array.isArray(log) ? log : [])
-                    .filter((e) => e.type === "immich_upload")
-                    .slice(0, 10);
-                  return uploads.length === 0 ? (
-                    <div className="text-muted-foreground">
-                      Nicio încărcare înregistrată încă. Apare aici după următoarea.
-                    </div>
-                  ) : (
-                    <div className="space-y-1.5 stagger-in">
-                      {uploads.map((e) => (
-                        <div
-                          key={e.id}
-                          className="flex items-start justify-between gap-2 rounded-lg bg-muted/40 px-2 py-1.5"
-                        >
-                          <span className="min-w-0 leading-relaxed">{e.message}</span>
-                          <span
-                            className="shrink-0 text-[10px] text-muted-foreground"
-                            title={formatDateTime(e.timestamp)}
-                          >
-                            {relativeTime(e.timestamp)}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  );
-                })()}
-              </div>
+              <ImmichUploadsCard
+                uploads={entries.filter((e) => e.type === "immich_upload").slice(0, 10)}
+              />
             )}
 
             {isWatcher && watch && (
@@ -256,9 +222,7 @@ export function PluginDetailDrawer({
 
                 <MetaRefreshHistory
                   key={plugin.id}
-                  entries={(Array.isArray(log) ? log : [])
-                    .filter((e) => e.type === "metadata_refresh")
-                    .slice(0, 10)}
+                  entries={entries.filter((e) => e.type === "metadata_refresh").slice(0, 10)}
                 />
 
                 <div className="rounded-2xl glass-card divide-y divide-border/50 text-xs">
@@ -339,6 +303,47 @@ function PluginSteps({ intro, steps }: { intro: string; steps: PluginStep[] }) {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+// Ultimele încărcări Immich, din jurnal, plus cea încă în desfășurare (nescrisă
+// în jurnal până nu se termină — vezi src/lib/services/immich-uploads.ts).
+function ImmichUploadsCard({ uploads }: { uploads: ActivityEntry[] }) {
+  const { data: tracker } = useQuery(immichTrackerQuery);
+  const inProgress = tracker?.inProgress ?? 0;
+  return (
+    <div className="rounded-2xl glass-card p-3 text-xs">
+      <div className="mb-2 flex items-center gap-1.5 text-muted-foreground">
+        <History className="h-3.5 w-3.5" /> Ultimele încărcări
+      </div>
+      {inProgress > 0 && (
+        <div className="mb-1.5 rounded-lg bg-purple-500/10 px-2 py-1.5 text-[11px] text-purple-300">
+          Încărcare în curs — {inProgress} până acum. Intră în jurnal când se termină.
+        </div>
+      )}
+      {uploads.length === 0 ? (
+        <div className="text-muted-foreground">
+          Nicio încărcare înregistrată încă. Apare aici după următoarea.
+        </div>
+      ) : (
+        <div className="space-y-1.5 stagger-in">
+          {uploads.map((e) => (
+            <div
+              key={e.id}
+              className="flex items-start justify-between gap-2 rounded-lg bg-muted/40 px-2 py-1.5"
+            >
+              <span className="min-w-0 leading-relaxed">{e.message}</span>
+              <span
+                className="shrink-0 text-[10px] text-muted-foreground"
+                title={formatDateTime(e.timestamp)}
+              >
+                {relativeTime(e.timestamp)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

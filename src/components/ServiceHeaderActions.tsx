@@ -4,12 +4,17 @@ import { useServerFn } from "@tanstack/react-start";
 import { ArrowUpCircle, ExternalLink, Loader2, RotateCcw, X } from "lucide-react";
 import { toast } from "sonner";
 
+import { runningFrom, startServiceAction } from "@/lib/system/service-jobs.functions";
 import {
-  startServiceAction,
+  JOB_OUTPUT_VISIBLE_MS,
+  jobLabel,
+  SERVICE_LABELS,
+  shortVersion,
   type JobKind,
   type ServiceJob,
   type ServiceKey,
-} from "@/lib/system/service-jobs.functions";
+} from "@/lib/system/service-meta";
+import { pluralRo } from "@/lib/format";
 import { serviceJobsQuery, versionsQuery } from "@/lib/queries";
 import type { ServiceVersion } from "@/lib/system/versions.functions";
 import { ServicePill } from "@/components/ServicePill";
@@ -23,30 +28,17 @@ import { formatDateTime, relativeTime } from "@/components/tehnic/utils";
 // Toate cer confirmare, rulează în fundal pe server și se scriu în jurnal de
 // acolo. O singură acțiune odată, pe toate serviciile.
 
-const NAMES: Record<ServiceKey, string> = {
-  plex: "Plex",
-  immich: "Immich",
-  qbit: "qBittorrent",
-  ubuntu: "Ubuntu",
-};
-
-const label = (service: ServiceKey, kind: JobKind) =>
-  `${kind === "restart" ? "Restart" : "Update"} ${NAMES[service]}`;
-
-// „1.43.4.10903-e5521bd8c” → „1.43.4.10903”, „v3.2.3” → „3.2.3”.
-const shortVersion = (v?: string) => (v ?? "?").replace(/^v/i, "").split(/[-+ ]/)[0];
-
 function confirmText(service: ServiceKey, kind: JobKind, v?: ServiceVersion): string {
   if (kind === "restart") {
     if (service === "ubuntu")
       return "Repornești tot sistemul?\n\nToate serviciile, inclusiv aplicația, vor fi indisponibile 1–2 minute.";
     if (service === "qbit")
       return "Repornești qBittorrent?\n\nSe golește și cache-ul DNS. Descărcările se reiau singure.";
-    return `Repornești ${NAMES[service]}?\n\nServiciul va fi indisponibil câteva secunde.`;
+    return `Repornești ${SERVICE_LABELS[service]}?\n\nServiciul va fi indisponibil câteva secunde.`;
   }
   if (service === "ubuntu")
-    return `Actualizezi Ubuntu?\n\nSe instalează ${v?.pending ?? "?"} pachete. Poate dura câteva minute.`;
-  return `Actualizezi ${NAMES[service]} de la ${shortVersion(v?.current)} la ${shortVersion(v?.latest)}?\n\nSe descarcă versiunea nouă, apoi serviciul repornește.`;
+    return `Actualizezi Ubuntu?\n\nSe instalează ${pluralRo(v?.pending ?? 0, "pachet", "pachete")}. Poate dura câteva minute.`;
+  return `Actualizezi ${SERVICE_LABELS[service]} de la ${shortVersion(v?.current)} la ${shortVersion(v?.latest)}?\n\nSe descarcă versiunea nouă, apoi serviciul repornește.`;
 }
 
 type Props = {
@@ -66,7 +58,7 @@ export function ServiceHeaderActions({ service, status, onRestart, statusSlot }:
   const start = useServerFn(startServiceAction);
 
   const v = (versions.data as Partial<Record<ServiceKey, ServiceVersion>> | undefined)?.[service];
-  const running = jobs.data?.running ?? null;
+  const running = runningFrom(jobs.data);
   const mine = running?.service === service ? running : null;
 
   const mutation = useMutation({
@@ -76,7 +68,7 @@ export function ServiceHeaderActions({ service, status, onRestart, statusSlot }:
         toast.error(res.error);
         return;
       }
-      toast(`${label(service, kind)} a pornit`);
+      toast(`${jobLabel(service, kind)} a pornit`);
       if (service !== "ubuntu") onRestart?.();
       qc.invalidateQueries({ queryKey: serviceJobsQuery.queryKey });
     },
@@ -84,24 +76,35 @@ export function ServiceHeaderActions({ service, status, onRestart, statusSlot }:
   });
 
   // Finalul unei acțiuni pornite de oriunde (și din alt tab): anunț +
-  // versiunile recitite, ca butonul Update să dispară singur.
-  const latest = jobs.data?.latest[service];
+  // versiunile recitite, ca butonul Update să dispară singur. A doua recitire,
+  // după 90s: Plex își instalează versiunea nouă abia după pornirea
+  // containerului, iar Immich răspunde abia după ce a pornit — la final încă
+  // ar raporta versiunea veche.
+  const latest = jobs.data?.[service];
   const seen = useRef<{ id: number; status: string } | null>(null);
   useEffect(() => {
     if (!latest) return;
     const prev = seen.current;
     seen.current = { id: latest.id, status: latest.status };
-    if (prev?.id !== latest.id || prev.status !== "running" || latest.status === "running") return;
-    if (latest.status === "ok") toast.success(`${label(service, latest.kind)}: reușit`);
+    if (!prev || prev.id !== latest.id || prev.status !== "running" || latest.status === "running")
+      return;
+    if (latest.status === "ok") toast.success(`${jobLabel(service, latest.kind)}: reușit`);
     else
       toast.error(
-        `${label(service, latest.kind)}: ${latest.status === "failed" ? "eșuat" : "întrerupt"}`,
+        `${jobLabel(service, latest.kind)}: ${latest.status === "failed" ? "eșuat" : "întrerupt"}`,
       );
     qc.invalidateQueries({ queryKey: versionsQuery.queryKey });
+    const later = window.setTimeout(
+      () => qc.invalidateQueries({ queryKey: versionsQuery.queryKey }),
+      90_000,
+    );
+    return () => window.clearTimeout(later);
   }, [latest, service, qc]);
 
   const busy = !!running || mutation.isPending;
-  const busyTitle = running ? `Rulează deja: ${label(running.service, running.kind)}` : undefined;
+  const busyTitle = running
+    ? `Rulează deja: ${jobLabel(running.service, running.kind)}`
+    : undefined;
 
   const showRestart = service !== "ubuntu" || v?.rebootRequired === true;
   const updateAvailable =
@@ -113,7 +116,7 @@ export function ServiceHeaderActions({ service, status, onRestart, statusSlot }:
   const showUpdate = updateAvailable || mine?.kind === "update";
   const updateText =
     service === "ubuntu"
-      ? `Update · ${v?.pending ?? ""} ${v?.pending === 1 ? "pachet" : "pachete"}`
+      ? `Update · ${pluralRo(v?.pending ?? 0, "pachet", "pachete")}`
       : `Update · ${shortVersion(v?.current)} → ${shortVersion(v?.latest)}`;
 
   const run = (kind: JobKind) => {
@@ -175,7 +178,7 @@ export function ServiceHeaderActions({ service, status, onRestart, statusSlot }:
 export function ServiceJobOutput({ service }: { service: ServiceKey }) {
   const jobs = useQuery(serviceJobsQuery);
   const [dismissed, setDismissed] = useState<number | null>(null);
-  const job: ServiceJob | undefined = jobs.data?.latest[service];
+  const job: ServiceJob | undefined = jobs.data?.[service];
   const preRef = useRef<HTMLPreElement>(null);
 
   useEffect(() => {
@@ -186,7 +189,8 @@ export function ServiceJobOutput({ service }: { service: ServiceKey }) {
   if (!job || job.id === dismissed) return null;
   const recent =
     job.status === "running" ||
-    (job.finishedAt != null && Date.now() - new Date(job.finishedAt).getTime() < 30 * 60_000);
+    (job.finishedAt != null &&
+      Date.now() - new Date(job.finishedAt).getTime() < JOB_OUTPUT_VISIBLE_MS);
   if (!recent) return null;
 
   const head =
@@ -205,7 +209,7 @@ export function ServiceJobOutput({ service }: { service: ServiceKey }) {
     <div className="rounded-2xl border border-border bg-black/40 p-3">
       <div className="mb-2 flex items-center gap-2 text-xs">
         {job.status === "running" && <Loader2 className="h-3 w-3 animate-spin text-sky-400" />}
-        <span className="font-medium">{label(job.service, job.kind)}</span>
+        <span className="font-medium">{jobLabel(job.service, job.kind)}</span>
         <span className={head.cls}>{head.text}</span>
         <span className="ml-auto text-muted-foreground" title={formatDateTime(job.startedAt)}>
           {relativeTime(job.startedAt)}

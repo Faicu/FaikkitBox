@@ -20,6 +20,7 @@
 // ---------------------------------------------------------------------------
 
 import { getDb } from "../db";
+import { pluralRo } from "../format";
 import { fetchJson, stripSlash } from "./shared";
 
 interface PendingUpload {
@@ -41,13 +42,6 @@ interface ImmichAsset {
   visibility?: string;
 }
 
-// „1 fotografie”, „2 fotografii”, „25 de fotografii”.
-function plural(n: number, one: string, many: string): string {
-  if (n === 1) return `1 ${one}`;
-  const rest = n % 100;
-  return n >= 20 && (rest === 0 || rest >= 20) ? `${n} de ${many}` : `${n} ${many}`;
-}
-
 function hhmm(iso: string): string {
   return new Date(iso).toLocaleTimeString("ro-RO", {
     hour: "2-digit",
@@ -58,8 +52,8 @@ function hhmm(iso: string): string {
 
 export function buildImmichUploadMessage(userName: string, p: PendingUpload): string {
   const parts: string[] = [];
-  if (p.photos > 0) parts.push(plural(p.photos, "fotografie", "fotografii"));
-  if (p.videos > 0) parts.push(plural(p.videos, "videoclip", "videoclipuri"));
+  if (p.photos > 0) parts.push(pluralRo(p.photos, "fotografie", "fotografii"));
+  if (p.videos > 0) parts.push(pluralRo(p.videos, "videoclip", "videoclipuri"));
   const from = hhmm(p.firstAt);
   const to = hhmm(p.lastAt);
   const when = from === to ? `la ora ${from}` : `între ${from} și ${to}`;

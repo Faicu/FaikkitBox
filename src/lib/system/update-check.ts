@@ -10,11 +10,11 @@
 // ---------------------------------------------------------------------------
 
 import { getDb } from "../db";
+import { pluralRo } from "../format";
+import { shortVersion } from "./service-meta";
 import type { ServiceVersion } from "./versions";
 
-export const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
-
-const shortVersion = (v?: string) => (v ?? "?").replace(/^v/i, "").split(/[-+ ]/)[0];
+const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 export interface UpdateSummary {
   items: string[];
@@ -40,7 +40,7 @@ export function summarizeUpdates(v: {
   }
   const pending = v.ubuntu?.pending ?? 0;
   if (pending > 0) {
-    items.push(`Ubuntu: ${pending} ${pending === 1 ? "pachet" : "pachete"}`);
+    items.push(`Ubuntu: ${pluralRo(pending, "pachet", "pachete")}`);
     pages.add("/sistem");
   }
   if (v.ubuntu?.rebootRequired) {
