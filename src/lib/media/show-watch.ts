@@ -129,10 +129,19 @@ async function fetchShowDetails(tmdbId: number): Promise<TmdbShowDetails | null>
 // instant ISO cu fus, deci browserul îl redă direct în ora României, fără să
 // calculăm noi vreun offset. TVmaze e interogat doar când chiar există un
 // episod următor, ca să nu-l batem degeaba pentru serialele încheiate.
+//
+// `markRefreshed` pornește ceasul de 12h (`meta_refreshed_at`) — doar
+// reîmprospătarea completă, care actualizează și episoadele, are voie să-l
+// pornească. Verificarea de episoade noi (la 3h) scria și ea aici, deci la
+// un serial urmărit ceasul nu apuca niciodată 12h, iar numele și descrierile
+// episoadelor nu se mai reîmprospătau deloc după descărcare (găsit pe 26 sept.
+// 2026: Insula Iubirii rămăsese cu „Episodul 1–3” și fără descrieri, deși
+// TMDB le avea de ore bune).
 async function writeShowMeta(
   showId: number,
   imdbId: string | null,
   details: TmdbShowDetails | null,
+  opts: { markRefreshed: boolean },
 ): Promise<void> {
   if (!details) return;
   const next = details.nextEpisode;
@@ -179,7 +188,7 @@ async function writeShowMeta(
             next_episode = ?,
             next_episode_air_date = ?,
             next_episode_airstamp = ?,
-            meta_refreshed_at = datetime('now')
+            meta_refreshed_at = CASE WHEN ? THEN datetime('now') ELSE meta_refreshed_at END
       WHERE id = ?`,
   ).run(
     details.title,
@@ -193,6 +202,7 @@ async function writeShowMeta(
     next ? formatEpisodeKey({ season: next.seasonNumber, episode: next.episodeNumber }) : null,
     next?.airDate ?? null,
     airstamp,
+    opts.markRefreshed ? 1 : 0,
     showId,
   );
 
@@ -330,7 +340,7 @@ async function checkShowInner(showId: number): Promise<ShowWatchOutcome> {
   const details = await fetchShowDetails(row.tmdb_id);
   // Verificarea unui serial urmărit e și momentul în care îi împrospătăm
   // metadatele — datele sunt deja aici, ar fi risipă să le aruncăm.
-  await writeShowMeta(row.id, details ? row.imdb_id : null, details);
+  await writeShowMeta(row.id, details ? row.imdb_id : null, details, { markRefreshed: false });
   const aired = await getAiredEpisodes(row.tmdb_id, from ? from.season : 1, details, true);
   const missing = aired
     .filter((k) => !ownedKeys.has(formatEpisodeKey(k)))
@@ -674,7 +684,7 @@ export async function setShowWatchCore(input: SetShowWatchInput): Promise<void> 
     let bestOrd = owned?.ord ?? 0;
     if (show?.tmdb_id) {
       const details = await fetchShowDetails(show.tmdb_id);
-      await writeShowMeta(input.mediaId, show.imdb_id, details);
+      await writeShowMeta(input.mediaId, show.imdb_id, details, { markRefreshed: false });
       const aired = await getAiredEpisodes(show.tmdb_id, 1, details).catch(() => []);
       for (const k of aired) bestOrd = Math.max(bestOrd, ord(k));
     }
@@ -881,7 +891,7 @@ export async function refreshShowMetadata(): Promise<number> {
         touch.run(row.id);
         continue;
       }
-      await writeShowMeta(row.id, row.imdb_id, details);
+      await writeShowMeta(row.id, row.imdb_id, details, { markRefreshed: true });
       // Toate episoadele serialului, odată cu el — vezi syncEpisodeDetails.
       await syncEpisodeDetails({ parentId: row.id, all: true });
       refreshed++;

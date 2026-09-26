@@ -351,6 +351,31 @@ describe("checkShow — calitatea de rezervă", () => {
     expect(downloadedNames()[1]).toBe("MobLand.S02E02.720p.WEB-DL");
   });
 
+  it("verificarea de episoade noi nu amână reîmprospătarea de 12h (Insula Iubirii, 26 sept.)", async () => {
+    // Scadent: ultima reîmprospătare completă, acum 13 ore.
+    db.prepare(
+      "UPDATE media SET meta_refreshed_at = datetime('now', '-13 hours') WHERE id = ?",
+    ).run(showId);
+    tmdbSeason2(daysAgo(7));
+
+    await watch.checkShow(showId);
+
+    const r = db
+      .prepare(
+        `SELECT tv_status, meta_refreshed_at <= datetime('now', '-12 hours') AS due
+           FROM media WHERE id = ?`,
+      )
+      .get(showId) as { tv_status: string; due: number };
+    // Detaliile serialului se scriu în continuare...
+    expect(r.tv_status).toBe("Returning Series");
+    // ...dar ceasul de 12h rămâne al reîmprospătării complete.
+    expect(r.due).toBe(1);
+
+    tmdb.seasons.mockClear();
+    await watch.refreshShowMetadata();
+    expect(tmdb.seasons).toHaveBeenCalledWith(247718, [2], { details: true });
+  });
+
   it("schimbarea calităților golește notițele", async () => {
     withFallback("720p");
     onFilelist("MobLand.S02E02.720p.WEB-DL");
