@@ -265,6 +265,17 @@ export function getDb(): DatabaseSync {
       clean_shutdown INTEGER NOT NULL DEFAULT 0,
       pid INTEGER
     );
+
+    -- Urmărirea încărcărilor Immich (server/plugins/immich-upload-tracker.ts).
+    -- checked_until: până unde s-a verificat (ISO) — următoarea verificare
+    -- cere de acolo încolo, deci o repornire nu pierde nimic. pending: JSON cu
+    -- încărcările încă în desfășurare, per utilizator Immich, scrise în jurnal
+    -- abia când o verificare nu mai găsește nimic nou la el.
+    CREATE TABLE IF NOT EXISTS immich_upload_tracker (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      checked_until TEXT NOT NULL,
+      pending TEXT NOT NULL DEFAULT '{}'
+    );
   `);
 
   // Curățări one-time, versionate cu PRAGMA user_version

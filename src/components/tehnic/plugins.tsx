@@ -7,6 +7,7 @@ import {
   Power,
   PlugZap,
   DatabaseBackup,
+  Upload,
   Tv,
   RefreshCw,
   Clapperboard,
@@ -16,7 +17,9 @@ import { Orb } from "@/components/ui/orb";
 
 // Catalogul plugin-urilor de fundal — sursă unică pentru lista din Tehnic și
 // pentru drawer-ul de detalii. Reflectă exact fișierele din server/plugins/:
-// un rând per proces care rulează, nu per funcționalitate. Completarea
+// un rând per proces care rulează, nu per funcționalitate. Excepție de loc,
+// nu de regulă: un plugin legat de un singur serviciu stă pe pagina acelui
+// serviciu, nu în lista din Tehnic (IMMICH_UPLOAD_PLUGIN, pe pagina Immich). Completarea
 // numelor de episoade, de exemplu, n-are intrare proprie — e un pas dintr-un
 // tic al lui show-watcher, iar o intrare separată ar putea arăta "activ"
 // chiar dacă plugin-ul e mort.
@@ -180,3 +183,16 @@ export const PLUGINS: PluginInfo[] = [
     activityType: "server_stop",
   },
 ];
+
+// Pe pagina Immich, nu în lista din Tehnic — vezi nota de la începutul
+// fișierului.
+export const IMMICH_UPLOAD_PLUGIN: PluginInfo = {
+  id: "immich-upload-tracker",
+  label: "Urmărire Încărcări",
+  description: "Trece în jurnal pozele și clipurile încărcate",
+  cadence: "la 5 min (prima, la 1 min după pornire)",
+  details:
+    "Întreabă Immich ce s-a încărcat de la ultima verificare și scrie în Jurnalul de activitate câte fotografii și videoclipuri a încărcat fiecare utilizator, cu notificare push. O încărcare întreagă devine o singură intrare: se scrie când o verificare nu mai găsește nimic nou, deci apare în jurnal la cel mult ~10 minute după ce se termină. Un Live Photo se numără o dată, ca în galerie.\n\nPunctul de plecare stă în baza de date, așa că o repornire a serverului nu pierde nimic — verificarea următoare continuă de unde a rămas. Varianta veche rula doar cât era deschisă pagina Immich și pornea de la zero la fiecare repornire: în septembrie 2026, 285 de încărcări într-o lună, zero intrări în jurnal.",
+  icon: <Upload className="h-4 w-4 text-purple-400" />,
+  activityType: "immich_upload",
+};

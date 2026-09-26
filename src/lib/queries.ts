@@ -8,6 +8,7 @@ import {
   getSpeedtestState,
 } from "./system/speedtest.functions";
 import { getActivityLog } from "./activity-log.functions";
+import { getImmichTracker } from "./services/immich-uploads.functions";
 import { listWantedMovies } from "./media/media.functions";
 import { getErrorLogs } from "./errors/error-log.functions";
 import {
@@ -70,6 +71,16 @@ export const immichQuery = queryOptions({
   queryFn: () => getImmich(),
   refetchInterval: () => getRefreshMs(),
   staleTime: 0,
+  ...keepPrev,
+});
+
+// Starea plugin-ului de încărcări Immich (immich-upload-tracker). Se schimbă
+// la 5 minute, deci un minut e destul.
+export const immichTrackerQuery = queryOptions({
+  queryKey: ["immichTracker"],
+  queryFn: () => getImmichTracker(),
+  refetchInterval: 60_000,
+  staleTime: 30_000,
   ...keepPrev,
 });
 

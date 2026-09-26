@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Box, ChevronRight } from "lucide-react";
+import { Box } from "lucide-react";
 
 import {
   activityLogQuery,
@@ -8,9 +8,9 @@ import {
   showWatchStatusQuery,
   wantedMoviesQuery,
 } from "@/lib/queries";
-import { relativeTime } from "../utils";
 import { PLUGINS, type PluginInfo } from "../plugins";
 import { PluginDetailDrawer } from "../PluginDetailDrawer";
+import { PluginRow } from "../PluginRow";
 
 export function PluginStatusSection() {
   const { data: log } = useQuery(activityLogQuery);
@@ -63,37 +63,15 @@ export function PluginStatusSection() {
       {/* overflow-hidden: fundalul de hover al primului/ultimului rând ar
           depăși altfel colțurile rotunjite ale cardului. */}
       <div className="overflow-hidden rounded-2xl glass-card divide-y divide-border/50 stagger-in">
-        {PLUGINS.map((p) => {
-          const lastTs = lastTsFor(p);
-          return (
-            <button
-              key={p.id}
-              type="button"
-              onClick={() => setOpenPlugin(p)}
-              className="press-tile flex w-full items-center gap-3 px-3 py-3 text-left transition-colors first:rounded-t-2xl last:rounded-b-2xl hover:bg-muted/40"
-            >
-              <div className="shrink-0">{p.icon}</div>
-              <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium leading-tight">{p.label}</div>
-                <div className="truncate text-[11px] text-muted-foreground">
-                  {descriptionFor(p)}
-                </div>
-              </div>
-              <div className="flex shrink-0 items-center gap-1.5">
-                {/* live-dot pulsează; e nepot al lui stagger-in, nu copil
-                    direct, deci propriul lui `animation` nu intră în conflict
-                    cu animația de intrare a rândului. */}
-                <span className="live-dot" />
-                {lastTs && (
-                  <span className="whitespace-nowrap text-[10px] text-muted-foreground">
-                    {relativeTime(lastTs)}
-                  </span>
-                )}
-                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-              </div>
-            </button>
-          );
-        })}
+        {PLUGINS.map((p) => (
+          <PluginRow
+            key={p.id}
+            plugin={p}
+            description={descriptionFor(p)}
+            lastTs={lastTsFor(p)}
+            onOpen={() => setOpenPlugin(p)}
+          />
+        ))}
       </div>
 
       <PluginDetailDrawer

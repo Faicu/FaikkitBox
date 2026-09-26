@@ -204,11 +204,6 @@ async function collectImmichData(): Promise<ImmichData> {
 
       const jobQueueDepth = activeJobs.reduce((sum, j) => sum + j.active + j.waiting, 0);
 
-      // Tracking activitate Immich (fire and forget)
-      import("../activity-log")
-        .then(({ trackImmichUploads }) => trackImmichUploads(usageByUser))
-        .catch(() => {});
-
       return {
         status: "ok",
         version: version ? `${version.major}.${version.minor}.${version.patch}` : undefined,
