@@ -37,7 +37,13 @@ import {
 } from "./fallback-quality";
 import { advancedWatchFrom, type EpisodeKey } from "./watch-position";
 import { getDb } from "../db";
-import { diffFields, EPISODE_FIELDS, SHOW_FIELDS, type MetaReport } from "./metadata-report";
+import {
+  diffFields,
+  EPISODE_FIELDS,
+  logEpisodeUpdates,
+  SHOW_FIELDS,
+  type MetaReport,
+} from "./metadata-report";
 
 const ITEM_INTERVAL_MS = 3 * 60 * 60 * 1000; // 3 ore — cadența reală per serial
 // Câte descărcări pornim cel mult într-o rulare per serial. Un serial abia
@@ -753,7 +759,9 @@ export async function syncEpisodeDetails(opts: {
   parentId: number;
   all?: boolean;
   // Câte o linie per episod schimbat, pentru jurnalul reîmprospătării.
-  onEpisodeChange?: (line: string) => void;
+  // `firstFill`: episodul n-avea încă niciun detaliu (tocmai creat) — prima
+  // completare, nu o reîmprospătare.
+  onEpisodeChange?: (line: string, firstFill: boolean) => void;
 }): Promise<number> {
   const db = getDb();
   const filter = opts.all
@@ -829,6 +837,12 @@ export async function syncEpisodeDetails(opts: {
     }
 
     const before = readEpisode.get(r.id) as Record<string, unknown> | undefined;
+    const firstFill =
+      before != null &&
+      before.episode_title == null &&
+      before.episode_overview == null &&
+      before.episode_still == null &&
+      before.episode_air_date == null;
     update.run(
       title,
       found.overview ?? null,
@@ -847,6 +861,7 @@ export async function syncEpisodeDetails(opts: {
       changed++;
       opts.onEpisodeChange?.(
         `${formatEpisodeKey({ season: r.season, episode: r.episode })}: ${fields.join(", ")}`,
+        firstFill,
       );
     }
   }
@@ -858,11 +873,31 @@ export async function syncEpisodeDetails(opts: {
 // desfacerea unui pachet de sezon). Rulează în fundal: descărcarea nu
 // așteaptă după TMDB, iar o eroare aici nu contează — reîmprospătarea de 12
 // ore reîncearcă oricum.
+//
+// Ce schimbă la episoadele mai vechi (un nume „Episodul 4” devenit „Prima
+// flacără”, fiindcă nu aveau încă imagine și intră și ele în rulare) ajunge în
+// jurnalul de metadate, ca la reîmprospătarea de 12h. Episoadele tocmai create
+// nu: prima lor completare nu e o actualizare (decizia userului, 27 sept. 2026).
 export function syncEpisodeDetailsForShow(parentId: number | null): void {
   if (parentId == null) return;
-  syncEpisodeDetails({ parentId }).catch((e) =>
+  syncAndLogEpisodeDetails(parentId).catch((e) =>
     console.warn(`[show-watch] Detalii de episod necompletate pentru serialul ${parentId}:`, e),
   );
+}
+
+// Exportată pentru teste — syncEpisodeDetailsForShow nu așteaptă rezultatul.
+export async function syncAndLogEpisodeDetails(parentId: number): Promise<void> {
+  const episodes: string[] = [];
+  await syncEpisodeDetails({
+    parentId,
+    onEpisodeChange: (line, firstFill) => {
+      if (!firstFill) episodes.push(line);
+    },
+  });
+  if (episodes.length === 0) return;
+  const show = getDb().prepare("SELECT title FROM media WHERE id = ?").get(parentId) as
+    { title: string } | undefined;
+  await logEpisodeUpdates(show?.title ?? "", episodes);
 }
 
 // ---------------------------------------------------------------------------

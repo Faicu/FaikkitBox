@@ -15,8 +15,13 @@ vi.mock("../tmdb/tmdb.functions", () => ({
   getTmdbAllSeasonsInternal: vi.fn(),
 }));
 vi.mock("../tvmaze/tvmaze.functions", () => ({ getTvmazeAirstampsInternal: vi.fn() }));
+vi.mock("../activity-log", () => ({ logActivity: vi.fn() }));
 
-import { newMetaReport, buildMetaRefreshMessage } from "./metadata-report";
+import {
+  newMetaReport,
+  buildEpisodeUpdateMessage,
+  buildMetaRefreshMessage,
+} from "./metadata-report";
 
 let movies: typeof import("./movie-metadata");
 let shows: typeof import("./show-watch");
@@ -378,5 +383,99 @@ describe("jurnalul reîmprospătării (metadata-report)", () => {
         ],
       }),
     ).toBe("Metadate: 2 seriale, 58 de filme · schimbări la 2 titluri (3 episoade) · 1 eșuat");
+  });
+});
+
+describe("completarea de după o descărcare (syncAndLogEpisodeDetails)", () => {
+  // Insula Iubirii: E4 salvat cu „Episodul 4” și fără imagine (deci reintră în
+  // completare), E7 tocmai descărcat, încă fără niciun detaliu.
+  function insula(): number {
+    const showId = Number(
+      db
+        .prepare(
+          `INSERT INTO media (media_type, title, tmdb_id) VALUES ('tv_show', 'Insula Iubirii', 62767)`,
+        )
+        .run().lastInsertRowid,
+    );
+    db.prepare(
+      `INSERT INTO media (media_type, parent_id, title, season, episode, episode_title,
+                          episode_air_date)
+       VALUES ('episode', ?, 'Insula Iubirii', 10, 4, 'Episodul 4', '2026-09-12')`,
+    ).run(showId);
+    db.prepare(
+      `INSERT INTO media (media_type, parent_id, title, season, episode)
+       VALUES ('episode', ?, 'Insula Iubirii', 10, 7)`,
+    ).run(showId);
+    return showId;
+  }
+
+  const ep = (episodeNum: number, title: string, airDate: string) => ({
+    episodeNum,
+    title,
+    overview: `Descriere ${episodeNum}`,
+    stillUrl: null,
+    airDate,
+    aired: true,
+  });
+
+  it("jurnalul are episodul vechi actualizat, nu și pe cel tocmai descărcat", async () => {
+    const showId = insula();
+    seasons.mockResolvedValue([
+      {
+        seasonNumber: 10,
+        posterUrl: null,
+        episodes: [ep(4, "Prima flacără", "2026-09-12"), ep(7, "Revenirea", "2026-09-26")],
+      },
+    ]);
+    const { logActivity } = await import("../activity-log");
+
+    await shows.syncAndLogEpisodeDetails(showId);
+
+    expect(logActivity).toHaveBeenCalledTimes(1);
+    expect(logActivity).toHaveBeenCalledWith(
+      "metadata_refresh",
+      "Metadate: Insula Iubirii · 1 episod actualizat",
+      {
+        shows: 0,
+        movies: 0,
+        failed: 0,
+        items: [
+          {
+            title: "Insula Iubirii",
+            kind: "show",
+            fields: "",
+            episodes: "S10E04: nume „Episodul 4” → „Prima flacără”, descriere",
+          },
+        ],
+      },
+    );
+    // Episodul nou e totuși completat — doar jurnalul îl lasă pe dinafară.
+    const e7 = db
+      .prepare("SELECT episode_title FROM media WHERE parent_id = ? AND episode = 7")
+      .get(showId) as { episode_title: string };
+    expect(e7.episode_title).toBe("Revenirea");
+  });
+
+  it("doar episodul nou completat: nimic în jurnal", async () => {
+    const showId = insula();
+    seasons.mockResolvedValue([
+      {
+        seasonNumber: 10,
+        posterUrl: null,
+        episodes: [ep(4, "Episodul 4", "2026-09-12"), ep(7, "Revenirea", "2026-09-26")],
+      },
+    ]);
+    db.exec("UPDATE media SET episode_overview = 'Descriere 4' WHERE episode = 4");
+    const { logActivity } = await import("../activity-log");
+
+    await shows.syncAndLogEpisodeDetails(showId);
+
+    expect(logActivity).not.toHaveBeenCalled();
+  });
+
+  it("mesajul: numărători în română", () => {
+    expect(buildEpisodeUpdateMessage("Insula Iubirii", 3)).toBe(
+      "Metadate: Insula Iubirii · 3 episoade actualizate",
+    );
   });
 });

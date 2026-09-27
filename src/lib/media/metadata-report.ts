@@ -123,3 +123,22 @@ export async function logMetaReport(r: MetaReport): Promise<void> {
     })),
   });
 }
+
+// Episoadele mai vechi actualizate de completarea de după o descărcare
+// (syncAndLogEpisodeDetails din show-watch.ts). Aceeași formă ca o rulare de
+// 12h, ca detaliile să se deschidă în același panou; scrisă doar când s-a
+// schimbat ceva — completarea rulează la fiecare episod descărcat.
+export function buildEpisodeUpdateMessage(title: string, episodes: number): string {
+  return `Metadate: ${title} · ${pluralRo(episodes, "episod actualizat", "episoade actualizate")}`;
+}
+
+export async function logEpisodeUpdates(title: string, episodes: string[]): Promise<void> {
+  if (episodes.length === 0) return;
+  const { logActivity } = await import("../activity-log");
+  await logActivity("metadata_refresh", buildEpisodeUpdateMessage(title, episodes.length), {
+    shows: 0,
+    movies: 0,
+    failed: 0,
+    items: [{ title, kind: "show", fields: "", episodes: episodes.join("\n") }],
+  });
+}
