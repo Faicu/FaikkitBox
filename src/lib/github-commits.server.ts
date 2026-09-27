@@ -1,6 +1,7 @@
 // Sincronizarea commit-urilor din GitHub în tabela `commits` — un singur loc,
-// folosit și de polling-ul din pagina Tehnic (getRecentCommits), și de
-// plugin-ul care sincronizează la pornire (github-commit-tracker).
+// folosit de polling-ul din pagina Tehnic (getRecentCommits) și imediat după
+// un push reușit (pushToGitHub). Webhook-ul scrie separat, dar în aceeași
+// tabelă, cu aceeași regulă INSERT OR IGNORE.
 //
 // Doar import dinamic din module care ajung în client (vezi github.functions.ts).
 

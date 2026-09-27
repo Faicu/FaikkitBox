@@ -4,7 +4,6 @@ import { Box } from "lucide-react";
 
 import {
   activityLogQuery,
-  commitsFromDbQuery,
   dbBackupQuery,
   showWatchStatusQuery,
   wantedMoviesQuery,
@@ -15,7 +14,6 @@ import { PluginRow } from "../PluginRow";
 
 export function PluginStatusSection() {
   const { data: log } = useQuery(activityLogQuery);
-  const { data: commitsData } = useQuery(commitsFromDbQuery);
   const { data: watch } = useQuery(showWatchStatusQuery);
   const { data: wanted } = useQuery(wantedMoviesQuery);
   const { data: backup } = useQuery(dbBackupQuery);
@@ -25,11 +23,6 @@ export function PluginStatusSection() {
     if (!type || !Array.isArray(log)) return null;
     const entry = log.find((e) => e.type === type);
     return entry ? entry.timestamp : null;
-  }
-
-  function lastCommitSync(): string | null {
-    if (commitsData?.status !== "ok" || !commitsData.commits.length) return null;
-    return commitsData.commits[0].date;
   }
 
   // watch_last_checked_at e în formatul SQLite, în UTC ("2026-09-06 08:09:04").
@@ -50,7 +43,6 @@ export function PluginStatusSection() {
   }
 
   function lastTsFor(p: PluginInfo): string | null {
-    if (p.id === "github-commit-tracker") return lastCommitSync();
     if (p.id === "show-watcher") return lastShowWatch();
     if (p.id === "maintenance") return lastMaintenance(p);
     return lastActivity(p.activityType);

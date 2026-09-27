@@ -153,7 +153,7 @@ Detectarea trăiește în două locuri, după sursă:
 
 **În wizard**, verificarea întoarce toate calitățile din Plex, nu doar `Media[0]`, iar `qualityDirection` primește lista completă: nu propune nimic pentru o calitate pe care deja o deții, și compară cu cea mai bună deținută — cu 4K HDR + 720p în bibliotecă, un 1080p e downgrade, nu upgrade față de 720p.
 
-**Rândurile deja existente** își recalculează eticheta o dată, din Plex, la prima pornire după update (`redetectQualitiesOnce`, declanșat de `download-recovery` înaintea primei reconcilieri). Marcajul stă în tabela `one_time_jobs` — munca de pornire care atinge rețeaua nu poate sta într-o migrare sincronă, care rulează în tranzacție și e fatală la eșec.
+**Rândurile deja existente** și-au recalculat eticheta o dată, din Plex, la prima pornire după update (`redetectQualitiesOnce`, rulat pe 17 sept. 2026 și scos apoi din cod — vezi commit-ul 571cfe4). Marcajul a stat în tabela `one_time_jobs` — munca de pornire care atinge rețeaua nu poate sta într-o migrare sincronă, care rulează în tranzacție și e fatală la eșec.
 
 ---
 
@@ -179,7 +179,7 @@ Tot în ticul acestui plugin: reîmprospătarea detaliilor pentru seriale (cu ep
 
 ## Backup și retenție
 
-**Backup-ul bazei** (`src/lib/system/db-backup.ts`, `server/plugins/maintenance.ts`) — `data/faikkitbox.db` ține absolut tot: bibliotecă, conturi, jurnal, abonamente push. Copia se face cu **`VACUUM INTO`**, nu cu `cp`: baza rulează în mod WAL, deci o copiere de fișier ar prinde un `.db` fără tranzacțiile încă necheckpoint-ate. Plugin-ul rulează la +90s după pornire, apoi la 24h, cu rotație la 14 fișiere în `data/backups/`; sare peste rulare dacă ultima copie e mai nouă de 20h, altfel o zi cu multe deploy-uri ar goli rotația de istoric util. Starea (vechimea ultimei copii, număr, spațiu) e vizibilă în Tehnic, cu buton de backup manual.
+**Backup-ul bazei** (`src/lib/system/db-backup.ts`, `server/plugins/maintenance.ts`) — `data/faikkitbox.db` ține absolut tot: bibliotecă, conturi, jurnal, abonamente push. Copia se face cu **`VACUUM INTO`**, nu cu `cp`: baza rulează în mod WAL, deci o copiere de fișier ar prinde un `.db` fără tranzacțiile încă necheckpoint-ate. Plugin-ul verifică la +90s după pornire, apoi din oră în oră, cu rotație la 14 fișiere în `data/backups/`; copia se face doar dacă ultima de pe disc e mai veche de 23h, altfel o zi cu multe deploy-uri ar goli rotația de istoric util. Ceasul e chiar fișierul, deci deploy-urile nu-l resetează. Starea (vechimea ultimei copii, număr, spațiu) e vizibilă în Tehnic, cu buton de backup manual.
 
 **Retenție** — Jurnalul de activitate se curăță la 30 de zile (`pruneActivityLog`, la pornire și apoi zilnic); jurnalul de erori, tot la 30 de zile, plafonat la 1000 de rânduri.
 
@@ -301,8 +301,8 @@ src/
 server/
   plugins/            plugin-uri Nitro (fundal): show-watcher,
                       plex-session-tracker, download-recovery,
-                      github-commit-tracker, maintenance,
-                      server-lifecycle, immich-upload-tracker
+                      maintenance, server-lifecycle,
+                      immich-upload-tracker
   routes/             rute API: GitHub webhook, SSE auto-reload, proxy thumbnail-uri Plex
 deploy/
   hardening/          unit systemd, listă sudoers și scripturi pentru contul
@@ -439,7 +439,7 @@ Vezi [`STRUCTURE.md`](./STRUCTURE.md) pentru lista completă, fișier cu fișier
 - **`media` (db.ts)** — sursa unică de adevăr pentru bibliotecă. Conține conținut real (descărcat sau backfill din Plex), plus urmărirea, ca set de coloane pe rândul-părinte — **nu** ca tabelă paralelă: exact structura paralelă (`pinned_*`) a fost sursa unei clase întregi de bug-uri și a fost eliminată. Singura excepție de la „conținut real" e filmul urmărit, care are un rând fără `torrent_hash` și fără `plex_rating_key` — și tocmai de-asta rămâne invizibil peste tot unde se cere una dintre cele două coloane. Dacă ai nevoie de un flux nou de intenție/monitorizare, extinde rândul existent, nu crea o structură lângă el. Tabela `downloads` a fost eliminată în migrarea v25: nu mai există un jurnal separat de descărcări.
 - **`*.functions.ts` — fără importuri server statice.** Corpul unui handler `createServerFn` e eliminat din bundle-ul de client, deci un `await import("./x")` din interiorul lui rămâne pe server; un import static la vârful fișierului trage tot graful în bundle-ul public. De aceea logica stă în `media.ts` / `activity-log.ts` / `error-log.ts` / `filelist/download.ts` / `system/network-link.ts` / `system/speedtest.ts` / `system/db-backup.ts`, iar definițiile de server functions în perechile lor `*.functions.ts`. Nerespectarea regulii a servit public schema SQLite completă și a produs eroarea `(0 , n.dirname) is not a function`, rămasă luni de zile neexplicată.
 - **Munca de la pornirea serverului se declanșează din `server/plugins/`**, nu dintr-un `setTimeout` la nivel de modul. Un efect de modul rulează doar dacă cineva importă modulul, iar asta depinde de grafuri de import care se schimbă la refactorizări — două bug-uri identice au fost cauzate exact de asta (logarea pornirii/opririi rula abia la prima cerere HTTP; reluarea polling-urilor a încetat complet să mai ruleze după un refactor de bundle).
-- **Munca de pornire care atinge rețeaua nu are ce căuta într-o migrare.** Migrarea rulează sincron, în tranzacție, și e fatală la eșec — un apel Plex picat ar bloca pornirea. Pentru „o singură dată pe instalare, dar cu rețea", folosește tabela `one_time_jobs` și declanșează din plugin (vezi `redetectQualitiesOnce`).
+- **Munca de pornire care atinge rețeaua nu are ce căuta într-o migrare.** Migrarea rulează sincron, în tranzacție, și e fatală la eșec — un apel Plex picat ar bloca pornirea. Pentru „o singură dată pe instalare, dar cu rețea", folosește tabela `one_time_jobs` și declanșează din plugin (exemplu: `redetectQualitiesOnce` din commit-ul 571cfe4; după ce a rulat peste tot, codul se poate scoate).
 - **Migrările sunt tranzacționale și fatale la eșec** — `runCleanups` rulează în `BEGIN`/`COMMIT`, iar o eroare oprește pornirea. Înainte, un `catch` cu `console.warn` lăsa aplicația să pornească cu schemă parțială. O migrare nouă trebuie să fie idempotentă și să verifice că tabela sursă chiar există (v9 nu o făcea și lăsa o tabelă orfană pe orice instalare nouă).
 - **DB** — SQLite nativ (`node:sqlite`), un singur fișier la `/opt/faikkitbox/data/faikkitbox.db` (override cu `FAIKKITBOX_DB_PATH`). Fără ORM/migrations tool — schema se creează cu `CREATE TABLE IF NOT EXISTS`, migrările incrementale via `PRAGMA user_version` (`runCleanups` în `db.ts`); orice schimbare de schemă se adaugă acolo, niciodată prin modificarea unei migrări deja aplicate.
 

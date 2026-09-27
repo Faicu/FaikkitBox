@@ -1,11 +1,25 @@
-export default function () {
-  const INTERVAL_MS = 30_000;
+// ---------------------------------------------------------------------------
+// Plugin: sesiunile Plex active, la 30s — începutul și sfârșitul fiecărei
+// vizionări, în jurnal (trackPlexSessions din activity-log.ts).
+// ---------------------------------------------------------------------------
 
+const INTERVAL_MS = 30_000;
+// Mult sub interval: un Plex blocat (în timpul unui update, de exemplu) ar ține
+// altfel cererea minute întregi.
+const REQUEST_TIMEOUT_MS = 10_000;
+
+// Gardă de suprapunere: două verificări care primesc aceeași sesiune nouă ar
+// vedea-o amândouă ca necunoscută și ar scrie de două ori „a început să
+// vizioneze”, cu două notificări push.
+let polling = false;
+
+export default function () {
   async function poll() {
     const token = process.env.PLEX_TOKEN;
     const base = process.env.PLEX_URL?.replace(/\/$/, "");
-    if (!token || !base) return;
+    if (!token || !base || polling) return;
 
+    polling = true;
     try {
       const { trackPlexSessions } = await import("../../src/lib/activity-log");
 
@@ -14,7 +28,10 @@ export default function () {
         "X-Plex-Token": token,
       };
 
-      const res = await fetch(`${base}/status/sessions`, { headers });
+      const res = await fetch(`${base}/status/sessions`, {
+        headers,
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      });
       if (!res.ok) return;
 
       const json = (await res.json()) as {
@@ -55,7 +72,10 @@ export default function () {
         }),
       );
     } catch {
-      // Plex poate fi offline — ignorăm
+      // Plex poate fi offline (sau n-a răspuns la timp) — sesiunile rămân
+      // cum erau, nu le închidem pe baza unei erori.
+    } finally {
+      polling = false;
     }
   }
 

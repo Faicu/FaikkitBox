@@ -18,9 +18,7 @@
 // 2. Reconcilierea (la +45s, apoi la 10 min): titlurile terminate, dar
 //    rămase fără plex_rating_key — prinse de un restart în fereastra de
 //    legare, deci blocate pe „se procesează” în Bibliotecă. Vezi
-//    src/lib/media/plex-link-reconciler.ts. Înaintea primei treceri rulează o
-//    singură dată redetectQualitiesOnce, ca reconcilierea să lucreze deja pe
-//    etichete de calitate corecte (marcată în DB, pornirile următoare o sar).
+//    src/lib/media/plex-link-reconciler.ts.
 //
 // Distanța de 30s dintre cele două rămâne explicită: resumeOrphanedPolls
 // doar PORNEȘTE buclele și se întoarce imediat, deci „după ce s-a terminat”
@@ -63,17 +61,8 @@ async function reconcile(): Promise<void> {
   }
 }
 
-async function redetectQualities(): Promise<void> {
-  try {
-    const { redetectQualitiesOnce } = await import("../../src/lib/media/media");
-    await redetectQualitiesOnce();
-  } catch (e) {
-    console.warn("[media] Recalcularea calităților a eșuat, se reia la următoarea pornire:", e);
-  }
-}
-
 export default function () {
   setTimeout(() => void resume(), RESUME_DELAY_MS);
-  setTimeout(() => void redetectQualities().then(reconcile), RECONCILE_DELAY_MS);
+  setTimeout(() => void reconcile(), RECONCILE_DELAY_MS);
   setInterval(() => void reconcile(), RECONCILE_INTERVAL_MS);
 }

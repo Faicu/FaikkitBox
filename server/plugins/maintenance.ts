@@ -10,10 +10,17 @@
 //    butoanele pe veci („rulează deja”).
 //
 // 2. Backup-ul bazei (src/lib/system/db-backup.ts), la +90s — ca să nu
-//    concureze cu migrările și cu celelalte plugin-uri de pornire — apoi la
-//    24h. Copia se face doar dacă cea mai recentă e mai veche de ~20h, altfel
-//    un server repornit de cinci ori pe zi (deploy-uri) ar face cinci copii
-//    identice și ar împinge afară din rotație istoricul chiar util.
+//    concureze cu migrările și cu celelalte plugin-uri de pornire — apoi din
+//    oră în oră. Copia se face doar dacă cea mai recentă e mai veche de 23h,
+//    deci efectiv o dată pe zi, iar un server repornit de cinci ori pe zi
+//    (deploy-uri) nu face cinci copii identice care să împingă afară din
+//    rotație istoricul chiar util.
+//
+//    Ceasul e data celui mai nou fișier din data/backups/, nu un interval în
+//    memorie. Varianta veche (interval de 24h, pornit la fiecare boot, cu
+//    pragul de 20h) se reseta la fiecare deploy: un deploy la 19h după backup
+//    sărea copia și o amâna cu încă 24h. În septembrie 2026 au fost pauze de
+//    30h, 33h și 41h între backup-uri.
 //
 // 3. Verificarea actualizărilor (Plex, Immich, Ubuntu, cererea de repornire —
 //    src/lib/system/update-check.ts), la +5 min, apoi din oră în oră. Efectivă
@@ -22,8 +29,10 @@
 // ---------------------------------------------------------------------------
 
 const BACKUP_DELAY_MS = 90_000;
-const BACKUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
-const BACKUP_MIN_AGE_MS = 20 * 60 * 60 * 1000;
+const BACKUP_CHECK_INTERVAL_MS = 60 * 60_000;
+// 23h, nu 24h: cu verificare din oră în oră, pauza reală e pragul plus cel
+// mult o oră — deci tot cel mult 24h.
+const BACKUP_MIN_AGE_MS = 23 * 60 * 60 * 1000;
 
 // Plex și Immich au timp să răspundă după pornire.
 const UPDATE_CHECK_DELAY_MS = 5 * 60_000;
@@ -79,12 +88,8 @@ export default function () {
   // Imediat: până nu se curăță, butoanele ar refuza orice acțiune nouă.
   void closeInterruptedJobs();
 
-  // Timerele backup-ului nu țin procesul în viață — așa erau și înainte.
-  const firstBackup = setTimeout(() => {
-    void backupIfDue();
-    setInterval(() => void backupIfDue(), BACKUP_INTERVAL_MS).unref?.();
-  }, BACKUP_DELAY_MS);
-  firstBackup.unref?.();
+  setTimeout(() => void backupIfDue(), BACKUP_DELAY_MS);
+  setInterval(() => void backupIfDue(), BACKUP_CHECK_INTERVAL_MS);
 
   setTimeout(() => void checkUpdates(), UPDATE_CHECK_DELAY_MS);
   setInterval(() => void checkUpdates(), UPDATE_CHECK_INTERVAL_MS);

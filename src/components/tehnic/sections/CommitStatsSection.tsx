@@ -35,6 +35,8 @@ export function CommitStatsSection() {
         qc.invalidateQueries({ queryKey: ["githubPushStatus"] });
         qc.invalidateQueries({ queryKey: ["githubSync"] });
         qc.invalidateQueries({ queryKey: ["unpushedCommits"] });
+        qc.invalidateQueries({ queryKey: ["recentCommits"] });
+        qc.invalidateQueries({ queryKey: ["commitsFromDb"] });
       } else {
         toast.error(`Push eșuat: ${res.error}`);
       }

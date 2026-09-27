@@ -14,8 +14,8 @@
 // 2. Captura erorilor din consolă spre „Erori aplicație” (console-capture.ts).
 //    src/server.ts o instalează și el, dar se încarcă abia la prima cerere
 //    HTTP — fără pasul de aici, erorile plugin-urilor de la pornire s-ar
-//    pierde. Înainte o instalau github-commit-tracker și plex-session-tracker,
-//    fără nicio legătură cu treaba lor.
+//    pierde. Înainte o instalau github-commit-tracker (scos între timp) și
+//    plex-session-tracker, fără nicio legătură cu treaba lor.
 //
 // 3. Logarea pornirii/opririi în jurnal (initServerLifecycleLogging). Blocul
 //    rula ca efect secundar de modul, iar nimic nu importa activity-log la

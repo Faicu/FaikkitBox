@@ -439,6 +439,16 @@ export const pushToGitHub = createServerFn({ method: "POST" }).handler(
         return { status: "ok", pushedCommits: 0 };
       }
       execFileSync("git", ["push", "origin", branch], { timeout: 30_000 });
+      // Commit-urile publicate intră imediat în DB (cu notificarea lor), fără
+      // să depindă de webhook sau de polling-ul paginii. Fost plugin separat
+      // (github-commit-tracker), care sincroniza la fiecare pornire pentru un
+      // webhook pierdut într-un restart — dar push-ul pleacă doar de aici, cu
+      // serverul pornit. O sincronizare picată nu face push-ul eșuat: publicarea
+      // a reușit, iar polling-ul din Tehnic o reia.
+      const { syncCommitsFromGitHub } = await import("./github-commits.server");
+      await syncCommitsFromGitHub().catch((e) =>
+        console.warn("[github] Sincronizarea de după push a eșuat:", e),
+      );
       return { status: "ok", pushedCommits: ahead };
     } catch (e) {
       return {

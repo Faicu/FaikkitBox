@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import {
-  GitCommitHorizontal,
   PlayCircle,
   Link2,
   RotateCcw,
@@ -62,7 +61,8 @@ export const PLUGINS: PluginInfo[] = [
     label: "Urmărire Seriale și Filme",
     description: "Descărcare automată episoade noi și filme așteptate",
     cadence: "verificat din 10 în 10 min",
-    details: "Face patru lucruri la fiecare tic, fiecare cu ritmul lui.",
+    details:
+      "Face patru lucruri la fiecare tic, fiecare cu ritmul lui, în ordinea de mai jos: întâi descărcările, apoi detaliile. Un pas care eșuează nu-i oprește pe ceilalți.",
     steps: [
       {
         title: "Episoade noi",
@@ -76,6 +76,19 @@ export const PLUGINS: PluginInfo[] = [
           "Dacă ai ales o calitate de rezervă, ea se ia doar când principala lipsește la două verificări, la cel puțin 3 ore distanță.",
         ],
         icon: <Tv className="h-3.5 w-3.5 text-blue-400" />,
+      },
+      {
+        title: "Filme așteptate",
+        cadence: "la 12h / film",
+        summary: "Filme cerute care încă nu existau pe Filelist la calitatea vrută.",
+        points: [
+          "Cadență mai lentă decât la seriale, fiindcă un film poate întârzia luni de zile.",
+          "Înainte de data lansării nici nu se caută — n-ar avea ce găsi.",
+          "Prima verificare face excepție: vine la un minut după adăugare, pe o buclă proprie de 30s.",
+          "Calitatea de rezervă funcționează ca la seriale.",
+          "Spre deosebire de seriale, urmărirea unui film se stinge singură la prima descărcare reușită.",
+        ],
+        icon: <Film className="h-3.5 w-3.5 text-amber-400" />,
       },
       {
         title: "Detalii seriale",
@@ -97,19 +110,6 @@ export const PLUGINS: PluginInfo[] = [
           "După aceeași regulă ca la seriale: cerute în română, cu engleza ca rezervă până apare traducerea.",
         ],
         icon: <Clapperboard className="h-3.5 w-3.5 text-purple-400" />,
-      },
-      {
-        title: "Filme așteptate",
-        cadence: "la 12h / film",
-        summary: "Filme cerute care încă nu existau pe Filelist la calitatea vrută.",
-        points: [
-          "Cadență mai lentă decât la seriale, fiindcă un film poate întârzia luni de zile.",
-          "Înainte de data lansării nici nu se caută — n-ar avea ce găsi.",
-          "Prima verificare face excepție: vine la un minut după adăugare, pe o buclă proprie de 30s.",
-          "Calitatea de rezervă funcționează ca la seriale.",
-          "Spre deosebire de seriale, urmărirea unui film se stinge singură la prima descărcare reușită.",
-        ],
-        icon: <Film className="h-3.5 w-3.5 text-amber-400" />,
       },
     ],
     icon: <Orb state="searching" />,
@@ -160,16 +160,6 @@ export const PLUGINS: PluginInfo[] = [
     activityType: null,
   },
   {
-    id: "github-commit-tracker",
-    label: "GitHub Commit Tracker",
-    description: "Sincronizare commit-uri din GitHub",
-    cadence: "la pornire (după 6s)",
-    details:
-      "Aduce ultimele commit-uri din GitHub și trimite notificare pentru cele noi față de ce e în DB. Acoperă cazul în care webhook-ul a picat exact în timpul unui restart.",
-    icon: <GitCommitHorizontal className="h-4 w-4 text-purple-400" />,
-    activityType: null,
-  },
-  {
     id: "maintenance",
     label: "Întreținere",
     description: "Backup zilnic al bazei, verificarea actualizărilor, deblocarea acțiunilor",
@@ -189,12 +179,13 @@ export const PLUGINS: PluginInfo[] = [
       },
       {
         title: "Backup bază de date",
-        cadence: "la pornire (după 90s), apoi la 24h",
+        cadence: "zilnic (verificat din oră în oră)",
         summary: "Copie a bazei, cu rotație la ultimele 14.",
         points: [
           "Baza ține tot ce știe aplicația — bibliotecă, conturi, jurnal, abonamente push. Înainte nu exista niciun backup: un disc mort sau o migrare greșită însemna pierdere totală.",
           "Copia se face cu VACUUM INTO, nu cu o copiere de fișier: baza rulează în mod WAL, deci un `cp` poate prinde un .db fără tranzacțiile încă necheckpoint-ate și poate da o copie coruptă.",
-          "O copie se face doar dacă cea mai recentă e mai veche de 20h — altfel o zi cu cinci deploy-uri ar face cinci copii identice și ar împinge afară din rotație istoricul chiar util.",
+          "O copie se face doar dacă cea mai recentă e mai veche de 23h — altfel o zi cu cinci deploy-uri ar face cinci copii identice și ar împinge afară din rotație istoricul chiar util.",
+          "Ceasul e data ultimei copii de pe disc, verificată din oră în oră, deci deploy-urile nu-l resetează. Înainte, un interval de 24h pornit la fiecare repornire lăsa uneori până la 41h între copii.",
           "Copiile stau lângă bază, pe același disc: te apără de o stricăciune logică, nu de un disc mort.",
         ],
         icon: <DatabaseBackup className="h-3.5 w-3.5 text-teal-400" />,

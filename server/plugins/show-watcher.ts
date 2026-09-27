@@ -25,32 +25,53 @@ const NEW_MOVIE_POLL_MS = 30 * 1000;
 // suprapuse ar cere de două ori aceleași sezoane de la TMDB.
 let running = false;
 
+// Un pas care aruncă nu trebuie să-i oprească pe ceilalți. Înainte toată
+// rularea stătea într-un singur try, cu metadatele primele: o eroare la
+// reîmprospătarea detaliilor sărea căutarea episoadelor și a filmelor pentru
+// tot ciclul.
+async function step(name: string, fn: () => Promise<void>): Promise<void> {
+  try {
+    await fn();
+  } catch (e) {
+    console.warn(`[show-watcher] ${name} — pas eșuat, se reia la ciclul următor:`, e);
+  }
+}
+
 async function run(): Promise<void> {
   if (running) return;
   running = true;
   try {
-    const { checkDueShows, refreshShowMetadata } = await import("../../src/lib/media/show-watch");
-    // Detaliile tuturor serialelor și ale episoadelor lor, la 12h fiecare
-    // (vezi refreshShowMetadata) — nu doar pentru cele urmărite, fiindcă
-    // tv_status decide dacă vezi butonul de urmărire, deci trebuie corect mai
-    // ales acolo unde încă n-ai pornit-o.
-    // Seriale și filme adună în același raport: o rulare = o intrare în
-    // jurnal (vezi metadata-report.ts), scrisă doar dacă a fost ceva scadent.
-    const { newMetaReport, logMetaReport } = await import("../../src/lib/media/metadata-report");
-    const report = newMetaReport();
-    await refreshShowMetadata(report);
-    // La fel pentru filme: titlu, an, descriere, genuri, poster (vezi
-    // movie-metadata.ts) — filmele n-aveau deloc reîmprospătare.
-    const { refreshMovieMetadata } = await import("../../src/lib/media/movie-metadata");
-    await refreshMovieMetadata(report);
-    await logMetaReport(report);
-    await checkDueShows();
+    // Descărcările întâi — sunt motivul pentru care există plugin-ul, iar
+    // fiecare verificare își cere singură detaliile de care are nevoie, deci
+    // nu depinde de reîmprospătarea de mai jos.
+    await step("Episoade noi", async () => {
+      const { checkDueShows } = await import("../../src/lib/media/show-watch");
+      await checkDueShows();
+    });
     // Filmele așteptate, la coadă și în aceeași buclă, nu într-un plugin
     // separat: ambele caută pe Filelist, iar două bucle independente ar
-    // deschide sesiuni concurente acolo, fiecare cu garda ei de suprapunere
-    // inutilă față de cealaltă. Aici rămân strict secvențiale.
-    const { checkDueMovies } = await import("../../src/lib/media/movie-watch");
-    await checkDueMovies();
+    // deschide sesiuni concurente acolo. Aici rămân strict secvențiale.
+    await step("Filme așteptate", async () => {
+      const { checkDueMovies } = await import("../../src/lib/media/movie-watch");
+      await checkDueMovies();
+    });
+    // Detaliile tuturor serialelor (cu episoadele lor) și ale filmelor, la
+    // 12h fiecare — nu doar pentru cele urmărite, fiindcă tv_status decide
+    // dacă vezi butonul de urmărire, deci trebuie corect mai ales acolo unde
+    // încă n-ai pornit-o. Seriale și filme adună în același raport: o rulare =
+    // o intrare în jurnal (vezi metadata-report.ts), scrisă doar dacă a fost
+    // ceva scadent — și scrisă chiar dacă una dintre jumătăți a eșuat.
+    const { newMetaReport, logMetaReport } = await import("../../src/lib/media/metadata-report");
+    const report = newMetaReport();
+    await step("Detalii seriale", async () => {
+      const { refreshShowMetadata } = await import("../../src/lib/media/show-watch");
+      await refreshShowMetadata(report);
+    });
+    await step("Detalii filme", async () => {
+      const { refreshMovieMetadata } = await import("../../src/lib/media/movie-metadata");
+      await refreshMovieMetadata(report);
+    });
+    await logMetaReport(report);
   } catch (e) {
     console.warn("[show-watcher] Rulare eșuată:", e);
   } finally {
@@ -63,13 +84,14 @@ async function run(): Promise<void> {
 // verifică seriale, muncă mult prea grea pentru fiecare minut. Aici e un
 // singur SELECT care, în marea majoritate a minutelor, nu întoarce nimic.
 //
-// Gardă separată de `running`: cele două bucle pot rula în paralel fără să se
-// calce, fiindcă checkMovie are propria protecție per film (inProgress), iar
-// un film abia adăugat nu poate fi în același timp și scadent la 12h.
+// Nu pornește cât rulează ciclul mare: acela caută și el pe Filelist, iar
+// regula de mai sus (fără căutări concurente) ar fi încălcată exact aici.
+// Filmul nou e prins la primul tic de 30s de după ciclu. Garda proprie,
+// `checkingNew`, rămâne pentru suprapunerea buclei cu ea însăși.
 let checkingNew = false;
 
 async function runNewMovies(): Promise<void> {
-  if (checkingNew) return;
+  if (checkingNew || running) return;
   checkingNew = true;
   try {
     const { checkNewMovies } = await import("../../src/lib/media/movie-watch");

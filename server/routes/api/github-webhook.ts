@@ -36,7 +36,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const commits: GithubPushCommit[] = payload.commits ?? [];
-  // Același fallback ca în github.functions.ts și github-commit-tracker.ts —
+  // Același fallback ca în github.functions.ts și github-commits.server.ts —
   // cu "" ieșea un URL rupt (https://github.com//commit/<sha>) pe commit-urile
   // în care GitHub nu trimite `url` în payload.
   const repo = process.env.GITHUB_REPO ?? "Faicu/FaikkitBox";
