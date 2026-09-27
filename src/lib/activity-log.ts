@@ -422,7 +422,7 @@ async function logServerStart(): Promise<void> {
     dbModuleRef = dbModule;
     cryptoRef = await import("node:crypto");
     // Deschide conexiunea (și rulează migrările) acum, la pornire — la oprire
-    // avem doar ~300ms până la ieșirea forțată din fast-shutdown.ts, prea
+    // avem doar ~300ms până la ieșirea forțată din server-lifecycle.ts, prea
     // puțin ca să deschidem DB-ul de la zero acolo.
     const db = dbModule.getDb();
 
@@ -470,7 +470,7 @@ async function logServerStart(): Promise<void> {
     // Dintre cele două, pornirea e și informația utilă ("e din nou sus"), și
     // singura trimisă de un proces care chiar are timp s-o ducă la capăt:
     // push-ul de la oprire pleacă fără await, într-o fereastră de ~300ms
-    // (fast-shutdown.ts), deci uneori nu ajunge deloc.
+    // (server-lifecycle.ts), deci uneori nu ajunge deloc.
     await logActivity("server_start", buildServerStartMessage(cause, nowHM()), {
       deploy: isDeploy,
       pid: process.pid,
@@ -504,7 +504,7 @@ function logServerStopSync(): void {
     db.prepare("UPDATE server_runtime SET clean_shutdown = 1 WHERE id = 1").run();
 
     // Push best-effort, fără await — la oprire avem doar ~300ms
-    // (fast-shutdown.ts) înainte de ieșirea forțată, insuficient garantat
+    // (server-lifecycle.ts) înainte de ieșirea forțată, insuficient garantat
     // pentru un round-trip web-push, dar merită încercat când apucă.
     import("./notifications/push")
       .then(({ sendPushToAll }) =>
@@ -527,7 +527,7 @@ declare global {
 // a poluat jurnalul în timpul testării manuale a acestui fișier.
 const isRealServerBuild = import.meta.url.includes("/.output/");
 
-// Apelată explicit (și AȘTEPTATĂ) din server/plugins/activity-boot.ts.
+// Apelată explicit din server/plugins/server-lifecycle.ts.
 //
 // Înainte, blocul rula ca side-effect la încărcarea modulului — dar nimic nu
 // importa activity-log la boot, deci se executa abia la PRIMA CERERE HTTP.
@@ -581,7 +581,7 @@ export async function initServerLifecycleLogging(): Promise<void> {
   // e sincron, deci merge).
   process.on("exit", logOnce);
   // Backup: dacă SIGTERM nu duce la un exit normal, logăm direct la semnal.
-  // NU apelăm process.exit() aici — lăsăm Nitro (și fast-shutdown.ts) să-și
+  // NU apelăm process.exit() aici — lăsăm Nitro (și server-lifecycle.ts) să-și
   // termine treaba.
   process.on("SIGTERM", logOnce);
   process.on("SIGINT", logOnce);

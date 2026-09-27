@@ -5,6 +5,7 @@ import { Box } from "lucide-react";
 import {
   activityLogQuery,
   commitsFromDbQuery,
+  dbBackupQuery,
   showWatchStatusQuery,
   wantedMoviesQuery,
 } from "@/lib/queries";
@@ -17,6 +18,7 @@ export function PluginStatusSection() {
   const { data: commitsData } = useQuery(commitsFromDbQuery);
   const { data: watch } = useQuery(showWatchStatusQuery);
   const { data: wanted } = useQuery(wantedMoviesQuery);
+  const { data: backup } = useQuery(dbBackupQuery);
   const [openPlugin, setOpenPlugin] = useState<PluginInfo | null>(null);
 
   function lastActivity(type: string | null): string | null {
@@ -37,9 +39,20 @@ export function PluginStatusSection() {
     return v ? `${v.replace(" ", "T")}Z` : null;
   }
 
+  // Backup-ul e urma zilnică sigură a plugin-ului; o actualizare anunțată
+  // apare doar când chiar există una. Se afișează cea mai recentă dintre ele.
+  function lastMaintenance(p: PluginInfo): string | null {
+    const ts = [backup?.lastAt ?? null, lastActivity(p.activityType)].filter(
+      (t): t is string => t !== null,
+    );
+    if (!ts.length) return null;
+    return ts.reduce((a, b) => (new Date(a).getTime() >= new Date(b).getTime() ? a : b));
+  }
+
   function lastTsFor(p: PluginInfo): string | null {
     if (p.id === "github-commit-tracker") return lastCommitSync();
     if (p.id === "show-watcher") return lastShowWatch();
+    if (p.id === "maintenance") return lastMaintenance(p);
     return lastActivity(p.activityType);
   }
 

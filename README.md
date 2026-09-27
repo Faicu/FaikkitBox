@@ -121,12 +121,12 @@ Descărcarea de pe Filelist răspunde imediat după ce upload-ul la qBittorrent 
 
 ### Continuitate după restart (`server/plugins/`)
 
-O descărcare pornită din aplicație e urmărită de o buclă de polling care trăiește în procesul serverului. Un restart o omoară — iar workflow-ul de deploy repornește serviciul la fiecare modificare de cod. Două plugin-uri acoperă golul:
+O descărcare pornită din aplicație e urmărită de o buclă de polling care trăiește în procesul serverului. Un restart o omoară — iar workflow-ul de deploy repornește serviciul la fiecare modificare de cod. Plugin-ul **`download-recovery.ts`** acoperă golul, în doi pași:
 
-- **`filelist-resume.ts`** (la +15s de la pornire) reia polling-ul pentru descărcările nefinalizate. Fără el, un torrent care se termină după restart nu e observat niciodată: fără subtitrare RO, fără `completed_at`, fără notificare, fără legare Plex.
-- **`plex-link-reconciler.ts`** (la +45s, apoi la 10 min) acoperă cazul complementar — descărcare terminată, dar legarea la Plex întreruptă de un restart în fereastra ei de 30 de minute. Reîncearcă pentru tot ce e complet și fără `plex_rating_key` în ultimele 72h.
+- **Reluarea** (la +15s de la pornire) reia polling-ul pentru descărcările nefinalizate. Fără el, un torrent care se termină după restart nu e observat niciodată: fără subtitrare RO, fără `completed_at`, fără notificare, fără legare Plex.
+- **Reconcilierea** (la +45s, apoi la 10 min) acoperă cazul complementar — descărcare terminată, dar legarea la Plex întreruptă de un restart în fereastra ei de 30 de minute. Reîncearcă pentru tot ce e complet și fără `plex_rating_key` în ultimele 72h.
 
-Ambele sunt plugin-uri explicite, nu efecte secundare la nivel de modul: un `setTimeout` scris în corpul unui modul rulează doar dacă cineva importă modulul, iar asta depinde de grafuri de import care se schimbă la refactorizări.
+E plugin explicit, nu efect secundar la nivel de modul: un `setTimeout` scris în corpul unui modul rulează doar dacă cineva importă modulul, iar asta depinde de grafuri de import care se schimbă la refactorizări.
 
 Conținutul (titlu + text) notificărilor de torrent adăugat/complet trăiește în `src/lib/notifications/notifications.ts` — sursă unică, nu recalculat inline la fiecare loc care trimite o notificare.
 
@@ -153,7 +153,7 @@ Detectarea trăiește în două locuri, după sursă:
 
 **În wizard**, verificarea întoarce toate calitățile din Plex, nu doar `Media[0]`, iar `qualityDirection` primește lista completă: nu propune nimic pentru o calitate pe care deja o deții, și compară cu cea mai bună deținută — cu 4K HDR + 720p în bibliotecă, un 1080p e downgrade, nu upgrade față de 720p.
 
-**Rândurile deja existente** își recalculează eticheta o dată, din Plex, la prima pornire după update (`redetectQualitiesOnce`, declanșat de `plex-link-reconciler`). Marcajul stă în tabela `one_time_jobs` — munca de pornire care atinge rețeaua nu poate sta într-o migrare sincronă, care rulează în tranzacție și e fatală la eșec.
+**Rândurile deja existente** își recalculează eticheta o dată, din Plex, la prima pornire după update (`redetectQualitiesOnce`, declanșat de `download-recovery` înaintea primei reconcilieri). Marcajul stă în tabela `one_time_jobs` — munca de pornire care atinge rețeaua nu poate sta într-o migrare sincronă, care rulează în tranzacție și e fatală la eșec.
 
 ---
 
@@ -179,7 +179,7 @@ Tot în ticul acestui plugin: reîmprospătarea detaliilor pentru seriale (cu ep
 
 ## Backup și retenție
 
-**Backup-ul bazei** (`src/lib/system/db-backup.ts`, `server/plugins/db-backup.ts`) — `data/faikkitbox.db` ține absolut tot: bibliotecă, conturi, jurnal, abonamente push. Copia se face cu **`VACUUM INTO`**, nu cu `cp`: baza rulează în mod WAL, deci o copiere de fișier ar prinde un `.db` fără tranzacțiile încă necheckpoint-ate. Plugin-ul rulează la +90s după pornire, apoi la 24h, cu rotație la 14 fișiere în `data/backups/`; sare peste rulare dacă ultima copie e mai nouă de 20h, altfel o zi cu multe deploy-uri ar goli rotația de istoric util. Starea (vechimea ultimei copii, număr, spațiu) e vizibilă în Tehnic, cu buton de backup manual.
+**Backup-ul bazei** (`src/lib/system/db-backup.ts`, `server/plugins/maintenance.ts`) — `data/faikkitbox.db` ține absolut tot: bibliotecă, conturi, jurnal, abonamente push. Copia se face cu **`VACUUM INTO`**, nu cu `cp`: baza rulează în mod WAL, deci o copiere de fișier ar prinde un `.db` fără tranzacțiile încă necheckpoint-ate. Plugin-ul rulează la +90s după pornire, apoi la 24h, cu rotație la 14 fișiere în `data/backups/`; sare peste rulare dacă ultima copie e mai nouă de 20h, altfel o zi cu multe deploy-uri ar goli rotația de istoric util. Starea (vechimea ultimei copii, număr, spațiu) e vizibilă în Tehnic, cu buton de backup manual.
 
 **Retenție** — Jurnalul de activitate se curăță la 30 de zile (`pruneActivityLog`, la pornire și apoi zilnic); jurnalul de erori, tot la 30 de zile, plafonat la 1000 de rânduri.
 
@@ -299,10 +299,10 @@ src/
   routes/             pagini: index, descopera, biblioteca, immich, qbit, sistem,
                       tehnic, users, login, register
 server/
-  plugins/            plugin-uri Nitro (fundal): activity-boot, filelist-resume,
-                      plex-link-reconciler, plex-session-tracker,
-                      show-watcher, db-backup, github-commit-tracker,
-                      fast-shutdown
+  plugins/            plugin-uri Nitro (fundal): show-watcher,
+                      plex-session-tracker, download-recovery,
+                      github-commit-tracker, maintenance,
+                      server-lifecycle, immich-upload-tracker
   routes/             rute API: GitHub webhook, SSE auto-reload, proxy thumbnail-uri Plex
 deploy/
   hardening/          unit systemd, listă sudoers și scripturi pentru contul
@@ -389,7 +389,7 @@ sudo systemctl start faikkitbox       # 5. repornește cu build-ul nou
 
 **De ce oprire înainte de build, nu doar la final:** `npm run build` scrie direct peste `.output/server/`, folosit de procesul live pentru chunk-uri SSR încărcate dinamic. Dacă serviciul rulează în timpul build-ului, o cerere poate nimeri exact în fereastra în care fișierele vechi au fost deja șterse/redenumite, dând `ERR_MODULE_NOT_FOUND` — a apărut recurent în istoric înainte de acest fix.
 
-**De ce shutdown-ul e rapid și curat:** `server/plugins/fast-shutdown.ts` forțează ieșirea la 300ms după `SIGTERM`/`SIGINT`. Fără el, conexiunea SSE de auto-reload (`server/routes/api/deploy-sha.ts`, ține un tab de browser „la curent" cu restart-urile) ar ține procesul viu peste `TimeoutStopSec` din unitatea systemd, care oricum ar termina cu `SIGKILL` — un kill necurat, fără nicio garanție că apucă să ruleze codul de cleanup (ex. logarea opririi în Jurnalul de Activitate).
+**De ce shutdown-ul e rapid și curat:** `server/plugins/server-lifecycle.ts` forțează ieșirea la 300ms după `SIGTERM`/`SIGINT`. Fără el, conexiunea SSE de auto-reload (`server/routes/api/deploy-sha.ts`, ține un tab de browser „la curent" cu restart-urile) ar ține procesul viu peste `TimeoutStopSec` din unitatea systemd, care oricum ar termina cu `SIGKILL` — un kill necurat, fără nicio garanție că apucă să ruleze codul de cleanup (ex. logarea opririi în Jurnalul de Activitate).
 
 ---
 

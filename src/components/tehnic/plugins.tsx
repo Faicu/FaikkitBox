@@ -9,6 +9,8 @@ import {
   DatabaseBackup,
   Upload,
   Wrench,
+  ArrowUpCircle,
+  Bug,
   Tv,
   RefreshCw,
   Clapperboard,
@@ -124,23 +126,37 @@ export const PLUGINS: PluginInfo[] = [
     activityType: "plex_watch_start",
   },
   {
-    id: "plex-link-reconciler",
-    label: "Reconciliere Plex",
-    description: "Leagă descărcările rămase fără Plex",
-    cadence: "la 10 min",
+    id: "download-recovery",
+    label: "Continuitate Descărcări",
+    description: "Reia descărcările și legarea la Plex întrerupte de un restart",
+    cadence: "la pornire (după 15s și 45s), apoi la 10 min",
     details:
-      "Un titlu descărcat complet, dar prins de un restart înainte ca Plex să-l indexeze, rămâne fără plex_rating_key — adică blocat pe „se procesează” la nesfârșit. Plugin-ul reia legarea pentru toate rândurile rămase așa. Nu atinge Plex decât dacă chiar există ceva nelegat.",
+      "O descărcare e urmărită de o buclă care trăiește în proces, iar după terminare tot ea o leagă la Plex, timp de 30 de minute. Un restart le omoară pe amândouă — și fiecare deploy repornește serviciul. Două plase de siguranță, pentru cele două momente în care te poate prinde restartul.",
+    steps: [
+      {
+        title: "Reluare descărcări",
+        cadence: "la pornire (după 15s)",
+        summary: "Repornește urmărirea descărcărilor încă neterminate.",
+        points: [
+          "Fără ea, torrentul se termină în qBittorrent, dar aplicația nu află niciodată: fără subtitrare RO, fără completed_at, fără notificare, fără legare la Plex.",
+          "A existat cândva ca efect secundar de modul și a încetat silențios să mai ruleze când modulul a devenit import leneș — de-aia e plugin explicit acum.",
+        ],
+        icon: <RotateCcw className="h-3.5 w-3.5 text-blue-400" />,
+      },
+      {
+        title: "Reconciliere Plex",
+        cadence: "după 45s, apoi la 10 min",
+        summary: "Leagă la Plex titlurile descărcate, dar rămase nelegate.",
+        points: [
+          "Un titlu terminat, dar prins de un restart înainte ca Plex să-l indexeze, rămâne fără plex_rating_key — adică blocat pe „se procesează” la nesfârșit.",
+          "Reîncearcă pentru tot ce s-a terminat în ultimele 72h și n-are încă legătură. Nu atinge Plex decât dacă chiar există ceva nelegat.",
+          "Completează și calitatea filmelor legate corect, dar la care nu s-a putut decide care versiune din Plex e a noastră.",
+          "Pornește la 30s după reluare: fiecare parte lucrează pe alte rânduri (neterminate vs. terminate), iar distanța le ține separate și la pornire.",
+        ],
+        icon: <Link2 className="h-3.5 w-3.5 text-emerald-400" />,
+      },
+    ],
     icon: <Link2 className="h-4 w-4 text-emerald-400" />,
-    activityType: null,
-  },
-  {
-    id: "filelist-resume",
-    label: "Reluare Descărcări",
-    description: "Repornește polling-ul întrerupt de un restart",
-    cadence: "la pornire (după 15s)",
-    details:
-      "Fiecare descărcare are o buclă de urmărire care trăiește în proces; un restart o omoară. Fără reluare, torrentul se termină în qBittorrent, dar aplicația nu află niciodată: fără subtitrare RO, fără completed_at, fără notificare, fără legare la Plex. A existat cândva ca efect secundar de modul și a încetat silențios să mai ruleze când modulul a devenit import leneș — de-aia e plugin explicit acum.",
-    icon: <RotateCcw className="h-4 w-4 text-blue-400" />,
     activityType: null,
   },
   {
@@ -154,44 +170,91 @@ export const PLUGINS: PluginInfo[] = [
     activityType: null,
   },
   {
-    id: "db-backup",
-    label: "Backup Bază de Date",
-    description: "Copie zilnică a bazei, cu rotație",
-    cadence: "la pornire (după 90s), apoi la 24h",
+    id: "maintenance",
+    label: "Întreținere",
+    description: "Backup zilnic al bazei, verificarea actualizărilor, deblocarea acțiunilor",
+    cadence: "la pornire, apoi zilnic",
     details:
-      "Baza ține tot ce știe aplicația — bibliotecă, conturi, jurnal, abonamente push — și până acum nu exista niciun backup: nici script, nici cron. Un disc mort sau o migrare greșită însemna pierdere totală.\n\nCopierea se face cu VACUUM INTO, nu cu o copiere de fișier: baza rulează în mod WAL, deci un `cp` poate prinde un .db fără tranzacțiile încă necheckpoint-ate și poate da o copie coruptă. Se păstrează ultimele 14 copii.\n\nO copie se face doar dacă cea mai recentă e mai veche de 20h — altfel o zi cu cinci deploy-uri ar face cinci copii identice și ar împinge afară din rotație istoricul chiar util. Copiile stau lângă bază, pe același disc: te apără de o stricăciune logică, nu de un disc mort.",
-    icon: <DatabaseBackup className="h-4 w-4 text-teal-400" />,
-    activityType: null,
-  },
-  {
-    id: "service-jobs",
-    label: "Acțiuni Servicii",
-    description: "Verifică zilnic actualizările; deblochează butoanele după o repornire",
-    cadence: "la 24h (verificat din oră în oră) · curățare la pornire",
-    details:
-      "Două lucruri.\n\nO dată la 24 de ore verifică dacă există actualizări pentru Plex (canalul beta) și Immich, pachete de instalat în Ubuntu sau o cerere de repornire a sistemului — aceleași verificări ca butoanele Update. Dacă găsește ceva, scrie o intrare în jurnal (filtrul Updates) și trimite o notificare push cu tot ce e disponibil. Reamintirea e zilnică: cât timp ceva rămâne neinstalat, apare din nou a doua zi. Momentul ultimei verificări stă în baza de date, așa că deploy-urile dese nu resetează ceasul; dacă nicio verificare nu reușește (fără rețea), se reîncearcă peste o oră.\n\nLa pornire, închide acțiunile Restart/Update rămase „în curs”: dacă aplicația repornește în timpul uneia, acțiunea moare odată cu ea, dar în baza de date ar rămâne „în curs” și ar bloca toate butoanele pe veci, cu „rulează deja”. O marchează „întreruptă” și scrie asta în jurnal.",
+      "Trei treburi de întreținere, fiecare cu ritmul ei. Una care eșuează nu le oprește pe celelalte.",
+    steps: [
+      {
+        title: "Deblocare acțiuni",
+        cadence: "la pornire",
+        summary: "Închide acțiunile Restart/Update rămase „în curs” după o repornire.",
+        points: [
+          "Dacă aplicația repornește în timpul unei acțiuni, acțiunea moare odată cu ea, dar în baza de date ar rămâne „în curs” și ar bloca toate butoanele pe veci, cu „rulează deja”.",
+          "O marchează „întreruptă” și scrie asta în jurnal.",
+        ],
+        icon: <Wrench className="h-3.5 w-3.5 text-orange-400" />,
+      },
+      {
+        title: "Backup bază de date",
+        cadence: "la pornire (după 90s), apoi la 24h",
+        summary: "Copie a bazei, cu rotație la ultimele 14.",
+        points: [
+          "Baza ține tot ce știe aplicația — bibliotecă, conturi, jurnal, abonamente push. Înainte nu exista niciun backup: un disc mort sau o migrare greșită însemna pierdere totală.",
+          "Copia se face cu VACUUM INTO, nu cu o copiere de fișier: baza rulează în mod WAL, deci un `cp` poate prinde un .db fără tranzacțiile încă necheckpoint-ate și poate da o copie coruptă.",
+          "O copie se face doar dacă cea mai recentă e mai veche de 20h — altfel o zi cu cinci deploy-uri ar face cinci copii identice și ar împinge afară din rotație istoricul chiar util.",
+          "Copiile stau lângă bază, pe același disc: te apără de o stricăciune logică, nu de un disc mort.",
+        ],
+        icon: <DatabaseBackup className="h-3.5 w-3.5 text-teal-400" />,
+      },
+      {
+        title: "Actualizări disponibile",
+        cadence: "la 24h (verificat din oră în oră)",
+        summary: "Plex (beta), Immich, pachete Ubuntu și cererea de repornire.",
+        points: [
+          "Aceleași verificări ca butoanele Update. Dacă găsește ceva, scrie o intrare în jurnal (filtrul Updates) și trimite o notificare push cu tot ce e disponibil.",
+          "Reamintirea e zilnică: cât timp ceva rămâne neinstalat, apare din nou a doua zi.",
+          "Momentul ultimei verificări stă în baza de date, așa că deploy-urile dese nu resetează ceasul; dacă nicio verificare nu reușește (fără rețea), se reîncearcă peste o oră.",
+        ],
+        icon: <ArrowUpCircle className="h-3.5 w-3.5 text-sky-400" />,
+      },
+    ],
     icon: <Wrench className="h-4 w-4 text-orange-400" />,
+    // Rândul arată ultimul backup sau ultima actualizare anunțată, care e mai
+    // recentă — vezi PluginStatusSection.
     activityType: "update_available",
   },
   {
-    id: "activity-boot",
-    label: "Jurnal Pornire/Oprire",
-    description: "Înregistrează ciclul de viață al serverului",
-    cadence: "la pornire",
-    details:
-      "Logarea pornirii/opririi rula ca efect secundar de modul, deci se executa abia la prima cerere HTTP: după un restart, jurnalul rămânea gol până deschidea cineva aplicația, iar atunci „Serverul a pornit” se scria cu ora greșită și cu cauza greșită. Dacă serviciul era oprit înainte de vreo cerere, oprirea nu se loga deloc.",
+    id: "server-lifecycle",
+    label: "Pornire și Oprire",
+    description: "Jurnalul pornirilor/opririlor, oprire curată, captura erorilor",
+    cadence: "la pornire și la oprire",
+    details: "Tot ce ține de procesul serverului în sine, nu de vreun serviciu.",
+    steps: [
+      {
+        title: "Jurnal pornire/oprire",
+        cadence: "la pornire",
+        summary: "Scrie în jurnal fiecare pornire și oprire, cu cauza ei.",
+        points: [
+          "Rula ca efect secundar de modul, deci se executa abia la prima cerere HTTP: după un restart, jurnalul rămânea gol până deschidea cineva aplicația, iar atunci „Serverul a pornit” se scria cu ora greșită și cu cauza greșită.",
+          "Dacă serviciul era oprit înainte de vreo cerere, oprirea nu se loga deloc.",
+        ],
+        icon: <PlugZap className="h-3.5 w-3.5 text-sky-400" />,
+      },
+      {
+        title: "Oprire controlată",
+        cadence: "la oprire",
+        summary: "Închide curat la SIGTERM, înainte ca systemd să dea SIGKILL.",
+        points: [
+          "Fără ea, oprirea aștepta drenarea tuturor conexiunilor HTTP — inclusiv SSE-ul de auto-reload, deschis cât timp orice tab are dashboard-ul deschis.",
+          "Asta depășea mereu TimeoutStopSec=5, iar systemd termina procesul cu SIGKILL, fără nicio șansă pentru logarea opririi. Acum logarea are o fereastră scurtă, apoi procesul iese controlat.",
+        ],
+        icon: <Power className="h-3.5 w-3.5 text-rose-400" />,
+      },
+      {
+        title: "Captura erorilor",
+        cadence: "la pornire",
+        summary: "Trimite erorile și avertismentele din consolă în „Erori aplicație”.",
+        points: [
+          "Prinde tot ce ajunge în console.error/console.warn pe server — server functions și plugin-uri de fundal — nu doar ce e logat explicit.",
+        ],
+        icon: <Bug className="h-3.5 w-3.5 text-amber-400" />,
+      },
+    ],
     icon: <PlugZap className="h-4 w-4 text-sky-400" />,
     activityType: "server_start",
-  },
-  {
-    id: "fast-shutdown",
-    label: "Oprire Controlată",
-    description: "Închide curat la SIGTERM, înainte de SIGKILL",
-    cadence: "la oprire",
-    details:
-      "Fără el, oprirea aștepta drenarea tuturor conexiunilor HTTP — inclusiv SSE-ul de auto-reload, deschis cât timp orice tab are dashboard-ul deschis. Asta depășea mereu TimeoutStopSec=5, iar systemd termina procesul cu SIGKILL, fără nicio șansă pentru logarea opririi. Aici dăm celorlalte listenere o fereastră scurtă, apoi ieșim controlat.",
-    icon: <Power className="h-4 w-4 text-rose-400" />,
-    activityType: "server_stop",
   },
 ];
 

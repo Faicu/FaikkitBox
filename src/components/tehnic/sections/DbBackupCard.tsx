@@ -1,6 +1,6 @@
 // Starea backup-urilor bazei de date + buton de backup manual.
 //
-// Backup-ul rulează singur (server/plugins/db-backup.ts), deci cardul nu e
+// Backup-ul rulează singur (server/plugins/maintenance.ts), deci cardul nu e
 // despre a-l declanșa, ci despre a răspunde la o singură întrebare: "chiar
 // se face?". De-asta vârful cardului e vechimea ultimei copii, nu lista.
 

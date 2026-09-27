@@ -8,9 +8,9 @@
 // s-ar reseta la fiecare restart al serviciului.
 //
 // Plugin explicit, nu efect secundar de modul: aceeași lecție ca la
-// activity-boot.ts și filelist-resume.ts — munca de la pornire făcută într-un
-// `setTimeout` la nivel de modul funcționează doar cât timp cineva mai
-// importă static modulul respectiv, și încetează silențios când nu.
+// server-lifecycle.ts și download-recovery.ts — munca de la pornire făcută
+// într-un `setTimeout` la nivel de modul funcționează doar cât timp cineva
+// mai importă static modulul respectiv, și încetează silențios când nu.
 // ---------------------------------------------------------------------------
 
 const POLL_INTERVAL_MS = 10 * 60 * 1000; // 10 min — cât de des vedem cine a expirat
@@ -82,8 +82,8 @@ async function runNewMovies(): Promise<void> {
 }
 
 export default function () {
-  // 45s: după filelist-resume (15s), ca reluarea descărcărilor întrerupte să
-  // apuce să repopuleze starea înainte să ne apucăm să căutăm ce lipsește —
+  // 45s: după reluarea din download-recovery.ts (15s), ca descărcările
+  // întrerupte să apuce să-și repopuleze starea înainte să ne apucăm să căutăm ce lipsește —
   // altfel un episod deja în curs ar putea părea lipsă.
   setTimeout(run, 45_000);
   setInterval(run, POLL_INTERVAL_MS);

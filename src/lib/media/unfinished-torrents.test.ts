@@ -57,7 +57,7 @@ afterAll(() => {
 });
 
 // De ce contează interogarea asta: pe ea se sprijină singură reluarea
-// polling-ului după un restart (server/plugins/filelist-resume.ts). Dacă
+// polling-ului după un restart (server/plugins/download-recovery.ts). Dacă
 // ratează un torrent, acela se termină în qBittorrent, dar aplicația nu află
 // niciodată — fără subtitrare, fără completed_at, fără notificare, fără
 // legare la Plex, și complet tăcut. Dacă, invers, întoarce prea mult,

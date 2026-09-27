@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------------
 // Verificarea zilnică a actualizărilor: Plex, Immich, Ubuntu (pachete și
 // cererea de repornire). qBittorrent nu intră — nu se actualizează niciodată
-// din aplicație. Rulată de server/plugins/service-jobs.ts.
+// din aplicație. Rulată de server/plugins/maintenance.ts.
 //
 // Reamintire zilnică, nu doar la noutăți (decizia userului, 26 sept. 2026):
 // cât timp ceva rămâne neinstalat, fiecare verificare îl anunță din nou —

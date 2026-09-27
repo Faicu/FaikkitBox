@@ -2,8 +2,10 @@
 // (server functions, SSR, plugin-uri de fundal) și le
 // trimite spre logError(), ca să apară în widgetul "Erori aplicație" din
 // Tehnic — fără să fie nevoie de un apel logError() manual la fiecare loc
-// unde cineva scrie console.warn/error. Instalată o singură dată, la
-// pornirea serverului (import cu efect în server.ts).
+// unde cineva scrie console.warn/error. Instalată la pornire din
+// server/plugins/server-lifecycle.ts — server.ts o apelează și el, dar
+// server.ts se încarcă abia la prima cerere HTTP. Apelurile repetate nu fac
+// nimic (`installed`).
 
 import { logError } from "./error-log";
 
