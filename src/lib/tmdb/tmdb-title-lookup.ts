@@ -52,9 +52,12 @@ interface TmdbFindItem {
   id: number;
   title?: string;
   name?: string;
+  original_title?: string;
+  original_name?: string;
   release_date?: string;
   first_air_date?: string;
   poster_path?: string | null;
+  vote_average?: number | null;
 }
 interface TmdbFindResponseFull {
   movie_results?: TmdbFindItem[];
@@ -96,8 +99,10 @@ export interface TmdbBasicInfo {
   id: number;
   mediaType: "movie" | "tv";
   title: string;
+  originalTitle: string;
   year: string | null;
   posterPath: string | null;
+  voteAverage: number | null;
 }
 
 const infoCache = new Map<string, { expiresAt: number; value: TmdbBasicInfo | null }>();
@@ -137,8 +142,10 @@ export async function lookupTmdbInfoByImdbId(imdbId: string): Promise<TmdbBasicI
         id: movie.id,
         mediaType: "movie",
         title,
+        originalTitle: movie.original_title || enTitle || title,
         year: (movie.release_date || enMovie?.release_date || "").slice(0, 4) || null,
         posterPath: movie.poster_path || enMovie?.poster_path || null,
+        voteAverage: typeof movie.vote_average === "number" ? movie.vote_average : null,
       };
     } else if (show) {
       const enShow = en?.tv_results?.[0];
@@ -152,8 +159,10 @@ export async function lookupTmdbInfoByImdbId(imdbId: string): Promise<TmdbBasicI
         id: show.id,
         mediaType: "tv",
         title,
+        originalTitle: show.original_name || enTitle || title,
         year: (show.first_air_date || enShow?.first_air_date || "").slice(0, 4) || null,
         posterPath: show.poster_path || enShow?.poster_path || null,
+        voteAverage: typeof show.vote_average === "number" ? show.vote_average : null,
       };
     }
   } catch {

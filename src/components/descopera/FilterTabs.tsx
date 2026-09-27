@@ -1,9 +1,13 @@
 import type { DiscoverMediaType, DiscoverSort } from "@/lib/tmdb/tmdb.discover.functions";
 
-const sortTabs: { value: DiscoverSort; label: string }[] = [
+// Taburile de sursă: sortările TMDB + „Top Filelist" (torrentele populare).
+export type DiscoverTab = DiscoverSort | "filelist_top";
+
+const sortTabs: { value: DiscoverTab; label: string }[] = [
   { value: "trending", label: "Trending" },
   { value: "popular_all_time", label: "Populare all-time" },
   { value: "newest", label: "Cele mai noi" },
+  { value: "filelist_top", label: "Top Filelist" },
 ];
 
 const mediaTabs: { value: DiscoverMediaType | "all"; label: string }[] = [
@@ -34,9 +38,9 @@ export function FilterTabs({
   onSortChange,
   onMediaChange,
 }: {
-  sort: DiscoverSort;
+  sort: DiscoverTab;
   media: DiscoverMediaType | "all";
-  onSortChange: (v: DiscoverSort) => void;
+  onSortChange: (v: DiscoverTab) => void;
   onMediaChange: (v: DiscoverMediaType | "all") => void;
 }) {
   return (

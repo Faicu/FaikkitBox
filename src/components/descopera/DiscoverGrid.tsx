@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Star, Film, Tv } from "lucide-react";
 
 import { getDiscoverTitles } from "@/lib/tmdb/tmdb.discover.functions";
 import type {
@@ -9,6 +8,7 @@ import type {
   DiscoverSort,
   DiscoverTitle,
 } from "@/lib/tmdb/tmdb.discover.functions";
+import { PosterCard } from "./PosterCard";
 import { SceneViewer } from "./SceneViewer";
 
 export function DiscoverGrid({
@@ -100,43 +100,11 @@ export function DiscoverGrid({
           )}
           <div className="grid grid-cols-3 gap-3 stagger-in">
             {items.map((item) => (
-              <button
+              <PosterCard
                 key={`${item.mediaType}-${item.id}`}
-                type="button"
+                item={item}
                 onClick={() => setSelected(item)}
-                className="poster-tilt group relative aspect-[2/3] overflow-hidden rounded-xl border border-border bg-muted/40 text-left"
-              >
-                {item.posterUrl ? (
-                  <img
-                    src={item.posterUrl}
-                    alt=""
-                    className="h-full w-full object-cover"
-                    loading="lazy"
-                  />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center">
-                    {item.mediaType === "movie" ? (
-                      <Film className="h-6 w-6 text-muted-foreground/40" />
-                    ) : (
-                      <Tv className="h-6 w-6 text-muted-foreground/40" />
-                    )}
-                  </div>
-                )}
-                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent p-2 pt-6">
-                  <div className="line-clamp-2 text-[11px] font-medium leading-tight text-white">
-                    {item.originalTitle}
-                  </div>
-                  <div className="mt-0.5 flex items-center gap-1.5 text-[10px] text-white/70">
-                    {item.year && <span>{item.year}</span>}
-                    {item.voteAverage != null && (
-                      <span className="flex items-center gap-0.5">
-                        <Star className="h-2.5 w-2.5 fill-amber-400 text-amber-400" />
-                        {item.voteAverage.toFixed(1)}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </button>
+              />
             ))}
           </div>
 

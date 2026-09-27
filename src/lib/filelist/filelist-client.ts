@@ -97,6 +97,34 @@ async function searchFilelistRaw(
   }
 }
 
+// Ultimele torrente urcate (max 100, limita API-ului) din categoriile unui
+// filtru — sursa tabului „Top Filelist" din Descoperă. API-ul nu are un
+// endpoint de top/populare, deci popularitatea se calculează din
+// seederi/leecheri doar peste fereastra asta recentă (~2 zile pentru HD/4K).
+// Aruncă la eroare, ca apelantul să nu pună în cache o listă goală falsă.
+export async function fetchLatestTorrents(category: FilelistCategory): Promise<FilelistTorrent[]> {
+  const username = process.env.FILELIST_USERNAME;
+  const passkey = process.env.FILELIST_PASSKEY;
+  if (!username || !passkey) {
+    throw new Error("FILELIST_USERNAME / FILELIST_PASSKEY nu sunt configurate în .env");
+  }
+  const params = new URLSearchParams({
+    username,
+    passkey,
+    action: "latest-torrents",
+    limit: "100",
+    category: resolveCategoryIds(category).join(","),
+    output: "json",
+  });
+  const res = await fetch(`https://filelist.io/api.php?${params.toString()}`, {
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!res.ok) throw new Error(`Filelist API HTTP ${res.status}`);
+  const raw: unknown = await res.json();
+  if (!Array.isArray(raw)) throw new Error("Răspuns neașteptat de la Filelist API");
+  return mapApiTorrents(raw as FilelistApiTorrent[]);
+}
+
 // ---------------------------------------------------------------------------
 // Server function: căutare pe Filelist.io
 // ---------------------------------------------------------------------------
