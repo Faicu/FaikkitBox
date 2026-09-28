@@ -6,7 +6,6 @@ import {
   refreshPlexLibrariesAndEmptyTrash,
 } from "../plex-refresh";
 import { deleteMediaByTorrentHash } from "../media/media";
-import { isInsideMediaRoot } from "./sidecar-files";
 
 // Ștergerea unui titlu: qBittorrent (torrent + fișiere), reziduul de pe disk
 // și rândurile din `media`. Orice rând `media` cu torrent_hash cunoscut e
@@ -45,20 +44,20 @@ export const deleteMediaEntry = createServerFn({ method: "POST" })
       }
 
       let qbitDeleted = false;
-      let contentPath: string | null = null;
+      let rootPath: string | null = null;
       try {
         const qbitUrl = (process.env.QBIT_URL ?? "http://192.168.1.192:25556").replace(/\/$/, "");
         const user = process.env.QBIT_USERNAME ?? "";
         const pass = process.env.QBIT_PASSWORD ?? "";
         const cookie = await qbitLogin(qbitUrl, user, pass);
 
-        // Reținem calea reală a conținutului dinaintea ștergerii — numele
+        // Reținem calea reală de pe disc dinaintea ștergerii — numele
         // torrentului salvat în DB poate diferi de numele folderului de pe
         // disk (qBittorrent normalizează unele nume), deci e singura sursă
-        // de adevăr pentru fallback-ul de mai jos. Rădăcina, nu content_path:
+        // de adevăr pentru curățarea de mai jos. Rădăcina, nu content_path:
         // un fișier unic într-un folder propriu și-ar lăsa altfel folderul
         // gol pe disc (vezi qbitTorrentRootPath).
-        contentPath = await qbitTorrentRootPath(qbitUrl, row.torrent_hash, user, pass);
+        rootPath = await qbitTorrentRootPath(qbitUrl, row.torrent_hash, user, pass);
 
         const form = new URLSearchParams({ hashes: row.torrent_hash, deleteFiles: "true" });
         const res = await fetch(`${qbitUrl}/api/v2/torrents/delete`, {
@@ -71,39 +70,11 @@ export const deleteMediaEntry = createServerFn({ method: "POST" })
         console.warn("[filelist] Nu am putut șterge din qBit:", e);
       }
 
-      // qBittorrent șterge doar fișierele pe care le-a descărcat el — dacă
-      // pipeline-ul de subtitrări a scris .srt-uri direct în folderul
-      // torrentului (cazul obișnuit pentru un titlu deja complet), qBit dă
-      // "Directory not empty" la ștergere și lasă folderul (cu doar
-      // subtitrările) orfan pe disk, invizibil în DB/qBit (vezi reziduul
-      // The Crown S02, 2026-09-02). La acest punct fișierele video sunt deja
-      // confirmate șterse de qBittorrent, deci orice mai rămâne e propriul
-      // nostru reziduu — sigur de șters forțat.
-      if (contentPath && !isInsideMediaRoot(contentPath)) {
-        console.warn(`[filelist] Ștergere refuzată, cale în afara bibliotecii: ${contentPath}`);
-        contentPath = null;
-      }
-      if (contentPath) {
-        try {
-          const { existsSync, rmSync, readdirSync, statSync } = await import("node:fs");
-          // Torrent cu un singur fișier: calea e chiar video-ul, deci
-          // subtitrările scrise de aplicație lângă el (vezi sidecar-files.ts)
-          // nu intră în ștergerea recursivă de mai jos.
-          const isFolder = existsSync(contentPath) && statSync(contentPath).isDirectory();
-          if (!isFolder) {
-            const { dirname, basename, join } = await import("node:path");
-            const { sidecarSubtitleNames } = await import("./sidecar-files");
-            const dir = dirname(contentPath);
-            for (const name of sidecarSubtitleNames(basename(contentPath), readdirSync(dir))) {
-              rmSync(join(dir, name), { force: true });
-            }
-          }
-          if (existsSync(contentPath)) {
-            rmSync(contentPath, { recursive: true, force: true });
-          }
-        } catch (e) {
-          console.warn("[filelist] Nu am putut curăța reziduul de pe disk:", e);
-        }
+      // Ce a rămas după qBittorrent (subtitrările scrise de aplicație) —
+      // vezi disk-cleanup.ts.
+      if (rootPath) {
+        const { removeTorrentResidue } = await import("./disk-cleanup");
+        await removeTorrentResidue(rootPath);
       }
 
       // Toate rândurile media care împart același torrent_hash (episoadele

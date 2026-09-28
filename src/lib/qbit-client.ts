@@ -115,7 +115,22 @@ export async function qbitContentPath(
 // singur fișier pus într-un folder propriu ("Film-GRUP/Film-GRUP.mkv").
 // Acolo qBittorrent raportează ca content_path fișierul, nu folderul, deci o
 // ștergere pornită de la content_path lăsa folderul gol pe disc.
-// Fără node:path intenționat — modulul ajunge și în bundle-ul de client.
+//
+// Folderul rădăcină = primul segment, comun TUTUROR fișierelor. Un torrent
+// fără folder rădăcină poate avea totuși subfoldere („Subs/…") — acolo
+// primul segment al primului fișier nu e rădăcina. Fără node:path
+// intenționat — modulul ajunge și în bundle-ul de client.
+export function torrentRootPath(
+  savePath: string,
+  contentPath: string,
+  fileNames: string[],
+): string {
+  const roots = new Set(fileNames.map((n) => (n.includes("/") ? n.split("/")[0] : "")));
+  const [root] = roots;
+  if (roots.size !== 1 || !root) return contentPath;
+  return `${savePath.replace(/\/$/, "")}/${root}`;
+}
+
 export async function qbitTorrentRootPath(
   url: string,
   hash: string,
@@ -130,9 +145,11 @@ export async function qbitTorrentRootPath(
     const savePath = info[0]?.save_path;
     if (!contentPath || !savePath) return contentPath;
     const files = await qbitListFiles(url, hash, user, pass);
-    const firstSegment = files[0]?.name.split("/")[0];
-    if (!firstSegment || !files[0].name.includes("/")) return contentPath;
-    return `${savePath.replace(/\/$/, "")}/${firstSegment}`;
+    return torrentRootPath(
+      savePath,
+      contentPath,
+      files.map((f) => f.name),
+    );
   } catch {
     return null;
   }

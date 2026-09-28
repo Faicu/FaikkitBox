@@ -87,24 +87,23 @@ interface ReleaseTags {
 // din coada numelui, deci fără curățarea asta nu se potrivea niciodată pe
 // astfel de nume. Tot aici iese și indiciul de ID pentru Plex
 // (" {imdb-tt…}", vezi plex-id-hint.ts), pus înaintea extensiei.
+//
 // Codul de limbă dinaintea extensiei de subtitrare e mereu cu litere mici
-// („.ro.srt", „.eng.srt"); fără sensibilitate la majuscule s-ar fi dus și
-// tag-uri reale („Film.2026.WEB.srt" ar fi pierdut „.WEB").
+// („.ro.srt", „.eng.srt") — de aceea SUB_LANG_RE e sensibil la majuscule:
+// altfel s-ar fi dus și tag-uri reale („Film.2026.WEB.srt" pierdea „.WEB").
 const MEDIA_EXT_RE = /\.(?:mkv|mp4|avi|m2ts|ts|wmv|mov)$/i;
-const SUB_EXT_RE = /(?:\.(?:[a-z]{2,3}|forced|sdh))?\.(?:srt|sub|ass|ssa)$/;
+const SUB_EXT_RE = /\.(?:srt|sub|ass|ssa)$/i;
+const SUB_LANG_RE = /\.(?:[a-z]{2,3}|forced|sdh)$/;
 const PLEX_ID_HINT_RE = /\s*\{(?:imdb|tmdb|tvdb)-[^}]*\}/gi;
 
 export function releaseNameOf(name: string): string {
-  const isFile = MEDIA_EXT_RE.test(name) || /\.(?:srt|sub|ass|ssa)$/i.test(name);
+  let file = name;
+  if (SUB_EXT_RE.test(file)) file = file.replace(SUB_EXT_RE, "").replace(SUB_LANG_RE, "");
+  else if (MEDIA_EXT_RE.test(file)) file = file.replace(MEDIA_EXT_RE, "");
   // Folderul se taie doar din căi de fișier — un nume de lansare de la
   // OpenSubtitles poate conține „/" fără să fie o cale.
-  const file = isFile ? (name.split(/[\\/]/).pop() ?? name) : name;
-  return file
-    .replace(SUB_EXT_RE, "")
-    .replace(/\.(?:srt|sub|ass|ssa)$/i, "")
-    .replace(MEDIA_EXT_RE, "")
-    .replace(PLEX_ID_HINT_RE, "")
-    .trim();
+  if (file !== name) file = file.split(/[\\/]/).pop() ?? file;
+  return file.replace(PLEX_ID_HINT_RE, "").trim();
 }
 
 function extractTags(rawName: string): ReleaseTags {

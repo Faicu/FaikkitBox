@@ -146,20 +146,22 @@ export async function applyPlexIdHint(params: {
       files.map((f) => f.name),
       imdbId,
     );
-    let done = 0;
+    const done: PlannedRename[] = [];
     for (const r of renames) {
       try {
         await qbitRenameFile(qbitUrl, torrentHash, r.oldPath, r.newPath, qbitUser, qbitPass);
-        done++;
+        done.push(r);
       } catch (e) {
         console.warn(`[plex-id] Redenumire eșuată „${r.oldPath}":`, e);
       }
     }
-    if (done > 0) {
-      await waitForRenamesOnDisk(params, renames);
-      console.log(`[plex-id] ${done} fișiere redenumite cu {imdb-${imdbId}} (${torrentHash})`);
+    if (done.length > 0) {
+      await waitForRenamesOnDisk(params, done);
+      console.log(
+        `[plex-id] ${done.length} fișiere redenumite cu {imdb-${imdbId}} (${torrentHash})`,
+      );
     }
-    return done;
+    return done.length;
   } catch (e) {
     console.warn(`[plex-id] Nu am putut aplica ID-ul IMDb pentru ${torrentHash}:`, e);
     return 0;
