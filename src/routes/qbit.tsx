@@ -200,19 +200,19 @@ function QbitPage() {
           <div className="grid grid-cols-3 gap-2 text-center text-xs">
             <button
               onClick={() => setOpenList((v) => (v === "downloading" ? null : "downloading"))}
-              className={`rounded-xl bg-sky-500/15 py-2 text-sky-400 transition hover:bg-sky-500/25 ${openList === "downloading" ? "ring-1 ring-sky-400" : ""}`}
+              className={`rounded-xl bg-sky-500/15 py-2 text-sky-400 transition active:scale-[0.96] hover:bg-sky-500/25 ${openList === "downloading" ? "ring-1 ring-sky-400" : ""}`}
             >
               <b className="block text-lg">{data.counts.downloading}</b>În descărcare
             </button>
             <button
               onClick={() => setOpenList((v) => (v === "seeding" ? null : "seeding"))}
-              className={`rounded-xl bg-emerald-500/15 py-2 text-emerald-400 transition hover:bg-emerald-500/25 ${openList === "seeding" ? "ring-1 ring-emerald-400" : ""}`}
+              className={`rounded-xl bg-emerald-500/15 py-2 text-emerald-400 transition active:scale-[0.96] hover:bg-emerald-500/25 ${openList === "seeding" ? "ring-1 ring-emerald-400" : ""}`}
             >
               <b className="block text-lg">{data.counts.seeding}</b>Seed
             </button>
             <button
               onClick={() => setOpenList((v) => (v === "paused" ? null : "paused"))}
-              className={`rounded-xl bg-muted py-2 text-muted-foreground transition hover:bg-muted/70 ${openList === "paused" ? "ring-1 ring-muted-foreground" : ""}`}
+              className={`rounded-xl bg-muted py-2 text-muted-foreground transition active:scale-[0.96] hover:bg-muted/70 ${openList === "paused" ? "ring-1 ring-muted-foreground" : ""}`}
             >
               <b className="block text-lg">{data.counts.paused}</b>Oprite
             </button>
@@ -267,7 +267,7 @@ function QbitPage() {
                       Niciun torrent.
                     </div>
                   ) : (
-                    <ul className="rounded-2xl glass-card divide-y divide-border">
+                    <ul className="rounded-2xl glass-card divide-y divide-border stagger-in">
                       {filtered.map((t) => (
                         <li key={t.hash} className="px-3 py-2">
                           <div className="truncate text-sm">{t.name}</div>

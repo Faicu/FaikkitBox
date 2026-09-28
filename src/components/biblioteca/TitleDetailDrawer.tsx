@@ -16,7 +16,6 @@ import {
   Loader2,
   Trash2,
   Wrench,
-  ChevronDown,
   ChevronRight,
   ExternalLink,
   XCircle,
@@ -647,14 +646,12 @@ export function TitleDetailDrawer({
                     className="flex w-full items-center gap-1 py-1 text-muted-foreground hover:text-foreground transition-colors"
                   >
                     <Wrench className="h-3.5 w-3.5" /> Detalii tehnice
-                    {showTech ? (
-                      <ChevronDown className="h-3.5 w-3.5 ml-auto" />
-                    ) : (
-                      <ChevronRight className="h-3.5 w-3.5 ml-auto" />
-                    )}
+                    <ChevronRight
+                      className={`h-3.5 w-3.5 ml-auto transition-transform duration-200 ${showTech ? "rotate-90" : ""}`}
+                    />
                   </button>
                   {showTech && (
-                    <div className="flex flex-col gap-1 rounded-lg bg-muted/40 px-2 py-1.5">
+                    <div className="animate-in fade-in-0 slide-in-from-top-1 duration-200 flex flex-col gap-1 rounded-lg bg-muted/40 px-2 py-1.5">
                       {[
                         d.tech.torrentName && ["Torrent", d.tech.torrentName],
                         d.tech.sizeBytes > 0 && ["Mărime", formatBytes(d.tech.sizeBytes)],

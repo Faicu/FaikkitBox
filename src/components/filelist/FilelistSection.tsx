@@ -183,7 +183,7 @@ export function FilelistSection() {
                     sortBy === "seeders" ? b.seeders - a.seeders : b.size - a.size,
                   );
             return (
-              <div className="space-y-2">
+              <div className="space-y-2 stagger-in">
                 {/* Sortarea stă aici, nu printre filtrele de calitate: ea
                   privește lista de rezultate, iar linia asta o descrie deja.
                   Lângă filtre nu mai încăpea (cinci calități umplu rândul) și
@@ -207,7 +207,7 @@ export function FilelistSection() {
                 {displayed.map((t) => (
                   <div
                     key={t.id}
-                    className="flex items-start gap-2.5 rounded-xl bg-muted/50 border border-border/50 p-2.5"
+                    className="flex items-start gap-2.5 rounded-xl bg-muted/50 border border-border/50 p-2.5 transition-colors hover:border-primary/30 hover:bg-muted/70"
                   >
                     {/* Tip */}
                     <div className="mt-0.5 shrink-0">

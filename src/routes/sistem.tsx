@@ -134,7 +134,7 @@ function HostPage() {
               <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
                 <Boxes className="h-3.5 w-3.5" /> Aplicații
               </h2>
-              <ul className="rounded-2xl glass-card divide-y divide-border">
+              <ul className="rounded-2xl glass-card divide-y divide-border stagger-in">
                 {data.apps.map((a) => (
                   <li key={a.name} className="flex items-center justify-between px-3 py-2 text-sm">
                     <div className="flex min-w-0 items-center gap-2">
@@ -207,7 +207,7 @@ function HostPage() {
               <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
                 <Network className="h-3.5 w-3.5" /> Rețea
               </h2>
-              <ul className="space-y-2">
+              <ul className="space-y-2 stagger-in">
                 {data.net.map((n) => (
                   <li key={n.name} className="rounded-2xl glass-card p-3">
                     <div className="flex items-center justify-between gap-2">
@@ -219,8 +219,8 @@ function HostPage() {
                           {n.name}
                         </span>
                       </div>
-                      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                        Trafic live
+                      <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                        <span className="live-dot" aria-hidden /> Trafic live
                       </span>
                     </div>
                     <div className="mt-2 grid grid-cols-2 gap-2 text-xs tabular-nums">
@@ -248,7 +248,7 @@ function HostPage() {
               <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
                 <Terminal className="h-3.5 w-3.5" /> Top procese
               </h2>
-              <ul className="rounded-2xl glass-card divide-y divide-border">
+              <ul className="rounded-2xl glass-card divide-y divide-border stagger-in">
                 {data.topProcesses.map((p, i) => (
                   <li key={i} className="flex items-center justify-between px-3 py-2 text-sm">
                     <span className="truncate pr-2 font-mono text-xs">{p.name}</span>
@@ -266,7 +266,7 @@ function HostPage() {
               <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
                 <HardDriveDownload className="h-3.5 w-3.5" /> Top I/O disc
               </h2>
-              <ul className="rounded-2xl glass-card divide-y divide-border">
+              <ul className="rounded-2xl glass-card divide-y divide-border stagger-in">
                 {data.diskIO.map((p, i) => (
                   <li key={i} className="flex items-center justify-between px-3 py-2 text-sm">
                     <span className="truncate pr-2 font-mono text-xs">{p.name}</span>

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown, ChevronRight, CircleDashed, Eye, EyeOff, Tv } from "lucide-react";
+import { ChevronRight, CircleDashed, Eye, EyeOff, Tv } from "lucide-react";
 
 import type { ShowEpisodeEntry } from "@/lib/services/plex-browse";
 import { formatMs } from "@/lib/format";
@@ -56,12 +56,11 @@ export function EpisodeList({
               <span className="text-[11px] text-muted-foreground">
                 {n === 1 ? (watched ? "văzut" : "nevăzut") : `${watched} din ${n} văzute`}
               </span>
-              {collapsible &&
-                (isOpen ? (
-                  <ChevronDown className="ml-auto h-4 w-4 self-center text-muted-foreground" />
-                ) : (
-                  <ChevronRight className="ml-auto h-4 w-4 self-center text-muted-foreground" />
-                ))}
+              {collapsible && (
+                <ChevronRight
+                  className={`ml-auto h-4 w-4 self-center text-muted-foreground transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`}
+                />
+              )}
             </button>
             {isOpen && (
               <div className="mt-1 space-y-1.5 stagger-in">

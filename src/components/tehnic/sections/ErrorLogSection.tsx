@@ -166,56 +166,60 @@ export function ErrorLogSection() {
                   : "Niciun rezultat pentru filtrele curente."}
               </div>
             )}
-            {entries.map((e) => (
-              <div
-                key={e.id}
-                className={`rounded-xl border p-3 text-xs ${
-                  e.level === "warn"
-                    ? "border-amber-500/20 bg-amber-500/5"
-                    : "border-red-500/20 bg-red-500/5"
-                }`}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5">
-                    <span
-                      className={`rounded-full px-2 py-0.5 font-medium ${
-                        e.level === "warn"
-                          ? "bg-amber-500/15 text-amber-400"
-                          : "bg-red-500/15 text-red-400"
-                      }`}
-                    >
-                      {SOURCE_LABEL[e.source] ?? e.source}
-                    </span>
-                    {e.count > 1 && (
-                      <span className="rounded-full bg-muted px-1.5 py-0.5 font-medium text-muted-foreground">
-                        ×{e.count}
+            <div className="space-y-2 stagger-in">
+              {entries.map((e) => (
+                <div
+                  key={e.id}
+                  className={`rounded-xl border p-3 text-xs ${
+                    e.level === "warn"
+                      ? "border-amber-500/20 bg-amber-500/5"
+                      : "border-red-500/20 bg-red-500/5"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className={`rounded-full px-2 py-0.5 font-medium ${
+                          e.level === "warn"
+                            ? "bg-amber-500/15 text-amber-400"
+                            : "bg-red-500/15 text-red-400"
+                        }`}
+                      >
+                        {SOURCE_LABEL[e.source] ?? e.source}
                       </span>
-                    )}
+                      {e.count > 1 && (
+                        <span className="rounded-full bg-muted px-1.5 py-0.5 font-medium text-muted-foreground">
+                          ×{e.count}
+                        </span>
+                      )}
+                    </div>
+                    <span className="shrink-0 text-muted-foreground">
+                      {relativeTime(e.lastSeen)}
+                    </span>
                   </div>
-                  <span className="shrink-0 text-muted-foreground">{relativeTime(e.lastSeen)}</span>
+                  <div className="mt-1.5 break-words font-medium text-foreground">{e.message}</div>
+                  {e.count > 1 && (
+                    <div className="mt-0.5 text-[10px] text-muted-foreground">
+                      Prima apariție: {relativeTime(e.timestamp)}
+                    </div>
+                  )}
+                  {e.stack && (
+                    <button
+                      type="button"
+                      onClick={() => setExpandedId(expandedId === e.id ? null : e.id)}
+                      className="mt-1.5 text-[11px] text-muted-foreground underline"
+                    >
+                      {expandedId === e.id ? "Ascunde stack trace" : "Arată stack trace"}
+                    </button>
+                  )}
+                  {expandedId === e.id && e.stack && (
+                    <pre className="mt-1.5 overflow-auto whitespace-pre-wrap break-all text-[10px] text-muted-foreground">
+                      {e.stack}
+                    </pre>
+                  )}
                 </div>
-                <div className="mt-1.5 break-words font-medium text-foreground">{e.message}</div>
-                {e.count > 1 && (
-                  <div className="mt-0.5 text-[10px] text-muted-foreground">
-                    Prima apariție: {relativeTime(e.timestamp)}
-                  </div>
-                )}
-                {e.stack && (
-                  <button
-                    type="button"
-                    onClick={() => setExpandedId(expandedId === e.id ? null : e.id)}
-                    className="mt-1.5 text-[11px] text-muted-foreground underline"
-                  >
-                    {expandedId === e.id ? "Ascunde stack trace" : "Arată stack trace"}
-                  </button>
-                )}
-                {expandedId === e.id && e.stack && (
-                  <pre className="mt-1.5 overflow-auto whitespace-pre-wrap break-all text-[10px] text-muted-foreground">
-                    {e.stack}
-                  </pre>
-                )}
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </DrawerContent>
       </Drawer>

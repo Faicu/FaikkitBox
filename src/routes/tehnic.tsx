@@ -118,7 +118,11 @@ function TehnicPage() {
       <button
         type="button"
         onClick={() => setSpeedtestDrawer(true)}
-        className="block w-full rounded-2xl glass-card glass-card-hover press-tile p-4 text-left"
+        // Haloul stă pe ::after (vezi pulse-glow în styles.css), deci nu
+        // concurează cu stagger-in-ul din PageShell al cărui copil direct e cardul.
+        className={`block w-full rounded-2xl glass-card glass-card-hover press-tile p-4 text-left ${
+          speedtestRunning ? "pulse-glow" : ""
+        }`}
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -232,7 +236,9 @@ function TehnicPage() {
               type="button"
               onClick={() => speedtestMutation.mutate()}
               disabled={speedtestRunning || speedtestMutation.isPending}
-              className="w-full rounded-xl border border-rose-500/30 bg-rose-500/15 px-3 py-2.5 text-sm font-medium text-rose-400 transition-transform hover:bg-rose-500/25 active:scale-[0.98] disabled:opacity-50"
+              className={`w-full rounded-xl border border-rose-500/30 bg-rose-500/15 px-3 py-2.5 text-sm font-medium text-rose-400 transition-transform hover:bg-rose-500/25 active:scale-[0.98] disabled:opacity-50 ${
+                speedtestRunning || speedtestMutation.isPending ? "border-flow" : ""
+              }`}
             >
               {speedtestRunning || speedtestMutation.isPending
                 ? "Se rulează testul... (poate dura 30-60s)"

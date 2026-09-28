@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight, Film } from "lucide-react";
+import { ChevronRight, Film } from "lucide-react";
 
 import { wantedMoviesQuery } from "@/lib/queries";
 import { relativeTime } from "@/components/tehnic/utils";
@@ -31,11 +31,9 @@ export function WantedMoviesSection() {
           onClick={() => setOpen((v) => !v)}
           className="flex w-full items-center gap-2 text-left"
         >
-          {open ? (
-            <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-          ) : (
-            <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-          )}
+          <ChevronRight
+            className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200 ${open ? "rotate-90" : ""}`}
+          />
           <Orb state="searching" px={14} />
           <span className="flex-1 text-xs font-semibold">Se așteaptă ({items.length})</span>
         </button>

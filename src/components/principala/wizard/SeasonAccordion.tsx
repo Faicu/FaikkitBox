@@ -1,13 +1,5 @@
 import { useState } from "react";
-import {
-  ChevronDown,
-  ChevronRight,
-  CheckCircle2,
-  Download,
-  Loader2,
-  Clock3,
-  XCircle,
-} from "lucide-react";
+import { ChevronRight, CheckCircle2, Download, Loader2, Clock3, XCircle } from "lucide-react";
 
 import { Orb } from "@/components/ui/orb";
 import type { FilelistTorrent } from "@/lib/filelist.functions";
@@ -212,16 +204,14 @@ function SeasonRow({
           >
             {badge.label}
           </span>
-          {isOpen ? (
-            <ChevronDown className="h-4 w-4 text-muted-foreground" />
-          ) : (
-            <ChevronRight className="h-4 w-4 text-muted-foreground" />
-          )}
+          <ChevronRight
+            className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`}
+          />
         </div>
       </button>
 
       {isOpen && (
-        <div className="border-t border-border/60 px-3 py-2">
+        <div className="animate-in fade-in-0 slide-in-from-top-1 duration-200 border-t border-border/60 px-3 py-2">
           {season.packDownloading ? (
             <div className="mb-2 flex items-center justify-center gap-1.5 rounded-lg bg-amber-500/10 py-1.5 text-xs font-medium text-amber-400">
               <Orb state="working" px={14} /> Pachetul sezonului se descarcă…

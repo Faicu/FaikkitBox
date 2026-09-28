@@ -153,7 +153,7 @@ export function ActivityLogSection() {
             </button>
           ))}
         </div>
-        <div className="rounded-2xl glass-card divide-y divide-border/50">
+        <div className="rounded-2xl glass-card divide-y divide-border/50 stagger-in">
           {isLoading && (
             <div className="space-y-1.5 p-3">
               {Array.from({ length: 4 }).map((_, i) => (

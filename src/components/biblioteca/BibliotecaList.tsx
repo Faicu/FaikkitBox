@@ -255,14 +255,14 @@ export function BibliotecaList() {
       {confirmDeleteTitle &&
         createPortal(
           <div
-            className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/80 pointer-events-auto"
+            className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/80 pointer-events-auto animate-in fade-in-0 duration-200"
             onClick={() => setConfirmDeleteTitle(null)}
           >
             <div
               role="dialog"
               aria-label="Ștergere completă"
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-sm space-y-4 rounded-2xl glass-card p-5 shadow-xl"
+              className="w-full max-w-sm space-y-4 rounded-2xl glass-card p-5 shadow-xl animate-in fade-in-0 zoom-in-95 duration-200"
             >
               <div className="text-sm font-semibold">
                 {confirmDeleteTitle.isCancel ? "Anulare descărcare" : "Ștergere completă"}

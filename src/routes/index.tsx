@@ -30,6 +30,7 @@ import { SupportWidget } from "@/components/principala/SupportWidget";
 import { plexQuery, plexSessionsQuery, adminStatusQuery, recentWatchesQuery } from "@/lib/queries";
 import { formatDateTime } from "@/components/tehnic/utils";
 import { useLiveViewOffsets } from "@/components/principala/useLiveViewOffsets";
+import { useFlashOnChange } from "@/hooks/use-flash-on-change";
 import type { PlexSession } from "@/lib/services/plex";
 
 // Câte vizionări arată cardul de pe Acasă înainte de "Arată mai multe".
@@ -140,10 +141,11 @@ function Overview() {
             status={plex.isLoading ? "loading" : (plex.data?.status ?? "error")}
             error={plex.data?.error}
           >
+            {plex.isLoading && <PlexSkeleton />}
             {plex.data?.status === "ok" && (
               <div className="space-y-2 text-sm">
                 {(sessions?.length ?? 0) > 0 ? (
-                  <div className="space-y-1.5">
+                  <div className="space-y-1.5 stagger-in">
                     {sessions!.map((s, i) => {
                       const offsetMs = liveOffsets[i] ?? s.viewOffsetMs;
                       const pct =
@@ -179,8 +181,8 @@ function Overview() {
                                     ⏸ Pauză
                                   </span>
                                 ) : (
-                                  <span className="shrink-0 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400">
-                                    ▶ Redare
+                                  <span className="inline-flex shrink-0 items-center gap-1 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400">
+                                    <span className="live-dot" aria-hidden /> Redare
                                   </span>
                                 )}
                               </div>
@@ -229,8 +231,14 @@ function Overview() {
                           {s.durationMs > 0 && (
                             <div className="space-y-0.5">
                               <div className="h-1 w-full rounded-full bg-muted overflow-hidden">
+                                {/* Gradientul curge doar cât rulează — la pauză bara
+                                    rămâne plată, ca să se vadă dintr-o privire. */}
                                 <div
-                                  className="h-full rounded-full bg-amber-400 transition-all"
+                                  className={`h-full rounded-full transition-[width] duration-1000 ease-linear ${
+                                    s.playerState === "paused"
+                                      ? "bg-amber-400/70"
+                                      : "progress-flow progress-flow-amber"
+                                  }`}
                                   style={{ width: `${pct}%` }}
                                 />
                               </div>
@@ -255,12 +263,12 @@ function Overview() {
                   <button
                     type="button"
                     onClick={stop(() => setPlexDrawer("views"))}
-                    className="rounded-lg bg-muted/40 px-2.5 py-2.5 text-center transition-colors hover:bg-muted/60 active:bg-muted"
+                    className="rounded-lg bg-muted/40 px-2.5 py-2.5 text-center transition-all duration-200 hover:bg-muted/60 active:scale-[0.97] active:bg-muted"
                   >
                     <div className="flex flex-col items-center">
-                      <div className="text-2xl font-bold tabular-nums">
-                        {String(plex.data.episodesToday ?? 0)}
-                      </div>
+                      <FlashNumber className="text-2xl font-bold tabular-nums">
+                        {plex.data.episodesToday ?? 0}
+                      </FlashNumber>
                       <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
                         Vizionate azi
                       </div>
@@ -278,12 +286,12 @@ function Overview() {
                   <button
                     type="button"
                     onClick={stop(() => setPlexDrawer("users"))}
-                    className="rounded-lg bg-muted/40 px-2.5 py-2.5 text-center transition-colors hover:bg-muted/60 active:bg-muted"
+                    className="rounded-lg bg-muted/40 px-2.5 py-2.5 text-center transition-all duration-200 hover:bg-muted/60 active:scale-[0.97] active:bg-muted"
                   >
                     <div className="flex flex-col items-center">
-                      <div className="text-2xl font-bold tabular-nums">
-                        {String(plex.data.activeUsersToday ?? 0)}
-                      </div>
+                      <FlashNumber className="text-2xl font-bold tabular-nums">
+                        {plex.data.activeUsersToday ?? 0}
+                      </FlashNumber>
                       <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
                         Utilizatori activi azi
                       </div>
@@ -309,7 +317,7 @@ function Overview() {
                     <div className="mb-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
                       Biblioteci
                     </div>
-                    <div className="flex flex-wrap justify-center gap-1.5">
+                    <div className="flex flex-wrap justify-center gap-1.5 stagger-in">
                       {plex.data.libraries.map((lib) => (
                         <div
                           key={lib.key}
@@ -339,7 +347,7 @@ function Overview() {
             </span>
             <span className="font-semibold">Vizionări recente</span>
           </div>
-          <div className="mt-3 space-y-1.5">
+          <div className="mt-3 space-y-1.5 stagger-in">
             {(allWatchesShown
               ? recentWatchItems
               : recentWatchItems.slice(0, RECENT_WATCHES_COLLAPSED)
@@ -406,7 +414,7 @@ function Overview() {
           </DrawerHeader>
           <div className="overflow-y-auto overscroll-contain px-4 pb-6">
             {plex.data?.status === "ok" && (plex.data.todayViews?.length ?? 0) > 0 ? (
-              <ul className="rounded-2xl glass-card divide-y divide-border">
+              <ul className="rounded-2xl glass-card divide-y divide-border stagger-in">
                 {plex.data.todayViews!.map((e, i) => {
                   const seasonEp =
                     e.season != null && e.episode != null
@@ -449,7 +457,7 @@ function Overview() {
           </DrawerHeader>
           <div className="overflow-y-auto overscroll-contain px-4 pb-6">
             {plex.data?.status === "ok" && (plex.data.activeUsersTodayList?.length ?? 0) > 0 ? (
-              <ul className="rounded-2xl glass-card divide-y divide-border">
+              <ul className="rounded-2xl glass-card divide-y divide-border stagger-in">
                 {plex.data.activeUsersTodayList!.map((u, i) => (
                   <li key={i} className="flex items-center justify-between px-3 py-2 text-sm">
                     <span className="truncate">{u.user}</span>
@@ -470,6 +478,31 @@ function Overview() {
 
       {isAuthenticated && <AddMediaWizard open={wizardOpen} onClose={() => setWizardOpen(false)} />}
     </PageShell>
+  );
+}
+
+// Cifră care face flash când se schimbă — aceeași convenție ca la StatCard.
+function FlashNumber({ children, className }: { children: number; className?: string }) {
+  const flash = useFlashOnChange(children);
+  return <div className={`${className ?? ""} ${flash ? "tick-flash" : ""}`}>{children}</div>;
+}
+
+// Forma cardului Plex cât vine primul răspuns: un rând de redare, cele două
+// casete de azi, bibliotecile — ca să nu sară layout-ul la sosirea datelor.
+function PlexSkeleton() {
+  return (
+    <div className="space-y-2">
+      <div className="h-[4.5rem] skeleton-sweep rounded-lg" />
+      <div className="grid grid-cols-2 gap-1.5">
+        <div className="h-16 skeleton-sweep rounded-lg" />
+        <div className="h-16 skeleton-sweep rounded-lg" />
+      </div>
+      <div className="flex justify-center gap-1.5">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="h-[4.5rem] w-[110px] skeleton-sweep rounded-lg" />
+        ))}
+      </div>
+    </div>
   );
 }
 
