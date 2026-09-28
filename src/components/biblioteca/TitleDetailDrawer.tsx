@@ -666,10 +666,11 @@ export function TitleDetailDrawer({
                         d.tech.addedVia && ["Adăugat via", d.tech.addedVia],
                         d.tech.completedAt && [
                           "Finalizat",
-                          addedDate(
+                          dayTimeLabel(
                             Math.floor(
                               new Date(`${d.tech.completedAt.replace(" ", "T")}Z`).getTime() / 1000,
                             ),
+                            false,
                           ),
                         ],
                         d.tech.subtitleSource && [
