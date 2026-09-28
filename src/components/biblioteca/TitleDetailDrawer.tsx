@@ -481,28 +481,21 @@ export function TitleDetailDrawer({
 
               {d.type === "tv_show" && (
                 <>
-                  {/* Următorul episod — citit din `media`, nu cerut live:
-                      show-watcher îl ține la zi din TMDB (data) + TVmaze (ora
-                      exactă). Ora se redă în fusul browserului, deci apare
-                      direct în ora României. */}
-                  <NextEpisodeLine detail={d} />
-                  {/* Episoadele imediat sub descriere și „Urmează…” — sunt
-                      conținutul serialului. Urmărirea, „cine l-a văzut” și
-                      detaliile tehnice coboară sub ele. */}
-                  <EpisodeList
-                    key={d.mediaId}
-                    episodes={d.episodes}
-                    onOpen={(episodeId) => setOpenEpisode({ showId: mediaId!, episodeId })}
-                  />
-                  {/* Urmărirea episoadelor noi. Ascunsă pentru serialele
-                      încheiate — n-au ce episoade noi să primească — DAR nu și
-                      când e deja pornită: un serial urmărit care se încheie
-                      între timp ar rămâne altfel cu urmărirea activă și fără
-                      niciun buton prin care s-o oprești. */}
-                  {d.canManage && (d.tvStatus !== "Ended" || d.autoDownload) && (
-                    <div
-                      className={`rounded-xl border border-border bg-muted/30 p-3 space-y-2 ${d.autoDownload ? "border-flow" : ""}`}
-                    >
+                  {/* Episoadele noi, într-un singur card: ce urmează și cine
+                      se ocupă de el. „Urmează S10E08” și „Urmărit” spun două
+                      jumătăți ale aceluiași lucru — când apare episodul și
+                      dacă ajunge singur în bibliotecă — deci stau împreună. */}
+                  <div
+                    className={`rounded-xl border border-border bg-muted/30 p-3 space-y-2 ${d.autoDownload ? "border-flow" : ""}`}
+                  >
+                    {/* Urmărirea episoadelor noi. Butoanele sunt ascunse
+                        pentru serialele încheiate — n-au ce episoade noi să
+                        primească — DAR nu și când urmărirea e deja pornită: un
+                        serial urmărit care se încheie între timp ar rămâne
+                        altfel fără niciun buton prin care s-o oprești. Fără
+                        drepturi pe serial, starea „Urmărit” se vede, fără
+                        butoane. */}
+                    {(d.autoDownload || (d.canManage && d.tvStatus !== "Ended")) && (
                       <div className="flex items-center gap-2">
                         {d.autoDownload ? (
                           <Orb state="searching" px={18} label="Urmărit" />
@@ -512,7 +505,7 @@ export function TitleDetailDrawer({
                         <span className="flex-1 text-xs font-medium">
                           {d.autoDownload ? "Urmărit" : "Urmărește episoade noi"}
                         </span>
-                        {d.autoDownload ? (
+                        {!d.canManage ? null : d.autoDownload ? (
                           <button
                             type="button"
                             onClick={() => toggleWatch(false)}
@@ -532,114 +525,128 @@ export function TitleDetailDrawer({
                           </button>
                         )}
                       </div>
+                    )}
 
-                      {/* Alegerea punctului de pornire e explicită, nu
-                          implicită: pentru un serial din care ai doar primele
-                          sezoane, "recuperează tot" înseamnă zeci de episoade
-                          descărcate deodată — trebuie să fie o decizie luată
-                          în cunoștință de cauză, nu un efect secundar. */}
-                      {pickingWatch && !d.autoDownload && (
-                        <div className="space-y-1.5">
+                    {/* Următorul episod — citit din `media`, nu cerut live:
+                        show-watcher îl ține la zi din TMDB (data) + TVmaze
+                        (ora exactă). Ora se redă în fusul browserului, deci
+                        apare direct în ora României. */}
+                    <NextEpisodeLine detail={d} />
+
+                    {/* Alegerea punctului de pornire e explicită, nu
+                        implicită: pentru un serial din care ai doar primele
+                        sezoane, "recuperează tot" înseamnă zeci de episoade
+                        descărcate deodată — trebuie să fie o decizie luată în
+                        cunoștință de cauză, nu un efect secundar. */}
+                    {d.canManage && pickingWatch && !d.autoDownload && (
+                      <div className="space-y-1.5">
+                        <button
+                          type="button"
+                          onClick={() => toggleWatch(true, "forward")}
+                          className="w-full rounded-lg bg-muted/60 px-2 py-1.5 text-left text-[11px] transition-colors hover:bg-muted"
+                        >
+                          <span className="block font-medium text-foreground">
+                            Doar de acum înainte
+                          </span>
+                          <span className="block text-muted-foreground">
+                            Descarcă episoadele care apar din acest moment
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => toggleWatch(true, "backfill")}
+                          className="w-full rounded-lg bg-muted/60 px-2 py-1.5 text-left text-[11px] transition-colors hover:bg-muted"
+                        >
+                          <span className="block font-medium text-foreground">
+                            Recuperează și ce lipsește
+                          </span>
+                          <span className="block text-muted-foreground">
+                            Descarcă și episoadele difuzate pe care nu le ai
+                          </span>
+                        </button>
+                      </div>
+                    )}
+
+                    {d.canManage && d.autoDownload && (
+                      <>
+                        <div className="flex items-center gap-1.5 border-t border-border/50 pt-2">
+                          <span className="text-[11px] text-muted-foreground">Calitate</span>
+                          <select
+                            value={d.autoDownloadQuality ?? "1080p"}
+                            onChange={(e) =>
+                              setWatchQualities(
+                                e.target.value,
+                                d.autoDownloadFallbackQuality ?? null,
+                              )
+                            }
+                            disabled={savingWatch}
+                            className="rounded-lg border border-border bg-muted/40 px-1.5 py-0.5 text-[11px] outline-none focus:ring-1 focus:ring-primary"
+                          >
+                            {WATCH_QUALITIES.map((q) => (
+                              <option key={q} value={q}>
+                                {q}
+                              </option>
+                            ))}
+                          </select>
                           <button
                             type="button"
-                            onClick={() => toggleWatch(true, "forward")}
-                            className="w-full rounded-lg bg-muted/60 px-2 py-1.5 text-left text-[11px] transition-colors hover:bg-muted"
+                            onClick={checkNow}
+                            disabled={checkingNow}
+                            className="ml-auto flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-[11px] font-medium text-foreground transition-colors hover:bg-muted/60 disabled:opacity-40"
                           >
-                            <span className="block font-medium text-foreground">
-                              Doar de acum înainte
-                            </span>
-                            <span className="block text-muted-foreground">
-                              Descarcă episoadele care apar din acest moment
-                            </span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => toggleWatch(true, "backfill")}
-                            className="w-full rounded-lg bg-muted/60 px-2 py-1.5 text-left text-[11px] transition-colors hover:bg-muted"
-                          >
-                            <span className="block font-medium text-foreground">
-                              Recuperează și ce lipsește
-                            </span>
-                            <span className="block text-muted-foreground">
-                              Descarcă și episoadele difuzate pe care nu le ai
-                            </span>
+                            {checkingNow ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <RefreshCw className="h-3 w-3" />
+                            )}
+                            Verifică acum
                           </button>
                         </div>
-                      )}
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[11px] text-muted-foreground">Rezervă</span>
+                          <select
+                            value={d.autoDownloadFallbackQuality ?? ""}
+                            onChange={(e) =>
+                              setWatchQualities(
+                                d.autoDownloadQuality ?? "1080p",
+                                e.target.value || null,
+                              )
+                            }
+                            disabled={savingWatch}
+                            className="rounded-lg border border-border bg-muted/40 px-1.5 py-0.5 text-[11px] outline-none focus:ring-1 focus:ring-primary"
+                          >
+                            <option value="">Fără</option>
+                            {WATCH_QUALITIES.filter(
+                              (q) => q !== (d.autoDownloadQuality ?? "1080p"),
+                            ).map((q) => (
+                              <option key={q} value={q}>
+                                {q}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="text-[10px] text-muted-foreground">
+                          {d.autoDownloadFallbackQuality
+                            ? `Dacă ${d.autoDownloadQuality ?? "1080p"} lipsește la două verificări (la minimum 3 ore distanță), se ia ${d.autoDownloadFallbackQuality}. `
+                            : ""}
+                          {d.autoDownloadFrom
+                            ? `De după ${d.autoDownloadFrom}. `
+                            : "Recuperează tot ce lipsește. "}
+                          {d.watchLastCheckedAt
+                            ? `Verificat ultima dată ${addedDate(Math.floor(new Date(`${d.watchLastCheckedAt.replace(" ", "T")}Z`).getTime() / 1000))}.`
+                            : "Încă neverificat."}
+                        </div>
+                      </>
+                    )}
+                  </div>
 
-                      {d.autoDownload && (
-                        <>
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-[11px] text-muted-foreground">Calitate</span>
-                            <select
-                              value={d.autoDownloadQuality ?? "1080p"}
-                              onChange={(e) =>
-                                setWatchQualities(
-                                  e.target.value,
-                                  d.autoDownloadFallbackQuality ?? null,
-                                )
-                              }
-                              disabled={savingWatch}
-                              className="rounded-lg border border-border bg-muted/40 px-1.5 py-0.5 text-[11px] outline-none focus:ring-1 focus:ring-primary"
-                            >
-                              {WATCH_QUALITIES.map((q) => (
-                                <option key={q} value={q}>
-                                  {q}
-                                </option>
-                              ))}
-                            </select>
-                            <button
-                              type="button"
-                              onClick={checkNow}
-                              disabled={checkingNow}
-                              className="ml-auto flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-[11px] font-medium text-foreground transition-colors hover:bg-muted/60 disabled:opacity-40"
-                            >
-                              {checkingNow ? (
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                              ) : (
-                                <RefreshCw className="h-3 w-3" />
-                              )}
-                              Verifică acum
-                            </button>
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-[11px] text-muted-foreground">Rezervă</span>
-                            <select
-                              value={d.autoDownloadFallbackQuality ?? ""}
-                              onChange={(e) =>
-                                setWatchQualities(
-                                  d.autoDownloadQuality ?? "1080p",
-                                  e.target.value || null,
-                                )
-                              }
-                              disabled={savingWatch}
-                              className="rounded-lg border border-border bg-muted/40 px-1.5 py-0.5 text-[11px] outline-none focus:ring-1 focus:ring-primary"
-                            >
-                              <option value="">Fără</option>
-                              {WATCH_QUALITIES.filter(
-                                (q) => q !== (d.autoDownloadQuality ?? "1080p"),
-                              ).map((q) => (
-                                <option key={q} value={q}>
-                                  {q}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                          <div className="text-[10px] text-muted-foreground">
-                            {d.autoDownloadFallbackQuality
-                              ? `Dacă ${d.autoDownloadQuality ?? "1080p"} lipsește la două verificări (la minimum 3 ore distanță), se ia ${d.autoDownloadFallbackQuality}. `
-                              : ""}
-                            {d.autoDownloadFrom
-                              ? `De după ${d.autoDownloadFrom}. `
-                              : "Recuperează tot ce lipsește. "}
-                            {d.watchLastCheckedAt
-                              ? `Verificat ultima dată ${addedDate(Math.floor(new Date(`${d.watchLastCheckedAt.replace(" ", "T")}Z`).getTime() / 1000))}.`
-                              : "Încă neverificat."}
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  )}
+                  {/* Episoadele, după cardul de mai sus. „Cine l-a văzut” și
+                      detaliile tehnice coboară sub ele. */}
+                  <EpisodeList
+                    key={d.mediaId}
+                    episodes={d.episodes}
+                    onOpen={(episodeId) => setOpenEpisode({ showId: mediaId!, episodeId })}
+                  />
                 </>
               )}
 
@@ -912,6 +919,8 @@ function ClampedSummary({ text }: { text: string }) {
   );
 }
 
+// Rândul „Urmează…” din cardul de episoade noi — fără card propriu, stă în
+// cel al urmăririi.
 function NextEpisodeLine({ detail }: { detail: PlexTitleDetail }) {
   const when = nextEpisodeWhen(detail.nextEpisodeAirDate, detail.nextEpisodeAirstamp);
 
@@ -919,7 +928,7 @@ function NextEpisodeLine({ detail }: { detail: PlexTitleDetail }) {
   // putea fi citit drept "încă n-am aflat".
   if (detail.tvStatus === "Ended" && !when) {
     return (
-      <div className="flex items-center gap-2 rounded-xl bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <CheckCheck className="h-3.5 w-3.5 shrink-0" />
         Serial încheiat — nu mai urmează episoade
       </div>
@@ -928,7 +937,7 @@ function NextEpisodeLine({ detail }: { detail: PlexTitleDetail }) {
 
   if (!when || !detail.nextEpisode) {
     return (
-      <div className="rounded-xl bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+      <div className="text-xs text-muted-foreground">
         <div className="flex items-center gap-2">
           <CalendarClock className="h-3.5 w-3.5 shrink-0" />
           Niciun episod nou anunțat încă
@@ -938,13 +947,16 @@ function NextEpisodeLine({ detail }: { detail: PlexTitleDetail }) {
     );
   }
 
+  // „Curând” (azi – poimâine) iese în evidență: data devine pastilă colorată.
   return (
-    <div
-      className={`rounded-xl px-3 py-2 text-xs ${
-        when.soon ? "bg-primary/10 text-foreground" : "bg-muted/30 text-muted-foreground"
-      }`}
-    >
-      <div className="flex items-center gap-2">
+    <div className="text-xs">
+      <div
+        className={`flex items-center gap-2 ${
+          when.soon
+            ? "-mx-1 rounded-lg bg-primary/10 px-1 py-1 text-foreground"
+            : "text-muted-foreground"
+        }`}
+      >
         <CalendarClock
           className={`h-3.5 w-3.5 shrink-0 ${when.soon ? "animate-pulse text-primary" : ""}`}
         />
@@ -965,12 +977,9 @@ function NextEpisodeLine({ detail }: { detail: PlexTitleDetail }) {
 function AutoDownloadNote({ on }: { on: boolean }) {
   if (!on) return null;
   return (
-    <div className="mt-1.5 flex items-start gap-2 border-t border-border/50 pt-1.5 text-[11px] text-muted-foreground">
+    <div className="mt-1 flex items-start gap-2 text-[11px] text-muted-foreground">
       <Download className="mt-px h-3 w-3 shrink-0 text-primary" />
-      <span>
-        Episoadele viitoare se descarcă automat, imediat ce apar pe Filelist. Nu trebuie să ceri
-        nimic manual.
-      </span>
+      <span>Se descarcă automat, imediat ce apare pe Filelist.</span>
     </div>
   );
 }

@@ -296,15 +296,15 @@ transversale, fără un singur domeniu clar.
 
 ### src/components/biblioteca/
 
-| Fișier                    | Ce conține                                                                                                                                                                                                                                                         |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `BibliotecaList.tsx`      | Lista principală — căutare, grupare episoade consecutive pe serial, încărcare incrementală, confirmare de ștergere.                                                                                                                                                |
-| `TitleDetailDrawer.tsx`   | Drawer de detalii per titlu — antet fix (poster, titlu, insigne de stare, progres, genuri), apoi cadrul episodului, descrierea, la serial lista de episoade (`EpisodeList`) și panoul de urmărire, cine a văzut, corectare/ștergere subtitrare, ștergere completă. |
-| `EpisodeList.tsx`         | Lista de episoade din drawer-ul serialului — pe sezoane (cel mai nou primul și singurul deschis), rânduri cu miniatura cadrului, nume, dată de difuzare, durată și stare.                                                                                          |
-| `StatusBadge.tsx`         | Badge mic "Se descarcă" (status calculat din rândul `media`).                                                                                                                                                                                                      |
-| `WantedMoviesSection.tsx` | Filmele așteptate — urmărire pornită, dar încă negăsite pe Filelist la calitatea cerută. Secțiune separată, deasupra listei, nu rânduri amestecate printre titluri: un film așteptat nu e ceva ce ai.                                                              |
-| `WantedMovieDrawer.tsx`   | Drawer per film așteptat — calitatea cerută și cea de rezervă, ultima verificare, oprirea urmăririi.                                                                                                                                                               |
-| `utils.ts`                | Helpere pure — grupare episoade, formatare dată, `matchesQuery` (căutare fără diacritice).                                                                                                                                                                         |
+| Fișier                    | Ce conține                                                                                                                                                                                                                                                                                                                               |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `BibliotecaList.tsx`      | Lista principală — căutare, grupare episoade consecutive pe serial, încărcare incrementală, confirmare de ștergere.                                                                                                                                                                                                                      |
+| `TitleDetailDrawer.tsx`   | Drawer de detalii per titlu — antet fix (poster, titlu, insigne de stare, progres, genuri), apoi cadrul episodului, descrierea, la serial cardul de episoade noi (următorul episod + urmărirea, calitate principală și de rezervă) și lista de episoade (`EpisodeList`), cine a văzut, corectare/ștergere subtitrare, ștergere completă. |
+| `EpisodeList.tsx`         | Lista de episoade din drawer-ul serialului — pe sezoane (cel mai nou primul și singurul deschis), rânduri cu miniatura cadrului, nume, dată de difuzare, durată și stare.                                                                                                                                                                |
+| `StatusBadge.tsx`         | Badge mic "Se descarcă" (status calculat din rândul `media`).                                                                                                                                                                                                                                                                            |
+| `WantedMoviesSection.tsx` | Filmele așteptate — urmărire pornită, dar încă negăsite pe Filelist la calitatea cerută. Secțiune separată, deasupra listei, nu rânduri amestecate printre titluri: un film așteptat nu e ceva ce ai.                                                                                                                                    |
+| `WantedMovieDrawer.tsx`   | Drawer per film așteptat — calitatea cerută și cea de rezervă, ultima verificare, oprirea urmăririi.                                                                                                                                                                                                                                     |
+| `utils.ts`                | Helpere pure — grupare episoade, formatare dată, `matchesQuery` (căutare fără diacritice).                                                                                                                                                                                                                                               |
 
 ### src/components/principala/
 
@@ -452,7 +452,7 @@ funcții numite, fan-in rezolvat prin importurile `@/` și relative, inclusiv
 `import()` dinamic). Tabelul e integral generat — nu are rânduri actualizate
 manual, deci nu poate fi parțial vechi.
 
-**Total: 226 fișiere, ~36 765 linii, ~795 funcții**
+**Total: 226 fișiere, ~36 774 linii, ~795 funcții**
 
 (numărătoare aproximativă — funcții numite, `const x = (...) =>` și
 `createServerFn`, fără metode de clasă sau funcții anonime inline)
@@ -472,7 +472,7 @@ manual, deci nu poate fi parțial vechi.
 | `src/lib/filelist/`                 |      20 |  3 746 |
 | `src/lib/services/`                 |      17 |  4 422 |
 | `src/lib/tvmaze/`                   |       1 |     46 |
-| `src/components/` (toate)           |      76 | 10 435 |
+| `src/components/` (toate)           |      76 | 10 444 |
 | `src/hooks/`                        |       4 |    289 |
 | `server/plugins/`                   |       6 |    467 |
 | `server/routes/api/`                |       3 |    191 |
@@ -500,8 +500,8 @@ manual, deci nu poate fi parțial vechi.
 | Fișier                                                        | Linii | Funcții | Fan-in |
 | ------------------------------------------------------------- | ----: | ------: | -----: |
 | `src/lib/db.ts`                                               |  1025 |       4 |     37 |
+| `src/components/biblioteca/TitleDetailDrawer.tsx`             |   986 |      11 |      1 |
 | `src/lib/media/show-watch.ts`                                 |   983 |      17 |      8 |
-| `src/components/biblioteca/TitleDetailDrawer.tsx`             |   977 |      11 |      1 |
 | `src/lib/services/plex-browse.ts`                             |   969 |       9 |      6 |
 | `src/lib/media/media.ts`                                      |   890 |      18 |     17 |
 | `src/lib/filelist/download.ts`                                |   772 |      11 |     11 |
