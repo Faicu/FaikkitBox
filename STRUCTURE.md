@@ -452,7 +452,7 @@ funcții numite, fan-in rezolvat prin importurile `@/` și relative, inclusiv
 `import()` dinamic). Tabelul e integral generat — nu are rânduri actualizate
 manual, deci nu poate fi parțial vechi.
 
-**Total: 229 fișiere, ~37 137 linii, ~805 funcții**
+**Total: 229 fișiere, ~37 173 linii, ~806 funcții**
 
 (numărătoare aproximativă — funcții numite, `const x = (...) =>` și
 `createServerFn`, fără metode de clasă sau funcții anonime inline)
@@ -472,7 +472,7 @@ manual, deci nu poate fi parțial vechi.
 | `src/lib/filelist/`                 |      23 |  4 078 |
 | `src/lib/services/`                 |      17 |  4 422 |
 | `src/lib/tvmaze/`                   |       1 |     46 |
-| `src/components/` (toate)           |      76 | 10 475 |
+| `src/components/` (toate)           |      76 | 10 511 |
 | `src/hooks/`                        |       4 |    289 |
 | `server/plugins/`                   |       6 |    467 |
 | `server/routes/api/`                |       3 |    191 |
@@ -499,8 +499,8 @@ manual, deci nu poate fi parțial vechi.
 
 | Fișier                                                        | Linii | Funcții | Fan-in |
 | ------------------------------------------------------------- | ----: | ------: | -----: |
+| `src/components/biblioteca/TitleDetailDrawer.tsx`             |  1034 |      12 |      1 |
 | `src/lib/db.ts`                                               |  1025 |       4 |     38 |
-| `src/components/biblioteca/TitleDetailDrawer.tsx`             |   998 |      11 |      1 |
 | `src/lib/media/show-watch.ts`                                 |   983 |      17 |      8 |
 | `src/lib/services/plex-browse.ts`                             |   969 |       9 |      6 |
 | `src/lib/media/media.ts`                                      |   890 |      18 |     17 |

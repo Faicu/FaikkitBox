@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -23,6 +23,7 @@ import {
   ArrowLeft,
   Radar,
   CalendarClock,
+  Check,
   CheckCheck,
   RefreshCw,
   Download,
@@ -100,6 +101,7 @@ export function TitleDetailDrawer({
   const [savingWatch, setSavingWatch] = useState(false);
   const [checkingNow, setCheckingNow] = useState(false);
   const [pickingWatch, setPickingWatch] = useState(false);
+  const [pickingQuality, setPickingQuality] = useState(false);
 
   const correctFn = useServerFn(correctSubtitleForMedia);
   const deleteSubtitleFn = useServerFn(deleteSubtitleForMedia);
@@ -506,6 +508,21 @@ export function TitleDetailDrawer({
                         <span className="flex-1 text-xs font-medium">
                           {d.autoDownload ? "Urmărit" : "Urmărește episoade noi"}
                         </span>
+                        {d.canManage && d.autoDownload && (
+                          <button
+                            type="button"
+                            onClick={checkNow}
+                            disabled={checkingNow}
+                            className="flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-[11px] font-medium text-foreground transition-colors hover:bg-muted/60 disabled:opacity-40"
+                          >
+                            {checkingNow ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <RefreshCw className="h-3 w-3" />
+                            )}
+                            Verifică acum
+                          </button>
+                        )}
                         {!d.canManage ? null : d.autoDownload ? (
                           <button
                             type="button"
@@ -531,8 +548,53 @@ export function TitleDetailDrawer({
                     {/* Următorul episod — citit din `media`, nu cerut live:
                         show-watcher îl ține la zi din TMDB (data) + TVmaze
                         (ora exactă). Ora se redă în fusul browserului, deci
-                        apare direct în ora României. */}
-                    <NextEpisodeLine detail={d} />
+                        apare direct în ora României. În dreapta, calitatea
+                        cu care se descarcă. */}
+                    <NextEpisodeLine
+                      detail={d}
+                      trailing={
+                        d.canManage && d.autoDownload ? (
+                          <button
+                            type="button"
+                            onClick={() => setPickingQuality((v) => !v)}
+                            disabled={savingWatch}
+                            className="flex shrink-0 items-center gap-1 rounded-lg border border-border bg-muted/40 px-2 py-1 text-[11px] font-medium text-foreground transition-colors hover:bg-muted/60 disabled:opacity-40"
+                          >
+                            {d.autoDownloadQuality ?? "1080p"}
+                            {d.autoDownloadFallbackQuality && (
+                              <span className="text-muted-foreground">
+                                + {d.autoDownloadFallbackQuality}
+                              </span>
+                            )}
+                            <ChevronDown
+                              className={`h-3 w-3 text-muted-foreground transition-transform ${pickingQuality ? "rotate-180" : ""}`}
+                            />
+                          </button>
+                        ) : null
+                      }
+                    />
+
+                    {/* Lista de calități, inline — nu un Popover/Select Radix:
+                        un overlay imbricat în Drawer-ul vaul îngheață ecranul
+                        (vezi commit c76ce30). */}
+                    {d.canManage && d.autoDownload && pickingQuality && (
+                      <QualityChecklist
+                        primary={d.autoDownloadQuality ?? "1080p"}
+                        fallback={d.autoDownloadFallbackQuality}
+                        disabled={savingWatch}
+                        onChange={setWatchQualities}
+                      />
+                    )}
+
+                    {d.autoDownload && (
+                      <div className="flex items-start gap-2 text-[11px] text-muted-foreground">
+                        <Download className="mt-px h-3 w-3 shrink-0 text-primary" />
+                        <span className="flex-1">Se descarcă automat când apare pe Filelist.</span>
+                        <span className="shrink-0 text-[10px]">
+                          {lastCheckedLabel(d.watchLastCheckedAt)}
+                        </span>
+                      </div>
+                    )}
 
                     {/* Alegerea punctului de pornire e explicită, nu
                         implicită: pentru un serial din care ai doar primele
@@ -566,89 +628,6 @@ export function TitleDetailDrawer({
                           </span>
                         </button>
                       </div>
-                    )}
-
-                    {d.canManage && d.autoDownload && (
-                      <>
-                        {/* Calitățile în stânga; „Verifică acum” în dreapta, cu
-                            momentul ultimei verificări sub el — un rând în
-                            minus față de nota separată de dedesubt. */}
-                        <div className="flex items-start gap-3 border-t border-border/50 pt-2">
-                          <div className="min-w-0 flex-1 space-y-1.5">
-                            <div className="flex items-center gap-1.5">
-                              <span className="w-12 shrink-0 text-[11px] text-muted-foreground">
-                                Calitate
-                              </span>
-                              <select
-                                value={d.autoDownloadQuality ?? "1080p"}
-                                onChange={(e) =>
-                                  setWatchQualities(
-                                    e.target.value,
-                                    d.autoDownloadFallbackQuality ?? null,
-                                  )
-                                }
-                                disabled={savingWatch}
-                                className="rounded-lg border border-border bg-muted/40 px-1.5 py-0.5 text-[11px] outline-none focus:ring-1 focus:ring-primary"
-                              >
-                                {WATCH_QUALITIES.map((q) => (
-                                  <option key={q} value={q}>
-                                    {q}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
-                            <div className="flex items-center gap-1.5">
-                              <span className="w-12 shrink-0 text-[11px] text-muted-foreground">
-                                Rezervă
-                              </span>
-                              <select
-                                value={d.autoDownloadFallbackQuality ?? ""}
-                                onChange={(e) =>
-                                  setWatchQualities(
-                                    d.autoDownloadQuality ?? "1080p",
-                                    e.target.value || null,
-                                  )
-                                }
-                                disabled={savingWatch}
-                                className="rounded-lg border border-border bg-muted/40 px-1.5 py-0.5 text-[11px] outline-none focus:ring-1 focus:ring-primary"
-                              >
-                                <option value="">Fără</option>
-                                {WATCH_QUALITIES.filter(
-                                  (q) => q !== (d.autoDownloadQuality ?? "1080p"),
-                                ).map((q) => (
-                                  <option key={q} value={q}>
-                                    {q}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
-                          </div>
-                          <div className="flex shrink-0 flex-col items-end gap-1">
-                            <button
-                              type="button"
-                              onClick={checkNow}
-                              disabled={checkingNow}
-                              className="flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-[11px] font-medium text-foreground transition-colors hover:bg-muted/60 disabled:opacity-40"
-                            >
-                              {checkingNow ? (
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                              ) : (
-                                <RefreshCw className="h-3 w-3" />
-                              )}
-                              Verifică acum
-                            </button>
-                            <span className="text-[10px] text-muted-foreground">
-                              {lastCheckedLabel(d.watchLastCheckedAt)}
-                            </span>
-                          </div>
-                        </div>
-                        {d.autoDownloadFallbackQuality && (
-                          <div className="text-[10px] text-muted-foreground">
-                            Dacă {d.autoDownloadQuality ?? "1080p"} lipsește la două verificări (la
-                            minimum 3 ore distanță), se ia {d.autoDownloadFallbackQuality}.
-                          </div>
-                        )}
-                      </>
                     )}
                   </div>
 
@@ -932,38 +911,32 @@ function ClampedSummary({ text }: { text: string }) {
 }
 
 // Rândul „Urmează…” din cardul de episoade noi — fără card propriu, stă în
-// cel al urmăririi.
-function NextEpisodeLine({ detail }: { detail: PlexTitleDetail }) {
+// cel al urmăririi. `trailing` e alegerea calității, în dreapta rândului.
+function NextEpisodeLine({ detail, trailing }: { detail: PlexTitleDetail; trailing?: ReactNode }) {
   const when = nextEpisodeWhen(detail.nextEpisodeAirDate, detail.nextEpisodeAirstamp);
 
-  // Serial încheiat: spunem asta explicit, în loc să lăsăm un gol care ar
-  // putea fi citit drept "încă n-am aflat".
+  let content: ReactNode;
   if (detail.tvStatus === "Ended" && !when) {
-    return (
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+    // Serial încheiat: spunem asta explicit, în loc să lăsăm un gol care ar
+    // putea fi citit drept "încă n-am aflat".
+    content = (
+      <span className="flex min-w-0 items-center gap-2 text-muted-foreground">
         <CheckCheck className="h-3.5 w-3.5 shrink-0" />
         Serial încheiat — nu mai urmează episoade
-      </div>
+      </span>
     );
-  }
-
-  if (!when || !detail.nextEpisode) {
-    return (
-      <div className="text-xs text-muted-foreground">
-        <div className="flex items-center gap-2">
-          <CalendarClock className="h-3.5 w-3.5 shrink-0" />
-          Niciun episod nou anunțat încă
-        </div>
-        <AutoDownloadNote on={detail.autoDownload} />
-      </div>
+  } else if (!when || !detail.nextEpisode) {
+    content = (
+      <span className="flex min-w-0 items-center gap-2 text-muted-foreground">
+        <CalendarClock className="h-3.5 w-3.5 shrink-0" />
+        Niciun episod nou anunțat încă
+      </span>
     );
-  }
-
-  // „Curând” (azi – poimâine) iese în evidență: data devine pastilă colorată.
-  return (
-    <div className="text-xs">
-      <div
-        className={`flex items-center gap-2 ${
+  } else {
+    // „Curând” (azi – poimâine) iese în evidență: fundal colorat.
+    content = (
+      <span
+        className={`flex min-w-0 items-center gap-2 ${
           when.soon
             ? "-mx-1 rounded-lg bg-primary/10 px-1 py-1 text-foreground"
             : "text-muted-foreground"
@@ -976,22 +949,85 @@ function NextEpisodeLine({ detail }: { detail: PlexTitleDetail }) {
           Urmează <span className="font-medium text-foreground">{detail.nextEpisode}</span> ·{" "}
           {when.text}
         </span>
-      </div>
-      <AutoDownloadNote on={detail.autoDownload} />
+      </span>
+    );
+  }
+
+  return (
+    <div className="flex items-center justify-between gap-2 text-xs">
+      {content}
+      {trailing}
     </div>
   );
 }
 
-// Pentru serialele urmărite, spunem explicit, lângă data următorului episod, că
-// nu e nimic de făcut manual: show-watcher-ul îl ia singur când apare pe
-// Filelist. Fără rândul ăsta, "Urmează S02E05 · peste 3 zile" se citea ca o
-// simplă informație, nu ca o promisiune că episodul chiar ajunge în bibliotecă.
-function AutoDownloadNote({ on }: { on: boolean }) {
-  if (!on) return null;
+// Calitatea urmăririi, ca listă de bifat: cel mult două. Cea mai bună dintre
+// cele bifate e principala, cealaltă e rezerva — aceeași regulă ca înainte
+// (fallback-quality.ts): rezerva se ia doar dacă principala lipsește la două
+// verificări, la minimum 3 ore distanță.
+function QualityChecklist({
+  primary,
+  fallback,
+  disabled,
+  onChange,
+}: {
+  primary: string;
+  fallback: string | null;
+  disabled: boolean;
+  onChange: (primary: string, fallback: string | null) => void;
+}) {
+  const checked = [primary, fallback].filter((q): q is string => !!q);
+  const full = checked.length >= 2;
+
+  function toggle(q: string) {
+    let next: string[];
+    if (checked.includes(q)) {
+      // Măcar una rămâne bifată — fără calitate, urmărirea n-ar avea ce căuta.
+      if (checked.length === 1) return;
+      next = checked.filter((c) => c !== q);
+    } else {
+      if (full) return;
+      next = [...checked, q];
+    }
+    next.sort((a, b) => WATCH_QUALITIES.indexOf(a) - WATCH_QUALITIES.indexOf(b));
+    onChange(next[0], next[1] ?? null);
+  }
+
   return (
-    <div className="mt-1 flex items-start gap-2 text-[11px] text-muted-foreground">
-      <Download className="mt-px h-3 w-3 shrink-0 text-primary" />
-      <span>Se descarcă automat, imediat ce apare pe Filelist.</span>
+    <div className="rounded-lg bg-muted/40 p-1.5">
+      <div className="grid grid-cols-3 gap-1">
+        {WATCH_QUALITIES.map((q) => {
+          const on = checked.includes(q);
+          const role = on && full ? (q === primary ? "principală" : "rezervă") : null;
+          return (
+            <button
+              key={q}
+              type="button"
+              onClick={() => toggle(q)}
+              disabled={disabled || (!on && full)}
+              className={`flex items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-[11px] transition-colors disabled:opacity-40 ${
+                on ? "bg-primary/15 text-foreground" : "text-muted-foreground hover:bg-muted/60"
+              }`}
+            >
+              <span
+                className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border ${
+                  on ? "border-primary bg-primary text-primary-foreground" : "border-border"
+                }`}
+              >
+                {on && <Check className="h-2.5 w-2.5" />}
+              </span>
+              <span className="min-w-0">
+                <span className="block font-medium">{q}</span>
+                {role && <span className="block text-[9px] text-muted-foreground">{role}</span>}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      <div className="mt-1.5 px-0.5 text-[10px] text-muted-foreground">
+        Cel mult două. A doua bifată e rezervă: se ia doar dacă prima lipsește la două verificări,
+        la minimum 3 ore distanță.
+      </div>
     </div>
   );
 }
