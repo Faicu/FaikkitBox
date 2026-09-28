@@ -28,13 +28,13 @@ Cmnd_Alias FKB_REBOOT = /usr/bin/systemctl reboot
 
 # Update = pull (cu serviciul pornit), apoi recreare. La Plex, --force-recreate:
 # imaginea beta își instalează ultima versiune la pornirea containerului.
-Cmnd_Alias FKB_PLEX = /usr/bin/docker-compose -f /root/plex/docker-compose.yml restart, \
-                      /usr/bin/docker-compose -f /root/plex/docker-compose.yml pull, \
-                      /usr/bin/docker-compose -f /root/plex/docker-compose.yml up -d --force-recreate
+Cmnd_Alias FKB_PLEX = /usr/bin/docker compose -f /root/plex/docker-compose.yml restart, \
+                      /usr/bin/docker compose -f /root/plex/docker-compose.yml pull, \
+                      /usr/bin/docker compose -f /root/plex/docker-compose.yml up -d --force-recreate
 
-Cmnd_Alias FKB_IMMICH = /usr/bin/docker-compose -f /root/immich-app/docker-compose.yml restart, \
-                        /usr/bin/docker-compose -f /root/immich-app/docker-compose.yml pull, \
-                        /usr/bin/docker-compose -f /root/immich-app/docker-compose.yml up -d
+Cmnd_Alias FKB_IMMICH = /usr/bin/docker compose -f /root/immich-app/docker-compose.yml restart, \
+                        /usr/bin/docker compose -f /root/immich-app/docker-compose.yml pull, \
+                        /usr/bin/docker compose -f /root/immich-app/docker-compose.yml up -d
 
 # ethtool e fixat pe interfața reală: cu argument liber, `ethtool -s` poate
 # reconfigura placa de rețea, ceea ce nu are legătură cu ce face aplicația.

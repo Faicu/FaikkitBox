@@ -40,7 +40,7 @@ const PLEX_COMPOSE = process.env.PLEX_COMPOSE_FILE ?? "/root/plex/docker-compose
 const IMMICH_COMPOSE = process.env.IMMICH_COMPOSE_FILE ?? "/root/immich-app/docker-compose.yml";
 
 const compose = (file: string, ...args: string[]): Step => ({
-  argv: ["sudo", "-n", "/usr/bin/docker-compose", "-f", file, ...args],
+  argv: ["sudo", "-n", "/usr/bin/docker", "compose", "-f", file, ...args],
 });
 
 // null = acțiune inexistentă (qBittorrent nu se actualizează niciodată din

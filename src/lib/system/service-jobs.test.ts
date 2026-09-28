@@ -76,8 +76,8 @@ describe("acțiunile pe servicii", () => {
     const id = await jobs.startServiceJob("immich", "update");
     await finished(id);
 
-    // [sudo, -n, docker-compose, -f, fișier, ...comanda]
-    expect(spawned.map((a) => a.slice(5).join(" "))).toEqual(["pull", "up -d"]);
+    // [sudo, -n, docker, compose, -f, fișier, ...comanda]
+    expect(spawned.map((a) => a.slice(6).join(" "))).toEqual(["pull", "up -d"]);
     expect(journal()).toEqual([{ type: "service_update", message: "Immich a fost actualizat" }]);
   });
 
