@@ -453,7 +453,7 @@ funcții numite, fan-in rezolvat prin importurile `@/` și relative, inclusiv
 `import()` dinamic). Tabelul e integral generat — nu are rânduri actualizate
 manual, deci nu poate fi parțial vechi.
 
-**Total: 230 fișiere, ~37 341 linii, ~810 funcții**
+**Total: 232 fișiere, ~37 422 linii, ~811 funcții**
 
 (numărătoare aproximativă — funcții numite, `const x = (...) =>` și
 `createServerFn`, fără metode de clasă sau funcții anonime inline)
@@ -466,11 +466,11 @@ manual, deci nu poate fi parțial vechi.
 | `src/lib/` (rădăcină, transversale) |      15 |  3 192 |
 | `src/lib/auth/`                     |      10 |    953 |
 | `src/lib/tmdb/`                     |       9 |  1 381 |
-| `src/lib/media/`                    |      24 |  5 605 |
+| `src/lib/media/`                    |      26 |  5 671 |
 | `src/lib/notifications/`            |       3 |    425 |
 | `src/lib/errors/`                   |       6 |    475 |
 | `src/lib/system/`                   |      17 |  1 825 |
-| `src/lib/filelist/`                 |      23 |  4 117 |
+| `src/lib/filelist/`                 |      23 |  4 132 |
 | `src/lib/services/`                 |      17 |  4 422 |
 | `src/lib/tvmaze/`                   |       1 |     46 |
 | `src/components/` (toate)           |      77 | 10 612 |
@@ -496,13 +496,13 @@ manual, deci nu poate fi parțial vechi.
 | `src/components/filelist/types.ts`          |     21 |    17 |
 | `src/components/principala/wizard/types.ts` |     21 |    47 |
 
-### Tabel complet, toate cele 230 de fișiere
+### Tabel complet, toate cele 232 de fișiere
 
 | Fișier                                                        | Linii | Funcții | Fan-in |
 | ------------------------------------------------------------- | ----: | ------: | -----: |
 | `src/lib/db.ts`                                               |  1025 |       4 |     38 |
 | `src/components/biblioteca/TitleDetailDrawer.tsx`             |   994 |      11 |      1 |
-| `src/lib/media/show-watch.ts`                                 |   983 |      17 |      8 |
+| `src/lib/media/show-watch.ts`                                 |   987 |      17 |      8 |
 | `src/lib/services/plex-browse.ts`                             |   969 |       9 |      6 |
 | `src/lib/media/media.ts`                                      |   890 |      18 |     17 |
 | `src/lib/filelist/download.ts`                                |   780 |      11 |     11 |
@@ -555,10 +555,10 @@ manual, deci nu poate fi parțial vechi.
 | `src/components/tehnic/sections/ErrorLogSection.tsx`          |   225 |       2 |      1 |
 | `src/lib/errors/error-log.ts`                                 |   225 |       9 |      4 |
 | `src/components/principala/wizard/use-wizard-download.ts`     |   222 |       6 |      1 |
+| `src/lib/filelist/release-scoring.ts`                         |   221 |       5 |      3 |
 | `src/lib/filelist/subsro-client.ts`                           |   212 |      10 |      1 |
 | `src/lib/media/episode-details.test.ts`                       |   212 |       4 |      0 |
 | `src/components/tehnic/sections/PushSubscriptionsSection.tsx` |   210 |       3 |      1 |
-| `src/lib/filelist/release-scoring.ts`                         |   210 |       5 |      3 |
 | `src/lib/media/plex-link-by-hash.test.ts`                     |   201 |       2 |      0 |
 | `src/lib/qbit-client.ts`                                      |   201 |      11 |     11 |
 | `src/lib/filelist/subtitle-apply.ts`                          |   197 |       4 |      1 |
@@ -603,10 +603,10 @@ manual, deci nu poate fi parțial vechi.
 | `src/lib/filelist/subtitle-outcomes.ts`                       |   127 |       2 |      7 |
 | `src/lib/system/db-backup.ts`                                 |   127 |       8 |      2 |
 | `src/lib/services/plex-quality.test.ts`                       |   125 |       0 |      0 |
+| `src/lib/filelist/plex-id-hint.test.ts`                       |   121 |       0 |      0 |
 | `src/lib/system/update-check.test.ts`                         |   120 |       3 |      0 |
 | `src/components/principala/wizard/selection.ts`               |   119 |       7 |      4 |
 | `src/lib/filelist/subtitle-encoding.ts`                       |   118 |       6 |      2 |
-| `src/lib/filelist/plex-id-hint.test.ts`                       |   117 |       0 |      0 |
 | `src/routes/login.tsx`                                        |   116 |       1 |      7 |
 | `src/lib/notifications/push.functions.ts`                     |   115 |       6 |      2 |
 | `server/plugins/show-watcher.ts`                              |   114 |       3 |      3 |
@@ -692,6 +692,7 @@ manual, deci nu poate fi parțial vechi.
 | `src/components/StatCard.tsx`                                 |    35 |       1 |      3 |
 | `src/components/principala/wizard/ConfirmStep.tsx`            |    34 |       1 |      1 |
 | `src/components/principala/wizard/DoneStep.tsx`               |    34 |       1 |      1 |
+| `src/lib/media/next-episode-airstamp.test.ts`                 |    34 |       0 |      0 |
 | `src/lib/tmdb/poster.ts`                                      |    34 |       2 |      7 |
 | `src/components/biblioteca/StatusBadge.tsx`                   |    33 |       1 |      2 |
 | `src/components/tehnic/TehnicSubNav.tsx`                      |    33 |       1 |      5 |
@@ -704,6 +705,7 @@ manual, deci nu poate fi parțial vechi.
 | `src/hooks/use-flash-on-change.ts`                            |    29 |       1 |      2 |
 | `src/components/tehnic/utils.ts`                              |    28 |       2 |     27 |
 | `src/lib/errors/error-capture.ts`                             |    28 |       2 |      2 |
+| `src/lib/media/next-episode-airstamp.ts`                      |    28 |       1 |      2 |
 | `src/lib/auth/unauthorized.ts`                                |    27 |       2 |      3 |
 | `src/lib/system/db-backup.functions.ts`                       |    27 |       2 |      2 |
 | `src/components/ui/progress.tsx`                              |    26 |       0 |      2 |
