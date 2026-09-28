@@ -198,14 +198,10 @@ export function WantedMovieDrawer({
                 )}
               </div>
 
-              {/* Căutarea e strict pe IMDb — fără id, n-ar avea ce căuta. */}
               <div className="flex items-center justify-between gap-2 text-xs">
                 <span className="flex min-w-0 items-center gap-2 text-muted-foreground">
                   <Search className="h-3.5 w-3.5 shrink-0" />
-                  <span className="truncate">
-                    Se caută pe Filelist după IMDb{" "}
-                    <span className="text-foreground">{d.imdbId ?? "lipsă"}</span>
-                  </span>
+                  <span className="truncate">Se caută pe Filelist</span>
                 </span>
                 {d.canManage ? (
                   <QualityButton
