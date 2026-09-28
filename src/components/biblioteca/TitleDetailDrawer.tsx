@@ -51,6 +51,7 @@ import {
   nextEpisodeWhen,
   displayEpisodeTitle,
   airDateLabel,
+  lastCheckedLabel,
   WATCH_QUALITIES,
 } from "./utils";
 
@@ -569,73 +570,84 @@ export function TitleDetailDrawer({
 
                     {d.canManage && d.autoDownload && (
                       <>
-                        <div className="flex items-center gap-1.5 border-t border-border/50 pt-2">
-                          <span className="text-[11px] text-muted-foreground">Calitate</span>
-                          <select
-                            value={d.autoDownloadQuality ?? "1080p"}
-                            onChange={(e) =>
-                              setWatchQualities(
-                                e.target.value,
-                                d.autoDownloadFallbackQuality ?? null,
-                              )
-                            }
-                            disabled={savingWatch}
-                            className="rounded-lg border border-border bg-muted/40 px-1.5 py-0.5 text-[11px] outline-none focus:ring-1 focus:ring-primary"
-                          >
-                            {WATCH_QUALITIES.map((q) => (
-                              <option key={q} value={q}>
-                                {q}
-                              </option>
-                            ))}
-                          </select>
-                          <button
-                            type="button"
-                            onClick={checkNow}
-                            disabled={checkingNow}
-                            className="ml-auto flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-[11px] font-medium text-foreground transition-colors hover:bg-muted/60 disabled:opacity-40"
-                          >
-                            {checkingNow ? (
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                            ) : (
-                              <RefreshCw className="h-3 w-3" />
-                            )}
-                            Verifică acum
-                          </button>
+                        {/* Calitățile în stânga; „Verifică acum” în dreapta, cu
+                            momentul ultimei verificări sub el — un rând în
+                            minus față de nota separată de dedesubt. */}
+                        <div className="flex items-start gap-3 border-t border-border/50 pt-2">
+                          <div className="min-w-0 flex-1 space-y-1.5">
+                            <div className="flex items-center gap-1.5">
+                              <span className="w-12 shrink-0 text-[11px] text-muted-foreground">
+                                Calitate
+                              </span>
+                              <select
+                                value={d.autoDownloadQuality ?? "1080p"}
+                                onChange={(e) =>
+                                  setWatchQualities(
+                                    e.target.value,
+                                    d.autoDownloadFallbackQuality ?? null,
+                                  )
+                                }
+                                disabled={savingWatch}
+                                className="rounded-lg border border-border bg-muted/40 px-1.5 py-0.5 text-[11px] outline-none focus:ring-1 focus:ring-primary"
+                              >
+                                {WATCH_QUALITIES.map((q) => (
+                                  <option key={q} value={q}>
+                                    {q}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="w-12 shrink-0 text-[11px] text-muted-foreground">
+                                Rezervă
+                              </span>
+                              <select
+                                value={d.autoDownloadFallbackQuality ?? ""}
+                                onChange={(e) =>
+                                  setWatchQualities(
+                                    d.autoDownloadQuality ?? "1080p",
+                                    e.target.value || null,
+                                  )
+                                }
+                                disabled={savingWatch}
+                                className="rounded-lg border border-border bg-muted/40 px-1.5 py-0.5 text-[11px] outline-none focus:ring-1 focus:ring-primary"
+                              >
+                                <option value="">Fără</option>
+                                {WATCH_QUALITIES.filter(
+                                  (q) => q !== (d.autoDownloadQuality ?? "1080p"),
+                                ).map((q) => (
+                                  <option key={q} value={q}>
+                                    {q}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+                          <div className="flex shrink-0 flex-col items-end gap-1">
+                            <button
+                              type="button"
+                              onClick={checkNow}
+                              disabled={checkingNow}
+                              className="flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-[11px] font-medium text-foreground transition-colors hover:bg-muted/60 disabled:opacity-40"
+                            >
+                              {checkingNow ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <RefreshCw className="h-3 w-3" />
+                              )}
+                              Verifică acum
+                            </button>
+                            <span className="text-[10px] text-muted-foreground">
+                              {lastCheckedLabel(d.watchLastCheckedAt)}
+                            </span>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[11px] text-muted-foreground">Rezervă</span>
-                          <select
-                            value={d.autoDownloadFallbackQuality ?? ""}
-                            onChange={(e) =>
-                              setWatchQualities(
-                                d.autoDownloadQuality ?? "1080p",
-                                e.target.value || null,
-                              )
-                            }
-                            disabled={savingWatch}
-                            className="rounded-lg border border-border bg-muted/40 px-1.5 py-0.5 text-[11px] outline-none focus:ring-1 focus:ring-primary"
-                          >
-                            <option value="">Fără</option>
-                            {WATCH_QUALITIES.filter(
-                              (q) => q !== (d.autoDownloadQuality ?? "1080p"),
-                            ).map((q) => (
-                              <option key={q} value={q}>
-                                {q}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div className="text-[10px] text-muted-foreground">
-                          {d.autoDownloadFallbackQuality
-                            ? `Dacă ${d.autoDownloadQuality ?? "1080p"} lipsește la două verificări (la minimum 3 ore distanță), se ia ${d.autoDownloadFallbackQuality}. `
-                            : ""}
-                          {d.autoDownloadFrom
-                            ? `De după ${d.autoDownloadFrom}. `
-                            : "Recuperează tot ce lipsește. "}
-                          {d.watchLastCheckedAt
-                            ? `Verificat ultima dată ${addedDate(Math.floor(new Date(`${d.watchLastCheckedAt.replace(" ", "T")}Z`).getTime() / 1000))}.`
-                            : "Încă neverificat."}
-                        </div>
+                        {d.autoDownloadFallbackQuality && (
+                          <div className="text-[10px] text-muted-foreground">
+                            Dacă {d.autoDownloadQuality ?? "1080p"} lipsește la două verificări (la
+                            minimum 3 ore distanță), se ia {d.autoDownloadFallbackQuality}.
+                          </div>
+                        )}
                       </>
                     )}
                   </div>

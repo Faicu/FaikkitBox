@@ -152,3 +152,22 @@ export function airDateShort(airDate: string | null): string | null {
 export function stillThumb(url: string | null): string | null {
   return url ? url.replace(/\/t\/p\/[^/]+\//, "/t/p/w300/") : null;
 }
+
+// Ultima verificare a urmăririi, scurt, pentru sub „Verifică acum”: „azi,
+// 20:29”, „ieri, 20:29”, „27 sept., 20:29”. Coloana e în formatul SQLite, în
+// UTC ("2026-09-28 17:29:04") — fără "Z", new Date() ar citi-o ca oră locală.
+export function lastCheckedLabel(sqliteUtc: string | null): string {
+  if (!sqliteUtc) return "Încă neverificat";
+  const d = new Date(`${sqliteUtc.replace(" ", "T")}Z`);
+  if (Number.isNaN(d.getTime())) return "Încă neverificat";
+  const time = d.toLocaleTimeString("ro-RO", { hour: "2-digit", minute: "2-digit" });
+  const startOfDay = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const days = Math.round((startOfDay(new Date()) - startOfDay(d)) / 86_400_000);
+  const day =
+    days === 0
+      ? "azi"
+      : days === 1
+        ? "ieri"
+        : d.toLocaleDateString("ro-RO", { day: "numeric", month: "short" });
+  return `Verificat ${day}, ${time}`;
+}
