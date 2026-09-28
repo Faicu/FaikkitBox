@@ -73,6 +73,10 @@ describe("releaseNameOf / scorarea subtitrărilor", () => {
     expect(releaseNameOf("Film.2026.1080p.AMZN.WEB-DL-GRP")).toBe(
       "Film.2026.1080p.AMZN.WEB-DL-GRP",
     );
+    expect(releaseNameOf("Film.2026.1080p.WEB.srt")).toBe("Film.2026.1080p.WEB");
+    expect(releaseNameOf("Film.2026.1080p.WEB-GRP / Film.2026.720p.WEB-GRP")).toBe(
+      "Film.2026.1080p.WEB-GRP / Film.2026.720p.WEB-GRP",
+    );
   });
 
   it("grupul se potrivește și când ținta e un fișier redenumit", () => {
