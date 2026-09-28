@@ -110,6 +110,34 @@ export async function qbitContentPath(
   }
 }
 
+// Rădăcina unui torrent pe disc — ce trebuie să dispară la ștergerea lui.
+// Diferă de content_path într-un singur caz, dar frecvent: torrent cu un
+// singur fișier pus într-un folder propriu ("Film-GRUP/Film-GRUP.mkv").
+// Acolo qBittorrent raportează ca content_path fișierul, nu folderul, deci o
+// ștergere pornită de la content_path lăsa folderul gol pe disc.
+// Fără node:path intenționat — modulul ajunge și în bundle-ul de client.
+export async function qbitTorrentRootPath(
+  url: string,
+  hash: string,
+  user: string,
+  pass: string,
+): Promise<string | null> {
+  try {
+    const res = await qbitGet(url, `/api/v2/torrents/info?hashes=${hash}`, user, pass);
+    if (!res.ok) return null;
+    const info = (await res.json()) as Array<{ content_path?: string; save_path?: string }>;
+    const contentPath = info[0]?.content_path ?? null;
+    const savePath = info[0]?.save_path;
+    if (!contentPath || !savePath) return contentPath;
+    const files = await qbitListFiles(url, hash, user, pass);
+    const firstSegment = files[0]?.name.split("/")[0];
+    if (!firstSegment || !files[0].name.includes("/")) return contentPath;
+    return `${savePath.replace(/\/$/, "")}/${firstSegment}`;
+  } catch {
+    return null;
+  }
+}
+
 export interface QbitFileInfo {
   index: number; // poziția fișierului în torrent — necesar pentru filePrio
   name: string; // cale relativă în torrent, ex. "Sub/movie.srt"

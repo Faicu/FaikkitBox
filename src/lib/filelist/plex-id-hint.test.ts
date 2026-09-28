@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { planPlexIdRenames } from "./plex-id-hint";
 import { pickBestByRelease, releaseNameOf } from "./release-scoring";
-import { sidecarSubtitleNames } from "./sidecar-files";
+import { isInsideMediaRoot, sidecarSubtitleNames } from "./sidecar-files";
 
 describe("planPlexIdRenames", () => {
   it("film dintr-un singur fișier", () => {
@@ -99,5 +99,18 @@ describe("sidecarSubtitleNames", () => {
         "Alt.Film-GRP.ro.srt",
       ]),
     ).toEqual(["Film-GRP {imdb-tt1}.ro.srt", "Film-GRP {imdb-tt1}.srt"]);
+  });
+});
+
+describe("isInsideMediaRoot", () => {
+  const roots = ["/media/ssd2tb/Filme", "/media/ssd2tb/Seriale/"];
+  it("acceptă doar căi strict în interiorul bibliotecii", () => {
+    expect(isInsideMediaRoot("/media/ssd2tb/Filme/Film-GRP", roots)).toBe(true);
+    expect(isInsideMediaRoot("/media/ssd2tb/Seriale/Show.S01/E01.mkv", roots)).toBe(true);
+    expect(isInsideMediaRoot("/media/ssd2tb/Filme", roots)).toBe(false);
+    expect(isInsideMediaRoot("/media/ssd2tb/Filme/", roots)).toBe(false);
+    expect(isInsideMediaRoot("/media/ssd2tb/FilmeAltele/x", roots)).toBe(false);
+    expect(isInsideMediaRoot("/media/ssd2tb/Filme/../Seriale", roots)).toBe(false);
+    expect(isInsideMediaRoot("/", roots)).toBe(false);
   });
 });

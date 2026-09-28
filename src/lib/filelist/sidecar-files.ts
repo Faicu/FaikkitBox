@@ -21,3 +21,22 @@ export function sidecarSubtitleNames(videoFileName: string, dirEntries: string[]
     return middle === "" || /^[A-Za-z-]{2,10}$/.test(middle);
   });
 }
+
+// Gardă pentru ștergerea recursivă: calea trebuie să fie STRICT în interiorul
+// unui folder de bibliotecă, niciodată folderul însuși. Un torrent cu mai
+// multe fișiere și fără folder rădăcină are ca content_path chiar save_path
+// (ex. /media/ssd2tb/Filme) — fără garda asta, rmSync recursiv ar goli tot
+// folderul de filme. Fără node:path: modulul ajunge și în bundle-ul de client.
+export function isInsideMediaRoot(
+  path: string,
+  roots: string[] = [
+    process.env.MEDIA_MOVIES_PATH ?? "/media/ssd2tb/Filme",
+    process.env.MEDIA_SERIES_PATH ?? "/media/ssd2tb/Seriale",
+  ],
+): boolean {
+  if (path.split("/").includes("..")) return false;
+  const clean = path.replace(/\/+$/, "");
+  return roots
+    .map((r) => r.replace(/\/+$/, ""))
+    .some((root) => clean.startsWith(`${root}/`) && clean.length > root.length + 1);
+}
