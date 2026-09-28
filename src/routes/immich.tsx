@@ -16,7 +16,11 @@ import {
 import { PageShell } from "@/components/PageShell";
 import { StatCard } from "@/components/StatCard";
 import { ErrorCard } from "@/components/ErrorCard";
-import { ServiceHeaderActions, ServiceJobOutput } from "@/components/ServiceHeaderActions";
+import {
+  ServiceHeaderActions,
+  ServiceJobOutput,
+  ServiceUpdateBanner,
+} from "@/components/ServiceHeaderActions";
 import { useServiceRecovery } from "@/components/useServiceRecovery";
 import { TehnicSubNav } from "@/components/tehnic/TehnicSubNav";
 import { immichQuery, immichTrackerQuery } from "@/lib/queries";
@@ -54,6 +58,7 @@ function ImmichPage() {
     >
       <TehnicSubNav />
 
+      <ServiceUpdateBanner service="immich" onRestart={startRecovery} />
       <ServiceJobOutput service="immich" />
 
       {isLoading && (

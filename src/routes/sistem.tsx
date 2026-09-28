@@ -18,7 +18,11 @@ import { ServicePill } from "@/components/ServicePill";
 import { Meter } from "@/components/Meter";
 import { StatCard } from "@/components/StatCard";
 import { ErrorCard } from "@/components/ErrorCard";
-import { ServiceHeaderActions, ServiceJobOutput } from "@/components/ServiceHeaderActions";
+import {
+  ServiceHeaderActions,
+  ServiceJobOutput,
+  ServiceUpdateBanner,
+} from "@/components/ServiceHeaderActions";
 import { TehnicSubNav } from "@/components/tehnic/TehnicSubNav";
 import { hostQuery } from "@/lib/queries";
 import { requireAdminBeforeLoad } from "@/lib/auth/admin-route-guard";
@@ -71,6 +75,7 @@ function HostPage() {
     >
       <TehnicSubNav />
 
+      <ServiceUpdateBanner service="ubuntu" />
       <ServiceJobOutput service="ubuntu" />
 
       <PushNotificationsCard push={push} />

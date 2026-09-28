@@ -41,17 +41,9 @@ function confirmText(service: ServiceKey, kind: JobKind, v?: ServiceVersion): st
   return `Actualizezi ${SERVICE_LABELS[service]} de la ${shortVersion(v?.current)} la ${shortVersion(v?.latest)}?\n\nSe descarcă versiunea nouă, apoi serviciul repornește.`;
 }
 
-type Props = {
-  service: ServiceKey;
-  status: "ok" | "error" | "loading";
-  // Pentru mesajul „se repornește…” al paginii (useServiceRecovery).
-  onRestart?: () => void;
-  // Înlocuiește bulina de stare (pagina Sistem o folosește pentru
-  // „Repornit recent”).
-  statusSlot?: React.ReactNode;
-};
-
-export function ServiceHeaderActions({ service, status, onRestart, statusSlot }: Props) {
+// Starea comună a butoanelor Restart (header) și Update (banner): versiunea,
+// acțiunea care rulează și pornirea uneia noi, cu confirmare.
+function useServiceAction(service: ServiceKey, onRestart?: () => void) {
   const qc = useQueryClient();
   const versions = useQuery(versionsQuery);
   const jobs = useQuery(serviceJobsQuery);
@@ -75,12 +67,41 @@ export function ServiceHeaderActions({ service, status, onRestart, statusSlot }:
     onError: (e) => toast.error((e as Error).message),
   });
 
+  const busy = !!running || mutation.isPending;
+  const busyTitle = running
+    ? `Rulează deja: ${jobLabel(running.service, running.kind)}`
+    : undefined;
+
+  const run = (kind: JobKind) => {
+    if (confirm(confirmText(service, kind, v))) mutation.mutate(kind);
+  };
+  const spinning = (kind: JobKind) =>
+    mine?.kind === kind || (mutation.isPending && mutation.variables === kind);
+
+  return { v, mine, busy, busyTitle, run, spinning, latest: jobs.data?.[service] };
+}
+
+type Props = {
+  service: ServiceKey;
+  status: "ok" | "error" | "loading";
+  // Pentru mesajul „se repornește…” al paginii (useServiceRecovery).
+  onRestart?: () => void;
+  // Înlocuiește bulina de stare (pagina Sistem o folosește pentru
+  // „Repornit recent”).
+  statusSlot?: React.ReactNode;
+};
+
+// Header-ul ține doar Restart (iconiță) + starea, pe un singur rând;
+// actualizarea are bannerul ei în pagină (ServiceUpdateBanner).
+export function ServiceHeaderActions({ service, status, onRestart, statusSlot }: Props) {
+  const qc = useQueryClient();
+  const { v, busy, busyTitle, run, spinning, latest } = useServiceAction(service, onRestart);
+
   // Finalul unei acțiuni pornite de oriunde (și din alt tab): anunț +
-  // versiunile recitite, ca butonul Update să dispară singur. A doua recitire,
-  // după 90s: Plex își instalează versiunea nouă abia după pornirea
+  // versiunile recitite, ca bannerul de Update să dispară singur. A doua
+  // recitire, după 90s: Plex își instalează versiunea nouă abia după pornirea
   // containerului, iar Immich răspunde abia după ce a pornit — la final încă
   // ar raporta versiunea veche.
-  const latest = jobs.data?.[service];
   const seen = useRef<{ id: number; status: string } | null>(null);
   useEffect(() => {
     if (!latest) return;
@@ -101,73 +122,83 @@ export function ServiceHeaderActions({ service, status, onRestart, statusSlot }:
     return () => window.clearTimeout(later);
   }, [latest, service, qc]);
 
-  const busy = !!running || mutation.isPending;
-  const busyTitle = running
-    ? `Rulează deja: ${jobLabel(running.service, running.kind)}`
-    : undefined;
-
   const showRestart = service !== "ubuntu" || v?.rebootRequired === true;
+  const restartTitle = service === "ubuntu" ? "Restart — sistemul cere repornire" : "Restart";
+
+  return (
+    <div className="flex shrink-0 items-center gap-2">
+      {showRestart && (
+        <button
+          type="button"
+          onClick={() => run("restart")}
+          disabled={busy}
+          title={busyTitle ?? restartTitle}
+          aria-label="Restart"
+          className="flex h-8 w-8 items-center justify-center rounded-full border border-sky-500/30 bg-sky-500/15 text-sky-400 hover:bg-sky-500/25 disabled:opacity-50"
+        >
+          <RotateCcw className={`h-3.5 w-3.5 ${spinning("restart") ? "animate-spin" : ""}`} />
+        </button>
+      )}
+      {statusSlot ?? <ServicePill status={status} />}
+    </div>
+  );
+}
+
+// Actualizarea disponibilă: versiunea curentă → nouă (sau pachetele Ubuntu),
+// changelog și butonul de pornire. Rămâne vizibil și cât rulează, cu spinner.
+export function ServiceUpdateBanner({
+  service,
+  onRestart,
+}: {
+  service: ServiceKey;
+  onRestart?: () => void;
+}) {
+  const { v, mine, busy, busyTitle, run, spinning } = useServiceAction(service, onRestart);
+
   const updateAvailable =
     service === "qbit"
       ? false
       : service === "ubuntu"
         ? (v?.pending ?? 0) > 0
         : v?.upToDate === false;
-  const showUpdate = updateAvailable || mine?.kind === "update";
-  const updateText =
-    service === "ubuntu"
-      ? `Update · ${pluralRo(v?.pending ?? 0, "pachet", "pachete")}`
-      : `Update · ${shortVersion(v?.current)} → ${shortVersion(v?.latest)}`;
+  if (!updateAvailable && mine?.kind !== "update") return null;
 
-  const run = (kind: JobKind) => {
-    if (confirm(confirmText(service, kind, v))) mutation.mutate(kind);
-  };
-  const spinning = (kind: JobKind) =>
-    mine?.kind === kind || (mutation.isPending && mutation.variables === kind);
+  const detail =
+    service === "ubuntu"
+      ? pluralRo(v?.pending ?? 0, "pachet", "pachete")
+      : `${shortVersion(v?.current)} → ${shortVersion(v?.latest)}`;
 
   return (
-    <div className="flex flex-wrap items-center justify-end gap-2">
-      {v?.changelog && showUpdate && (
+    <div className="flex items-center gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3">
+      <ArrowUpCircle className="h-5 w-5 shrink-0 text-amber-400" />
+      <div className="min-w-0 flex-1">
+        <div className="text-sm font-medium text-amber-400">Actualizare disponibilă</div>
+        <div className="truncate text-xs text-muted-foreground">
+          {SERVICE_LABELS[service]} · {detail}
+        </div>
+      </div>
+      {v?.changelog && (
         <a
           href={v.changelog}
           target="_blank"
           rel="noreferrer"
-          className="flex h-9 w-9 items-center justify-center rounded-full glass-card text-muted-foreground hover:text-foreground"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:text-foreground"
           title="Changelog"
           aria-label="Changelog"
         >
           <ExternalLink className="h-4 w-4" />
         </a>
       )}
-      {showRestart && (
-        <button
-          type="button"
-          onClick={() => run("restart")}
-          disabled={busy}
-          title={busyTitle ?? (service === "ubuntu" ? "Sistemul cere repornire" : "Repornește")}
-          className="flex h-9 items-center gap-1.5 rounded-lg border border-sky-500/30 bg-sky-500/15 px-3 text-xs font-medium text-sky-400 hover:bg-sky-500/25 disabled:opacity-50"
-        >
-          <RotateCcw className={`h-3.5 w-3.5 ${spinning("restart") ? "animate-spin" : ""}`} />
-          {spinning("restart") ? "…" : "Restart"}
-        </button>
-      )}
-      {showUpdate && (
-        <button
-          type="button"
-          onClick={() => run("update")}
-          disabled={busy}
-          title={busyTitle ?? "Actualizare disponibilă"}
-          className="flex h-9 items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/15 px-3 text-xs font-medium text-amber-400 hover:bg-amber-500/25 disabled:opacity-50"
-        >
-          {spinning("update") ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <ArrowUpCircle className="h-3.5 w-3.5" />
-          )}
-          {spinning("update") ? "Se actualizează…" : updateText}
-        </button>
-      )}
-      {statusSlot ?? <ServicePill status={status} />}
+      <button
+        type="button"
+        onClick={() => run("update")}
+        disabled={busy}
+        title={busyTitle}
+        className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/15 px-3 text-xs font-medium text-amber-400 hover:bg-amber-500/25 disabled:opacity-50"
+      >
+        {spinning("update") && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+        {spinning("update") ? "Se actualizează…" : "Actualizează"}
+      </button>
     </div>
   );
 }

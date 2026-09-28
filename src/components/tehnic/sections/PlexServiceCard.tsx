@@ -2,7 +2,11 @@ import { useQuery } from "@tanstack/react-query";
 import { PlayCircle } from "lucide-react";
 
 import { plexQuery } from "@/lib/queries";
-import { ServiceHeaderActions, ServiceJobOutput } from "@/components/ServiceHeaderActions";
+import {
+  ServiceHeaderActions,
+  ServiceJobOutput,
+  ServiceUpdateBanner,
+} from "@/components/ServiceHeaderActions";
 import { useServiceRecovery } from "@/components/useServiceRecovery";
 
 // Control pentru serviciul Plex (restart/actualizare) — mutat aici de pe
@@ -36,6 +40,9 @@ export function PlexServiceCard() {
             </div>
           </div>
           <ServiceHeaderActions service="plex" status={status} onRestart={startRecovery} />
+        </div>
+        <div className="mt-3 empty:hidden">
+          <ServiceUpdateBanner service="plex" onRestart={startRecovery} />
         </div>
       </div>
       <ServiceJobOutput service="plex" />
