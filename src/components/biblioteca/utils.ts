@@ -153,14 +153,13 @@ export function stillThumb(url: string | null): string | null {
   return url ? url.replace(/\/t\/p\/[^/]+\//, "/t/p/w300/") : null;
 }
 
-// Ultima verificare a urmăririi, scurt, pentru sub „Verifică acum”: „azi,
-// 20:29”, „ieri, 20:29”, „27 sept., 20:29”. Coloana e în formatul SQLite, în
-// UTC ("2026-09-28 17:29:04") — fără "Z", new Date() ar citi-o ca oră locală.
-export function lastCheckedLabel(sqliteUtc: string | null): string {
-  if (!sqliteUtc) return "Încă neverificat";
-  const d = new Date(`${sqliteUtc.replace(" ", "T")}Z`);
-  if (Number.isNaN(d.getTime())) return "Încă neverificat";
-  const time = d.toLocaleTimeString("ro-RO", { hour: "2-digit", minute: "2-digit" });
+// Momentul unui eveniment, scurt: „azi, 20:29”, „ieri, 20:29”, „27 sept.,
+// 20:29”, cu anul doar când nu e cel curent. Pentru rândurile înguste din
+// drawer, unde „28 septembrie 2026 la 21:40” rupea rândul în două.
+// `unixSec` în secunde (convenția Plex, ca addedDate).
+export function dayTimeLabel(unixSec: number, withTime = true): string {
+  if (!unixSec) return "—";
+  const d = new Date(unixSec * 1000);
   const startOfDay = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
   const days = Math.round((startOfDay(new Date()) - startOfDay(d)) / 86_400_000);
   const day =
@@ -168,6 +167,22 @@ export function lastCheckedLabel(sqliteUtc: string | null): string {
       ? "azi"
       : days === 1
         ? "ieri"
-        : d.toLocaleDateString("ro-RO", { day: "numeric", month: "short" });
-  return `Verificat ${day}, ${time}`;
+        : d.toLocaleDateString("ro-RO", {
+            day: "numeric",
+            month: "short",
+            ...(d.getFullYear() === new Date().getFullYear() ? {} : { year: "numeric" }),
+          });
+  if (!withTime) return day;
+  const time = d.toLocaleTimeString("ro-RO", { hour: "2-digit", minute: "2-digit" });
+  return `${day}, ${time}`;
+}
+
+// Ultima verificare a urmăririi, pentru cardul de urmărire. Coloana e în
+// formatul SQLite, în UTC ("2026-09-28 17:29:04") — fără "Z", new Date() ar
+// citi-o ca oră locală.
+export function lastCheckedLabel(sqliteUtc: string | null): string {
+  if (!sqliteUtc) return "Încă neverificat";
+  const ms = new Date(`${sqliteUtc.replace(" ", "T")}Z`).getTime();
+  if (Number.isNaN(ms)) return "Încă neverificat";
+  return `Verificat ${dayTimeLabel(Math.floor(ms / 1000))}`;
 }

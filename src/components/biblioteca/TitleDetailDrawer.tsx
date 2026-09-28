@@ -23,7 +23,6 @@ import {
   ArrowLeft,
   Radar,
   CalendarClock,
-  Check,
   CheckCheck,
   RefreshCw,
   Download,
@@ -53,8 +52,9 @@ import {
   displayEpisodeTitle,
   airDateLabel,
   lastCheckedLabel,
-  WATCH_QUALITIES,
+  dayTimeLabel,
 } from "./utils";
+import { QualityButton, QualityChecklist } from "./QualityChecklist";
 
 // Peste pragul ăsta, "Se procesează" nu mai e o scanare Plex în curs — de
 // obicei legarea reușește în primul minut după descărcare.
@@ -554,22 +554,13 @@ export function TitleDetailDrawer({
                       detail={d}
                       trailing={
                         d.canManage && d.autoDownload ? (
-                          <button
-                            type="button"
-                            onClick={() => setPickingQuality((v) => !v)}
+                          <QualityButton
+                            primary={d.autoDownloadQuality ?? "1080p"}
+                            fallback={d.autoDownloadFallbackQuality}
+                            open={pickingQuality}
                             disabled={savingWatch}
-                            className="flex shrink-0 items-center gap-1 rounded-lg border border-border bg-muted/40 px-2 py-1 text-[11px] font-medium text-foreground transition-colors hover:bg-muted/60 disabled:opacity-40"
-                          >
-                            {d.autoDownloadQuality ?? "1080p"}
-                            {d.autoDownloadFallbackQuality && (
-                              <span className="text-muted-foreground">
-                                + {d.autoDownloadFallbackQuality}
-                              </span>
-                            )}
-                            <ChevronDown
-                              className={`h-3 w-3 text-muted-foreground transition-transform ${pickingQuality ? "rotate-180" : ""}`}
-                            />
-                          </button>
+                            onToggle={() => setPickingQuality((v) => !v)}
+                          />
                         ) : null
                       }
                     />
@@ -631,8 +622,10 @@ export function TitleDetailDrawer({
                     )}
                   </div>
 
-                  {/* Episoadele, după cardul de mai sus. „Cine l-a văzut” și
-                      detaliile tehnice coboară sub ele. */}
+                  {/* Cine l-a adus și cine l-a văzut, apoi episoadele.
+                      Detaliile tehnice rămân la coadă. */}
+                  <AudienceCard detail={d} watchedEpisodes={watchedEpisodes} />
+
                   <EpisodeList
                     key={d.mediaId}
                     episodes={d.episodes}
@@ -641,65 +634,10 @@ export function TitleDetailDrawer({
                 </>
               )}
 
-              {/* Cine l-a adus și cine l-a văzut — un singur card cu rânduri,
-                  în loc de patru-cinci rânduri separate, fiecare cu titlul lui. */}
-              <div className="rounded-xl border border-border/60 bg-muted/30 divide-y divide-border/50 text-xs">
-                <InfoRow icon={<User className="h-3.5 w-3.5" />} label="Adăugat">
-                  {addedDate(d.addedAt)} · {d.addedByUsername ?? "necunoscut"}
-                </InfoRow>
-                {/* Bara stă în același rând cu „Tu”, nu separată de linie. */}
-                <div>
-                  <InfoRow
-                    icon={
-                      d.watchedByMe ? (
-                        <Eye className="h-3.5 w-3.5 text-emerald-400" />
-                      ) : (
-                        <EyeOff className="h-3.5 w-3.5" />
-                      )
-                    }
-                    label="Tu"
-                  >
-                    {d.type === "tv_show"
-                      ? // Pentru un serial, "văzut" n-ar spune nimic util — un
-                        // episod din 36 e tot "văzut".
-                        `${watchedEpisodes} din ${d.episodes.length} episoade`
-                      : d.watchedByMe
-                        ? d.watchedByMeAt
-                          ? `văzut ${addedDate(d.watchedByMeAt)}`
-                          : "văzut"
-                        : "nevăzut"}
-                  </InfoRow>
-                  {d.type === "tv_show" && d.episodes.length > 0 && (
-                    <div className="px-3 pb-2.5">
-                      <div className="h-1 overflow-hidden rounded-full bg-muted">
-                        <div
-                          className="h-full rounded-full bg-emerald-400/80"
-                          style={{
-                            width: `${(watchedEpisodes / d.episodes.length) * 100}%`,
-                          }}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-                <InfoRow icon={<Users className="h-3.5 w-3.5" />} label="Alții">
-                  {d.watchedByOthers.length === 0 ? (
-                    <span className="text-muted-foreground">nimeni încă</span>
-                  ) : (
-                    <span className="flex flex-col items-end gap-0.5">
-                      {d.watchedByOthers.map((u) => (
-                        <span key={u.username}>
-                          <span className="font-medium">{u.username}</span>
-                          <span className="text-[10px] text-muted-foreground">
-                            {" "}
-                            · {addedDate(u.viewedAt)}
-                          </span>
-                        </span>
-                      ))}
-                    </span>
-                  )}
-                </InfoRow>
-              </div>
+              {/* La serial, cardul stă deasupra sezoanelor (vezi mai sus). */}
+              {d.type !== "tv_show" && (
+                <AudienceCard detail={d} watchedEpisodes={watchedEpisodes} />
+              )}
 
               {d.tech && (
                 <div className="text-xs">
@@ -862,6 +800,99 @@ export function TitleDetailDrawer({
   );
 }
 
+// Cine l-a adus și cine l-a văzut — un singur card cu rânduri, în loc de
+// patru-cinci rânduri separate, fiecare cu titlul lui. Datele scurte („28
+// sept., 21:40”, „ieri, 19:45”): cele lungi rupeau rândurile în două pe telefon.
+// Ceilalți spectatori stau pe toată lățimea, nume în stânga și dată în dreapta,
+// primii trei la vedere și restul la „încă N”.
+const OTHERS_VISIBLE = 3;
+
+function AudienceCard({
+  detail: d,
+  watchedEpisodes,
+}: {
+  detail: PlexTitleDetail;
+  watchedEpisodes: number;
+}) {
+  const [showAll, setShowAll] = useState(false);
+  const others = showAll ? d.watchedByOthers : d.watchedByOthers.slice(0, OTHERS_VISIBLE);
+  const hidden = d.watchedByOthers.length - others.length;
+
+  return (
+    <div className="rounded-xl border border-border/60 bg-muted/30 divide-y divide-border/50 text-xs">
+      <InfoRow icon={<User className="h-3.5 w-3.5" />} label="Adăugat">
+        <span className="font-medium">{d.addedByUsername ?? "necunoscut"}</span>
+        <span className="text-muted-foreground"> · {dayTimeLabel(d.addedAt, false)}</span>
+      </InfoRow>
+      {/* Bara stă în același rând cu „Tu”, nu separată de linie. */}
+      <div>
+        <InfoRow
+          icon={
+            d.watchedByMe ? (
+              <Eye className="h-3.5 w-3.5 text-emerald-400" />
+            ) : (
+              <EyeOff className="h-3.5 w-3.5" />
+            )
+          }
+          label="Tu"
+        >
+          {d.type === "tv_show"
+            ? // Pentru un serial, "văzut" n-ar spune nimic util — un episod
+              // din 36 e tot "văzut".
+              `${watchedEpisodes} din ${d.episodes.length} episoade`
+            : d.watchedByMe
+              ? d.watchedByMeAt
+                ? `văzut ${dayTimeLabel(d.watchedByMeAt)}`
+                : "văzut"
+              : "nevăzut"}
+        </InfoRow>
+        {d.type === "tv_show" && d.episodes.length > 0 && (
+          <div className="px-3 pb-2.5">
+            <div className="h-1 overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-emerald-400/80"
+                style={{ width: `${(watchedEpisodes / d.episodes.length) * 100}%` }}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+      {d.watchedByOthers.length === 0 ? (
+        <InfoRow icon={<Users className="h-3.5 w-3.5" />} label="Alții">
+          <span className="text-muted-foreground">nimeni încă</span>
+        </InfoRow>
+      ) : (
+        <div className="px-3 py-2">
+          <div className="flex items-center gap-1.5 text-muted-foreground">
+            <Users className="h-3.5 w-3.5" />
+            Au mai văzut
+            <span className="text-[10px]">({d.watchedByOthers.length})</span>
+          </div>
+          <div className="mt-1.5 space-y-1 pl-5">
+            {others.map((u) => (
+              <div key={u.username} className="flex items-baseline justify-between gap-3">
+                <span className="min-w-0 truncate font-medium">{u.username}</span>
+                <span className="shrink-0 text-[10px] text-muted-foreground">
+                  {dayTimeLabel(u.viewedAt)}
+                </span>
+              </div>
+            ))}
+            {(hidden > 0 || showAll) && d.watchedByOthers.length > OTHERS_VISIBLE && (
+              <button
+                type="button"
+                onClick={() => setShowAll((v) => !v)}
+                className="text-[11px] font-medium text-foreground/80 transition-colors hover:text-foreground"
+              >
+                {showAll ? "mai puțin" : `încă ${hidden}`}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function InfoRow({
   icon,
   label,
@@ -957,77 +988,6 @@ function NextEpisodeLine({ detail, trailing }: { detail: PlexTitleDetail; traili
     <div className="flex items-center justify-between gap-2 text-xs">
       {content}
       {trailing}
-    </div>
-  );
-}
-
-// Calitatea urmăririi, ca listă de bifat: cel mult două. Cea mai bună dintre
-// cele bifate e principala, cealaltă e rezerva — aceeași regulă ca înainte
-// (fallback-quality.ts): rezerva se ia doar dacă principala lipsește la două
-// verificări, la minimum 3 ore distanță.
-function QualityChecklist({
-  primary,
-  fallback,
-  disabled,
-  onChange,
-}: {
-  primary: string;
-  fallback: string | null;
-  disabled: boolean;
-  onChange: (primary: string, fallback: string | null) => void;
-}) {
-  const checked = [primary, fallback].filter((q): q is string => !!q);
-  const full = checked.length >= 2;
-
-  function toggle(q: string) {
-    let next: string[];
-    if (checked.includes(q)) {
-      // Măcar una rămâne bifată — fără calitate, urmărirea n-ar avea ce căuta.
-      if (checked.length === 1) return;
-      next = checked.filter((c) => c !== q);
-    } else {
-      if (full) return;
-      next = [...checked, q];
-    }
-    next.sort((a, b) => WATCH_QUALITIES.indexOf(a) - WATCH_QUALITIES.indexOf(b));
-    onChange(next[0], next[1] ?? null);
-  }
-
-  return (
-    <div className="rounded-lg bg-muted/40 p-1.5">
-      <div className="grid grid-cols-3 gap-1">
-        {WATCH_QUALITIES.map((q) => {
-          const on = checked.includes(q);
-          const role = on && full ? (q === primary ? "principală" : "rezervă") : null;
-          return (
-            <button
-              key={q}
-              type="button"
-              onClick={() => toggle(q)}
-              disabled={disabled || (!on && full)}
-              className={`flex items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-[11px] transition-colors disabled:opacity-40 ${
-                on ? "bg-primary/15 text-foreground" : "text-muted-foreground hover:bg-muted/60"
-              }`}
-            >
-              <span
-                className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border ${
-                  on ? "border-primary bg-primary text-primary-foreground" : "border-border"
-                }`}
-              >
-                {on && <Check className="h-2.5 w-2.5" />}
-              </span>
-              <span className="min-w-0">
-                <span className="block font-medium">{q}</span>
-                {role && <span className="block text-[9px] text-muted-foreground">{role}</span>}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-      <div className="mt-1.5 px-0.5 text-[10px] text-muted-foreground">
-        Cel mult două. A doua bifată e rezervă: se ia doar dacă prima lipsește la două verificări,
-        la minimum 3 ore distanță.
-      </div>
     </div>
   );
 }

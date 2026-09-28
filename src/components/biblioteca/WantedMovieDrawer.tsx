@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Film, Tag, User, CalendarClock, RefreshCw, XCircle } from "lucide-react";
+import { Download, Film, Loader2, RefreshCw, Search, User } from "lucide-react";
 
 import {
   Drawer,
@@ -13,8 +13,8 @@ import {
 } from "@/components/ui/drawer";
 import { getWantedMovieDetail, setMovieWatch, checkMovieNow } from "@/lib/media/media.functions";
 import { Orb } from "@/components/ui/orb";
-import { relativeTime } from "@/components/tehnic/utils";
-import { WATCH_QUALITIES } from "./utils";
+import { dayTimeLabel, lastCheckedLabel } from "./utils";
+import { QualityButton, QualityChecklist } from "./QualityChecklist";
 
 // Detaliile unui film așteptat. Drawer propriu, nu TitleDetailDrawer: acela e
 // construit în jurul Plex-ului, episoadelor și subtitrărilor, care aici nu
@@ -28,6 +28,8 @@ export function WantedMovieDrawer({
 }) {
   const queryClient = useQueryClient();
   const [busy, setBusy] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [pickingQuality, setPickingQuality] = useState(false);
   const detailFn = useServerFn(getWantedMovieDetail);
   const setMovieWatchFn = useServerFn(setMovieWatch);
   const checkNowFn = useServerFn(checkMovieNow);
@@ -63,15 +65,16 @@ export function WantedMovieDrawer({
     }
   }
 
-  async function setFallback(fallbackQuality: string | null) {
+  // Principala și rezerva vin împreună din lista de bifat (QualityChecklist).
+  async function setQualities(quality: string, fallbackQuality: string | null) {
     if (!d?.tmdbId) return;
     setBusy(true);
     try {
       const res = await setMovieWatchFn({
-        data: { tmdbId: d.tmdbId, enabled: true, quality: d.quality, fallbackQuality },
+        data: { tmdbId: d.tmdbId, enabled: true, quality, fallbackQuality },
       }).catch((e) => ({ ok: false as const, error: e instanceof Error ? e.message : String(e) }));
       if (!res.ok) {
-        toast.error("Nu am putut schimba calitatea de rezervă", { description: res.error });
+        toast.error("Nu am putut schimba calitatea", { description: res.error });
         return;
       }
       refresh();
@@ -83,6 +86,7 @@ export function WantedMovieDrawer({
   async function checkNow() {
     if (!d) return;
     setBusy(true);
+    setChecking(true);
     try {
       const res = await checkNowFn({ data: { mediaId: d.mediaId } }).catch((e) => ({
         ok: false as const,
@@ -102,6 +106,7 @@ export function WantedMovieDrawer({
       }
     } finally {
       setBusy(false);
+      setChecking(false);
     }
   }
 
@@ -136,10 +141,6 @@ export function WantedMovieDrawer({
                 </div>
               )}
               <div className="min-w-0 flex-1 space-y-1.5">
-                <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium text-amber-400">
-                  <Tag className="h-3 w-3" />
-                  {d.quality}
-                </span>
                 {d.genres.length > 0 && (
                   <div className="flex flex-wrap gap-1">
                     {d.genres.map((g) => (
@@ -161,94 +162,113 @@ export function WantedMovieDrawer({
               </p>
             )}
 
-            <div className="rounded-2xl glass-card divide-y divide-border/50 text-xs">
-              <Row icon={<User className="h-3.5 w-3.5" />} label="Adăugat de">
-                {d.requestedByUsername ?? "necunoscut"}
-              </Row>
-              <Row icon={<CalendarClock className="h-3.5 w-3.5" />} label="Adăugat">
-                {relativeTime(`${d.addedAt.replace(" ", "T")}Z`)}
-              </Row>
-              <Row icon={<RefreshCw className="h-3.5 w-3.5" />} label="Ultima verificare">
-                {d.lastCheckedAt
-                  ? relativeTime(`${d.lastCheckedAt.replace(" ", "T")}Z`)
-                  : "prima verificare în curând"}
-              </Row>
+            {/* Același card ca la serialele urmărite (TitleDetailDrawer):
+                stare + acțiuni, ce se caută + calitatea, apoi ultima
+                verificare. */}
+            <div className="space-y-2 rounded-xl border border-border bg-muted/30 p-3 border-flow">
+              <div className="flex items-center gap-2">
+                <Orb state="searching" px={18} label="Așteptat" />
+                <span className="flex-1 text-xs font-medium">Așteptat</span>
+                {/* Butoanele stau aici, nu în rândul din listă: acolo erau
+                    trei ținte de atins într-un rând de câțiva milimetri. */}
+                {d.canManage && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={checkNow}
+                      disabled={busy}
+                      className="flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-[11px] font-medium text-foreground transition-colors hover:bg-muted/60 disabled:opacity-40"
+                    >
+                      {checking ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-3 w-3" />
+                      )}
+                      Verifică acum
+                    </button>
+                    <button
+                      type="button"
+                      onClick={stopWatch}
+                      disabled={busy}
+                      className="rounded-lg border border-border px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted/60 disabled:opacity-40"
+                    >
+                      Oprește
+                    </button>
+                  </>
+                )}
+              </div>
+
+              {/* Căutarea e strict pe IMDb — fără id, n-ar avea ce căuta. */}
+              <div className="flex items-center justify-between gap-2 text-xs">
+                <span className="flex min-w-0 items-center gap-2 text-muted-foreground">
+                  <Search className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">
+                    Se caută pe Filelist după IMDb{" "}
+                    <span className="text-foreground">{d.imdbId ?? "lipsă"}</span>
+                  </span>
+                </span>
+                {d.canManage ? (
+                  <QualityButton
+                    primary={d.quality}
+                    fallback={d.fallbackQuality}
+                    open={pickingQuality}
+                    disabled={busy}
+                    onToggle={() => setPickingQuality((v) => !v)}
+                  />
+                ) : (
+                  <span className="shrink-0 text-[11px] font-medium">
+                    {d.quality}
+                    {d.fallbackQuality ? ` + ${d.fallbackQuality}` : ""}
+                  </span>
+                )}
+              </div>
+
+              {/* Inline, nu Popover Radix — un overlay imbricat în Drawer-ul
+                  vaul îngheață ecranul (vezi commit c76ce30). */}
+              {d.canManage && pickingQuality && (
+                <QualityChecklist
+                  primary={d.quality}
+                  fallback={d.fallbackQuality}
+                  disabled={busy}
+                  onChange={setQualities}
+                />
+              )}
+
+              {/* Prima verificare vine la un minut după adăugare, apoi din 12
+                  în 12 ore; la prima descărcare reușită urmărirea se stinge. */}
+              <div className="flex items-start gap-2 text-[11px] text-muted-foreground">
+                <Download className="mt-px h-3 w-3 shrink-0 text-primary" />
+                <span className="flex-1">Se descarcă automat când apare pe Filelist.</span>
+                <span className="shrink-0 text-[10px]">
+                  {d.lastCheckedAt
+                    ? lastCheckedLabel(d.lastCheckedAt)
+                    : "Prima verificare în curând"}
+                </span>
+              </div>
             </div>
 
-            <div className="rounded-2xl glass-card p-3 text-[11px] leading-relaxed text-muted-foreground">
-              Se caută pe Filelist strict după IMDb ({d.imdbId ?? "lipsă"}), la calitatea{" "}
-              {d.quality}.
-              {d.fallbackQuality
-                ? ` Dacă ${d.quality} lipsește la două verificări (la minimum 3 ore distanță), se ia ${d.fallbackQuality}.`
-                : ""}{" "}
-              Prima verificare vine la un minut după adăugare, apoi din 12 în 12 ore. Când filmul
-              apare, descărcarea pornește singură și urmărirea se oprește.
+            <div className="rounded-xl border border-border/60 bg-muted/30 text-xs">
+              <div className="flex items-start justify-between gap-3 px-3 py-2">
+                <span className="flex shrink-0 items-center gap-1.5 text-muted-foreground">
+                  <User className="h-3.5 w-3.5" />
+                  Adăugat
+                </span>
+                <span className="min-w-0 text-right">
+                  <span className="font-medium">{d.requestedByUsername ?? "necunoscut"}</span>
+                  <span className="text-muted-foreground">
+                    {" "}
+                    ·{" "}
+                    {dayTimeLabel(
+                      Math.floor(new Date(`${d.addedAt.replace(" ", "T")}Z`).getTime() / 1000),
+                      false,
+                    )}
+                  </span>
+                </span>
+              </div>
             </div>
-
-            {d.canManage && (
-              <div className="flex items-center gap-2 rounded-2xl glass-card px-3 py-2 text-xs">
-                <span className="flex-1 text-muted-foreground">Calitate de rezervă</span>
-                <select
-                  value={d.fallbackQuality ?? ""}
-                  onChange={(e) => setFallback(e.target.value || null)}
-                  disabled={busy}
-                  className="rounded-lg border border-border bg-muted/40 px-1.5 py-0.5 text-[11px] outline-none focus:ring-1 focus:ring-primary"
-                >
-                  <option value="">Fără</option>
-                  {WATCH_QUALITIES.filter((q) => q !== d.quality).map((q) => (
-                    <option key={q} value={q}>
-                      {q}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {/* Butoanele stau aici, nu în rândul din listă: acolo erau trei
-                ținte de atins într-un rând de câțiva milimetri. */}
-            {d.canManage && (
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={checkNow}
-                  className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-primary py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-50"
-                >
-                  <RefreshCw className={`h-4 w-4 ${busy ? "animate-spin" : ""}`} />
-                  Verifică acum
-                </button>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={stopWatch}
-                  className="flex items-center justify-center gap-1.5 rounded-xl border border-border px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/60 disabled:opacity-40"
-                >
-                  <XCircle className="h-4 w-4" />
-                  Oprește
-                </button>
-              </div>
-            )}
           </div>
         )}
       </DrawerContent>
     </Drawer>
-  );
-}
-
-function Row({
-  icon,
-  label,
-  children,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex items-center gap-2 px-3 py-2">
-      <span className="text-muted-foreground">{icon}</span>
-      <span className="flex-1 text-muted-foreground">{label}</span>
-      <span className="text-right font-medium">{children}</span>
-    </div>
   );
 }
