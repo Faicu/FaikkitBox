@@ -666,11 +666,10 @@ export function TitleDetailDrawer({
                         d.tech.addedVia && ["Adăugat via", d.tech.addedVia],
                         d.tech.completedAt && [
                           "Finalizat",
-                          dayTimeLabel(
+                          addedDate(
                             Math.floor(
                               new Date(`${d.tech.completedAt.replace(" ", "T")}Z`).getTime() / 1000,
                             ),
-                            false,
                           ),
                         ],
                         d.tech.subtitleSource && [
@@ -820,7 +819,7 @@ function AudienceCard({
     <div className="rounded-xl border border-border/60 bg-muted/30 divide-y divide-border/50 text-xs">
       <InfoRow icon={<User className="h-3.5 w-3.5" />} label="Adăugat">
         <span className="font-medium">{d.addedByUsername ?? "necunoscut"}</span>
-        <span className="text-muted-foreground"> · {dayTimeLabel(d.addedAt, false)}</span>
+        <span className="text-muted-foreground"> · {dayTimeLabel(d.addedAt)}</span>
       </InfoRow>
       {/* Bara stă în același rând cu „Tu”, nu separată de linie. */}
       <div>

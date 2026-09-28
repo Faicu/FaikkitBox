@@ -256,7 +256,6 @@ export function WantedMovieDrawer({
                     ·{" "}
                     {dayTimeLabel(
                       Math.floor(new Date(`${d.addedAt.replace(" ", "T")}Z`).getTime() / 1000),
-                      false,
                     )}
                   </span>
                 </span>
