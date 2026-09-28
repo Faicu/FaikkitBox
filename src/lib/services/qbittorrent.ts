@@ -44,11 +44,9 @@ export const qbitAction = createServerFn({ method: "POST" })
   .validator((data: { hashes: string[] | "all"; action: "pause" | "resume" | "delete" }) => data)
   .handler(async ({ data }): Promise<{ ok: boolean; error?: string }> => {
     const { requireAdmin } = await import("../auth/admin.server");
-    try {
-      await requireAdmin();
-    } catch (e) {
-      return { ok: false, error: (e as Error).message };
-    }
+    // Fără try: sesiunea expirată trebuie să ajungă la client ca eroare, ca să
+    // declanșeze redirectul spre login (vezi auth/unauthorized.ts).
+    await requireAdmin();
     const base = process.env.QBIT_URL;
     const user = process.env.QBIT_USERNAME;
     const pass = process.env.QBIT_PASSWORD;

@@ -1,5 +1,7 @@
 import type { StatementSync } from "node:sqlite";
-import { useSession } from "@tanstack/react-start/server";
+import { setResponseStatus, useSession } from "@tanstack/react-start/server";
+
+import { FORBIDDEN_MESSAGE, UNAUTHORIZED_MESSAGE } from "./unauthorized";
 
 export type AdminSession = {
   admin?: boolean;
@@ -65,19 +67,34 @@ async function liveAccount(userId: number): Promise<{ role: string; status: stri
   return row;
 }
 
+// Statusul HTTP rămâne 401 (util în Network/loguri), dar corpul e o eroare
+// serializată, nu un `Response` brut — vezi unauthorized.ts pentru de ce.
+function throwUnauthorized(): never {
+  setResponseStatus(401);
+  throw new Error(UNAUTHORIZED_MESSAGE);
+}
+
+// Logat, dar fără rolul cerut. Separat de 401: clientul redirecționează spre
+// login doar la sesiune pierdută, nu și când un user obișnuit atinge o
+// funcție de admin.
+function throwForbidden(): never {
+  setResponseStatus(403);
+  throw new Error(FORBIDDEN_MESSAGE);
+}
+
 // Orice cont autentificat (admin sau user obișnuit, ambele aprobate).
 export async function requireAuth() {
   const session = await getSession();
   const userId = session.data.userId;
   if (!userId) {
-    throw new Response("Unauthorized", { status: 401 });
+    throwUnauthorized();
   }
   const account = await liveAccount(userId);
   if (!account) {
     // Golim cookie-ul, altfel clientul continuă să se creadă logat și se
     // lovește de 401 la fiecare cerere, fără să fie trimis la autentificare.
     await session.clear();
-    throw new Response("Unauthorized", { status: 401 });
+    throwUnauthorized();
   }
   return session;
 }
@@ -86,11 +103,12 @@ export async function requireAdmin() {
   const session = await getSession();
   const userId = session.data.userId;
   if (!userId) {
-    throw new Response("Unauthorized", { status: 401 });
+    throwUnauthorized();
   }
   const account = await liveAccount(userId);
-  if (!session.data.admin || account?.role !== "admin") {
-    throw new Response("Unauthorized", { status: 401 });
+  if (!account) throwUnauthorized();
+  if (!session.data.admin || account.role !== "admin") {
+    throwForbidden();
   }
   return session;
 }

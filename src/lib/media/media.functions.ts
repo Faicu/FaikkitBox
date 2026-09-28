@@ -18,6 +18,8 @@
 
 import { createServerFn } from "@tanstack/react-start";
 
+import { isUnauthorizedError } from "../auth/unauthorized";
+
 // Doar tipuri — se șterg la compilare, nu trag nimic în bundle.
 export type { LibraryTitleMatch, DownloadingMediaEntry } from "./media";
 import type { LibraryTitleMatch } from "./media";
@@ -201,6 +203,9 @@ export const setMovieWatch = createServerFn({ method: "POST" })
       await setMovieWatchCore({ ...data, requestedByUserId: session.data.userId ?? null });
       return { ok: true };
     } catch (e) {
+      // Sesiunea expirată merge mai departe ca eroare (redirect spre login),
+      // nu ca mesaj „Neautorizat" într-un toast.
+      if (isUnauthorizedError(e)) throw e;
       return { ok: false, error: e instanceof Error ? e.message : String(e) };
     }
   });
