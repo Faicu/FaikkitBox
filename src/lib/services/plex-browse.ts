@@ -404,6 +404,12 @@ export interface ShowEpisodeEntry {
   // când torrentul nu mai e în qBittorrent (șters manual) — rândul rămâne
   // atunci fără procent, nu blocat la 0%.
   progress: number | null;
+  // Pentru rândul din listă: cadrul episodului (TMDB), data difuzării
+  // (YYYY-MM-DD) și durata fișierului din Plex. Aceleași coloane pe care le
+  // arată drawer-ul episodului — citite din același SELECT, fără cereri în plus.
+  stillUrl: string | null;
+  airDate: string | null;
+  durationMs: number | null;
 }
 
 export interface PlexTitleDetail {
@@ -567,7 +573,7 @@ async function buildDetailFromMediaRow(
         .prepare(
           `SELECT id, season, episode, original_title, title, episode_title,
                   plex_rating_key, plex_added_at, added_at, completed_at, is_season_pack,
-                  torrent_hash
+                  torrent_hash, episode_still, episode_air_date, duration_ms
              FROM media WHERE parent_id = ?
              ORDER BY season, episode`,
         )
@@ -584,6 +590,9 @@ async function buildDetailFromMediaRow(
         completed_at: string | null;
         is_season_pack: number;
         torrent_hash: string | null;
+        episode_still: string | null;
+        episode_air_date: string | null;
+        duration_ms: number | null;
       }>)
     : [];
 
@@ -675,6 +684,9 @@ async function buildDetailFromMediaRow(
           !e.plex_rating_key && e.torrent_hash && epProgress.has(e.torrent_hash)
             ? Math.round(epProgress.get(e.torrent_hash)!.progress * 1000) / 10
             : null,
+        stillUrl: e.episode_still,
+        airDate: e.episode_air_date,
+        durationMs: e.duration_ms || null,
       };
     });
   }

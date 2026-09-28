@@ -25,7 +25,6 @@ import {
   CalendarClock,
   CheckCheck,
   RefreshCw,
-  CircleDashed,
   Download,
 } from "lucide-react";
 import { Orb } from "@/components/ui/orb";
@@ -45,10 +44,10 @@ import { formatMs, formatBytes, formatSpeed, formatEta } from "@/lib/format";
 import { subtitleSourceDisplay } from "@/lib/filelist/subtitle-outcomes";
 import { Progress } from "@/components/ui/progress";
 import { StatusBadge } from "./StatusBadge";
+import { EpisodeList } from "./EpisodeList";
 import {
   episodeCode,
   addedDate,
-  groupBySeason,
   nextEpisodeWhen,
   displayEpisodeTitle,
   airDateLabel,
@@ -480,137 +479,6 @@ export function TitleDetailDrawer({
 
               {d.summary && <ClampedSummary key={activeId} text={d.summary} />}
 
-              {/* Cine l-a adus și cine l-a văzut — un singur card cu rânduri,
-                  în loc de patru-cinci rânduri separate, fiecare cu titlul lui. */}
-              <div className="rounded-xl border border-border/60 bg-muted/30 divide-y divide-border/50 text-xs">
-                <InfoRow icon={<User className="h-3.5 w-3.5" />} label="Adăugat">
-                  {addedDate(d.addedAt)} · {d.addedByUsername ?? "necunoscut"}
-                </InfoRow>
-                {/* Bara stă în același rând cu „Tu”, nu separată de linie. */}
-                <div>
-                  <InfoRow
-                    icon={
-                      d.watchedByMe ? (
-                        <Eye className="h-3.5 w-3.5 text-emerald-400" />
-                      ) : (
-                        <EyeOff className="h-3.5 w-3.5" />
-                      )
-                    }
-                    label="Tu"
-                  >
-                    {d.type === "tv_show"
-                      ? // Pentru un serial, "văzut" n-ar spune nimic util — un
-                        // episod din 36 e tot "văzut".
-                        `${watchedEpisodes} din ${d.episodes.length} episoade`
-                      : d.watchedByMe
-                        ? d.watchedByMeAt
-                          ? `văzut ${addedDate(d.watchedByMeAt)}`
-                          : "văzut"
-                        : "nevăzut"}
-                  </InfoRow>
-                  {d.type === "tv_show" && d.episodes.length > 0 && (
-                    <div className="px-3 pb-2.5">
-                      <div className="h-1 overflow-hidden rounded-full bg-muted">
-                        <div
-                          className="h-full rounded-full bg-emerald-400/80"
-                          style={{
-                            width: `${(watchedEpisodes / d.episodes.length) * 100}%`,
-                          }}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-                <InfoRow icon={<Users className="h-3.5 w-3.5" />} label="Alții">
-                  {d.watchedByOthers.length === 0 ? (
-                    <span className="text-muted-foreground">nimeni încă</span>
-                  ) : (
-                    <span className="flex flex-col items-end gap-0.5">
-                      {d.watchedByOthers.map((u) => (
-                        <span key={u.username}>
-                          <span className="font-medium">{u.username}</span>
-                          <span className="text-[10px] text-muted-foreground">
-                            {" "}
-                            · {addedDate(u.viewedAt)}
-                          </span>
-                        </span>
-                      ))}
-                    </span>
-                  )}
-                </InfoRow>
-              </div>
-
-              {d.tech && (
-                <div className="text-xs">
-                  <button
-                    type="button"
-                    onClick={() => setShowTech((v) => !v)}
-                    className="flex w-full items-center gap-1 py-1 text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    <Wrench className="h-3.5 w-3.5" /> Detalii tehnice
-                    {showTech ? (
-                      <ChevronDown className="h-3.5 w-3.5 ml-auto" />
-                    ) : (
-                      <ChevronRight className="h-3.5 w-3.5 ml-auto" />
-                    )}
-                  </button>
-                  {showTech && (
-                    <div className="flex flex-col gap-1 rounded-lg bg-muted/40 px-2 py-1.5">
-                      {[
-                        d.tech.torrentName && ["Torrent", d.tech.torrentName],
-                        d.tech.sizeBytes > 0 && ["Mărime", formatBytes(d.tech.sizeBytes)],
-                        d.tech.categoryName && ["Categorie", d.tech.categoryName],
-                        (d.tech.freeleech || d.tech.internal) && [
-                          "Steaguri",
-                          [d.tech.freeleech && "freeleech", d.tech.internal && "internal"]
-                            .filter(Boolean)
-                            .join(", "),
-                        ],
-                        d.tech.savePath && ["Cale disk", d.tech.savePath],
-                        d.tech.addedVia && ["Adăugat via", d.tech.addedVia],
-                        d.tech.completedAt && [
-                          "Finalizat",
-                          addedDate(
-                            Math.floor(
-                              new Date(`${d.tech.completedAt.replace(" ", "T")}Z`).getTime() / 1000,
-                            ),
-                          ),
-                        ],
-                        d.tech.subtitleSource && [
-                          "Sursă subtitrare",
-                          subtitleSourceDisplay(d.tech.subtitleSource),
-                        ],
-                        d.tech.subtitleDetail && ["Detaliu subtitrare", d.tech.subtitleDetail],
-                        d.tech.subtitleCheckedAt && [
-                          "Subtitrare verificată",
-                          addedDate(
-                            Math.floor(
-                              new Date(`${d.tech.subtitleCheckedAt.replace(" ", "T")}Z`).getTime() /
-                                1000,
-                            ),
-                          ),
-                        ],
-                        d.tech.plexRatingKey && ["Plex ratingKey", d.tech.plexRatingKey],
-                        d.tech.imdbId && ["IMDb", d.tech.imdbId],
-                        d.torrentHash && ["Torrent hash", d.torrentHash],
-                      ]
-                        .filter((row): row is [string, string] => !!row)
-                        .map(([label, value]) => (
-                          <div key={label} className="flex justify-between gap-3">
-                            <span className="shrink-0 text-muted-foreground">{label}</span>
-                            <span
-                              className="min-w-0 truncate text-right text-foreground"
-                              title={value}
-                            >
-                              {value}
-                            </span>
-                          </div>
-                        ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
               {d.type === "tv_show" && (
                 <>
                   {/* Următorul episod — citit din `media`, nu cerut live:
@@ -618,6 +486,14 @@ export function TitleDetailDrawer({
                       exactă). Ora se redă în fusul browserului, deci apare
                       direct în ora României. */}
                   <NextEpisodeLine detail={d} />
+                  {/* Episoadele imediat sub descriere și „Urmează…” — sunt
+                      conținutul serialului. Urmărirea, „cine l-a văzut” și
+                      detaliile tehnice coboară sub ele. */}
+                  <EpisodeList
+                    key={d.mediaId}
+                    episodes={d.episodes}
+                    onOpen={(episodeId) => setOpenEpisode({ showId: mediaId!, episodeId })}
+                  />
                   {/* Urmărirea episoadelor noi. Ascunsă pentru serialele
                       încheiate — n-au ce episoade noi să primească — DAR nu și
                       când e deja pornită: un serial urmărit care se încheie
@@ -764,70 +640,138 @@ export function TitleDetailDrawer({
                       )}
                     </div>
                   )}
-
-                  <div className="space-y-1.5">
-                    {groupBySeason(d.episodes).map((group) => (
-                      <div key={group.season ?? "x"}>
-                        <div className="mb-1 flex items-center gap-2 text-[11px] font-medium text-muted-foreground">
-                          {group.season != null ? `Sezonul ${group.season}` : "Fără sezon"}
-                          <span className="text-[10px] font-normal">
-                            {group.episodes.length}{" "}
-                            {group.episodes.length === 1 ? "episod" : "episoade"}
-                          </span>
-                        </div>
-                        <div className="space-y-1 stagger-in">
-                          {group.episodes.map((ep) => (
-                            <button
-                              key={ep.mediaId}
-                              type="button"
-                              onClick={() =>
-                                setOpenEpisode({ showId: mediaId!, episodeId: ep.mediaId })
-                              }
-                              className="flex w-full items-center gap-2 rounded-lg bg-muted/40 px-2 py-1.5 text-left transition-all hover:bg-muted/60 active:scale-[0.99]"
-                            >
-                              {ep.status === "in_library" ? (
-                                ep.watchedByMe ? (
-                                  <Eye className="h-3 w-3 shrink-0 text-emerald-400" />
-                                ) : (
-                                  <EyeOff className="h-3 w-3 shrink-0 text-muted-foreground" />
-                                )
-                              ) : (
-                                <CircleDashed className="h-3 w-3 shrink-0 animate-pulse text-blue-400" />
-                              )}
-                              {/* Procentul stă lângă iconiță doar cât timp
-                                  episodul chiar se descarcă; după ce torrentul
-                                  s-a terminat ("processing") nu mai are ce
-                                  arăta, aștepți doar indexarea Plex. */}
-                              {ep.status === "downloading" && ep.progress != null && (
-                                <span className="shrink-0 text-[10px] font-medium tabular-nums text-blue-400">
-                                  {ep.progress.toFixed(0)}%
-                                </span>
-                              )}
-                              {/* Un pachet de sezon încă neterminat e un
-                                  singur rând cu episode NULL — se desface în
-                                  episoade abia după ce Plex îl indexează.
-                                  Fără cazul ăsta, rândul afișa doar "—". */}
-                              <span className="shrink-0 text-[11px] font-medium tabular-nums">
-                                {episodeCode(ep.season, ep.episode) ??
-                                  (ep.isSeasonPack && ep.season != null
-                                    ? `Sezonul ${ep.season} — pachet complet`
-                                    : "—")}
-                              </span>
-                              {/* Numele lipsește cât timp completarea din TMDB
-                                  n-a ajuns la episodul ăsta — rândul rămâne
-                                  valid, doar cu codul. */}
-                              {displayEpisodeTitle(ep.episodeTitle) && (
-                                <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">
-                                  {ep.episodeTitle}
-                                </span>
-                              )}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
                 </>
+              )}
+
+              {/* Cine l-a adus și cine l-a văzut — un singur card cu rânduri,
+                  în loc de patru-cinci rânduri separate, fiecare cu titlul lui. */}
+              <div className="rounded-xl border border-border/60 bg-muted/30 divide-y divide-border/50 text-xs">
+                <InfoRow icon={<User className="h-3.5 w-3.5" />} label="Adăugat">
+                  {addedDate(d.addedAt)} · {d.addedByUsername ?? "necunoscut"}
+                </InfoRow>
+                {/* Bara stă în același rând cu „Tu”, nu separată de linie. */}
+                <div>
+                  <InfoRow
+                    icon={
+                      d.watchedByMe ? (
+                        <Eye className="h-3.5 w-3.5 text-emerald-400" />
+                      ) : (
+                        <EyeOff className="h-3.5 w-3.5" />
+                      )
+                    }
+                    label="Tu"
+                  >
+                    {d.type === "tv_show"
+                      ? // Pentru un serial, "văzut" n-ar spune nimic util — un
+                        // episod din 36 e tot "văzut".
+                        `${watchedEpisodes} din ${d.episodes.length} episoade`
+                      : d.watchedByMe
+                        ? d.watchedByMeAt
+                          ? `văzut ${addedDate(d.watchedByMeAt)}`
+                          : "văzut"
+                        : "nevăzut"}
+                  </InfoRow>
+                  {d.type === "tv_show" && d.episodes.length > 0 && (
+                    <div className="px-3 pb-2.5">
+                      <div className="h-1 overflow-hidden rounded-full bg-muted">
+                        <div
+                          className="h-full rounded-full bg-emerald-400/80"
+                          style={{
+                            width: `${(watchedEpisodes / d.episodes.length) * 100}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <InfoRow icon={<Users className="h-3.5 w-3.5" />} label="Alții">
+                  {d.watchedByOthers.length === 0 ? (
+                    <span className="text-muted-foreground">nimeni încă</span>
+                  ) : (
+                    <span className="flex flex-col items-end gap-0.5">
+                      {d.watchedByOthers.map((u) => (
+                        <span key={u.username}>
+                          <span className="font-medium">{u.username}</span>
+                          <span className="text-[10px] text-muted-foreground">
+                            {" "}
+                            · {addedDate(u.viewedAt)}
+                          </span>
+                        </span>
+                      ))}
+                    </span>
+                  )}
+                </InfoRow>
+              </div>
+
+              {d.tech && (
+                <div className="text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setShowTech((v) => !v)}
+                    className="flex w-full items-center gap-1 py-1 text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <Wrench className="h-3.5 w-3.5" /> Detalii tehnice
+                    {showTech ? (
+                      <ChevronDown className="h-3.5 w-3.5 ml-auto" />
+                    ) : (
+                      <ChevronRight className="h-3.5 w-3.5 ml-auto" />
+                    )}
+                  </button>
+                  {showTech && (
+                    <div className="flex flex-col gap-1 rounded-lg bg-muted/40 px-2 py-1.5">
+                      {[
+                        d.tech.torrentName && ["Torrent", d.tech.torrentName],
+                        d.tech.sizeBytes > 0 && ["Mărime", formatBytes(d.tech.sizeBytes)],
+                        d.tech.categoryName && ["Categorie", d.tech.categoryName],
+                        (d.tech.freeleech || d.tech.internal) && [
+                          "Steaguri",
+                          [d.tech.freeleech && "freeleech", d.tech.internal && "internal"]
+                            .filter(Boolean)
+                            .join(", "),
+                        ],
+                        d.tech.savePath && ["Cale disk", d.tech.savePath],
+                        d.tech.addedVia && ["Adăugat via", d.tech.addedVia],
+                        d.tech.completedAt && [
+                          "Finalizat",
+                          addedDate(
+                            Math.floor(
+                              new Date(`${d.tech.completedAt.replace(" ", "T")}Z`).getTime() / 1000,
+                            ),
+                          ),
+                        ],
+                        d.tech.subtitleSource && [
+                          "Sursă subtitrare",
+                          subtitleSourceDisplay(d.tech.subtitleSource),
+                        ],
+                        d.tech.subtitleDetail && ["Detaliu subtitrare", d.tech.subtitleDetail],
+                        d.tech.subtitleCheckedAt && [
+                          "Subtitrare verificată",
+                          addedDate(
+                            Math.floor(
+                              new Date(`${d.tech.subtitleCheckedAt.replace(" ", "T")}Z`).getTime() /
+                                1000,
+                            ),
+                          ),
+                        ],
+                        d.tech.plexRatingKey && ["Plex ratingKey", d.tech.plexRatingKey],
+                        d.tech.imdbId && ["IMDb", d.tech.imdbId],
+                        d.torrentHash && ["Torrent hash", d.torrentHash],
+                      ]
+                        .filter((row): row is [string, string] => !!row)
+                        .map(([label, value]) => (
+                          <div key={label} className="flex justify-between gap-3">
+                            <span className="shrink-0 text-muted-foreground">{label}</span>
+                            <span
+                              className="min-w-0 truncate text-right text-foreground"
+                              title={value}
+                            >
+                              {value}
+                            </span>
+                          </div>
+                        ))}
+                    </div>
+                  )}
+                </div>
               )}
 
               {d.type !== "tv_show" && (

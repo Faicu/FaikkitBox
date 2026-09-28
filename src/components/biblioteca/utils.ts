@@ -42,6 +42,9 @@ export function addedDate(unixSec: number): string {
 // târziu producea un al doilea segment "Sezonul N". Acum episoadele vin deja
 // sortate după (sezon, episod) din server, deci fiecare sezon apare o
 // singură dată, cu episoadele lui în ordine.
+//
+// Cel mai nou sezon primul — acolo apar episoadele noi; „Fără sezon” la coadă.
+// În interiorul sezonului rămâne ordinea firească, E1 → En.
 export type SeasonGroup = { season: number | null; episodes: ShowEpisodeEntry[] };
 
 export function groupBySeason(episodes: ShowEpisodeEntry[]): SeasonGroup[] {
@@ -53,7 +56,7 @@ export function groupBySeason(episodes: ShowEpisodeEntry[]): SeasonGroup[] {
   }
   return [...bySeason.entries()]
     .map(([season, eps]) => ({ season, episodes: eps }))
-    .sort((a, b) => (a.season ?? Infinity) - (b.season ?? Infinity));
+    .sort((a, b) => (b.season ?? -Infinity) - (a.season ?? -Infinity));
 }
 
 export function matchesQuery(item: PlexBrowseItem, q: string): boolean {
@@ -127,4 +130,25 @@ export function airDateLabel(airDate: string | null): string | null {
   const d = new Date(`${airDate}T00:00:00`);
   if (Number.isNaN(d.getTime())) return null;
   return d.toLocaleDateString("ro-RO", { day: "numeric", month: "short", year: "numeric" });
+}
+
+// Data difuzării, și mai scurt, pentru rândurile din lista de episoade:
+// „26 sept.”, cu anul doar când nu e cel curent.
+export function airDateShort(airDate: string | null): string | null {
+  if (!airDate) return null;
+  const d = new Date(`${airDate}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return null;
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleDateString("ro-RO", {
+    day: "numeric",
+    month: "short",
+    ...(sameYear ? {} : { year: "numeric" }),
+  });
+}
+
+// Cadrele de episod se salvează la rezoluția `original` (pentru drawer-ul
+// episodului, unde se văd mari). Ca miniatură de ~90px, aceeași imagine ar
+// însemna sute de KB per rând — TMDB servește și o variantă de 300px.
+export function stillThumb(url: string | null): string | null {
+  return url ? url.replace(/\/t\/p\/[^/]+\//, "/t/p/w300/") : null;
 }
