@@ -55,6 +55,10 @@ import {
   WATCH_QUALITIES,
 } from "./utils";
 
+// Peste pragul ăsta, "Se procesează" nu mai e o scanare Plex în curs — de
+// obicei legarea reușește în primul minut după descărcare.
+const PROCESSING_HINT_AFTER_MS = 30 * 60 * 1000;
+
 // Drawer-ul de detalii al unui titlu din Bibliotecă — complet independent de
 // listă: primește doar mediaId, își gestionează singur toată starea (query
 // de detalii, corectare/ștergere subtitrare). Cere listei doar două lucruri,
@@ -437,7 +441,15 @@ export function TitleDetailDrawer({
 
               {d.status === "processing" && (
                 <div className="text-[11px] text-muted-foreground">
-                  Fișierul e descărcat complet — aștept ca Plex să îl indexeze.
+                  {/* Plex poate potrivi fișierul la alt titlu (ex. „S.W.A.T.
+                      Exiles" pus la „S.W.A.T." 2017) — legarea după TMDB nu-l
+                      găsește atunci niciodată. Indiciul apare doar adminului
+                      (d.tech), singurul care poate face Fix Match în Plex. */}
+                  {d.tech?.completedAt &&
+                  Date.now() - new Date(`${d.tech.completedAt.replace(" ", "T")}Z`).getTime() >
+                    PROCESSING_HINT_AFTER_MS
+                    ? "Durează mai mult decât de obicei. Verifică în Plex dacă titlul a fost recunoscut corect — dacă nu, ⋯ → Fix Match → alege titlul corect. Se leagă automat după aceea."
+                    : "Fișierul e descărcat complet — aștept ca Plex să îl indexeze."}
                 </div>
               )}
             </div>
