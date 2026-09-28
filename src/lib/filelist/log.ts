@@ -78,7 +78,19 @@ export const deleteMediaEntry = createServerFn({ method: "POST" })
       // nostru reziduu — sigur de șters forțat.
       if (contentPath) {
         try {
-          const { existsSync, rmSync } = await import("node:fs");
+          const { existsSync, rmSync, readdirSync, statSync } = await import("node:fs");
+          // Torrent cu un singur fișier: calea e chiar video-ul, deci
+          // subtitrările scrise de aplicație lângă el (vezi sidecar-files.ts)
+          // nu intră în ștergerea recursivă de mai jos.
+          const isFolder = existsSync(contentPath) && statSync(contentPath).isDirectory();
+          if (!isFolder) {
+            const { dirname, basename, join } = await import("node:path");
+            const { sidecarSubtitleNames } = await import("./sidecar-files");
+            const dir = dirname(contentPath);
+            for (const name of sidecarSubtitleNames(basename(contentPath), readdirSync(dir))) {
+              rmSync(join(dir, name), { force: true });
+            }
+          }
           if (existsSync(contentPath)) {
             rmSync(contentPath, { recursive: true, force: true });
           }

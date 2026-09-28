@@ -81,7 +81,23 @@ interface ReleaseTags {
   group: string | null;
 }
 
-function extractTags(name: string): ReleaseTags {
+// Doar numele lansării, din ce primim efectiv: la pachete ținta e calea
+// fișierului din torrent ("Folder/Serial.S01E01...-GRUP.mkv"), iar candidații
+// subs.ro sunt nume de fișiere din arhivă ("...-GRUP.ro.srt"). Grupul se ia
+// din coada numelui, deci fără curățarea asta nu se potrivea niciodată pe
+// astfel de nume. Tot aici iese și indiciul de ID pentru Plex
+// (" {imdb-tt…}", vezi plex-id-hint.ts), pus înaintea extensiei.
+const MEDIA_EXT_RE = /\.(mkv|mp4|avi|m2ts|ts|wmv|mov)$/i;
+const SUB_EXT_RE = /(\.[a-z]{2,3})?\.(srt|sub|ass|ssa)$/i;
+const PLEX_ID_HINT_RE = /\s*\{(?:imdb|tmdb|tvdb)-[^}]*\}/gi;
+
+export function releaseNameOf(name: string): string {
+  const file = name.split(/[\\/]/).pop() ?? name;
+  return file.replace(SUB_EXT_RE, "").replace(MEDIA_EXT_RE, "").replace(PLEX_ID_HINT_RE, "").trim();
+}
+
+function extractTags(rawName: string): ReleaseTags {
+  const name = releaseNameOf(rawName);
   const resolution = findTag(name, RESOLUTION_TAGS);
   const acquisition = findTag(name, ACQUISITION_TAGS);
   const platform = findTag(name, PLATFORM_TAGS);

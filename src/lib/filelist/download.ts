@@ -145,6 +145,14 @@ async function pollUntilComplete(
       const isDone = isTorrentComplete(progress, state);
 
       if (isDone) {
+        // ID-ul IMDb în numele fișierelor, ca Plex să potrivească titlul din
+        // prima (vezi plex-id-hint.ts). Înaintea gărzii de mai jos, nu după:
+        // un restart între cele două reia polling-ul (completed_at e încă
+        // NULL), deci pasul nu se poate pierde. E idempotent — o a doua
+        // buclă pe același hash găsește fișierele deja redenumite.
+        const { applyPlexIdHint } = await import("./plex-id-hint");
+        await applyPlexIdHint({ qbitUrl, qbitUser, qbitPass, torrentHash });
+
         // Garda de "cine a ajuns primul aici" stă pe `media`, nu pe
         // id-ul de torrent Filelist: markMediaCompleted face UPDATE ... WHERE completed_at
         // IS NULL și întoarce true doar pentru apelantul care a schimbat
