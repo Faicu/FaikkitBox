@@ -12,6 +12,7 @@ import { getActivityLog } from "./activity-log.functions";
 import { getImmichTracker } from "./services/immich-uploads.functions";
 import { listWantedMovies } from "./media/media.functions";
 import { getErrorLogs } from "./errors/error-log.functions";
+import { getVwLog } from "./vw/vw-log.functions";
 import {
   getRecentCommits,
   getCommitsFromDb,
@@ -117,6 +118,14 @@ export const errorLogQuery = queryOptions({
   queryFn: () => getErrorLogs(),
   refetchInterval: slower(5),
   staleTime: 5_000,
+  ...keepPrev,
+});
+
+export const vwLogQuery = queryOptions({
+  queryKey: ["vwLog"],
+  queryFn: () => getVwLog(),
+  refetchInterval: slower(3),
+  staleTime: 3_000,
   ...keepPrev,
 });
 

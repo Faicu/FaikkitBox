@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as VwRouteImport } from './routes/vw'
 import { Route as UsersRouteImport } from './routes/users'
 import { Route as TehnicRouteImport } from './routes/tehnic'
 import { Route as SistemRouteImport } from './routes/sistem'
@@ -20,6 +21,11 @@ import { Route as DescoperaRouteImport } from './routes/descopera'
 import { Route as BibliotecaRouteImport } from './routes/biblioteca'
 import { Route as IndexRouteImport } from './routes/index'
 
+const VwRoute = VwRouteImport.update({
+  id: '/vw',
+  path: '/vw',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const UsersRoute = UsersRouteImport.update({
   id: '/users',
   path: '/users',
@@ -82,6 +88,7 @@ export interface FileRoutesByFullPath {
   '/sistem': typeof SistemRoute
   '/tehnic': typeof TehnicRoute
   '/users': typeof UsersRoute
+  '/vw': typeof VwRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -94,6 +101,7 @@ export interface FileRoutesByTo {
   '/sistem': typeof SistemRoute
   '/tehnic': typeof TehnicRoute
   '/users': typeof UsersRoute
+  '/vw': typeof VwRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -107,6 +115,7 @@ export interface FileRoutesById {
   '/sistem': typeof SistemRoute
   '/tehnic': typeof TehnicRoute
   '/users': typeof UsersRoute
+  '/vw': typeof VwRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -121,6 +130,7 @@ export interface FileRouteTypes {
     | '/sistem'
     | '/tehnic'
     | '/users'
+    | '/vw'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -133,6 +143,7 @@ export interface FileRouteTypes {
     | '/sistem'
     | '/tehnic'
     | '/users'
+    | '/vw'
   id:
     | '__root__'
     | '/'
@@ -145,6 +156,7 @@ export interface FileRouteTypes {
     | '/sistem'
     | '/tehnic'
     | '/users'
+    | '/vw'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -158,10 +170,18 @@ export interface RootRouteChildren {
   SistemRoute: typeof SistemRoute
   TehnicRoute: typeof TehnicRoute
   UsersRoute: typeof UsersRoute
+  VwRoute: typeof VwRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/vw': {
+      id: '/vw'
+      path: '/vw'
+      fullPath: '/vw'
+      preLoaderRoute: typeof VwRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/users': {
       id: '/users'
       path: '/users'
@@ -246,6 +266,7 @@ const rootRouteChildren: RootRouteChildren = {
   SistemRoute: SistemRoute,
   TehnicRoute: TehnicRoute,
   UsersRoute: UsersRoute,
+  VwRoute: VwRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

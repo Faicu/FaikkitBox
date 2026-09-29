@@ -297,6 +297,19 @@ export function getDb(): DatabaseSync {
       checked_at TEXT NOT NULL
     );
 
+    -- Jurnalul aplicației VW Welcome de pe navigația din mașină (POST /api/vw-log).
+    -- UNIQUE pe (device_at, line): aplicația retrimite lotul dacă nu primește
+    -- răspuns, iar duplicatele se ignoră la insert.
+    CREATE TABLE IF NOT EXISTS vw_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      device_at TEXT NOT NULL,
+      received_at TEXT NOT NULL,
+      version TEXT,
+      line TEXT NOT NULL,
+      UNIQUE (device_at, line)
+    );
+    CREATE INDEX IF NOT EXISTS idx_vw_log_device_at ON vw_log(device_at DESC);
+
     CREATE TABLE IF NOT EXISTS immich_upload_tracker (
       id INTEGER PRIMARY KEY CHECK (id = 1),
       checked_until TEXT NOT NULL,

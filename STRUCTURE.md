@@ -25,6 +25,7 @@ Convenție per fișier: **Ce conține** (1-2 propoziții) — **Folosit de**
   - [src/lib/filelist/](#srclibfilelist)
   - [src/lib/services/](#srclibservices)
   - [src/lib/tvmaze/](#srclibtvmaze)
+  - [src/lib/vw/](#srclibvw)
 - [src/components/ — UI](#src-components--ui)
   - [src/components/biblioteca/](#srccomponentsbiblioteca)
   - [src/components/principala/](#srccomponentsprincipala)
@@ -57,6 +58,7 @@ automat pe calea din numele fișierului.
 | `routes/api/deploy-sha.ts`         | Token de detectare restart (se schimbă la fiecare pornire a procesului) — clientul (`use-auto-reload.ts`) reîncarcă pagina când observă o valoare diferită.                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `routes/api/github-webhook.ts`     | Endpoint webhook GitHub (semnătură HMAC verificată) — push instant la commit nou, completează sincronizarea de după push (`pushToGitHub`) și polling-ul din Tehnic.                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `routes/api/plex-thumb.ts`         | Proxy autentificat pentru thumbnail-urile Plex (tokenul nu ajunge la client). Acceptă o singură formă de cale, pe listă albă, și verifică prin `isAccountLive` că sesiunea din cookie corespunde unui cont încă activ — vezi nota de securitate din fișier.                                                                                                                                                                                                                                                                                                                                                              |
+| `routes/api/vw-log.ts`             | Primește jurnalul aplicației Android VW Welcome (navigația din mașină): `POST`, `Authorization: Bearer $VW_LOG_TOKEN`, JSON `{version, lines:[{t,text}]}`, max 200 linii / 256 KB. Scrie prin `lib/vw/vw-log.ts`.                                                                                                                                                                                                                                                                                                                                                                                                        |
 
 **Notă:** trei dintre plugin-uri (`server-lifecycle`, `download-recovery`,
 `show-watcher`) există pentru că munca de la pornirea serverului
@@ -98,6 +100,7 @@ din nume (`index.tsx` = `/`). `__root.tsx` e layout-ul comun.
 | `tehnic.tsx` (`/tehnic`)         | Admin            | Jurnal activitate, commit-uri GitHub, erori aplicație, status plugin-uri, backup DB, abonamente push, speedtest, push-to-GitHub.     |
 | `users.tsx` (`/users`)           | Admin            | Listă conturi, aprobare/respingere, `UserDetailDrawer` (detalii per cont).                                                           |
 | `immich.tsx` (`/immich`)         | Admin            | Control serviciu Immich (foto).                                                                                                      |
+| `vw.tsx` (`/vw`)                 | Admin            | Jurnalul aplicației VW Welcome de pe navigație (primit prin `/api/vw-log`), cu golire.                                               |
 | `login.tsx` / `register.tsx`     | Public           | Autentificare / auto-înregistrare (aprobare manuală ulterioară).                                                                     |
 | `__root.tsx`                     | —                | Layout comun: `AppHeader`, `BottomNav`, `PageShell`, providers (query client, auto-reload).                                          |
 
@@ -288,6 +291,13 @@ transversale, fără un singur domeniu clar.
 | `recent-watch-merge.ts`       | Unirea episoadelor consecutive din „Vizionări recente", ca funcție pură. Separată de `plex-browse.ts` ca să fie testabilă fără DB/Plex.                                                                                                                                                                                                                                                                                                                                           | `plex-browse.ts`.                                                         |
 | `recent-watch-types.ts`       | Doar tipul `RecentWatch` — fișier curat, ca funcția pură și testele ei să nu tragă după ele `plex-browse.ts`.                                                                                                                                                                                                                                                                                                                                                                     | `recent-watch-merge.ts`, `plex-browse.ts`.                                |
 | `recent-watch-merge.test.ts`  | Teste vitest pentru unire.                                                                                                                                                                                                                                                                                                                                                                                                                                                        | —                                                                         |
+
+### src/lib/vw/
+
+| Fișier                | Ce conține                                                                                                                | Folosit de                                     |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `vw-log.ts`           | Tabela `vw_log` (jurnalul aplicației VW Welcome): inserare cu deduplicare pe `(device_at, line)`, ultimele 5000 de linii. | `routes/api/vw-log.ts`, `vw-log.functions.ts`. |
+| `vw-log.functions.ts` | Server functions admin: `getVwLog`, `clearVwLog`.                                                                         | `queries.ts`, `routes/vw.tsx`.                 |
 
 ### src/lib/tvmaze/
 
