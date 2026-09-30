@@ -18,6 +18,7 @@ import { Route as QbitRouteImport } from './routes/qbit'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ImmichRouteImport } from './routes/immich'
 import { Route as DescoperaRouteImport } from './routes/descopera'
+import { Route as CalatoriiRouteImport } from './routes/calatorii'
 import { Route as BibliotecaRouteImport } from './routes/biblioteca'
 import { Route as IndexRouteImport } from './routes/index'
 
@@ -66,6 +67,11 @@ const DescoperaRoute = DescoperaRouteImport.update({
   path: '/descopera',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CalatoriiRoute = CalatoriiRouteImport.update({
+  id: '/calatorii',
+  path: '/calatorii',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const BibliotecaRoute = BibliotecaRouteImport.update({
   id: '/biblioteca',
   path: '/biblioteca',
@@ -80,6 +86,7 @@ const IndexRoute = IndexRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/biblioteca': typeof BibliotecaRoute
+  '/calatorii': typeof CalatoriiRoute
   '/descopera': typeof DescoperaRoute
   '/immich': typeof ImmichRoute
   '/login': typeof LoginRoute
@@ -93,6 +100,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/biblioteca': typeof BibliotecaRoute
+  '/calatorii': typeof CalatoriiRoute
   '/descopera': typeof DescoperaRoute
   '/immich': typeof ImmichRoute
   '/login': typeof LoginRoute
@@ -107,6 +115,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/biblioteca': typeof BibliotecaRoute
+  '/calatorii': typeof CalatoriiRoute
   '/descopera': typeof DescoperaRoute
   '/immich': typeof ImmichRoute
   '/login': typeof LoginRoute
@@ -122,6 +131,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/biblioteca'
+    | '/calatorii'
     | '/descopera'
     | '/immich'
     | '/login'
@@ -135,6 +145,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/biblioteca'
+    | '/calatorii'
     | '/descopera'
     | '/immich'
     | '/login'
@@ -148,6 +159,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/biblioteca'
+    | '/calatorii'
     | '/descopera'
     | '/immich'
     | '/login'
@@ -162,6 +174,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   BibliotecaRoute: typeof BibliotecaRoute
+  CalatoriiRoute: typeof CalatoriiRoute
   DescoperaRoute: typeof DescoperaRoute
   ImmichRoute: typeof ImmichRoute
   LoginRoute: typeof LoginRoute
@@ -238,6 +251,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DescoperaRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/calatorii': {
+      id: '/calatorii'
+      path: '/calatorii'
+      fullPath: '/calatorii'
+      preLoaderRoute: typeof CalatoriiRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/biblioteca': {
       id: '/biblioteca'
       path: '/biblioteca'
@@ -258,6 +278,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   BibliotecaRoute: BibliotecaRoute,
+  CalatoriiRoute: CalatoriiRoute,
   DescoperaRoute: DescoperaRoute,
   ImmichRoute: ImmichRoute,
   LoginRoute: LoginRoute,

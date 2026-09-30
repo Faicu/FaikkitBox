@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -68,6 +68,10 @@ function VwPage() {
       }
     >
       <TehnicSubNav />
+
+      <Link to="/calatorii" className="text-sm text-sky-400 hover:underline">
+        Călătoriile mașinii →
+      </Link>
 
       <div className="flex items-center justify-between rounded-2xl glass-card p-4">
         <div className="flex items-center gap-2.5">

@@ -59,6 +59,7 @@ automat pe calea din numele fișierului.
 | `routes/api/github-webhook.ts`     | Endpoint webhook GitHub (semnătură HMAC verificată) — push instant la commit nou, completează sincronizarea de după push (`pushToGitHub`) și polling-ul din Tehnic.                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `routes/api/plex-thumb.ts`         | Proxy autentificat pentru thumbnail-urile Plex (tokenul nu ajunge la client). Acceptă o singură formă de cale, pe listă albă, și verifică prin `isAccountLive` că sesiunea din cookie corespunde unui cont încă activ — vezi nota de securitate din fișier.                                                                                                                                                                                                                                                                                                                                                              |
 | `routes/api/vw-log.ts`             | Primește jurnalul aplicației Android VW Welcome (navigația din mașină): `POST`, `Authorization: Bearer $VW_LOG_TOKEN`, JSON `{version, lines:[{t,text}]}`, max 200 linii / 256 KB. Scrie prin `lib/vw/vw-log.ts`.                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `routes/api/vw-trip.ts`            | Primește punctele de traseu ale aplicației VW Welcome (GPS + date CAN), aceeași cheie `VW_LOG_TOKEN`, max 500 puncte / 512 KB. Scrie prin `lib/vw/vw-trips.ts`.                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 
 **Notă:** trei dintre plugin-uri (`server-lifecycle`, `download-recovery`,
 `show-watcher`) există pentru că munca de la pornirea serverului
@@ -90,19 +91,20 @@ Rutare pe fișiere (TanStack Router) — fiecare fișier = o pagină, la calea
 din nume (`index.tsx` = `/`). `__root.tsx` e layout-ul comun.
 `routeTree.gen.ts` e generat automat, nu se editează manual.
 
-| Rută                             | Acces            | Ce arată                                                                                                                             |
-| -------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `index.tsx` (`/`)                | Public (parțial) | Status live Plex, wizard "Adaugă film/serial" (`AddMediaWizard`), căutare manuală Filelist (`FilelistSection`, admin).               |
-| `biblioteca.tsx` (`/biblioteca`) | Cont aprobat     | `BibliotecaList` — tot ce e descărcat prin aplicație sau deja în Plex, plus `WantedMoviesSection` (filmele urmărite, încă negăsite). |
-| `descopera.tsx` (`/descopera`)   | Cont aprobat     | Explorare TMDB (grid + feed video), deschide wizard-ul pentru un titlu identificat.                                                  |
-| `qbit.tsx` (`/qbit`)             | Cont aprobat     | Control qBittorrent — torrente active, viteze, acțiuni (pauză/reia/șterge).                                                          |
-| `sistem.tsx` (`/sistem`)         | Admin            | Metrici OS (CPU/RAM/disc/rețea), speedtest, acțiuni serviciu.                                                                        |
-| `tehnic.tsx` (`/tehnic`)         | Admin            | Jurnal activitate, commit-uri GitHub, erori aplicație, status plugin-uri, backup DB, abonamente push, speedtest, push-to-GitHub.     |
-| `users.tsx` (`/users`)           | Admin            | Listă conturi, aprobare/respingere, `UserDetailDrawer` (detalii per cont).                                                           |
-| `immich.tsx` (`/immich`)         | Admin            | Control serviciu Immich (foto).                                                                                                      |
-| `vw.tsx` (`/vw`)                 | Admin            | Jurnalul aplicației VW Welcome de pe navigație (primit prin `/api/vw-log`), cu golire.                                               |
-| `login.tsx` / `register.tsx`     | Public           | Autentificare / auto-înregistrare (aprobare manuală ulterioară).                                                                     |
-| `__root.tsx`                     | —                | Layout comun: `AppHeader`, `BottomNav`, `PageShell`, providers (query client, auto-reload).                                          |
+| Rută                             | Acces            | Ce arată                                                                                                                                        |
+| -------------------------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `index.tsx` (`/`)                | Public (parțial) | Status live Plex, wizard "Adaugă film/serial" (`AddMediaWizard`), căutare manuală Filelist (`FilelistSection`, admin).                          |
+| `biblioteca.tsx` (`/biblioteca`) | Cont aprobat     | `BibliotecaList` — tot ce e descărcat prin aplicație sau deja în Plex, plus `WantedMoviesSection` (filmele urmărite, încă negăsite).            |
+| `descopera.tsx` (`/descopera`)   | Cont aprobat     | Explorare TMDB (grid + feed video), deschide wizard-ul pentru un titlu identificat.                                                             |
+| `qbit.tsx` (`/qbit`)             | Cont aprobat     | Control qBittorrent — torrente active, viteze, acțiuni (pauză/reia/șterge).                                                                     |
+| `sistem.tsx` (`/sistem`)         | Admin            | Metrici OS (CPU/RAM/disc/rețea), speedtest, acțiuni serviciu.                                                                                   |
+| `tehnic.tsx` (`/tehnic`)         | Admin            | Jurnal activitate, commit-uri GitHub, erori aplicație, status plugin-uri, backup DB, abonamente push, speedtest, push-to-GitHub.                |
+| `users.tsx` (`/users`)           | Admin            | Listă conturi, aprobare/respingere, `UserDetailDrawer` (detalii per cont).                                                                      |
+| `immich.tsx` (`/immich`)         | Admin            | Control serviciu Immich (foto).                                                                                                                 |
+| `vw.tsx` (`/vw`)                 | Admin            | Jurnalul aplicației VW Welcome de pe navigație (primit prin `/api/vw-log`), cu golire.                                                          |
+| `calatorii.tsx` (`/calatorii`)   | Admin            | Călătoriile mașinii: totaluri pe 30 de zile, listă, hartă Leaflet/OSM (`components/vw/TripMap.tsx`) și grafic viteză/turație (`TripChart.tsx`). |
+| `login.tsx` / `register.tsx`     | Public           | Autentificare / auto-înregistrare (aprobare manuală ulterioară).                                                                                |
+| `__root.tsx`                     | —                | Layout comun: `AppHeader`, `BottomNav`, `PageShell`, providers (query client, auto-reload).                                                     |
 
 ---
 
@@ -294,10 +296,12 @@ transversale, fără un singur domeniu clar.
 
 ### src/lib/vw/
 
-| Fișier                | Ce conține                                                                                                                                                                               | Folosit de                                     |
-| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| `vw-log.ts`           | Tabela `vw_log` (jurnalul aplicației VW Welcome): inserare cu deduplicare pe `(device_at, line)`, ultimele 200.000 de linii; `readVwLog(eventsOnly)` poate ascunde liniile `DIAG`/`CAN`. | `routes/api/vw-log.ts`, `vw-log.functions.ts`. |
-| `vw-log.functions.ts` | Server functions admin: `getVwLog`, `clearVwLog`.                                                                                                                                        | `queries.ts`, `routes/vw.tsx`.                 |
+| Fișier                  | Ce conține                                                                                                                                                                               | Folosit de                                        |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| `vw-log.ts`             | Tabela `vw_log` (jurnalul aplicației VW Welcome): inserare cu deduplicare pe `(device_at, line)`, ultimele 200.000 de linii; `readVwLog(eventsOnly)` poate ascunde liniile `DIAG`/`CAN`. | `routes/api/vw-log.ts`, `vw-log.functions.ts`.    |
+| `vw-log.functions.ts`   | Server functions admin: `getVwLog`, `clearVwLog`.                                                                                                                                        | `queries.ts`, `routes/vw.tsx`.                    |
+| `vw-trips.ts`           | Tabela `vw_trip_point`; călătoriile se obțin la citire, tăind la pauze > 5 min (distanță din GPS sau din kilometraj pe drumuri ≥ 5 km).                                                  | `routes/api/vw-trip.ts`, `vw-trips.functions.ts`. |
+| `vw-trips.functions.ts` | Server functions admin: `getVwTrips`, `getVwTripPoints`.                                                                                                                                 | `queries.ts`, `routes/calatorii.tsx`.             |
 
 ### src/lib/tvmaze/
 

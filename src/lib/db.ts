@@ -310,6 +310,25 @@ export function getDb(): DatabaseSync {
     );
     CREATE INDEX IF NOT EXISTS idx_vw_log_device_at ON vw_log(device_at DESC);
 
+    -- Punctele de traseu trimise de VW Welcome (POST /api/vw-trip): GPS de la Android
+    -- plus datele de la mașină citite prin MainServer-ul FYT. Călătoriile nu sunt
+    -- stocate: se obțin la citire, tăind șirul de puncte la pauzele de peste 5 minute.
+    CREATE TABLE IF NOT EXISTS vw_trip_point (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      device_at TEXT NOT NULL UNIQUE,
+      received_at TEXT NOT NULL,
+      lat REAL,
+      lon REAL,
+      alt REAL,
+      acc REAL,
+      gps_speed REAL,
+      can_speed REAL,
+      rpm INTEGER,
+      volt REAL,
+      temp REAL,
+      odo INTEGER
+    );
+
     CREATE TABLE IF NOT EXISTS immich_upload_tracker (
       id INTEGER PRIMARY KEY CHECK (id = 1),
       checked_until TEXT NOT NULL,

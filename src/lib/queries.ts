@@ -13,6 +13,7 @@ import { getImmichTracker } from "./services/immich-uploads.functions";
 import { listWantedMovies } from "./media/media.functions";
 import { getErrorLogs } from "./errors/error-log.functions";
 import { getVwLog } from "./vw/vw-log.functions";
+import { getVwTripPoints, getVwTrips } from "./vw/vw-trips.functions";
 import {
   getRecentCommits,
   getCommitsFromDb,
@@ -128,6 +129,21 @@ export const vwLogQuery = (eventsOnly: boolean) =>
     refetchInterval: slower(3),
     staleTime: 3_000,
     ...keepPrev,
+  });
+
+export const vwTripsQuery = queryOptions({
+  queryKey: ["vwTrips"],
+  queryFn: () => getVwTrips(),
+  refetchInterval: slower(10),
+  staleTime: 10_000,
+  ...keepPrev,
+});
+
+export const vwTripPointsQuery = (start: string, end: string) =>
+  queryOptions({
+    queryKey: ["vwTripPoints", start, end],
+    queryFn: () => getVwTripPoints({ data: { start, end } }),
+    staleTime: 30_000,
   });
 
 export const adminStatusQuery = queryOptions({
