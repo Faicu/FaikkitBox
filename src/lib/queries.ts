@@ -14,6 +14,7 @@ import { listWantedMovies } from "./media/media.functions";
 import { getErrorLogs } from "./errors/error-log.functions";
 import { getVwLog } from "./vw/vw-log.functions";
 import { getVwTripPoints, getVwTrips } from "./vw/vw-trips.functions";
+import { getVwCar } from "./vw/vw-car.functions";
 import {
   getRecentCommits,
   getCommitsFromDb,
@@ -130,6 +131,14 @@ export const vwLogQuery = (eventsOnly: boolean) =>
     staleTime: 3_000,
     ...keepPrev,
   });
+
+export const vwCarQuery = queryOptions({
+  queryKey: ["vwCar"],
+  queryFn: () => getVwCar(),
+  refetchInterval: slower(10),
+  staleTime: 10_000,
+  ...keepPrev,
+});
 
 export const vwTripsQuery = queryOptions({
   queryKey: ["vwTrips"],

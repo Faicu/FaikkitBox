@@ -313,6 +313,19 @@ export function getDb(): DatabaseSync {
     -- Punctele de traseu trimise de VW Welcome (POST /api/vw-trip): GPS de la Android
     -- plus datele de la mașină citite prin MainServer-ul FYT. Călătoriile nu sunt
     -- stocate: se obțin la citire, tăind șirul de puncte la pauzele de peste 5 minute.
+    -- Mentenanța mașinii (pagina /calatorii, aplicația VW Welcome prin /api/vw-status).
+    -- Scadența: last_km + every_km și/sau due_date (explicit) sau last_date + every_months.
+    CREATE TABLE IF NOT EXISTS vw_reminder (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      every_km INTEGER,
+      every_months INTEGER,
+      last_km INTEGER,
+      last_date TEXT,
+      due_date TEXT,
+      created_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS vw_trip_point (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       device_at TEXT NOT NULL UNIQUE,

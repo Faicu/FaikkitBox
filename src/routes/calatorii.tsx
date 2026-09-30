@@ -7,7 +7,9 @@ import { PageShell } from "@/components/PageShell";
 import { TehnicSubNav } from "@/components/tehnic/TehnicSubNav";
 import { TripMap } from "@/components/vw/TripMap";
 import { TripChart } from "@/components/vw/TripChart";
-import { vwTripPointsQuery, vwTripsQuery } from "@/lib/queries";
+import { CarPosition } from "@/components/vw/CarPosition";
+import { Maintenance } from "@/components/vw/Maintenance";
+import { vwCarQuery, vwTripPointsQuery, vwTripsQuery } from "@/lib/queries";
 import type { VwTrip } from "@/lib/vw/vw-trips.functions";
 import { requireAdminBeforeLoad } from "@/lib/auth/admin-route-guard";
 
@@ -36,6 +38,7 @@ function duration(min: number): string {
 
 function TripsPage() {
   const { data, isLoading } = useQuery(vwTripsQuery);
+  const { data: car } = useQuery(vwCarQuery);
   const trips = data ?? [];
   const [selected, setSelected] = useState<string | null>(null);
   const current = trips.find((t) => t.start === selected) ?? trips[0];
@@ -54,6 +57,8 @@ function TripsPage() {
         </Link>
       </div>
 
+      {car && <CarPosition position={car.position} />}
+
       <div className="grid grid-cols-3 gap-2">
         <Stat label="Călătorii (30 zile)" value={String(month.length)} />
         <Stat label="Distanță" value={`${Math.round(km)} km`} />
@@ -68,6 +73,8 @@ function TripsPage() {
       )}
 
       {current && <TripDetail trip={current} />}
+
+      {car && <Maintenance reminders={car.reminders} odometer={car.odometer} />}
 
       <div className="space-y-2">
         {trips.map((t) => (

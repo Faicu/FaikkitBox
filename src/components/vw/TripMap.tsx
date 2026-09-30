@@ -22,6 +22,18 @@ export function TripMap({ points }: { points: VwTripPoint[] }) {
         maxZoom: 19,
         attribution: "© OpenStreetMap",
       }).addTo(map);
+      if (coords.length === 1) {
+        // Un singur punct: mașina parcată.
+        L.circleMarker(coords[0], {
+          radius: 9,
+          color: "#fff",
+          weight: 3,
+          fillColor: "#38bdf8",
+          fillOpacity: 1,
+        }).addTo(map);
+        map.setView(coords[0], 16);
+        return;
+      }
       const line = L.polyline(coords, { color: "#38bdf8", weight: 5, opacity: 0.9 }).addTo(map);
       L.circleMarker(coords[0], {
         radius: 7,
