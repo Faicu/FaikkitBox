@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Car, Trash2 } from "lucide-react";
@@ -38,7 +39,8 @@ function formatTime(iso: string): string {
 }
 
 function VwPage() {
-  const { data, isLoading } = useQuery(vwLogQuery);
+  const [eventsOnly, setEventsOnly] = useState(true);
+  const { data, isLoading } = useQuery(vwLogQuery(eventsOnly));
   const entries: VwLogEntry[] = data ?? [];
   const lastReceived = entries.reduce<string | null>(
     (max, e) => (max === null || e.receivedAt > max ? e.receivedAt : max),
@@ -71,24 +73,35 @@ function VwPage() {
         <div className="flex items-center gap-2.5">
           <Car className="h-5 w-5 text-sky-400" />
           <div>
-            <p className="font-semibold">{entries.length} linii</p>
+            <p className="font-semibold">
+              {entries.length} linii{eventsOnly ? " · doar evenimente" : ""}
+            </p>
             <p className="text-xs text-muted-foreground">
               {entries[0]?.version ? `Aplicație ${entries[0].version} · ` : ""}ora afișată e cea de
               pe navigație
             </p>
           </div>
         </div>
-        <button
-          type="button"
-          disabled={entries.length === 0 || clearMutation.isPending}
-          onClick={() => {
-            if (confirm("Golești jurnalul VW?")) clearMutation.mutate();
-          }}
-          className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-red-400 hover:bg-red-500/10 disabled:opacity-40"
-        >
-          <Trash2 className="h-4 w-4" />
-          Golește
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setEventsOnly((v) => !v)}
+            className="rounded-lg px-3 py-1.5 text-sm text-sky-400 hover:bg-sky-500/10"
+          >
+            {eventsOnly ? "Arată și CAN/diagnostic" : "Doar evenimente"}
+          </button>
+          <button
+            type="button"
+            disabled={entries.length === 0 || clearMutation.isPending}
+            onClick={() => {
+              if (confirm("Golești jurnalul VW?")) clearMutation.mutate();
+            }}
+            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-red-400 hover:bg-red-500/10 disabled:opacity-40"
+          >
+            <Trash2 className="h-4 w-4" />
+            Golește
+          </button>
+        </div>
       </div>
 
       {isLoading && <div className="h-40 skeleton-sweep rounded-2xl" />}

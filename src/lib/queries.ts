@@ -121,13 +121,14 @@ export const errorLogQuery = queryOptions({
   ...keepPrev,
 });
 
-export const vwLogQuery = queryOptions({
-  queryKey: ["vwLog"],
-  queryFn: () => getVwLog(),
-  refetchInterval: slower(3),
-  staleTime: 3_000,
-  ...keepPrev,
-});
+export const vwLogQuery = (eventsOnly: boolean) =>
+  queryOptions({
+    queryKey: ["vwLog", eventsOnly],
+    queryFn: () => getVwLog({ data: { eventsOnly } }),
+    refetchInterval: slower(3),
+    staleTime: 3_000,
+    ...keepPrev,
+  });
 
 export const adminStatusQuery = queryOptions({
   queryKey: ["adminStatus"],

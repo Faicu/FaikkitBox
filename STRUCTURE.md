@@ -294,10 +294,10 @@ transversale, fără un singur domeniu clar.
 
 ### src/lib/vw/
 
-| Fișier                | Ce conține                                                                                                                | Folosit de                                     |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| `vw-log.ts`           | Tabela `vw_log` (jurnalul aplicației VW Welcome): inserare cu deduplicare pe `(device_at, line)`, ultimele 5000 de linii. | `routes/api/vw-log.ts`, `vw-log.functions.ts`. |
-| `vw-log.functions.ts` | Server functions admin: `getVwLog`, `clearVwLog`.                                                                         | `queries.ts`, `routes/vw.tsx`.                 |
+| Fișier                | Ce conține                                                                                                                                                                               | Folosit de                                     |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `vw-log.ts`           | Tabela `vw_log` (jurnalul aplicației VW Welcome): inserare cu deduplicare pe `(device_at, line)`, ultimele 200.000 de linii; `readVwLog(eventsOnly)` poate ascunde liniile `DIAG`/`CAN`. | `routes/api/vw-log.ts`, `vw-log.functions.ts`. |
+| `vw-log.functions.ts` | Server functions admin: `getVwLog`, `clearVwLog`.                                                                                                                                        | `queries.ts`, `routes/vw.tsx`.                 |
 
 ### src/lib/tvmaze/
 

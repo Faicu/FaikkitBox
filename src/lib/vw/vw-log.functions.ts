@@ -6,14 +6,14 @@ import { createServerFn } from "@tanstack/react-start";
 export type { VwLogEntry } from "./vw-log";
 import type { VwLogEntry } from "./vw-log";
 
-export const getVwLog = createServerFn({ method: "GET" }).handler(
-  async (): Promise<VwLogEntry[]> => {
+export const getVwLog = createServerFn({ method: "GET" })
+  .validator((data: { eventsOnly: boolean }) => data)
+  .handler(async ({ data }): Promise<VwLogEntry[]> => {
     const { requireAdmin } = await import("../auth/admin.server");
     await requireAdmin();
     const { readVwLog } = await import("./vw-log");
-    return readVwLog();
-  },
-);
+    return readVwLog(data.eventsOnly === true);
+  });
 
 export const clearVwLog = createServerFn({ method: "POST" }).handler(async () => {
   const { requireAdmin } = await import("../auth/admin.server");

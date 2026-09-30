@@ -20,7 +20,8 @@ export interface VwIncomingLine {
 }
 
 const MAX_LINE_LEN = 1000;
-const MAX_ROWS = 5000;
+// Sonda CAN a aplicației trimite mii de linii pe drum; păstrăm mult, dar nu la nesfârșit.
+const MAX_ROWS = 200_000;
 export const MAX_LINES_PER_REQUEST = 200;
 
 /** Inserează un lot; întoarce câte linii noi au intrat (duplicatele se ignoră). */
@@ -51,10 +52,12 @@ export function insertVwLines(lines: VwIncomingLine[], version: string | null): 
   return added;
 }
 
-export function readVwLog(limit = 1000): VwLogEntry[] {
+/** `eventsOnly` ascunde liniile de diagnostic („DIAG …”) și ale sondei CAN („CAN …”). */
+export function readVwLog(eventsOnly: boolean, limit = 1000): VwLogEntry[] {
+  const filter = eventsOnly ? `WHERE line NOT LIKE 'DIAG %' AND line NOT LIKE 'CAN %'` : "";
   const rows = getDb()
     .prepare(
-      `SELECT id, device_at, received_at, version, line FROM vw_log
+      `SELECT id, device_at, received_at, version, line FROM vw_log ${filter}
        ORDER BY device_at DESC, id DESC LIMIT ?`,
     )
     .all(limit) as Array<{
