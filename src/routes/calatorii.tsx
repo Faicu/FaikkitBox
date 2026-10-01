@@ -186,6 +186,14 @@ function TripDetail({ trip }: { trip: VwTrip }) {
           />
           <Info label="Cost (est.)" value={trip.cost !== null ? lei(trip.cost) : "—"} />
           <Info label="Pe loc, motor pornit" value={duration(trip.idleMin)} />
+          <Info
+            label="Rezervor (CAN)"
+            value={
+              trip.fuelStart !== null && trip.fuelEnd !== null
+                ? `${trip.fuelStart} → ${trip.fuelEnd} L`
+                : "—"
+            }
+          />
           <Info label="Puncte" value={String(trip.points)} />
         </div>
         {trip.startPos && (

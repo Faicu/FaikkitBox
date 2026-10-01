@@ -352,7 +352,8 @@ export function getDb(): DatabaseSync {
       rpm INTEGER,
       volt REAL,
       temp REAL,
-      odo INTEGER
+      odo INTEGER,
+      fuel REAL
     );
 
     CREATE TABLE IF NOT EXISTS immich_upload_tracker (
@@ -1077,6 +1078,17 @@ function applyCleanups(database: DatabaseSync): void {
       // plugin-ului, nu peste 12 ore.
       database.exec("UPDATE media SET meta_refreshed_at = NULL WHERE media_type = 'tv_show'");
       database.exec("PRAGMA user_version = 33");
+    }
+
+    if (version < 34) {
+      // v34: litrii din rezervor raportați de VW Welcome (cod CAN c104), la fiecare punct.
+      try {
+        database.exec("ALTER TABLE vw_trip_point ADD COLUMN fuel REAL");
+        console.log("[db] Migrare v34: adăugat vw_trip_point.fuel");
+      } catch {
+        // coloana există deja dintr-o rulare anterioară
+      }
+      database.exec("PRAGMA user_version = 34");
     }
   }
 }

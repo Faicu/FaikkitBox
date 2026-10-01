@@ -19,6 +19,7 @@ export interface VwIncomingPoint {
   v?: number | null; // tensiunea bateriei, V
   temp?: number | null; // temperatura exterioară, °C
   odo?: number | null; // kilometraj, km
+  fuel?: number | null; // litri în rezervor
 }
 
 export interface VwTripPoint {
@@ -40,6 +41,8 @@ export interface VwTrip {
   maxRpm: number | null;
   odoStart: number | null;
   odoEnd: number | null;
+  fuelStart: number | null; // litri în rezervor (CAN), la plecare și la sosire
+  fuelEnd: number | null;
   tempC: number | null;
   minVolt: number | null;
   startPos: [number, number] | null;
@@ -66,8 +69,8 @@ export function insertVwPoints(points: VwIncomingPoint[]): number {
   const now = new Date().toISOString();
   const stmt = db.prepare(
     `INSERT OR IGNORE INTO vw_trip_point
-       (device_at, received_at, lat, lon, alt, acc, gps_speed, can_speed, rpm, volt, temp, odo)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (device_at, received_at, lat, lon, alt, acc, gps_speed, can_speed, rpm, volt, temp, odo, fuel)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   let added = 0;
   db.exec("BEGIN");
@@ -89,6 +92,7 @@ export function insertVwPoints(points: VwIncomingPoint[]): number {
         num(p.v),
         num(p.temp),
         odo === null ? null : Math.round(odo),
+        num(p.fuel),
       );
       added += Number(r.changes);
     }
@@ -114,6 +118,7 @@ interface Row {
   volt: number | null;
   temp: number | null;
   odo: number | null;
+  fuel: number | null;
 }
 
 function haversineKm(a: [number, number], b: [number, number]): number {
@@ -166,6 +171,7 @@ function summarize(rows: Row[]): VwTrip {
   const start = rows[0].device_at;
   const end = rows[rows.length - 1].device_at;
   const durationMin = (new Date(end).getTime() - new Date(start).getTime()) / 60_000;
+  const tank = rows.map((r) => r.fuel).filter((f): f is number => f !== null && f > 0);
   const temps = rows.map((r) => r.temp).filter((t): t is number => t !== null);
   const fuel = estimateFuel(
     rows.map((r) => ({
@@ -185,6 +191,8 @@ function summarize(rows: Row[]): VwTrip {
     maxRpm,
     odoStart,
     odoEnd,
+    fuelStart: tank.length ? tank[0] : null,
+    fuelEnd: tank.length ? tank[tank.length - 1] : null,
     tempC: temps.length ? temps[temps.length - 1] : null,
     minVolt: minVolt === null ? null : Math.round(minVolt * 100) / 100,
     startPos,
@@ -206,7 +214,7 @@ export function readVwTrips(days = 60): VwTrip[] {
 export function readVwTripsSince(since: string): VwTrip[] {
   const rows = getDb()
     .prepare(
-      `SELECT device_at, lat, lon, acc, gps_speed, can_speed, rpm, volt, temp, odo
+      `SELECT device_at, lat, lon, acc, gps_speed, can_speed, rpm, volt, temp, odo, fuel
        FROM vw_trip_point WHERE device_at >= ? ORDER BY device_at`,
     )
     .all(since) as unknown as Row[];
