@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Car, MapPin } from "lucide-react";
 
 import { PageShell } from "@/components/PageShell";
@@ -51,15 +51,43 @@ function fuelLine(t: VwTrip): string {
   return ` · ≈ ${liters(t.fuelL)}${t.cost !== null ? ` · ${lei(t.cost)}` : ""}`;
 }
 
+const HIDE_IDLE_KEY = "calatorii.hideIdle";
+
+/** Motorul pornit pe loc (încălzire, așteptare), fără deplasare reală. */
+function isIdle(t: VwTrip): boolean {
+  return t.distanceKm < 0.3 && (t.maxSpeed ?? 0) < 8;
+}
+
 function TripsPage() {
   const { data, isLoading } = useQuery(vwTripsQuery);
   const { data: car } = useQuery(vwCarQuery);
   const { data: fuel } = useQuery(vwFuelQuery);
-  const trips = data ?? [];
+  const all = data ?? [];
+  const [hideIdle, setHideIdle] = useState(false);
+  useEffect(() => {
+    try {
+      setHideIdle(localStorage.getItem(HIDE_IDLE_KEY) === "1");
+    } catch {
+      // localStorage indisponibil — rămân afișate toate
+    }
+  }, []);
+  function toggleIdle() {
+    const next = !hideIdle;
+    setHideIdle(next);
+    try {
+      localStorage.setItem(HIDE_IDLE_KEY, next ? "1" : "0");
+    } catch {
+      // ignoră — alegerea nu se păstrează după reîncărcare
+    }
+  }
+  const idleCount = all.filter(isIdle).length;
+  const trips = hideIdle ? all.filter((t) => !isIdle(t)) : all;
   const [selected, setSelected] = useState<string | null>(null);
   const current = trips.find((t) => t.start === selected) ?? trips[0];
 
-  const month = trips.filter((t) => Date.now() - new Date(t.start).getTime() < 30 * 86_400_000);
+  // Totalurile includ și pornirile pe loc (consumă combustibil); doar lista și numărul se filtrează.
+  const recent = (t: VwTrip) => Date.now() - new Date(t.start).getTime() < 30 * 86_400_000;
+  const month = all.filter(recent);
   const km = month.reduce((s, t) => s + t.distanceKm, 0);
   const min = month.reduce((s, t) => s + t.durationMin, 0);
   const monthL = month.reduce((s, t) => s + (t.fuelL ?? 0), 0);
@@ -80,7 +108,7 @@ function TripsPage() {
       {car && <CarPosition position={car.position} />}
 
       <div className="grid grid-cols-3 gap-2">
-        <Stat label="Călătorii (30 zile)" value={String(month.length)} />
+        <Stat label="Călătorii (30 zile)" value={String(trips.filter(recent).length)} />
         <Stat label="Distanță" value={`${Math.round(km)} km`} />
         <Stat label="Timp la volan" value={duration(min)} />
         <Stat label="Combustibil (est.)" value={`≈ ${liters(monthL)}`} />
@@ -96,7 +124,7 @@ function TripsPage() {
       </div>
 
       {isLoading && <div className="h-40 skeleton-sweep rounded-2xl" />}
-      {!isLoading && trips.length === 0 && (
+      {!isLoading && all.length === 0 && (
         <p className="rounded-2xl glass-card p-4 text-sm text-muted-foreground">
           Nicio călătorie încă. Aplicația VW Welcome trimite traseul automat când mașina merge.
         </p>
@@ -109,6 +137,19 @@ function TripsPage() {
       {car && <Maintenance reminders={car.reminders} odometer={car.odometer} />}
 
       <div className="space-y-2">
+        {idleCount > 0 && (
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={toggleIdle}
+              className="rounded-lg px-3 py-1.5 text-sm text-sky-400 hover:bg-sky-500/10"
+            >
+              {hideIdle
+                ? `Arată și pornirile pe loc (${idleCount})`
+                : `Ascunde pornirile pe loc (${idleCount})`}
+            </button>
+          </div>
+        )}
         {trips.map((t) => (
           <button
             key={t.start}
