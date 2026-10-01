@@ -6,7 +6,6 @@ const items = [
   { to: "/qbit", label: "qBit" },
   { to: "/users", label: "Utilizatori" },
   { to: "/sistem", label: "Sistem" },
-  { to: "/vw", label: "VW" },
 ] as const;
 
 export function TehnicSubNav() {

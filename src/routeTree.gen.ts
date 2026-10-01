@@ -9,7 +9,6 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as VwRouteImport } from './routes/vw'
 import { Route as UsersRouteImport } from './routes/users'
 import { Route as TehnicRouteImport } from './routes/tehnic'
 import { Route as SistemRouteImport } from './routes/sistem'
@@ -18,15 +17,9 @@ import { Route as QbitRouteImport } from './routes/qbit'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ImmichRouteImport } from './routes/immich'
 import { Route as DescoperaRouteImport } from './routes/descopera'
-import { Route as CalatoriiRouteImport } from './routes/calatorii'
 import { Route as BibliotecaRouteImport } from './routes/biblioteca'
 import { Route as IndexRouteImport } from './routes/index'
 
-const VwRoute = VwRouteImport.update({
-  id: '/vw',
-  path: '/vw',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const UsersRoute = UsersRouteImport.update({
   id: '/users',
   path: '/users',
@@ -67,11 +60,6 @@ const DescoperaRoute = DescoperaRouteImport.update({
   path: '/descopera',
   getParentRoute: () => rootRouteImport,
 } as any)
-const CalatoriiRoute = CalatoriiRouteImport.update({
-  id: '/calatorii',
-  path: '/calatorii',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const BibliotecaRoute = BibliotecaRouteImport.update({
   id: '/biblioteca',
   path: '/biblioteca',
@@ -86,7 +74,6 @@ const IndexRoute = IndexRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/biblioteca': typeof BibliotecaRoute
-  '/calatorii': typeof CalatoriiRoute
   '/descopera': typeof DescoperaRoute
   '/immich': typeof ImmichRoute
   '/login': typeof LoginRoute
@@ -95,12 +82,10 @@ export interface FileRoutesByFullPath {
   '/sistem': typeof SistemRoute
   '/tehnic': typeof TehnicRoute
   '/users': typeof UsersRoute
-  '/vw': typeof VwRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/biblioteca': typeof BibliotecaRoute
-  '/calatorii': typeof CalatoriiRoute
   '/descopera': typeof DescoperaRoute
   '/immich': typeof ImmichRoute
   '/login': typeof LoginRoute
@@ -109,13 +94,11 @@ export interface FileRoutesByTo {
   '/sistem': typeof SistemRoute
   '/tehnic': typeof TehnicRoute
   '/users': typeof UsersRoute
-  '/vw': typeof VwRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/biblioteca': typeof BibliotecaRoute
-  '/calatorii': typeof CalatoriiRoute
   '/descopera': typeof DescoperaRoute
   '/immich': typeof ImmichRoute
   '/login': typeof LoginRoute
@@ -124,14 +107,12 @@ export interface FileRoutesById {
   '/sistem': typeof SistemRoute
   '/tehnic': typeof TehnicRoute
   '/users': typeof UsersRoute
-  '/vw': typeof VwRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/biblioteca'
-    | '/calatorii'
     | '/descopera'
     | '/immich'
     | '/login'
@@ -140,12 +121,10 @@ export interface FileRouteTypes {
     | '/sistem'
     | '/tehnic'
     | '/users'
-    | '/vw'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/biblioteca'
-    | '/calatorii'
     | '/descopera'
     | '/immich'
     | '/login'
@@ -154,12 +133,10 @@ export interface FileRouteTypes {
     | '/sistem'
     | '/tehnic'
     | '/users'
-    | '/vw'
   id:
     | '__root__'
     | '/'
     | '/biblioteca'
-    | '/calatorii'
     | '/descopera'
     | '/immich'
     | '/login'
@@ -168,13 +145,11 @@ export interface FileRouteTypes {
     | '/sistem'
     | '/tehnic'
     | '/users'
-    | '/vw'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   BibliotecaRoute: typeof BibliotecaRoute
-  CalatoriiRoute: typeof CalatoriiRoute
   DescoperaRoute: typeof DescoperaRoute
   ImmichRoute: typeof ImmichRoute
   LoginRoute: typeof LoginRoute
@@ -183,18 +158,10 @@ export interface RootRouteChildren {
   SistemRoute: typeof SistemRoute
   TehnicRoute: typeof TehnicRoute
   UsersRoute: typeof UsersRoute
-  VwRoute: typeof VwRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/vw': {
-      id: '/vw'
-      path: '/vw'
-      fullPath: '/vw'
-      preLoaderRoute: typeof VwRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/users': {
       id: '/users'
       path: '/users'
@@ -251,13 +218,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DescoperaRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/calatorii': {
-      id: '/calatorii'
-      path: '/calatorii'
-      fullPath: '/calatorii'
-      preLoaderRoute: typeof CalatoriiRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/biblioteca': {
       id: '/biblioteca'
       path: '/biblioteca'
@@ -278,7 +238,6 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   BibliotecaRoute: BibliotecaRoute,
-  CalatoriiRoute: CalatoriiRoute,
   DescoperaRoute: DescoperaRoute,
   ImmichRoute: ImmichRoute,
   LoginRoute: LoginRoute,
@@ -287,7 +246,6 @@ const rootRouteChildren: RootRouteChildren = {
   SistemRoute: SistemRoute,
   TehnicRoute: TehnicRoute,
   UsersRoute: UsersRoute,
-  VwRoute: VwRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

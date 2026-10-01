@@ -22,8 +22,7 @@ import { nitro } from "nitro/vite";
 // ---------------------------------------------------------------------------
 const CSP = [
   "default-src 'self'",
-  // Harta de pe /calatorii: tile-urile OpenStreetMap.
-  "img-src 'self' data: blob: https://image.tmdb.org https://*.tile.openstreetmap.org",
+  "img-src 'self' data: blob: https://image.tmdb.org",
   "script-src 'self' 'unsafe-inline'",
   "style-src 'self' 'unsafe-inline'",
   "font-src 'self' data:",

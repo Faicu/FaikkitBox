@@ -297,65 +297,6 @@ export function getDb(): DatabaseSync {
       checked_at TEXT NOT NULL
     );
 
-    -- Jurnalul aplicației VW Welcome de pe navigația din mașină (POST /api/vw-log).
-    -- UNIQUE pe (device_at, line): aplicația retrimite lotul dacă nu primește
-    -- răspuns, iar duplicatele se ignoră la insert.
-    CREATE TABLE IF NOT EXISTS vw_log (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      device_at TEXT NOT NULL,
-      received_at TEXT NOT NULL,
-      version TEXT,
-      line TEXT NOT NULL,
-      UNIQUE (device_at, line)
-    );
-    CREATE INDEX IF NOT EXISTS idx_vw_log_device_at ON vw_log(device_at DESC);
-
-    -- Punctele de traseu trimise de VW Welcome (POST /api/vw-trip): GPS de la Android
-    -- plus datele de la mașină citite prin MainServer-ul FYT. Călătoriile nu sunt
-    -- stocate: se obțin la citire, tăind șirul de puncte la pauzele de peste 5 minute.
-    -- Mentenanța mașinii (pagina /calatorii, aplicația VW Welcome prin /api/vw-status).
-    -- Scadența: last_km + every_km și/sau due_date (explicit) sau last_date + every_months.
-    CREATE TABLE IF NOT EXISTS vw_reminder (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      title TEXT NOT NULL,
-      every_km INTEGER,
-      every_months INTEGER,
-      last_km INTEGER,
-      last_date TEXT,
-      due_date TEXT,
-      created_at TEXT NOT NULL
-    );
-
-    -- Alimentările Golf-ului (pagina /calatorii): între două plinuri dau consumul real și
-    -- calibrează estimarea de combustibil pe călătorie (lib/vw/vw-fuel-model.ts).
-    CREATE TABLE IF NOT EXISTS vw_refuel (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      at TEXT NOT NULL,
-      odo INTEGER,
-      liters REAL NOT NULL,
-      price REAL,
-      full INTEGER NOT NULL DEFAULT 1,
-      note TEXT,
-      created_at TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS vw_trip_point (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      device_at TEXT NOT NULL UNIQUE,
-      received_at TEXT NOT NULL,
-      lat REAL,
-      lon REAL,
-      alt REAL,
-      acc REAL,
-      gps_speed REAL,
-      can_speed REAL,
-      rpm INTEGER,
-      volt REAL,
-      temp REAL,
-      odo INTEGER,
-      fuel REAL
-    );
-
     CREATE TABLE IF NOT EXISTS immich_upload_tracker (
       id INTEGER PRIMARY KEY CHECK (id = 1),
       checked_until TEXT NOT NULL,
@@ -1081,13 +1022,7 @@ function applyCleanups(database: DatabaseSync): void {
     }
 
     if (version < 34) {
-      // v34: litrii din rezervor raportați de VW Welcome (cod CAN c104), la fiecare punct.
-      try {
-        database.exec("ALTER TABLE vw_trip_point ADD COLUMN fuel REAL");
-        console.log("[db] Migrare v34: adăugat vw_trip_point.fuel");
-      } catch {
-        // coloana există deja dintr-o rulare anterioară
-      }
+      // v34: fără schimbări de schemă (numărul rămâne ocupat).
       database.exec("PRAGMA user_version = 34");
     }
   }
