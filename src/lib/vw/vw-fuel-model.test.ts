@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   calibrate,
   estimateFuel,
+  levelConsumption,
   priceAt,
   type FuelRefuel,
   type FuelSample,
@@ -106,5 +107,57 @@ describe("priceAt", () => {
   it("înainte de prima alimentare folosește prima", () => {
     expect(priceAt(list, "2026-09-01")).toBe(7);
     expect(priceAt([], "2026-09-01")).toBeNull();
+  });
+});
+
+describe("levelConsumption", () => {
+  const r = (t: string, fuel: number, odo: number) => ({ t, fuel, odo });
+
+  it("drumul real din 01.10: 22 → 21, alimentare +17 → 38 → 37", () => {
+    const c = levelConsumption([
+      r("2026-10-01T17:01:00Z", 22, 245070),
+      r("2026-10-01T17:12:00Z", 21, 245071),
+      r("2026-10-01T17:32:00Z", 38, 245073),
+      r("2026-10-01T17:35:00Z", 37, 245074),
+    ]);
+    expect(c).toMatchObject({ liters: 2, refills: 17, km: 4, lPer100: null });
+  });
+
+  it("oscilațiile de 1 L se anulează între capete", () => {
+    const c = levelConsumption([
+      r("a1", 40, 1000),
+      r("a2", 39, 1050),
+      r("a3", 40, 1100),
+      r("a4", 39, 1150),
+      r("a5", 30, 1200),
+    ]);
+    expect(c).toMatchObject({ liters: 10, refills: 0, km: 200, lPer100: 5 });
+  });
+});
+
+describe("calibrate cu nivelul rezervorului", () => {
+  it("nivelul are prioritate față de plinuri când s-au consumat destui litri", () => {
+    const c = calibrate(
+      [],
+      [{ start: "2026-10-02T00:00:00Z", modelLiters: 5 }],
+      [
+        { t: "2026-10-01T00:00:00Z", fuel: 40, odo: 1000 },
+        { t: "2026-10-03T00:00:00Z", fuel: 30, odo: 1150 },
+      ],
+    );
+    expect(c).toMatchObject({ calibrated: true, source: "level" });
+    expect(c.factor).toBeCloseTo(2);
+  });
+
+  it("sub 8 L consumați rămâne necalibrat", () => {
+    const c = calibrate(
+      [],
+      [{ start: "2026-10-02T00:00:00Z", modelLiters: 5 }],
+      [
+        { t: "2026-10-01T00:00:00Z", fuel: 40, odo: 1000 },
+        { t: "2026-10-03T00:00:00Z", fuel: 36, odo: 1050 },
+      ],
+    );
+    expect(c).toMatchObject({ calibrated: false, source: null, factor: 1 });
   });
 });

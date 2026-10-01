@@ -91,13 +91,18 @@ export function FuelLog({ fuel }: { fuel: VwFuelSummary }) {
           <div>
             <p className="font-semibold">Alimentări</p>
             <p className="text-xs text-muted-foreground">
+              {fuel.tank ? `Rezervor: ${fuel.tank.liters} L · ` : ""}
               {fuel.avgLPer100 !== null
-                ? `Consum real ${fmt(fuel.avgLPer100)} L/100 km`
-                : "Consumul real apare după două plinuri"}
+                ? `consum real ${fmt(fuel.avgLPer100)} L/100 km`
+                : fuel.level
+                  ? `consumat ${fuel.level.liters} L din rezervor (consumul real apare după ~8 L)`
+                  : "consumul real apare după primele drumuri"}
               {" · "}
-              {fuel.calibrated
-                ? `estimare calibrată (×${fmt(fuel.factor, 2)})`
-                : "estimare necalibrată"}
+              {fuel.source === "level"
+                ? `estimare calibrată din rezervor (×${fmt(fuel.factor, 2)})`
+                : fuel.source === "refuels"
+                  ? `estimare calibrată din plinuri (×${fmt(fuel.factor, 2)})`
+                  : "estimare necalibrată"}
             </p>
           </div>
         </div>
@@ -166,8 +171,8 @@ export function FuelLog({ fuel }: { fuel: VwFuelSummary }) {
           </label>
           <p className="text-xs text-muted-foreground">
             {total !== null ? `Total ${fmt(total, 2)} lei. ` : ""}
-            Doar plinurile dau consumul real; alimentările parțiale dintre ele se adună la următorul
-            plin.
+            Consumul real vine din nivelul rezervorului citit de la mașină, deci nu e nevoie de
+            plin; „Plin” ajută doar ca rezervă.
           </p>
           <button
             type="button"
@@ -182,8 +187,8 @@ export function FuelLog({ fuel }: { fuel: VwFuelSummary }) {
 
       {fuel.refuels.length === 0 && !form && (
         <p className="rounded-2xl glass-card p-4 text-sm text-muted-foreground">
-          Nicio alimentare. Adaugă fiecare plin: din ele ies consumul real și costul fiecărui drum.
-          Până atunci, litrii pe călătorie sunt doar estimați.
+          Nicio alimentare. Adaugă fiecare alimentare (cu prețul): din ea iese costul fiecărui drum.
+          Consumul real vine din nivelul rezervorului citit de la mașină.
         </p>
       )}
 

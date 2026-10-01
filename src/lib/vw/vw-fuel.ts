@@ -1,11 +1,19 @@
 // ---------------------------------------------------------------------------
 // Alimentările Golf-ului (tabela vw_refuel) și combustibilul pe călătorie:
-// estimarea brută din vw-fuel-model.ts × factorul din intervalele plin → plin,
-// costul cu prețul ultimei alimentări. Server-only (node:sqlite).
+// estimarea brută din vw-fuel-model.ts × factorul din nivelul rezervorului (CAN c104)
+// sau, fără destule citiri, din intervalele plin → plin; costul cu prețul ultimei
+// alimentări. Server-only (node:sqlite).
 // ---------------------------------------------------------------------------
 
 import { getDb } from "../db";
-import { calibrate, priceAt, type FuelInterval, type FuelRefuel } from "./vw-fuel-model";
+import {
+  calibrate,
+  priceAt,
+  type FuelInterval,
+  type FuelRefuel,
+  type LevelConsumption,
+  type LevelReading,
+} from "./vw-fuel-model";
 import { readVwTripsSince, type VwTrip } from "./vw-trips";
 
 export interface VwRefuel extends FuelRefuel {
@@ -27,9 +35,15 @@ export interface VwFuelSummary {
   refuels: VwRefuel[]; // cele mai noi primele
   factor: number;
   calibrated: boolean;
-  avgLPer100: number | null; // pe intervalele plin → plin cu kilometraj
+  avgLPer100: number | null; // din nivelul rezervorului sau din plinuri
   lastPrice: number | null;
+  source: "level" | "refuels" | null;
+  level: LevelConsumption | null;
+  tank: { liters: number; at: string } | null; // ultimul nivel citit
 }
+
+/** Nivelul se folosește pe ultimele atâtea zile (consumul se schimbă cu anotimpul). */
+const LEVEL_DAYS = 90;
 
 function readRefuels(): Array<FuelRefuel & { note: string | null }> {
   const rows = getDb()
@@ -46,11 +60,25 @@ function readRefuels(): Array<FuelRefuel & { note: string | null }> {
   return rows.map((r) => ({ ...r, full: r.full === 1 }));
 }
 
-/** Călătoriile care pot intra în calibrare: de la primul plin folosit încoace. */
-function calibrationFor(refuels: FuelRefuel[]) {
-  const first = refuels.find((r) => r.full);
-  const trips = first ? readVwTripsSince(first.at) : [];
-  return calibrate(refuels, trips);
+function readLevels(): LevelReading[] {
+  const since = new Date(Date.now() - LEVEL_DAYS * 86_400_000).toISOString();
+  return (
+    getDb()
+      .prepare(
+        `SELECT device_at, fuel, odo FROM vw_trip_point
+         WHERE fuel > 0 AND device_at >= ? ORDER BY device_at`,
+      )
+      .all(since) as Array<{ device_at: string; fuel: number; odo: number | null }>
+  ).map((r) => ({ t: r.device_at, fuel: r.fuel, odo: r.odo }));
+}
+
+/** Călătoriile care pot intra în calibrare: de la primul plin sau prima citire de nivel. */
+function calibrationFor(refuels: FuelRefuel[], levels = readLevels()) {
+  const starts = [refuels.find((r) => r.full)?.at, levels[0]?.t].filter(
+    (x): x is string => x !== undefined,
+  );
+  const trips = starts.length ? readVwTripsSince(starts.sort()[0]) : [];
+  return calibrate(refuels, trips, levels);
 }
 
 /** Completează litrii, consumul și costul călătoriilor (aceeași calibrare pentru toate). */
@@ -71,7 +99,9 @@ export function applyFuel(trips: VwTrip[]): VwTrip[] {
 
 export function readFuelSummary(): VwFuelSummary {
   const refuels = readRefuels();
-  const cal = calibrationFor(refuels);
+  const levels = readLevels();
+  const cal = calibrationFor(refuels, levels);
+  const last = levels[levels.length - 1];
   const byTo = new Map<number, FuelInterval>(cal.intervals.map((i) => [i.toId, i]));
   const withKm = cal.intervals.filter((i) => i.km !== null);
   const km = withKm.reduce((s, i) => s + (i.km ?? 0), 0);
@@ -86,8 +116,11 @@ export function readFuelSummary(): VwFuelSummary {
       .reverse(),
     factor: cal.factor,
     calibrated: cal.calibrated,
-    avgLPer100: km > 0 ? (liters / km) * 100 : null,
+    avgLPer100: cal.level?.lPer100 ?? (km > 0 ? (liters / km) * 100 : null),
     lastPrice: priced.length ? priced[priced.length - 1].price : null,
+    source: cal.source,
+    level: cal.level,
+    tank: last ? { liters: last.fuel, at: last.t } : null,
   };
 }
 

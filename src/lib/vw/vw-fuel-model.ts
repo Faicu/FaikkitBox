@@ -86,8 +86,58 @@ export interface FuelInterval {
 
 export interface FuelCalibration {
   factor: number;
-  calibrated: boolean; // false = încă fără două plinuri cu călătorii între ele
+  calibrated: boolean; // false = încă fără destule date (nivel sau două plinuri)
+  source: "level" | "refuels" | null; // de unde vine factorul
   intervals: FuelInterval[];
+  level: LevelConsumption | null;
+}
+
+/** O citire a nivelului din rezervor (CAN c104, litri întregi), cu motorul pornit. */
+export interface LevelReading {
+  t: string; // ISO
+  fuel: number;
+  odo: number | null;
+}
+
+export interface LevelConsumption {
+  from: string;
+  to: string;
+  liters: number; // consumați: nivelul de la început − cel de la sfârșit + alimentările
+  refills: number; // litri alimentați (salturile în sus)
+  km: number | null;
+  lPer100: number | null;
+}
+
+/** Un salt în sus de atâția litri e o alimentare; sub atât e combustibil care se mișcă. */
+const REFILL_JUMP = 3;
+/** Sub atâția litri consumați, rezoluția de 1 L a nivelului strică factorul. */
+const MIN_LEVEL_LITERS = 8;
+
+/**
+ * Consumul real din nivelul rezervorului: fluctuațiile mici se anulează între capete, deci
+ * eroarea rămâne ~1 L oricât de lungă e perioada. `readings` crescător după timp, fuel > 0.
+ */
+export function levelConsumption(readings: LevelReading[]): LevelConsumption | null {
+  if (readings.length < 2) return null;
+  let refills = 0;
+  for (let i = 1; i < readings.length; i++) {
+    const jump = readings[i].fuel - readings[i - 1].fuel;
+    if (jump >= REFILL_JUMP) refills += jump;
+  }
+  const first = readings[0];
+  const last = readings[readings.length - 1];
+  const liters = first.fuel - last.fuel + refills;
+  const odos = readings.map((r) => r.odo).filter((o): o is number => o !== null && o > 0);
+  const km =
+    odos.length >= 2 && odos[odos.length - 1] > odos[0] ? odos[odos.length - 1] - odos[0] : null;
+  return {
+    from: first.t,
+    to: last.t,
+    liters,
+    refills,
+    km,
+    lPer100: km !== null && km >= 50 ? (liters / km) * 100 : null,
+  };
 }
 
 /** Câte intervale plin → plin recente intră în factor (consumul se schimbă cu anotimpul). */
@@ -103,6 +153,7 @@ const FACTOR_MAX = 2.5;
 export function calibrate(
   refuels: FuelRefuel[],
   trips: Array<{ start: string; modelLiters: number }>,
+  readings: LevelReading[] = [],
 ): FuelCalibration {
   const intervals: FuelInterval[] = [];
   let from: FuelRefuel | null = null;
@@ -132,11 +183,29 @@ export function calibrate(
   const used = intervals.filter((i) => i.modelLiters > 0).slice(-CALIBRATION_INTERVALS);
   const model = used.reduce((s, i) => s + i.modelLiters, 0);
   const real = used.reduce((s, i) => s + i.liters, 0);
-  const raw = model > 0 ? real / model : 1;
+  const clamp = (x: number) => Math.min(FACTOR_MAX, Math.max(FACTOR_MIN, x));
+  // Nivelul din rezervor are prioritate: nu cere plinuri și acoperă toate drumurile.
+  const level = levelConsumption(readings);
+  if (level && level.liters >= MIN_LEVEL_LITERS) {
+    const levelModel = trips
+      .filter((t) => t.start >= level.from && t.start <= level.to)
+      .reduce((s, t) => s + t.modelLiters, 0);
+    if (levelModel > 0) {
+      return {
+        factor: clamp(level.liters / levelModel),
+        calibrated: true,
+        source: "level",
+        intervals,
+        level,
+      };
+    }
+  }
   return {
-    factor: Math.min(FACTOR_MAX, Math.max(FACTOR_MIN, raw)),
+    factor: model > 0 ? clamp(real / model) : 1,
     calibrated: model > 0,
+    source: model > 0 ? "refuels" : null,
     intervals,
+    level,
   };
 }
 
