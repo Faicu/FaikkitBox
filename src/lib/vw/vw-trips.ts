@@ -5,6 +5,7 @@
 // ---------------------------------------------------------------------------
 
 import { getDb } from "../db";
+import { estimateFuel } from "./vw-fuel-model";
 
 export interface VwIncomingPoint {
   t: number; // epoch ms, ceasul navigației
@@ -43,6 +44,12 @@ export interface VwTrip {
   minVolt: number | null;
   startPos: [number, number] | null;
   endPos: [number, number] | null;
+  modelLiters: number; // estimarea brută, necalibrată (vw-fuel-model.ts)
+  idleMin: number; // pe loc cu motorul pornit
+  // Completate de vw-fuel.ts cu factorul din alimentări și prețul de atunci.
+  fuelL: number | null;
+  lPer100: number | null;
+  cost: number | null;
 }
 
 export const MAX_POINTS_PER_REQUEST = 500;
@@ -160,6 +167,13 @@ function summarize(rows: Row[]): VwTrip {
   const end = rows[rows.length - 1].device_at;
   const durationMin = (new Date(end).getTime() - new Date(start).getTime()) / 60_000;
   const temps = rows.map((r) => r.temp).filter((t): t is number => t !== null);
+  const fuel = estimateFuel(
+    rows.map((r) => ({
+      t: new Date(r.device_at).getTime(),
+      speed: r.can_speed ?? r.gps_speed,
+      rpm: r.rpm,
+    })),
+  );
   return {
     start,
     end,
@@ -175,12 +189,21 @@ function summarize(rows: Row[]): VwTrip {
     minVolt: minVolt === null ? null : Math.round(minVolt * 100) / 100,
     startPos,
     endPos,
+    modelLiters: fuel.liters,
+    idleMin: Math.round(fuel.idleMin * 10) / 10,
+    fuelL: null,
+    lPer100: null,
+    cost: null,
   };
 }
 
 /** Călătoriile din ultimele `days` zile, cele mai noi primele. */
 export function readVwTrips(days = 60): VwTrip[] {
-  const since = new Date(Date.now() - days * 86_400_000).toISOString();
+  return readVwTripsSince(new Date(Date.now() - days * 86_400_000).toISOString());
+}
+
+/** Călătoriile începute după `since` (ISO), cele mai noi primele. */
+export function readVwTripsSince(since: string): VwTrip[] {
   const rows = getDb()
     .prepare(
       `SELECT device_at, lat, lon, acc, gps_speed, can_speed, rpm, volt, temp, odo

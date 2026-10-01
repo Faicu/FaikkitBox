@@ -15,6 +15,7 @@ import { getErrorLogs } from "./errors/error-log.functions";
 import { getVwLog } from "./vw/vw-log.functions";
 import { getVwTripPoints, getVwTrips } from "./vw/vw-trips.functions";
 import { getVwCar } from "./vw/vw-car.functions";
+import { getVwFuel } from "./vw/vw-fuel.functions";
 import {
   getRecentCommits,
   getCommitsFromDb,
@@ -135,6 +136,14 @@ export const vwLogQuery = (eventsOnly: boolean) =>
 export const vwCarQuery = queryOptions({
   queryKey: ["vwCar"],
   queryFn: () => getVwCar(),
+  refetchInterval: slower(10),
+  staleTime: 10_000,
+  ...keepPrev,
+});
+
+export const vwFuelQuery = queryOptions({
+  queryKey: ["vwFuel"],
+  queryFn: () => getVwFuel(),
   refetchInterval: slower(10),
   staleTime: 10_000,
   ...keepPrev,

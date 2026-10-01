@@ -326,6 +326,19 @@ export function getDb(): DatabaseSync {
       created_at TEXT NOT NULL
     );
 
+    -- Alimentările Golf-ului (pagina /calatorii): între două plinuri dau consumul real și
+    -- calibrează estimarea de combustibil pe călătorie (lib/vw/vw-fuel-model.ts).
+    CREATE TABLE IF NOT EXISTS vw_refuel (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      at TEXT NOT NULL,
+      odo INTEGER,
+      liters REAL NOT NULL,
+      price REAL,
+      full INTEGER NOT NULL DEFAULT 1,
+      note TEXT,
+      created_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS vw_trip_point (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       device_at TEXT NOT NULL UNIQUE,

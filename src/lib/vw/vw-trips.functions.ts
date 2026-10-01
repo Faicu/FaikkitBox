@@ -10,7 +10,8 @@ export const getVwTrips = createServerFn({ method: "GET" }).handler(async (): Pr
   const { requireAdmin } = await import("../auth/admin.server");
   await requireAdmin();
   const { readVwTrips } = await import("./vw-trips");
-  return readVwTrips();
+  const { applyFuel } = await import("./vw-fuel");
+  return applyFuel(readVwTrips());
 });
 
 export const getVwTripPoints = createServerFn({ method: "GET" })

@@ -9,7 +9,8 @@ import { TripMap } from "@/components/vw/TripMap";
 import { TripChart } from "@/components/vw/TripChart";
 import { CarPosition } from "@/components/vw/CarPosition";
 import { Maintenance } from "@/components/vw/Maintenance";
-import { vwCarQuery, vwTripPointsQuery, vwTripsQuery } from "@/lib/queries";
+import { FuelLog } from "@/components/vw/FuelLog";
+import { vwCarQuery, vwFuelQuery, vwTripPointsQuery, vwTripsQuery } from "@/lib/queries";
 import type { VwTrip } from "@/lib/vw/vw-trips.functions";
 import { requireAdminBeforeLoad } from "@/lib/auth/admin-route-guard";
 
@@ -36,9 +37,24 @@ function duration(min: number): string {
   return `${Math.floor(min / 60)} h ${Math.round(min % 60)} min`;
 }
 
+function liters(n: number): string {
+  return `${n.toLocaleString("ro-RO", { maximumFractionDigits: n < 10 ? 2 : 1 })} L`;
+}
+
+function lei(n: number): string {
+  return `${n.toLocaleString("ro-RO", { maximumFractionDigits: n < 100 ? 2 : 0 })} lei`;
+}
+
+/** „≈ 0,38 L · 2,66 lei” pentru lista de călătorii. */
+function fuelLine(t: VwTrip): string {
+  if (t.fuelL === null) return "";
+  return ` · ≈ ${liters(t.fuelL)}${t.cost !== null ? ` · ${lei(t.cost)}` : ""}`;
+}
+
 function TripsPage() {
   const { data, isLoading } = useQuery(vwTripsQuery);
   const { data: car } = useQuery(vwCarQuery);
+  const { data: fuel } = useQuery(vwFuelQuery);
   const trips = data ?? [];
   const [selected, setSelected] = useState<string | null>(null);
   const current = trips.find((t) => t.start === selected) ?? trips[0];
@@ -46,6 +62,10 @@ function TripsPage() {
   const month = trips.filter((t) => Date.now() - new Date(t.start).getTime() < 30 * 86_400_000);
   const km = month.reduce((s, t) => s + t.distanceKm, 0);
   const min = month.reduce((s, t) => s + t.durationMin, 0);
+  const monthL = month.reduce((s, t) => s + (t.fuelL ?? 0), 0);
+  const monthCost = month.some((t) => t.cost !== null)
+    ? month.reduce((s, t) => s + (t.cost ?? 0), 0)
+    : null;
 
   return (
     <PageShell title="Călătorii" subtitle="Golf 6 · VW Welcome">
@@ -63,6 +83,16 @@ function TripsPage() {
         <Stat label="Călătorii (30 zile)" value={String(month.length)} />
         <Stat label="Distanță" value={`${Math.round(km)} km`} />
         <Stat label="Timp la volan" value={duration(min)} />
+        <Stat label="Combustibil (est.)" value={`≈ ${liters(monthL)}`} />
+        <Stat
+          label="Consum (est.)"
+          value={
+            km >= 1
+              ? `${((monthL / km) * 100).toLocaleString("ro-RO", { maximumFractionDigits: 1 })} L/100`
+              : "—"
+          }
+        />
+        <Stat label="Cost (est.)" value={monthCost !== null ? lei(monthCost) : "—"} />
       </div>
 
       {isLoading && <div className="h-40 skeleton-sweep rounded-2xl" />}
@@ -73,6 +103,8 @@ function TripsPage() {
       )}
 
       {current && <TripDetail trip={current} />}
+
+      {fuel && <FuelLog fuel={fuel} />}
 
       {car && <Maintenance reminders={car.reminders} odometer={car.odometer} />}
 
@@ -96,6 +128,7 @@ function TripsPage() {
               {duration(t.durationMin)}
               {t.avgSpeed !== null ? ` · medie ${t.avgSpeed} km/h` : ""}
               {t.maxSpeed !== null ? ` · max ${t.maxSpeed} km/h` : ""}
+              {fuelLine(t)}
             </p>
           </button>
         ))}
@@ -139,6 +172,20 @@ function TripDetail({ trip }: { trip: VwTrip }) {
             label="Kilometraj"
             value={trip.odoEnd !== null ? `${trip.odoEnd.toLocaleString("ro-RO")} km` : "—"}
           />
+          <Info
+            label="Combustibil (est.)"
+            value={trip.fuelL !== null ? `≈ ${liters(trip.fuelL)}` : "—"}
+          />
+          <Info
+            label="Consum (est.)"
+            value={
+              trip.lPer100 !== null
+                ? `${trip.lPer100.toLocaleString("ro-RO", { maximumFractionDigits: 1 })} L/100 km`
+                : "—"
+            }
+          />
+          <Info label="Cost (est.)" value={trip.cost !== null ? lei(trip.cost) : "—"} />
+          <Info label="Pe loc, motor pornit" value={duration(trip.idleMin)} />
           <Info label="Puncte" value={String(trip.points)} />
         </div>
         {trip.startPos && (
