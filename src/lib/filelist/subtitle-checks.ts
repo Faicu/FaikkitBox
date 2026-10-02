@@ -38,6 +38,19 @@ export function extractEpisodeKey(name: string): string | null {
   return se ? episodeKeyFrom(se.season, se.episode) : null;
 }
 
+// Un candidat OpenSubtitles e pentru episodul `episodeKey`? Preferă
+// sezon/episod din metadatele API-ului; fără ele, cade pe SxxExx din release.
+// Un candidat fără niciun reper de episod e respins — mai bine fără
+// subtitrare decât cu a altui episod.
+export function osResultMatchesEpisode(
+  r: { release: string; seasonNumber?: number; episodeNumber?: number },
+  episodeKey: string,
+): boolean {
+  if (r.seasonNumber == null || r.episodeNumber == null)
+    return extractEpisodeKey(r.release) === episodeKey;
+  return episodeKeyFrom(r.seasonNumber, r.episodeNumber) === episodeKey;
+}
+
 // Verificare de limbă pentru un .srt deja bundle-uit în torrent — NU putem
 // presupune că, fiindcă e singurul .srt al fișierului, e automat română (bug
 // real: unele lansări vin cu subtitrare engleză bundle-uită, care ar fi fost

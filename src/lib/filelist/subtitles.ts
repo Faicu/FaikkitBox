@@ -46,8 +46,8 @@ import { lookupTitleByImdbId, searchImdbIdByReleaseName } from "../tmdb/tmdb-tit
 import {
   MEDIA_EXTENSIONS,
   parseSeasonEpisode,
-  episodeKeyFrom,
   extractEpisodeKey,
+  osResultMatchesEpisode,
 } from "./subtitle-checks";
 import { processMediaFile } from "./subtitle-pipeline";
 
@@ -183,6 +183,12 @@ export async function ensureRomanianSubtitle(
 
   const matchingSrtFiles = downloadedFiles.filter((f) => f.name.toLowerCase().endsWith(".srt"));
 
+  // Episod individual: căutările după IMDb id-ul serialului întorc subtitrări
+  // pentru orice episod (S.W.A.T. Exiles S01E02 a primit subtitrarea lui
+  // S01E01, 2 oct 2026), deci păstrăm doar candidații episodului nostru — la
+  // fel ca în processSeasonPack. Filmele (fără SxxExx) rămân nefiltrate.
+  const episodeKey = extractEpisodeKey(mediaFile.name);
+
   const result = await processMediaFile({
     mediaFile,
     matchingSrtFiles,
@@ -192,7 +198,10 @@ export async function ensureRomanianSubtitle(
     qbitUser,
     qbitPass,
     searchTargetName: torrentName,
-    getOsCandidates: () => searchSubtitles(imdbId, "ro"),
+    getOsCandidates: async () => {
+      const results = await searchSubtitles(imdbId, "ro");
+      return episodeKey ? results.filter((r) => osResultMatchesEpisode(r, episodeKey)) : results;
+    },
     getSubsRoCandidates: async () => {
       // O arhivă subs.ro poate conține mai multe variante (una per
       // sursă/rezoluție), fiecare tratată ca un candidat separat, scorat la fel.
@@ -202,7 +211,9 @@ export async function ensureRomanianSubtitle(
         const zipBuf = await downloadSubsRoZip(it.id);
         if (zipBuf) zipEntries.push(...(await extractSrtEntries(zipBuf)));
       }
-      return zipEntries;
+      return episodeKey
+        ? zipEntries.filter((e) => extractEpisodeKey(e.release) === episodeKey)
+        : zipEntries;
     },
   });
 
@@ -395,11 +406,7 @@ async function processSeasonPack(params: ProcessSeasonPackParams): Promise<Subti
       qbitPass,
       searchTargetName: mediaFile.name,
       getOsCandidates: async () =>
-        (await getOsSeasonResults()).filter((r) => {
-          if (r.seasonNumber == null || r.episodeNumber == null)
-            return extractEpisodeKey(r.release) === episodeKey;
-          return episodeKeyFrom(r.seasonNumber, r.episodeNumber) === episodeKey;
-        }),
+        (await getOsSeasonResults()).filter((r) => osResultMatchesEpisode(r, episodeKey)),
       getSubsRoCandidates: async () =>
         (await getSubsRoEntries()).filter((e) => extractEpisodeKey(e.release) === episodeKey),
     });
