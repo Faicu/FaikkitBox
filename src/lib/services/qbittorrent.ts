@@ -227,7 +227,9 @@ async function collectQbitData(): Promise<QbitData> {
       seeding = 0,
       paused = 0;
     for (const t of torrentsRaw) {
-      if (t.state?.includes("paused") || t.state === "pausedDL" || t.state === "pausedUP") paused++;
+      // qBittorrent 5.x a redenumit pausedDL/pausedUP în stoppedDL/stoppedUP;
+      // fără "stopped", torrentele oprite cădeau la seeding (conțin "UP").
+      if (t.state?.includes("paused") || t.state?.includes("stopped")) paused++;
       else if (t.state?.includes("UP") || t.state === "uploading" || t.state === "stalledUP")
         seeding++;
       else downloading++;
