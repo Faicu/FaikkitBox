@@ -9,55 +9,20 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as UsersRouteImport } from './routes/users'
-import { Route as TehnicRouteImport } from './routes/tehnic'
-import { Route as SistemRouteImport } from './routes/sistem'
-import { Route as RegisterRouteImport } from './routes/register'
-import { Route as QbitRouteImport } from './routes/qbit'
-import { Route as LoginRouteImport } from './routes/login'
-import { Route as ImmichRouteImport } from './routes/immich'
-import { Route as DescoperaRouteImport } from './routes/descopera'
-import { Route as BibliotecaRouteImport } from './routes/biblioteca'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as BibliotecaRouteImport } from './routes/biblioteca'
+import { Route as DescoperaRouteImport } from './routes/descopera'
+import { Route as ImmichRouteImport } from './routes/immich'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as QbitRouteImport } from './routes/qbit'
+import { Route as RegisterRouteImport } from './routes/register'
+import { Route as SistemRouteImport } from './routes/sistem'
+import { Route as TehnicRouteImport } from './routes/tehnic'
+import { Route as UsersRouteImport } from './routes/users'
 
-const UsersRoute = UsersRouteImport.update({
-  id: '/users',
-  path: '/users',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const TehnicRoute = TehnicRouteImport.update({
-  id: '/tehnic',
-  path: '/tehnic',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SistemRoute = SistemRouteImport.update({
-  id: '/sistem',
-  path: '/sistem',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const RegisterRoute = RegisterRouteImport.update({
-  id: '/register',
-  path: '/register',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const QbitRoute = QbitRouteImport.update({
-  id: '/qbit',
-  path: '/qbit',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LoginRoute = LoginRouteImport.update({
-  id: '/login',
-  path: '/login',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ImmichRoute = ImmichRouteImport.update({
-  id: '/immich',
-  path: '/immich',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DescoperaRoute = DescoperaRouteImport.update({
-  id: '/descopera',
-  path: '/descopera',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BibliotecaRoute = BibliotecaRouteImport.update({
@@ -65,9 +30,44 @@ const BibliotecaRoute = BibliotecaRouteImport.update({
   path: '/biblioteca',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const DescoperaRoute = DescoperaRouteImport.update({
+  id: '/descopera',
+  path: '/descopera',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ImmichRoute = ImmichRouteImport.update({
+  id: '/immich',
+  path: '/immich',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const QbitRoute = QbitRouteImport.update({
+  id: '/qbit',
+  path: '/qbit',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RegisterRoute = RegisterRouteImport.update({
+  id: '/register',
+  path: '/register',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SistemRoute = SistemRouteImport.update({
+  id: '/sistem',
+  path: '/sistem',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TehnicRoute = TehnicRouteImport.update({
+  id: '/tehnic',
+  path: '/tehnic',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const UsersRoute = UsersRouteImport.update({
+  id: '/users',
+  path: '/users',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -162,60 +162,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/users': {
-      id: '/users'
-      path: '/users'
-      fullPath: '/users'
-      preLoaderRoute: typeof UsersRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/tehnic': {
-      id: '/tehnic'
-      path: '/tehnic'
-      fullPath: '/tehnic'
-      preLoaderRoute: typeof TehnicRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/sistem': {
-      id: '/sistem'
-      path: '/sistem'
-      fullPath: '/sistem'
-      preLoaderRoute: typeof SistemRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/register': {
-      id: '/register'
-      path: '/register'
-      fullPath: '/register'
-      preLoaderRoute: typeof RegisterRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/qbit': {
-      id: '/qbit'
-      path: '/qbit'
-      fullPath: '/qbit'
-      preLoaderRoute: typeof QbitRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/immich': {
-      id: '/immich'
-      path: '/immich'
-      fullPath: '/immich'
-      preLoaderRoute: typeof ImmichRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/descopera': {
-      id: '/descopera'
-      path: '/descopera'
-      fullPath: '/descopera'
-      preLoaderRoute: typeof DescoperaRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/biblioteca': {
@@ -225,11 +176,60 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BibliotecaRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/descopera': {
+      id: '/descopera'
+      path: '/descopera'
+      fullPath: '/descopera'
+      preLoaderRoute: typeof DescoperaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/immich': {
+      id: '/immich'
+      path: '/immich'
+      fullPath: '/immich'
+      preLoaderRoute: typeof ImmichRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/qbit': {
+      id: '/qbit'
+      path: '/qbit'
+      fullPath: '/qbit'
+      preLoaderRoute: typeof QbitRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/register': {
+      id: '/register'
+      path: '/register'
+      fullPath: '/register'
+      preLoaderRoute: typeof RegisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sistem': {
+      id: '/sistem'
+      path: '/sistem'
+      fullPath: '/sistem'
+      preLoaderRoute: typeof SistemRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/tehnic': {
+      id: '/tehnic'
+      path: '/tehnic'
+      fullPath: '/tehnic'
+      preLoaderRoute: typeof TehnicRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/users': {
+      id: '/users'
+      path: '/users'
+      fullPath: '/users'
+      preLoaderRoute: typeof UsersRouteImport
       parentRoute: typeof rootRouteImport
     }
   }

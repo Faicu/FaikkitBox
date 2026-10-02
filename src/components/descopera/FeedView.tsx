@@ -118,7 +118,7 @@ export function FeedView({
     if (clips.length === 0) return;
     const active = clips[activeIndex];
     if (!active) return;
-    let seen: string[] = [];
+    let seen: string[];
     try {
       seen = JSON.parse(sessionStorage.getItem("feedSeenClips") ?? "[]");
     } catch {

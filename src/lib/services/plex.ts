@@ -559,7 +559,7 @@ export const getPlex = createServerFn({ method: "GET" }).handler(async (): Promi
             count: cached.count,
           };
         }
-        let count: number | null = null;
+        let count: number | null;
         try {
           const r = await fetchJson<PlexApiResponse>(
             `${url}/library/sections/${l.key}/all?X-Plex-Container-Start=0&X-Plex-Container-Size=0`,

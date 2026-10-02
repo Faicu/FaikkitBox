@@ -25,7 +25,7 @@ export async function lookupTitleByImdbId(imdbId: string): Promise<string | null
   const cached = titleCache.get(key);
   if (cached && cached.expiresAt > Date.now()) return cached.title;
 
-  let title: string | null = null;
+  let title: string | null;
   try {
     const data = await tmdbFetch<TmdbFindResponse>(
       `/find/${encodeURIComponent(key)}?external_source=imdb_id`,

@@ -290,6 +290,6 @@ async function collectQbitData(): Promise<QbitData> {
     // fetch reușit rămâne afișat (`keepPrev` din queries.ts) — pagina qBit
     // nu mai clipește la "Eroare necunoscută" pentru câteva secunde de rețea.
     resetQbitCookie();
-    throw new Error(errMsg(e));
+    throw new Error(errMsg(e), { cause: e });
   }
 }

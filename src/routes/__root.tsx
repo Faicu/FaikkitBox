@@ -51,9 +51,12 @@ function NotFoundComponent() {
   );
 }
 
-function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
+// TanStack Router tipează `error` ca `unknown` (orice poate fi aruncat).
+function ErrorComponent({ error, reset }: { error: unknown; reset: () => void }) {
   withoutClientCapture(() => console.error(error));
-  logClientError({ data: { message: error.message, stack: error.stack } }).catch(() => {});
+  const message = error instanceof Error ? error.message : String(error);
+  const stack = error instanceof Error ? error.stack : undefined;
+  logClientError({ data: { message, stack } }).catch(() => {});
   const router = useRouter();
 
   return (

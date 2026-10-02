@@ -72,7 +72,7 @@ export function usePushNotifications() {
       // Abonamentul local nu e suficient: rândul de pe server poate fi șters
       // din Tehnic sau expirat (410). Fără verificarea asta, interfața arăta
       // "activat" pentru un abonament la care nu mai putea ajunge nimic.
-      let registered = true;
+      let registered: boolean;
       try {
         ({ registered } = await checkRef.current({ data: { endpoint: sub.endpoint } }));
       } catch {

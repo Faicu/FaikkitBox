@@ -18,7 +18,7 @@ async function fetchOk(url: string, init?: RequestInit, timeoutMs = 8000): Promi
     return res;
   } catch (e) {
     // Undici hides the real reason under `cause`; surface it.
-    throw new Error(`${url} → ${errMsg(e)}`);
+    throw new Error(`${url} → ${errMsg(e)}`, { cause: e });
   } finally {
     clearTimeout(t);
   }

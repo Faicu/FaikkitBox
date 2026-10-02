@@ -206,9 +206,10 @@ async function executeSpeedtest(): Promise<SpeedtestResult> {
       if (message.includes("is not a snap cgroup for tag snap.speedtest.speedtest")) {
         throw new Error(
           "Speedtest instalat prin snap nu poate rula din acest serviciu systemd. Instaleaza varianta Ookla .deb (non-snap) sau seteaza SPEEDTEST_BIN catre un binar non-snap (ex: /usr/bin/speedtest).",
+          { cause: e },
         );
       }
-      throw new Error(message);
+      throw new Error(message, { cause: e });
     }
     return parseOoklaJson(stdout);
   }
