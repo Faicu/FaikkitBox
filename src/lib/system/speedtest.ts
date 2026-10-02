@@ -40,49 +40,45 @@ export type SpeedtestResult = {
   resultUrl?: string;
 };
 
-type BinaryConfig = {
-  path: string;
-  args: string[];
-  parser: (raw: string) => SpeedtestResult;
-};
+// Testul rulează DOAR pe serverul Digi București (Ookla 11494) — rezultatele
+// trebuie să fie comparabile între ele. speedtest-cli (Python) nu poate ținti
+// serverul ăsta („No matched servers: 11494”) și alegea unul la întâmplare
+// (ex. Harkov), așa că nu mai e folosit ca fallback: dacă Ookla eșuează,
+// utilizatorul vede eroarea, nu un rezultat de pe alt server.
+const SPEEDTEST_SERVER_ID = 11494;
 
-function speedtestConfigs(): BinaryConfig[] {
+function speedtestBinaries(): string[] {
   const configured = process.env.SPEEDTEST_BIN?.trim();
-  const ooklaArgs = [
-    "--accept-license",
-    "--accept-gdpr",
-    "-f",
-    "json",
-    "-p",
-    "no",
-    "--server-id",
-    "11494",
-  ];
-  const pyArgs = ["--json"];
-
-  if (configured) {
-    return [
-      { path: configured, args: ooklaArgs, parser: parseOoklaJson },
-      { path: configured, args: pyArgs, parser: parsePythonCliJson },
-    ];
-  }
-
+  if (configured) return [configured];
   return [
-    { path: "/usr/local/bin/ookla-speedtest", args: ooklaArgs, parser: parseOoklaJson },
-    { path: "speedtest", args: ooklaArgs, parser: parseOoklaJson },
-    { path: "/usr/bin/speedtest", args: ooklaArgs, parser: parseOoklaJson },
-    { path: "/usr/local/bin/speedtest", args: ooklaArgs, parser: parseOoklaJson },
-    { path: "speedtest-cli", args: pyArgs, parser: parsePythonCliJson },
-    { path: "/usr/bin/speedtest-cli", args: pyArgs, parser: parsePythonCliJson },
-    { path: "/usr/local/bin/speedtest-cli", args: pyArgs, parser: parsePythonCliJson },
+    "/usr/local/bin/ookla-speedtest",
+    "/usr/local/bin/speedtest",
+    "/usr/bin/speedtest",
+    "speedtest",
   ];
 }
+
+const OOKLA_ARGS = [
+  "--accept-license",
+  "--accept-gdpr",
+  "-f",
+  "json",
+  "-p",
+  "no",
+  "--server-id",
+  String(SPEEDTEST_SERVER_ID),
+];
 
 function parseOoklaJson(raw: string): SpeedtestResult {
   if (!raw?.trim()) throw new Error("Speedtest nu a returnat niciun rezultat (stdout gol).");
   const j = JSON.parse(raw);
   if (j?.type === "error" || j?.error) {
     throw new Error(j.error ?? "Speedtest a raportat o eroare.");
+  }
+  if (Number(j.server?.id) !== SPEEDTEST_SERVER_ID) {
+    throw new Error(
+      `Speedtest a rulat pe alt server (${j.server?.name ?? "necunoscut"}, id ${j.server?.id ?? "?"}) în loc de Digi București (${SPEEDTEST_SERVER_ID}) — rezultat ignorat.`,
+    );
   }
   return {
     timestamp: j.timestamp ?? new Date().toISOString(),
@@ -93,25 +89,6 @@ function parseOoklaJson(raw: string): SpeedtestResult {
     isp: j.isp,
     server: j.server ? { name: j.server.name, location: j.server.location } : undefined,
     resultUrl: j.result?.url,
-  };
-}
-
-// Parser pentru varianta Python `speedtest-cli` (apt-get install speedtest-cli).
-// Aceasta raportează download/upload în biți/sec și are o schemă JSON diferită.
-function parsePythonCliJson(raw: string): SpeedtestResult {
-  if (!raw?.trim()) throw new Error("Speedtest nu a returnat niciun rezultat (stdout gol).");
-  const j = JSON.parse(raw);
-  return {
-    timestamp: j.timestamp ?? new Date().toISOString(),
-    // download/upload sunt în biți/sec → convertim la bytes/sec
-    ping: { latency: j.ping ?? 0, jitter: 0 },
-    download: Math.round((j.download ?? 0) / 8),
-    upload: Math.round((j.upload ?? 0) / 8),
-    isp: j.client?.isp,
-    server: j.server
-      ? { name: j.server.sponsor ?? j.server.name, location: j.server.name }
-      : undefined,
-    resultUrl: j.share ?? undefined,
   };
 }
 
@@ -210,51 +187,34 @@ export async function readHistory(): Promise<SpeedtestHistoryEntry[]> {
   }
 }
 
-// Încearcă binarele pe rând. Aruncă dacă niciunul nu reușește — apelantul
-// (startSpeedtestRun) prinde și ține mesajul în stare.
+// Folosește primul binar Ookla găsit. Doar lipsa binarului (ENOENT) trece la
+// următorul candidat; orice altă eroare e eroarea reală a testului și se
+// aruncă direct — apelantul (startSpeedtestRun) o ține în stare.
 async function executeSpeedtest(): Promise<SpeedtestResult> {
-  let lastError: string | null = null;
-  let hasSnapCgroupError = false;
-  let hasAnyBinary = false;
-
-  for (const { path: bin, args, parser } of speedtestConfigs()) {
+  for (const bin of speedtestBinaries()) {
+    let stdout: string;
     try {
-      const { stdout } = await execFileAsync(bin, args, {
+      ({ stdout } = await execFileAsync(bin, OOKLA_ARGS, {
         timeout: 90_000,
         maxBuffer: 10 * 1024 * 1024,
         env: { ...process.env, PATH: `${process.env.PATH ?? ""}:/usr/local/bin:/usr/bin:/bin` },
-      });
-      return parser(stdout);
+      }));
     } catch (e) {
       const err = e as { code?: string; stderr?: string; stdout?: string; message?: string };
       if (err?.code === "ENOENT") continue;
-      hasAnyBinary = true;
       const message = err?.stderr || err?.stdout || err?.message || String(e);
-      if (
-        typeof message === "string" &&
-        message.includes("is not a snap cgroup for tag snap.speedtest.speedtest")
-      ) {
-        hasSnapCgroupError = true;
-        lastError = message;
-        continue;
+      if (message.includes("is not a snap cgroup for tag snap.speedtest.speedtest")) {
+        throw new Error(
+          "Speedtest instalat prin snap nu poate rula din acest serviciu systemd. Instaleaza varianta Ookla .deb (non-snap) sau seteaza SPEEDTEST_BIN catre un binar non-snap (ex: /usr/bin/speedtest).",
+        );
       }
-      lastError = message;
-      // Continuăm cu următoarea configurație (ex: Ookla a eșuat, încercăm speedtest-cli Python)
-      continue;
+      throw new Error(message);
     }
+    return parseOoklaJson(stdout);
   }
-
-  if (hasSnapCgroupError) {
-    throw new Error(
-      "Speedtest instalat prin snap nu poate rula din acest serviciu systemd. Instaleaza varianta Ookla .deb (non-snap) sau seteaza SPEEDTEST_BIN catre un binar non-snap (ex: /usr/bin/speedtest).",
-    );
-  }
-  if (!hasAnyBinary) {
-    throw new Error(
-      "Comanda speedtest nu a fost gasita pe server. Verifica instalarea Speedtest by Ookla si/sau seteaza SPEEDTEST_BIN in .env.",
-    );
-  }
-  throw new Error(lastError ?? "Speedtest a esuat dintr-un motiv necunoscut.");
+  throw new Error(
+    "Comanda speedtest nu a fost gasita pe server. Verifica instalarea Speedtest by Ookla si/sau seteaza SPEEDTEST_BIN in .env.",
+  );
 }
 
 // ---------------------------------------------------------------------------
