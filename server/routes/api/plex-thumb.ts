@@ -12,11 +12,12 @@
 
 import {
   defineEventHandler,
+  getChunkedCookie,
   getQuery,
-  getSession,
   setResponseHeader,
   setResponseStatus,
   sendStream,
+  unsealSession,
 } from "h3";
 
 import {
@@ -29,11 +30,25 @@ import {
 // (segmentul final lipsește la unele item-uri, de aici grupul opțional).
 const THUMB_PATH = /^\/library\/metadata\/\d+\/[a-z]+(\/\d+)?$/;
 
+// Sesiunea se citește DOAR, nu prin getSession(). h3-ul din Nitro (rc.32) e
+// mai nou decât cel din TanStack Start (h3-v2, rc.20), care emite și verifică
+// cookie-ul de login: getSession() vedea cookie-ul ca „sigiliu vechi” și îl
+// rescria în formatul nou, pe care TanStack nu-l mai poate citi — orice
+// poster încărcat în „cine vizionează acum” deloga utilizatorul. Citirea
+// merge în ambele sensuri; scrierea rămâne exclusiv a TanStack (login/logout).
+async function readSession(event: Parameters<typeof getChunkedCookie>[0]) {
+  const config = sessionConfig();
+  const sealed = getChunkedCookie(event, config.name);
+  if (!sealed) return {} as AdminSession;
+  const session = await unsealSession(event, config, sealed).catch(() => null);
+  return (session?.data ?? {}) as AdminSession;
+}
+
 export default defineEventHandler(async (event) => {
-  const session = await getSession<AdminSession>(event, sessionConfig());
+  const session = await readSession(event);
   // Aceeași verificare ca `requireAuth`: cookie-ul e valid 7 zile, deci simplul
   // fapt că poartă un userId nu înseamnă că acel cont mai are acces.
-  const userId = session.data.userId;
+  const userId = session.userId;
   if (!userId || !(await isAccountLive(userId))) {
     setResponseStatus(event, 401);
     return "Unauthorized";

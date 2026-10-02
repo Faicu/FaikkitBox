@@ -43,7 +43,21 @@ function globalRateLimitExceeded(): boolean {
   return globalWriteCount > GLOBAL_MAX_WRITES;
 }
 
+// Clientul a închis conexiunea înainte de răspuns (tab închis, PWA reluată
+// care își reîncarcă pagina, rețea schimbată pe telefon). Nu e o eroare a
+// aplicației: din Node 26 / srvx nou ajunge la console.error ca `aborted`
+// (ECONNRESET, direct sau ca `cause`) și trimitea notificări push degeaba.
+export function isClientAbort(error: unknown): boolean {
+  for (let e = error, depth = 0; e && typeof e === "object" && depth < 3; depth++) {
+    const err = e as { message?: unknown; code?: unknown; cause?: unknown };
+    if (err.message === "aborted" && err.code === "ECONNRESET") return true;
+    e = err.cause;
+  }
+  return false;
+}
+
 export function logError(source: ErrorSource, error: unknown, level: ErrorLevel = "error"): void {
+  if (isClientAbort(error)) return;
   try {
     const message = (error instanceof Error ? error.message : String(error)).slice(
       0,
