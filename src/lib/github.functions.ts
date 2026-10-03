@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
-import { execSync, execFileSync } from "child_process";
+import { execFile } from "child_process";
+import { promisify } from "util";
 
 export interface GitHubCommit {
   sha: string;
@@ -57,7 +58,7 @@ interface GitHubApiCommit {
 const GITHUB_REPO = process.env.GITHUB_REPO ?? "Faicu/FaikkitBox";
 
 // Un SHA de git e hex, atât. Validarea NU e cosmetică: `data.sha` ajunge
-// argument pentru `git show`, iar execFileSync nu folosește shell, deci nu
+// argument pentru `git show`, iar execFile nu folosește shell, deci nu
 // există injecție de shell — dar există injecție de ARGUMENT. `git show`
 // acceptă opțiunile de diff, printre care `--output=<fișier>`: un sha de
 // forma "--output=/root/.ssh/authorized_keys" scrie liniștit în calea aia.
@@ -214,24 +215,58 @@ export interface GitHubSyncStatus {
   commitsAhead: number;
 }
 
-// Numărătoarea vine din git (origin/<branch> după un fetch best-effort), nu din
+// Toate comenzile git rulează asincron. Înainte erau execSync/execFileSync,
+// iar `git fetch` (1,6–1,8 s până la GitHub) bloca tot procesul Node cât
+// dura: orice altă cerere — Plex, qBit, o citire banală din SQLite — aștepta
+// după el. Indicatorul din antet îl cerea la fiecare deschidere a aplicației,
+// la fiecare revenire în tab și la fiecare minut, deci prima atingere după
+// revenirea pe telefon „se gândea” ~2 s pe orice pagină (măsurat 3 oct. 2026).
+// Fără shell: argumentele merg ca listă, nu ca string interpolat.
+const execFileAsync = promisify(execFile);
+
+async function git(args: string[], timeout?: number): Promise<string> {
+  const { stdout } = await execFileAsync("git", args, { encoding: "utf8", timeout });
+  return stdout.trim();
+}
+
+// `git fetch` doar actualizează referința origin/<branch>, iar ce scrie rămâne
+// pe disc — deci nu trebuie așteptat la fiecare cerere. Pornește în fundal cel
+// mult o dată la 5 minute; răspunsul curent folosește referința deja știută,
+// iar următorul o vede pe cea nouă. Push-ul din Tehnic actualizează oricum
+// referința singur, deci după el cifrele sunt corecte imediat.
+const FETCH_INTERVAL_MS = 5 * 60_000;
+let lastFetchAt = 0;
+let fetchInFlight: Promise<void> | null = null;
+
+function refreshOriginInBackground(branch: string): void {
+  if (fetchInFlight || Date.now() - lastFetchAt < FETCH_INTERVAL_MS) return;
+  lastFetchAt = Date.now();
+  fetchInFlight = git(["fetch", "--quiet", "origin", branch], 8000)
+    .then(() => undefined)
+    .catch(() => {
+      // fără rețea sau fără acces — continuăm cu ce știm local
+    })
+    .finally(() => {
+      fetchInFlight = null;
+    });
+}
+
+function currentBranch(): Promise<string> {
+  return git(["rev-parse", "--abbrev-ref", "HEAD"]);
+}
+
+// Numărătoarea vine din git (origin/<branch>, reîmprospătat în fundal), nu din
 // lista de commit-uri de pe GitHub: acolo commit-ul local nepublicat nu apare
 // deloc, iar căutarea lui în listă dădea mereu "1 în urmă", indiferent câte
 // commit-uri erau de fapt — și în direcția greșită (serverul era înainte).
-function gitCounts(): { branch: string; ahead: number; behind: number } {
-  const branch = execSync("git rev-parse --abbrev-ref HEAD", { encoding: "utf8" }).trim();
-  try {
-    execFileSync("git", ["fetch", "--quiet", "origin", branch], { timeout: 8000 });
-  } catch {
-    // fără rețea sau fără acces — continuăm cu ce știm local
-  }
-  const ahead = Number(
-    execSync(`git rev-list origin/${branch}..HEAD --count`, { encoding: "utf8" }).trim(),
-  );
-  const behind = Number(
-    execSync(`git rev-list HEAD..origin/${branch} --count`, { encoding: "utf8" }).trim(),
-  );
-  return { branch, ahead, behind };
+async function gitCounts(): Promise<{ branch: string; ahead: number; behind: number }> {
+  const branch = await currentBranch();
+  refreshOriginInBackground(branch);
+  const [ahead, behind] = await Promise.all([
+    git(["rev-list", `origin/${branch}..HEAD`, "--count"]),
+    git(["rev-list", `HEAD..origin/${branch}`, "--count"]),
+  ]);
+  return { branch, ahead: Number(ahead), behind: Number(behind) };
 }
 
 export const getGitHubSyncStatus = createServerFn({ method: "GET" }).handler(
@@ -241,9 +276,11 @@ export const getGitHubSyncStatus = createServerFn({ method: "GET" }).handler(
     const { requireAdmin } = await import("./auth/admin.server");
     await requireAdmin();
     try {
-      const { branch, ahead, behind } = gitCounts();
-      const deployedSha = execSync("git rev-parse HEAD", { encoding: "utf8" }).trim();
-      const latestSha = execSync(`git rev-parse origin/${branch}`, { encoding: "utf8" }).trim();
+      const { branch, ahead, behind } = await gitCounts();
+      const [deployedSha, latestSha] = await Promise.all([
+        git(["rev-parse", "HEAD"]),
+        git(["rev-parse", `origin/${branch}`]),
+      ]);
 
       return {
         status: "ok",
@@ -270,15 +307,15 @@ export interface GitPushStatus {
 }
 
 // Numărul de commit-uri locale nepublicate — sursa pentru butonul de push din
-// pagina Tehnic. `git fetch` e best-effort (doar actualizează referința locală
-// origin/main, nu schimbă nimic din working tree); dacă eșuează (fără rețea),
-// raportăm ahead/behind față de ultima referință cunoscută.
+// pagina Tehnic. `git fetch` e best-effort și rulează în fundal (vezi
+// refreshOriginInBackground); raportăm ahead/behind față de ultima referință
+// cunoscută.
 export const getGitPushStatus = createServerFn({ method: "GET" }).handler(
   async (): Promise<{ status: "ok"; data: GitPushStatus } | { status: "error"; error: string }> => {
     const { requireAdmin } = await import("./auth/admin.server");
     await requireAdmin();
     try {
-      const { branch, ahead, behind } = gitCounts();
+      const { branch, ahead, behind } = await gitCounts();
       return { status: "ok", data: { ahead, behind, branch } };
     } catch (e) {
       return { status: "error", error: e instanceof Error ? e.message : String(e) };
@@ -303,12 +340,13 @@ export const getUnpushedCommits = createServerFn({ method: "GET" }).handler(
     const { requireAdmin } = await import("./auth/admin.server");
     await requireAdmin();
     try {
-      const branch = execSync("git rev-parse --abbrev-ref HEAD", { encoding: "utf8" }).trim();
+      const branch = await currentBranch();
       const sep = "\x1f";
-      const log = execSync(
-        `git log origin/${branch}..HEAD --pretty=format:%H${sep}%h${sep}%s${sep}%an${sep}%aI`,
-        { encoding: "utf8" },
-      ).trim();
+      const log = await git([
+        "log",
+        `origin/${branch}..HEAD`,
+        `--pretty=format:%H${sep}%h${sep}%s${sep}%an${sep}%aI`,
+      ]);
       const commits: UnpushedCommit[] = log
         ? log.split("\n").map((line) => {
             const [sha, shortSha, message, author, date] = line.split(sep);
@@ -338,7 +376,8 @@ export const getLocalCommitDetail = createServerFn({ method: "GET" })
       // tratează orice urmează ca revizie, nu ca opțiune, chiar dacă cineva
       // slăbește cândva regexul. Două straturi, fiindcă greșeala aici scrie
       // fișiere ca root (vezi SHA_RE).
-      const header = execFileSync(
+      // Fără trim: corpul mesajului (%B) e ultimul câmp tăiat de `.trim()` mai jos.
+      const { stdout: header } = await execFileAsync(
         "git",
         [
           "show",
@@ -351,16 +390,10 @@ export const getLocalCommitDetail = createServerFn({ method: "GET" })
       );
       const [sha, shortSha, message, author, date] = header.split(sep);
 
-      const numstat = execFileSync(
-        "git",
-        ["show", "--numstat", "--format=", "--end-of-options", data.sha],
-        { encoding: "utf8" },
-      ).trim();
-      const nameStatus = execFileSync(
-        "git",
-        ["show", "--name-status", "--format=", "--end-of-options", data.sha],
-        { encoding: "utf8" },
-      ).trim();
+      const [numstat, nameStatus] = await Promise.all([
+        git(["show", "--numstat", "--format=", "--end-of-options", data.sha]),
+        git(["show", "--name-status", "--format=", "--end-of-options", data.sha]),
+      ]);
       const statusByFile = new Map<string, string>();
       for (const line of nameStatus ? nameStatus.split("\n") : []) {
         const [code, filename] = line.split("\t");
@@ -431,14 +464,12 @@ export const pushToGitHub = createServerFn({ method: "POST" }).handler(
     const { requireAdmin } = await import("./auth/admin.server");
     await requireAdmin();
     try {
-      const branch = execSync("git rev-parse --abbrev-ref HEAD", { encoding: "utf8" }).trim();
-      const ahead = Number(
-        execSync(`git rev-list origin/${branch}..HEAD --count`, { encoding: "utf8" }).trim(),
-      );
+      const branch = await currentBranch();
+      const ahead = Number(await git(["rev-list", `origin/${branch}..HEAD`, "--count"]));
       if (ahead === 0) {
         return { status: "ok", pushedCommits: 0 };
       }
-      execFileSync("git", ["push", "origin", branch], { timeout: 30_000 });
+      await git(["push", "origin", branch], 30_000);
       // Commit-urile publicate intră imediat în DB (cu notificarea lor), fără
       // să depindă de webhook sau de polling-ul paginii. Fost plugin separat
       // (github-commit-tracker), care sincroniza la fiecare pornire pentru un
