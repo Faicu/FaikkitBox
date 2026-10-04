@@ -8,6 +8,9 @@ export type AdminSession = {
   userId?: number;
   username?: string;
   role?: "admin" | "user";
+  // Copia lui users.session_version de la login. Cookie-urile emise înainte
+  // de coloană n-o au — contează ca 0, valoarea implicită din DB.
+  sessionVersion?: number;
 };
 
 // Exportată pentru rutele Nitro brute (server/routes/api/*), care rulează în
@@ -48,8 +51,14 @@ export async function getSession() {
 //
 // Tot de aici vine și rolul: dacă cineva e retrogradat din admin, sesiunea lui
 // nu mai trebuie să poarte mai departe `admin: true` înghețat la login.
-export async function isAccountLive(userId: number): Promise<string | null> {
-  return (await liveAccount(userId))?.role ?? null;
+//
+// Și versiunea sesiunii: resetarea parolei incrementează users.session_version,
+// deci orice cookie emis cu parola veche nu mai trece.
+export async function isAccountLive(
+  userId: number,
+  sessionVersion: number | undefined,
+): Promise<string | null> {
+  return (await liveAccount(userId, sessionVersion))?.role ?? null;
 }
 
 // Statement-ul se pregătește o singură dată: verificarea rulează la FIECARE
@@ -57,13 +66,18 @@ export async function isAccountLive(userId: number): Promise<string | null> {
 // re-parsarea SQL-ului de fiecare dată ar fi singurul cost care se vede.
 let accountStmt: StatementSync | null = null;
 
-async function liveAccount(userId: number): Promise<{ role: string; status: string } | null> {
+async function liveAccount(
+  userId: number,
+  sessionVersion: number | undefined,
+): Promise<{ role: string; status: string } | null> {
   if (!accountStmt) {
     const { getDb } = await import("../db");
-    accountStmt = getDb().prepare("SELECT role, status FROM users WHERE id = ?");
+    accountStmt = getDb().prepare("SELECT role, status, session_version FROM users WHERE id = ?");
   }
-  const row = accountStmt.get(userId) as { role: string; status: string } | undefined;
+  const row = accountStmt.get(userId) as
+    { role: string; status: string; session_version: number } | undefined;
   if (!row || row.status !== "approved") return null;
+  if (row.session_version !== (sessionVersion ?? 0)) return null;
   return row;
 }
 
@@ -89,7 +103,7 @@ export async function requireAuth() {
   if (!userId) {
     throwUnauthorized();
   }
-  const account = await liveAccount(userId);
+  const account = await liveAccount(userId, session.data.sessionVersion);
   if (!account) {
     // Golim cookie-ul, altfel clientul continuă să se creadă logat și se
     // lovește de 401 la fiecare cerere, fără să fie trimis la autentificare.
@@ -105,7 +119,7 @@ export async function requireAdmin() {
   if (!userId) {
     throwUnauthorized();
   }
-  const account = await liveAccount(userId);
+  const account = await liveAccount(userId, session.data.sessionVersion);
   if (!account) throwUnauthorized();
   if (!session.data.admin || account.role !== "admin") {
     throwForbidden();

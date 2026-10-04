@@ -34,9 +34,18 @@ export const adminLogin = createServerFn({ method: "POST" })
 
     const db = getDb();
     const row = db
-      .prepare("SELECT id, username, password_hash, role, status FROM users WHERE username = ?")
+      .prepare(
+        "SELECT id, username, password_hash, role, status, session_version FROM users WHERE username = ?",
+      )
       .get(data.user) as
-      | { id: number; username: string; password_hash: string; role: string; status: string }
+      | {
+          id: number;
+          username: string;
+          password_hash: string;
+          role: string;
+          status: string;
+          session_version: number;
+        }
       | undefined;
 
     if (!row || !verifyPassword(data.pass, row.password_hash)) {
@@ -55,6 +64,7 @@ export const adminLogin = createServerFn({ method: "POST" })
       userId: row.id,
       username: row.username,
       role: row.role as "admin" | "user",
+      sessionVersion: row.session_version,
     });
 
     // Autentificare reușită — contorul de încercări se stinge, ca un login
@@ -91,7 +101,7 @@ export const getAdminStatus = createServerFn({ method: "GET" }).handler(async ()
   // Aceeași verificare pe care o fac `requireAuth`/`requireAdmin`, ca UI-ul să
   // nu rămână „logat" pentru un cont căruia i s-a revocat accesul — altfel ar
   // arăta butoanele și ar lua 401 la fiecare apăsare, fără explicație.
-  const role = userId ? await isAccountLive(userId) : null;
+  const role = userId ? await isAccountLive(userId, session.data.sessionVersion) : null;
   if (userId && !role) {
     await session.clear();
     return { isAdmin: false, isAuthenticated: false, username: null, role: null };

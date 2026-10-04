@@ -104,6 +104,52 @@ export const deleteUser = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+// Resetare parolă de către admin, pentru orice cont (inclusiv alt admin sau
+// propriul cont). Incrementarea session_version deloghează toate sesiunile
+// deja emise ale contului — vezi liveAccount în admin.server.ts.
+export const resetUserPassword = createServerFn({ method: "POST" })
+  .validator((data: { id: number; password: string }) => data)
+  .handler(async ({ data }): Promise<{ ok: boolean; error?: string }> => {
+    const { requireAdmin } = await import("./admin.server");
+    const session = await requireAdmin();
+    if (data.password.length < 8) {
+      return { ok: false, error: "Parola trebuie să aibă minim 8 caractere." };
+    }
+
+    const { getDb } = await import("../db");
+    const { hashPassword } = await import("./password");
+    const db = getDb();
+    const target = db.prepare("SELECT username FROM users WHERE id = ?").get(data.id) as
+      { username: string } | undefined;
+    if (!target) return { ok: false, error: "Contul nu mai există." };
+
+    const row = db
+      .prepare(
+        `UPDATE users SET password_hash = ?, session_version = session_version + 1
+         WHERE id = ? RETURNING session_version`,
+      )
+      .get(hashPassword(data.password), data.id) as { session_version: number };
+
+    // Adminul care își resetează propria parolă rămâne logat pe dispozitivul
+    // curent; celelalte sesiuni ale lui cad, ca la orice alt cont.
+    if (session.data.userId === data.id) {
+      await session.update({ sessionVersion: row.session_version });
+    }
+
+    // Încercările greșite de dinainte nu trebuie să-l țină blocat cu parola nouă.
+    const { resetRateLimit } = await import("./rate-limit");
+    resetRateLimit(`login:user:${target.username.trim().toLowerCase()}`);
+
+    const { logActivity } = await import("../activity-log");
+    await logActivity(
+      "account_request",
+      `Parolă resetată: ${target.username} (de ${session.data.username ?? "admin necunoscut"})`,
+      { username: target.username, by: session.data.username ?? null },
+      { skipPush: true },
+    );
+    return { ok: true };
+  });
+
 // ---------------------------------------------------------------------------
 // Detalii complete pentru un cont — pagina Utilizatori, la click pe un rând
 // ---------------------------------------------------------------------------

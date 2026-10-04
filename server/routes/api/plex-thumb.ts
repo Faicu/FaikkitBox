@@ -49,7 +49,7 @@ export default defineEventHandler(async (event) => {
   // Aceeași verificare ca `requireAuth`: cookie-ul e valid 7 zile, deci simplul
   // fapt că poartă un userId nu înseamnă că acel cont mai are acces.
   const userId = session.userId;
-  if (!userId || !(await isAccountLive(userId))) {
+  if (!userId || !(await isAccountLive(userId, session.sessionVersion))) {
     setResponseStatus(event, 401);
     return "Unauthorized";
   }

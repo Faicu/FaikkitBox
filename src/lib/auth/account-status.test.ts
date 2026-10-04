@@ -41,33 +41,43 @@ afterAll(() => {
 describe("isAccountLive", () => {
   it("acceptă un cont aprobat și întoarce rolul lui", async () => {
     const id = insertUser("aprobat", "user", "approved");
-    expect(await isAccountLive(id)).toBe("user");
+    expect(await isAccountLive(id, undefined)).toBe("user");
   });
 
   it("întoarce rolul curent, nu cel cu care s-a făcut login", async () => {
     const id = insertUser("promovat", "user", "approved");
     db.prepare("UPDATE users SET role = 'admin' WHERE id = ?").run(id);
-    expect(await isAccountLive(id)).toBe("admin");
+    expect(await isAccountLive(id, undefined)).toBe("admin");
 
     // Și invers: o retrogradare trebuie să se vadă imediat, nu la expirarea
     // cookie-ului care încă poartă `admin: true`.
     db.prepare("UPDATE users SET role = 'user' WHERE id = ?").run(id);
-    expect(await isAccountLive(id)).toBe("user");
+    expect(await isAccountLive(id, undefined)).toBe("user");
   });
 
   it("respinge un cont care așteaptă aprobare", async () => {
     const id = insertUser("in_asteptare", "user", "pending");
-    expect(await isAccountLive(id)).toBeNull();
+    expect(await isAccountLive(id, undefined)).toBeNull();
   });
 
   it("respinge un cont șters", async () => {
     const id = insertUser("sters", "user", "approved");
-    expect(await isAccountLive(id)).toBe("user");
+    expect(await isAccountLive(id, undefined)).toBe("user");
     db.prepare("DELETE FROM users WHERE id = ?").run(id);
-    expect(await isAccountLive(id)).toBeNull();
+    expect(await isAccountLive(id, undefined)).toBeNull();
   });
 
   it("respinge un id care n-a existat niciodată", async () => {
-    expect(await isAccountLive(999_999)).toBeNull();
+    expect(await isAccountLive(999_999, undefined)).toBeNull();
+  });
+
+  it("respinge o sesiune emisă înainte de resetarea parolei", async () => {
+    const id = insertUser("resetat", "user", "approved");
+    // Cookie-urile vechi, fără sessionVersion, contează ca versiunea 0.
+    expect(await isAccountLive(id, undefined)).toBe("user");
+    db.prepare("UPDATE users SET session_version = session_version + 1 WHERE id = ?").run(id);
+    expect(await isAccountLive(id, undefined)).toBeNull();
+    expect(await isAccountLive(id, 0)).toBeNull();
+    expect(await isAccountLive(id, 1)).toBe("user");
   });
 });

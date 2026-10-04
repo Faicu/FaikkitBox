@@ -1,5 +1,7 @@
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { toast } from "sonner";
 import {
   Mail,
   Phone,
@@ -14,6 +16,7 @@ import {
   Download,
   CheckCircle2,
   Loader2,
+  KeyRound,
 } from "lucide-react";
 
 import {
@@ -23,7 +26,7 @@ import {
   DrawerTitle,
   DrawerDescription,
 } from "@/components/ui/drawer";
-import { getUserDetail } from "@/lib/auth/users.functions";
+import { getUserDetail, resetUserPassword } from "@/lib/auth/users.functions";
 import { formatDateTime as fmtDate } from "./utils";
 
 function episodeCode(season: number | null, episode: number | null): string | null {
@@ -232,6 +235,8 @@ export function UserDetailDrawer({ userId, onClose }: { userId: number; onClose:
                 )}
               </div>
 
+              <ResetPasswordSection userId={user.id} username={user.username} />
+
               {/* Istoric autentificări */}
               <div>
                 <h3 className="mb-1.5 px-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
@@ -265,5 +270,84 @@ export function UserDetailDrawer({ userId, onClose }: { userId: number; onClose:
         </div>
       </DrawerContent>
     </Drawer>
+  );
+}
+
+// Formular inline, nu dialog — un Dialog imbricat în Drawer îngheață ecranul.
+function ResetPasswordSection({ userId, username }: { userId: number; username: string }) {
+  const resetFn = useServerFn(resetUserPassword);
+  const [open, setOpen] = useState(false);
+  const [password, setPassword] = useState("");
+
+  const mutation = useMutation({
+    mutationFn: () => resetFn({ data: { id: userId, password } }),
+    onSuccess: (res) => {
+      if (!res.ok) {
+        toast.error(res.error ?? "Resetare eșuată");
+        return;
+      }
+      toast.success(`Parolă resetată pentru ${username}`);
+      setPassword("");
+      setOpen(false);
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  return (
+    <div>
+      <h3 className="mb-1.5 px-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
+        <KeyRound className="h-3 w-3" /> Parolă
+      </h3>
+      {!open ? (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="w-full rounded-2xl glass-card px-3 py-2.5 text-left text-sm transition-colors hover:bg-muted/40 active:bg-muted/50"
+        >
+          Resetează parola
+        </button>
+      ) : (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            mutation.mutate();
+          }}
+          className="rounded-2xl glass-card p-3 space-y-2"
+        >
+          <input
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            type="password"
+            placeholder="Parolă nouă (min. 8 caractere)"
+            autoComplete="new-password"
+            autoFocus
+            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+          />
+          <p className="text-[11px] text-muted-foreground">
+            Toate sesiunile deschise ale lui {username} vor fi delogate.
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                setPassword("");
+              }}
+              disabled={mutation.isPending}
+              className="flex-1 rounded-lg border border-border px-3 py-2 text-sm transition-transform hover:bg-muted/40 active:scale-[0.98] disabled:opacity-50"
+            >
+              Anulează
+            </button>
+            <button
+              type="submit"
+              disabled={mutation.isPending || password.length < 8}
+              className="flex-1 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-transform hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50"
+            >
+              {mutation.isPending ? "Se salvează..." : "Salvează"}
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
   );
 }

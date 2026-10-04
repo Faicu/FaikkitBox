@@ -99,7 +99,8 @@ export function getDb(): DatabaseSync {
       plex_username TEXT,
       plex_email TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      last_login_at TEXT
+      last_login_at TEXT,
+      session_version INTEGER NOT NULL DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS user_logins (
@@ -1024,6 +1025,18 @@ function applyCleanups(database: DatabaseSync): void {
     if (version < 34) {
       // v34: fără schimbări de schemă (numărul rămâne ocupat).
       database.exec("PRAGMA user_version = 34");
+    }
+
+    if (version < 35) {
+      // v35: users.session_version — incrementat la resetarea parolei, ca
+      // sesiunile emise înainte (cookie semnat, 7 zile) să nu mai fie valide.
+      try {
+        database.exec("ALTER TABLE users ADD COLUMN session_version INTEGER NOT NULL DEFAULT 0");
+        console.log("[db] Migrare v35: adăugat users.session_version");
+      } catch {
+        // coloana există deja (tabel creat cu schema nouă)
+      }
+      database.exec("PRAGMA user_version = 35");
     }
   }
 }
