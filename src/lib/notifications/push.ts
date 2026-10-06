@@ -12,6 +12,38 @@ function ensureVapid() {
   vapidConfigured = true;
 }
 
+// Erori de rețea temporare (DNS încă nepornit, conexiune căzută) — tipic în
+// prima secundă după un reboot, când serviciul pornește odată cu
+// network-online.target, dar resolverul încă nu răspunde. Merită reîncercate;
+// orice altceva (răspuns HTTP de la FCM, chei greșite) nu.
+const TRANSIENT_CODES = new Set([
+  "EAI_AGAIN",
+  "ENOTFOUND",
+  "ECONNRESET",
+  "ECONNREFUSED",
+  "ETIMEDOUT",
+  "ENETUNREACH",
+  "EHOSTUNREACH",
+]);
+const RETRY_DELAYS_MS = [3_000, 10_000];
+
+async function sendWithRetry(
+  subscription: webpush.PushSubscription,
+  payload: string,
+): Promise<void> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await webpush.sendNotification(subscription, payload);
+      return;
+    } catch (err) {
+      const code = (err as { code?: string })?.code;
+      const delay = RETRY_DELAYS_MS[attempt];
+      if (!code || !TRANSIENT_CODES.has(code) || delay === undefined) throw err;
+      await new Promise((r) => setTimeout(r, delay));
+    }
+  }
+}
+
 export async function sendPushToAll(
   title: string,
   body: string,
@@ -40,7 +72,7 @@ export async function sendPushToAll(
     await Promise.allSettled(
       subs.map(async (sub) => {
         try {
-          await webpush.sendNotification(
+          await sendWithRetry(
             { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
             payload,
           );
