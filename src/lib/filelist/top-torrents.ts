@@ -16,6 +16,8 @@ export interface TopTorrentTitle extends DiscoverTitle {
   episodeLabel: string | null;
   seeders: number;
   leechers: number;
+  // IMDb id-ul titlului (din torrent) — pentru rating-ul IMDb.
+  imdbId: string;
 }
 
 type SeasonEpisodeParser = (name: string) => { season: number; episode: number | null } | null;
@@ -71,7 +73,9 @@ export function groupTopTorrents(
       originalTitle: info.originalTitle,
       year: info.year,
       posterUrl: info.posterPath ? `https://image.tmdb.org/t/p/w342${info.posterPath}` : null,
-      voteAverage: info.voteAverage,
+      imdbRating: null,
+      imdbVotes: null,
+      imdbId: imdb as string,
       episodeLabel,
       seeders: t.seeders,
       leechers: t.leechers,
@@ -83,4 +87,37 @@ export function groupTopTorrents(
   );
   const perType = { movie: 0, tv: 0 };
   return ranked.filter((g) => ++perType[g.mediaType] <= maxPerType);
+}
+
+// Perioadele din care se poate alege în tab (orele de la urcare). Implicit
+// 48h — cât acoperea lista înainte să existe alegerea.
+export const TOP_PERIODS = [
+  { hours: 24, label: "24h" },
+  { hours: 48, label: "48h" },
+  { hours: 72, label: "72h" },
+  { hours: 168, label: "7 zile" },
+] as const;
+export type TopPeriodHours = (typeof TOP_PERIODS)[number]["hours"];
+export const DEFAULT_TOP_PERIOD: TopPeriodHours = 48;
+
+// Câte ore în urmă acoperă complet un set de loturi `latest-torrents`: cel mai
+// vechi torrent din lotul care se oprește cel mai devreme. Un lot sub plafon
+// conține tot ce există, deci nu limitează. Null = nelimitat.
+export function coveredHours(
+  batches: { capped: boolean; oldestUpload: string | null }[],
+  now: number,
+): number | null {
+  let hours: number | null = null;
+  for (const b of batches) {
+    if (!b.capped || !b.oldestUpload) continue;
+    const h = (now - parseUploadDate(b.oldestUpload)) / 3_600_000;
+    if (hours === null || h < hours) hours = h;
+  }
+  return hours;
+}
+
+// Filelist dă data ca „2026-10-07 13:41:44", în ora României — aceeași cu a
+// serverului, deci parsarea locală e corectă.
+export function parseUploadDate(raw: string): number {
+  return new Date(raw.replace(" ", "T")).getTime();
 }

@@ -14,6 +14,7 @@ import {
   RefreshCw,
   Clapperboard,
   Film,
+  Star,
 } from "lucide-react";
 import { Orb } from "@/components/ui/orb";
 
@@ -162,10 +163,11 @@ export const PLUGINS: PluginInfo[] = [
   {
     id: "maintenance",
     label: "Întreținere",
-    description: "Backup zilnic al bazei, verificarea actualizărilor, deblocarea acțiunilor",
+    description:
+      "Backup zilnic al bazei, verificarea actualizărilor, rating-uri IMDb, deblocarea acțiunilor",
     cadence: "la pornire, apoi zilnic",
     details:
-      "Trei treburi de întreținere, fiecare cu ritmul ei. Una care eșuează nu le oprește pe celelalte.",
+      "Patru treburi de întreținere, fiecare cu ritmul ei. Una care eșuează nu le oprește pe celelalte.",
     steps: [
       {
         title: "Deblocare acțiuni",
@@ -200,6 +202,18 @@ export const PLUGINS: PluginInfo[] = [
           "Momentul ultimei verificări stă în baza de date, așa că deploy-urile dese nu resetează ceasul; dacă nicio verificare nu reușește (fără rețea), se reîncearcă peste o oră.",
         ],
         icon: <ArrowUpCircle className="h-3.5 w-3.5 text-sky-400" />,
+      },
+      {
+        title: "Rating-uri IMDb",
+        cadence: "zilnic (verificat din oră în oră)",
+        summary: "Descarcă datasetul oficial IMDb cu notele și numărul de voturi.",
+        points: [
+          "Grilele din Descoperă afișau nota TMDB, care diferă vizibil de cea de pe IMDb. Acum afișează nota și voturile IMDb.",
+          "Sursa e title.ratings.tsv.gz de la IMDb (~1,7 milioane de titluri), regenerat de IMDb zilnic — cifrele au cel mult o zi întârziere.",
+          "Stă într-o bază separată, data/imdb-ratings.db (~35 MB), ca să nu umfle backup-urile: se poate reface oricând din dataset.",
+          "Importul scrie un fișier nou și îl mută peste cel vechi abia la final; dacă datasetul nu s-a schimbat (același ETag), nu se descarcă nimic.",
+        ],
+        icon: <Star className="h-3.5 w-3.5 text-amber-400" />,
       },
     ],
     icon: <Wrench className="h-4 w-4 text-orange-400" />,

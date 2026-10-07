@@ -97,12 +97,24 @@ async function searchFilelistRaw(
   }
 }
 
-// Ultimele torrente urcate (max 100, limita API-ului) din categoriile unui
-// filtru — sursa tabului „Top Filelist" din Descoperă. API-ul nu are un
-// endpoint de top/populare, deci popularitatea se calculează din
-// seederi/leecheri doar peste fereastra asta recentă (~2 zile pentru HD/4K).
+// Ultimele torrente urcate (max 100, limita API-ului, fără paginare) din
+// categoriile date — sursa tabului „Top Filelist" din Descoperă. API-ul nu
+// are un endpoint de top/populare, deci popularitatea se calculează din
+// seederi/leecheri doar peste fereastra asta recentă. Apelantul cere câte o
+// categorie odată: 100 de torrente pe toate categoriile de seriale acoperă
+// ~1 zi, pe Filme 4K singură ~3 săptămâni.
 // Aruncă la eroare, ca apelantul să nu pună în cache o listă goală falsă.
-export async function fetchLatestTorrents(category: FilelistCategory): Promise<FilelistTorrent[]> {
+export interface LatestTorrentsBatch {
+  torrents: FilelistTorrent[];
+  // API-ul a dat plafonul de 100: mai vechi de `oldestUpload` există torrente
+  // pe care nu le vedem. Sub plafon, lotul e tot ce există în categorie.
+  capped: boolean;
+  oldestUpload: string | null;
+}
+
+export async function fetchLatestTorrents(
+  categoryIds: readonly number[],
+): Promise<LatestTorrentsBatch> {
   const username = process.env.FILELIST_USERNAME;
   const passkey = process.env.FILELIST_PASSKEY;
   if (!username || !passkey) {
@@ -113,7 +125,7 @@ export async function fetchLatestTorrents(category: FilelistCategory): Promise<F
     passkey,
     action: "latest-torrents",
     limit: "100",
-    category: resolveCategoryIds(category).join(","),
+    category: categoryIds.join(","),
     output: "json",
   });
   const res = await fetch(`https://filelist.io/api.php?${params.toString()}`, {
@@ -122,7 +134,18 @@ export async function fetchLatestTorrents(category: FilelistCategory): Promise<F
   if (!res.ok) throw new Error(`Filelist API HTTP ${res.status}`);
   const raw: unknown = await res.json();
   if (!Array.isArray(raw)) throw new Error("Răspuns neașteptat de la Filelist API");
-  return mapApiTorrents(raw as FilelistApiTorrent[]);
+  const list = raw as FilelistApiTorrent[];
+  // Din lista brută, înainte de filtrarea discurilor Blu-ray: plafonul și
+  // fereastra acoperită țin de ce a dat API-ul, nu de ce păstrăm.
+  const dates = list
+    .map((t) => String(t.upload_date ?? ""))
+    .filter(Boolean)
+    .sort();
+  return {
+    torrents: mapApiTorrents(list),
+    capped: list.length >= 100,
+    oldestUpload: dates[0] ?? null,
+  };
 }
 
 // ---------------------------------------------------------------------------

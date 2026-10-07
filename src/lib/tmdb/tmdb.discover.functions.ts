@@ -15,7 +15,11 @@ export interface DiscoverTitle {
   originalTitle: string;
   year: string | null;
   posterUrl: string | null;
-  voteAverage: number | null;
+  // Nota și voturile de pe IMDb (datasetul zilnic, vezi imdb/imdb-ratings.ts)
+  // — nu nota TMDB, care diferă vizibil. Null dacă IMDb n-are încă rating.
+  // Completate doar în grile (getDiscoverTitles, Top Filelist), nu în feed.
+  imdbRating: number | null;
+  imdbVotes: number | null;
 }
 
 interface TmdbApiDiscoverItem {
@@ -28,7 +32,6 @@ interface TmdbApiDiscoverItem {
   release_date?: string;
   first_air_date?: string;
   poster_path?: string | null;
-  vote_average?: number | null;
 }
 
 interface TmdbApiDiscoverResponse {
@@ -46,7 +49,8 @@ function mapItem(mediaType: DiscoverMediaType, r: TmdbApiDiscoverItem): Discover
         : (r.original_name ?? r.original_title ?? r.name ?? ""),
     year: (mediaType === "movie" ? r.release_date : r.first_air_date)?.slice(0, 4) || null,
     posterUrl: r.poster_path ? `https://image.tmdb.org/t/p/w342${r.poster_path}` : null,
-    voteAverage: typeof r.vote_average === "number" ? r.vote_average : null,
+    imdbRating: null,
+    imdbVotes: null,
   };
 }
 
@@ -83,7 +87,8 @@ export const getDiscoverTitles = createServerFn({ method: "GET" })
     await requireAuth();
     try {
       const items = await fetchDiscoverPage(data.mediaType, data.sort, data.page ?? 1);
-      return { items, degraded: false };
+      const { attachImdbRatings } = await import("../imdb/discover-ratings");
+      return { items: await attachImdbRatings(items), degraded: false };
     } catch {
       return { items: [], degraded: true };
     }

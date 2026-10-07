@@ -61,3 +61,14 @@ export function pluralRo(n: number, one: string, many: string): string {
   const rest = n % 100;
   return n >= 20 && (rest === 0 || rest >= 20) ? `${n} de ${many}` : `${n} ${many}`;
 }
+
+// Număr scurt, ca pe IMDb: 850, 12K, 125K, 1.3M.
+export function formatCompact(n: number): string {
+  if (n < 1000) return String(n);
+  if (n < 1_000_000) {
+    const k = n / 1000;
+    return `${k < 10 ? k.toFixed(1).replace(/\.0$/, "") : Math.round(k)}K`;
+  }
+  const m = n / 1_000_000;
+  return `${m < 10 ? m.toFixed(1).replace(/\.0$/, "") : Math.round(m)}M`;
+}

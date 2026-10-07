@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Star, Film, Tv } from "lucide-react";
 
+import { formatCompact } from "@/lib/format";
 import type { DiscoverTitle } from "@/lib/tmdb/tmdb.discover.functions";
 
 // Card de poster din grilele Descoperă (TMDB și Top Filelist). `badge` apare
@@ -40,10 +41,13 @@ export function PosterCard({
         </div>
         <div className="mt-0.5 flex items-center gap-1.5 text-[10px] text-white/70">
           {item.year && <span>{item.year}</span>}
-          {item.voteAverage != null && (
-            <span className="flex items-center gap-0.5">
+          {item.imdbRating != null && (
+            <span className="flex items-center gap-0.5" title="Rating IMDb">
               <Star className="h-2.5 w-2.5 fill-amber-400 text-amber-400" />
-              {item.voteAverage.toFixed(1)}
+              <span className="font-semibold text-white">{item.imdbRating.toFixed(1)}</span>
+              {item.imdbVotes != null && (
+                <span className="text-white/50">({formatCompact(item.imdbVotes)})</span>
+              )}
             </span>
           )}
         </div>
