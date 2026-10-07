@@ -32,6 +32,7 @@ export interface UpsertMediaEntryInput {
   tvStatus?: string | null;
   torrentName?: string | null;
   torrentHash?: string | null;
+  filelistId?: number | null;
   category?: number | null;
   categoryName?: string | null;
   size?: number;
@@ -286,9 +287,9 @@ export function upsertMediaEntry(input: UpsertMediaEntryInput): number {
       `INSERT INTO media (
         media_type, parent_id, imdb_id, tmdb_id, title, original_title, literal_title,
         year, season, episode, overview_ro, genres, poster_path, tv_status,
-        torrent_name, torrent_hash, category, category_name, size, freeleech, internal,
-        save_path, is_season_pack, added_via, requested_by_user_id
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        torrent_name, torrent_hash, filelist_id, category, category_name, size, freeleech,
+        internal, save_path, is_season_pack, added_via, requested_by_user_id
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     )
     .run(
       input.mediaType,
@@ -307,6 +308,7 @@ export function upsertMediaEntry(input: UpsertMediaEntryInput): number {
       input.tvStatus ?? null,
       input.torrentName ?? null,
       input.torrentHash ?? null,
+      input.filelistId ?? null,
       input.category ?? null,
       input.categoryName ?? null,
       input.size ?? 0,
@@ -693,6 +695,7 @@ interface SeasonPackMediaRow {
   tv_status: string | null;
   torrent_name: string | null;
   torrent_hash: string | null;
+  filelist_id: number | null;
   category: number | null;
   category_name: string | null;
   size: number;
@@ -784,11 +787,11 @@ export async function resolveSeasonPackPlexLinks(torrentHash: string): Promise<b
     `INSERT INTO media (
       media_type, parent_id, imdb_id, tmdb_id, title, original_title, literal_title,
       year, season, episode, overview_ro, genres, poster_path, tv_status,
-      plex_rating_key, plex_added_at, torrent_name, torrent_hash, category, category_name,
-      size, freeleech, internal, save_path, is_season_pack, added_via, requested_by_user_id,
-      completed_at, has_romanian_subtitle, has_romanian_audio, subtitle_source,
-      subtitle_detail, subtitle_checked_at, quality, duration_ms
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      plex_rating_key, plex_added_at, torrent_name, torrent_hash, filelist_id, category,
+      category_name, size, freeleech, internal, save_path, is_season_pack, added_via,
+      requested_by_user_id, completed_at, has_romanian_subtitle, has_romanian_audio,
+      subtitle_source, subtitle_detail, subtitle_checked_at, quality, duration_ms
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
   );
   const updateExisting = db.prepare(
     `UPDATE media SET plex_rating_key = ?, quality = ?, duration_ms = ?, plex_added_at = ?,
@@ -838,6 +841,7 @@ export async function resolveSeasonPackPlexLinks(torrentHash: string): Promise<b
       link.addedAt,
       row.torrent_name,
       row.torrent_hash,
+      row.filelist_id,
       row.category,
       row.category_name,
       row.size,

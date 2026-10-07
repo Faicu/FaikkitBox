@@ -364,6 +364,19 @@ export function TitleDetailDrawer({
                       <ExternalLink className="h-3 w-3" /> IMDb
                     </a>
                   )}
+                  {/* Spre deosebire de IMDb, ține de FIȘIER: există la film și
+                      la episod (la pachet, pagina pachetului), nu la serial.
+                      Doar descărcările noi au ID-ul salvat. */}
+                  {d.type !== "tv_show" && d.filelistId != null && (
+                    <a
+                      href={`https://filelist.io/details.php?id=${d.filelistId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex shrink-0 items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 font-medium text-foreground hover:bg-muted/70 transition-colors"
+                    >
+                      <ExternalLink className="h-3 w-3" /> Filelist
+                    </a>
+                  )}
                 </div>
               )}
               {d && (d.type !== "tv_show" || d.durationMs > 0) && (

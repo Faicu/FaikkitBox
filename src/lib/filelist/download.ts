@@ -335,6 +335,7 @@ export interface DownloadFilelistParams {
     import("../media/media").UpsertMediaEntryInput,
     | "torrentName"
     | "torrentHash"
+    | "filelistId"
     | "category"
     | "categoryName"
     | "size"
@@ -565,6 +566,7 @@ async function finishFilelistDownload(ctx: {
       ...(mediaPayload ?? fallbackPayload),
       torrentName: params.torrentName,
       torrentHash: torrentHash ?? null,
+      filelistId: params.torrentId,
       category: catId,
       categoryName: catName,
       size: params.size ?? 0,

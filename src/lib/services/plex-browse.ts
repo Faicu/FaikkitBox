@@ -448,6 +448,9 @@ export interface PlexTitleDetail {
   // Butoanele de corectare/ștergere subtitrare și ștergere completă operează
   // direct pe media.id + torrentHash.
   torrentHash: string | null;
+  // Pagina torrent-ului pe Filelist — doar descărcările de după migrarea v36
+  // au ID-ul; pentru rest, butonul lipsește.
+  filelistId: number | null;
   // true dacă intrarea găsită e un pachet de sezon întreg, nu doar acest
   // episod — ștergerea/corectarea ar afecta atunci tot pachetul.
   isSeasonPack: boolean;
@@ -514,6 +517,7 @@ interface MediaRow {
   duration_ms: number | null;
   torrent_name: string | null;
   torrent_hash: string | null;
+  filelist_id: number | null;
   category_name: string | null;
   size: number;
   freeleech: number;
@@ -757,6 +761,7 @@ async function buildDetailFromMediaRow(
     dlspeed,
     eta,
     torrentHash: row.torrent_hash,
+    filelistId: row.filelist_id,
     isSeasonPack: !!row.is_season_pack,
     canManage,
     tmdbId: row.tmdb_id,
@@ -806,7 +811,7 @@ export const getPlexTitleDetail = createServerFn({ method: "GET" })
         .prepare(
           `SELECT id, media_type, title, original_title, imdb_id, tmdb_id, season, episode, poster_path, year,
            overview_ro, genres, quality, has_romanian_subtitle, has_romanian_audio, duration_ms, torrent_name, torrent_hash,
-           category_name, size, freeleech, internal, save_path, added_via,
+           filelist_id, category_name, size, freeleech, internal, save_path, added_via,
            plex_rating_key, is_season_pack, requested_by_user_id, added_at, completed_at,
            subtitle_source, subtitle_detail, subtitle_checked_at, episode_title,
            episode_overview, episode_still, episode_air_date,

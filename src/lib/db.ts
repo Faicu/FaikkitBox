@@ -138,6 +138,10 @@ export function getDb(): DatabaseSync {
       plex_added_at INTEGER,
       torrent_name TEXT,
       torrent_hash TEXT,
+      -- ID-ul torrent-ului pe Filelist (details.php?id=…), pentru butonul din
+      -- drawer. Doar descărcările de după v36 îl au; rândurile mai vechi rămân
+      -- NULL (completarea retroactivă a fost respinsă — vezi migrarea).
+      filelist_id INTEGER,
       category INTEGER,
       category_name TEXT,
       size INTEGER NOT NULL DEFAULT 0,
@@ -1037,6 +1041,19 @@ function applyCleanups(database: DatabaseSync): void {
         // coloana există deja (tabel creat cu schema nouă)
       }
       database.exec("PRAGMA user_version = 35");
+    }
+
+    if (version < 36) {
+      // v36: media.filelist_id — linkul spre pagina torrent-ului pe Filelist.
+      // Fără completare pentru rândurile existente: butonul apare doar la
+      // descărcările noi.
+      try {
+        database.exec("ALTER TABLE media ADD COLUMN filelist_id INTEGER");
+        console.log("[db] Migrare v36: adăugat media.filelist_id");
+      } catch {
+        // coloana există deja (bază nouă, creată direct cu schema curentă)
+      }
+      database.exec("PRAGMA user_version = 36");
     }
   }
 }
