@@ -170,8 +170,18 @@ describe("checkShow", () => {
     expect(filelist.mock.calls[0][0].useCache).toBeFalsy();
   });
 
-  it("nu caută episoade viitoare", async () => {
+  it("descarcă episodul de mâine, dacă e deja pe Filelist (MobLand S02E04, 8 oct.)", async () => {
     tmdbSeason2(daysAgo(7), inDays(1));
+    onFilelist("MobLand.S02E02.Blank.Curtain.1080p.AMZN.WEB-DL");
+
+    const out = await watch.checkShow(showId);
+
+    expect(out.missing).toEqual(["S02E02"]);
+    expect(out.downloaded).toEqual(["S02E02"]);
+  });
+
+  it("nu caută episoadele de peste mâine", async () => {
+    tmdbSeason2(daysAgo(7), inDays(2));
     onFilelist("MobLand.S02E02.1080p.WEB-DL");
 
     const out = await watch.checkShow(showId);

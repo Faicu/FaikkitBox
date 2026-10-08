@@ -96,8 +96,8 @@ async function getAiredEpisodes(
   tmdbId: number,
   fromSeason: number,
   details: TmdbShowDetails | null,
-  // Și episoadele cu data de azi — vezi aired-episodes.ts.
-  includeToday = false,
+  // Și episoadele cu data de azi sau mâine — vezi aired-episodes.ts.
+  includeUpcoming = false,
 ): Promise<EpisodeKey[]> {
   const { getTmdbAllSeasonsInternal } = await import("../tmdb/tmdb.functions");
   const seasonNumbers = (details?.seasons ?? [])
@@ -107,7 +107,7 @@ async function getAiredEpisodes(
   const schema = await getTmdbAllSeasonsInternal(tmdbId, seasonNumbers).catch(() => []);
   // Aceeași zi ca în tmdb.functions.ts (UTC), ca regulile să nu se decaleze.
   return airedEpisodeKeys(schema, {
-    includeToday,
+    includeUpcoming,
     today: new Date().toISOString().slice(0, 10),
   });
 }
