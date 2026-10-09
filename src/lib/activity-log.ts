@@ -112,7 +112,7 @@ export async function readActivityLog(): Promise<ActivityEntry[]> {
     const { getDb } = await import("./db");
     const rows = getDb()
       .prepare(
-        "SELECT id, timestamp, type, message, meta FROM activity ORDER BY timestamp DESC, rowid DESC LIMIT 500",
+        "SELECT id, timestamp, type, message, meta FROM activity ORDER BY timestamp DESC, rowid DESC",
       )
       .all() as Array<{
       id: string;
