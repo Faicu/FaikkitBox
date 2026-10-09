@@ -6,16 +6,19 @@
 //
 // Găsit pe 9 oct. 2026: MobLand S02E02 și S02E03 aveau, byte cu byte,
 // subtitrarea lui S02E01 — subs.ro avea doar arhiva cu E01, iar înainte de
-// 643c7d2 orice episod o primea. Testat pe acele fișiere, verificarea de mai
-// jos dă 50–100% replici sincronizate pe episodul corect și sub 10% pe
-// celelalte, inclusiv cu un decalaj constant de câteva secunde.
+// 643c7d2 orice episod o primea.
 //
 // Trei verificări, fiecare sărită dacă nu are pe ce se baza:
 //  1. limba — trebuie să pară română (looksRomanian);
 //  2. durata — ultima replică nu poate fi mult după sfârșitul fișierului;
 //  3. sincronizarea — comparată cu o subtitrare text deja încorporată în
-//     fișier (de obicei engleza, la WEB-DL): replicile aceluiași episod încep
-//     la aceleași momente, cu cel mult un decalaj constant (alt release).
+//     fișier (de obicei engleza, la WEB-DL): în același episod se vorbește
+//     în aceleași momente, cu cel mult un decalaj constant (alt release).
+//     Comparăm intervalele de vorbire, nu începuturile replicilor: un
+//     traducător își împarte replicile altfel decât engleza SDH, iar prima
+//     variantă (pe începuturi) dădea doar 0,17–0,20 la The Rookie S08, cu
+//     subtitrările corecte. Pe intervale: episodul corect 0,72–1,00 (The
+//     Rookie, MobLand, o traducere automată Subtitle Cat), altul ≤ 0,29.
 // ---------------------------------------------------------------------------
 
 import { execFile } from "node:child_process";
@@ -27,68 +30,90 @@ const execFileAsync = promisify(execFile);
 // Cât poate depăși ultima replică durata fișierului (genericul de final,
 // diferențe mici între release-uri).
 const DURATION_SLACK_S = 120;
-// Sub atâtea replici sincronizate (din cele ale subtitrării verificate),
-// subtitrarea e pentru alt episod. Măsurat: corect ≥ 0,5, greșit ≤ 0,1.
-const MIN_TIMING_MATCH = 0.2;
-// Prea puține replici fac proporția nesigură — atunci nu decidem.
+// Corelația minimă a intervalelor de vorbire (vezi speechCorrelation).
+const MIN_SPEECH_CORRELATION = 0.45;
+// Prea puține replici fac comparația nesigură — atunci nu decidem.
 const MIN_CUES = 40;
-// Decalajul maxim căutat între cele două subtitrări și toleranța unei potriviri.
+// Decalajul maxim căutat între cele două subtitrări și rezoluția comparației.
 const MAX_OFFSET_S = 60;
-const BIN_S = 0.2;
+const BIN_S = 0.5;
 
 const TEXT_SUBTITLE_CODECS = ["subrip", "ass", "ssa", "mov_text", "webvtt", "text"];
 const ROMANIAN_LANG_CODES = ["ro", "rum", "ron"];
 
 export interface SrtTiming {
   starts: number[];
+  intervals: Array<[number, number]>;
   lastEnd: number;
 }
 
 export function parseSrtTiming(text: string): SrtTiming {
   const starts: number[] = [];
+  const intervals: Array<[number, number]> = [];
   let lastEnd = 0;
   const re =
     /(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})\s*-->\s*(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})/g;
   for (const m of text.matchAll(re)) {
     const t = (h: string, mi: string, s: string, ms: string) =>
       Number(h) * 3600 + Number(mi) * 60 + Number(s) + Number(ms.padEnd(3, "0")) / 1000;
-    starts.push(t(m[1], m[2], m[3], m[4]));
-    lastEnd = Math.max(lastEnd, t(m[5], m[6], m[7], m[8]));
+    const start = t(m[1], m[2], m[3], m[4]);
+    const end = t(m[5], m[6], m[7], m[8]);
+    starts.push(start);
+    intervals.push([start, end]);
+    lastEnd = Math.max(lastEnd, end);
   }
   starts.sort((a, b) => a - b);
-  return { starts, lastEnd };
+  return { starts, intervals, lastEnd };
 }
 
-// Proporția replicilor din `candidate` care încep odată cu o replică din
-// `reference`, la cel mai bun decalaj constant (± MAX_OFFSET_S). Pentru
-// fiecare replică numărăm o singură dată fiecare decalaj posibil, apoi luăm
-// decalajul cu cele mai multe potriviri.
-export function timingMatch(
-  candidate: number[],
-  reference: number[],
+// Corelația (Pearson) dintre „se vorbește / nu se vorbește" în cele două
+// subtitrări, pe felii de BIN_S secunde, la cel mai bun decalaj constant
+// (± MAX_OFFSET_S). 1 = aceleași momente de vorbire, ~0 = fără legătură.
+export function speechCorrelation(
+  candidate: Array<[number, number]>,
+  reference: Array<[number, number]>,
 ): { score: number; offset: number } {
   if (candidate.length === 0 || reference.length === 0) return { score: 0, offset: 0 };
-  const counts = new Map<number, number>();
-  let lo = 0;
-  for (const x of candidate) {
-    while (lo < reference.length && reference[lo] < x - MAX_OFFSET_S) lo++;
-    const seen = new Set<number>();
-    for (let i = lo; i < reference.length && reference[i] <= x + MAX_OFFSET_S; i++) {
-      const bin = Math.round((reference[i] - x) / BIN_S);
-      if (seen.has(bin)) continue;
-      seen.add(bin);
-      counts.set(bin, (counts.get(bin) ?? 0) + 1);
+  const maxShift = Math.round(MAX_OFFSET_S / BIN_S);
+  const lastEnd = Math.max(...candidate.map((i) => i[1]), ...reference.map((i) => i[1]));
+  const n = Math.ceil(lastEnd / BIN_S) + 1;
+  const toBins = (ivs: Array<[number, number]>) => {
+    const v = new Uint8Array(n);
+    for (const [a, b] of ivs) {
+      for (
+        let i = Math.max(0, Math.floor(a / BIN_S));
+        i <= Math.min(n - 1, Math.floor(b / BIN_S));
+        i++
+      )
+        v[i] = 1;
     }
-  }
-  let bestBin = 0;
-  let best = 0;
-  for (const [bin, n] of counts) {
-    if (n > best) {
-      best = n;
-      bestBin = bin;
+    return v;
+  };
+  const c = toBins(candidate);
+  const r = toBins(reference);
+
+  let best = { score: -1, offset: 0 };
+  for (let k = -maxShift; k <= maxShift; k++) {
+    let m = 0;
+    let sx = 0;
+    let sy = 0;
+    let sxy = 0;
+    for (let i = Math.max(0, -k); i < n && i + k < n; i++) {
+      const x = c[i];
+      const y = r[i + k];
+      m++;
+      sx += x;
+      sy += y;
+      sxy += x & y;
     }
+    if (m === 0) continue;
+    const px = sx / m;
+    const py = sy / m;
+    const den = Math.sqrt(px * (1 - px) * py * (1 - py));
+    const score = den > 0 ? (sxy / m - px * py) / den : 0;
+    if (score > best.score) best = { score, offset: k * BIN_S };
   }
-  return { score: best / candidate.length, offset: bestBin * BIN_S };
+  return best;
 }
 
 async function mediaDurationSeconds(mediaAbsPath: string): Promise<number | null> {
@@ -175,9 +200,9 @@ export function createSubtitleVerifier(mediaAbsPath: string) {
     reference ??= embeddedReferenceTiming(mediaAbsPath);
     const ref = await reference;
     if (ref && ref.starts.length >= MIN_CUES && timing.starts.length >= MIN_CUES) {
-      const { score } = timingMatch(timing.starts, ref.starts);
-      if (score < MIN_TIMING_MATCH) {
-        return `doar ${Math.round(score * 100)}% din replici se sincronizează cu subtitrarea încorporată în fișier — e pentru alt episod`;
+      const { score } = speechCorrelation(timing.intervals, ref.intervals);
+      if (score < MIN_SPEECH_CORRELATION) {
+        return `momentele de vorbire nu se potrivesc cu subtitrarea încorporată în fișier (corelație ${score.toFixed(2)}, minimum ${MIN_SPEECH_CORRELATION}) — e pentru alt episod`;
       }
     }
     return null;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parseSrtTiming, timingMatch } from "./subtitle-verify";
+import { parseSrtTiming, speechCorrelation } from "./subtitle-verify";
 
 const srt = (starts: number[]) =>
   starts
@@ -32,24 +32,34 @@ describe("parseSrtTiming", () => {
   });
 });
 
-describe("timingMatch", () => {
-  const e1 = episode(1);
-  const e2 = episode(2);
+// Intervalele de vorbire ale unui episod, din începuturile de mai sus.
+const speech = (starts: number[]) => starts.map((s): [number, number] => [s, s + 1.2]);
 
-  it("același episod: aproape toate replicile se potrivesc", () => {
-    expect(timingMatch(e1, e1).score).toBeGreaterThan(0.95);
+describe("speechCorrelation", () => {
+  const e1 = speech(episode(1));
+  const e2 = speech(episode(2));
+
+  it("același episod: corelație maximă", () => {
+    expect(speechCorrelation(e1, e1).score).toBeGreaterThan(0.95);
   });
 
   it("același episod cu decalaj constant (alt release): tot se potrivește", () => {
-    const m = timingMatch(
-      e1.map((x) => x + 3.4),
+    const m = speechCorrelation(
+      e1.map(([a, b]): [number, number] => [a + 3.5, b + 3.5]),
       e1,
     );
     expect(m.score).toBeGreaterThan(0.9);
-    expect(m.offset).toBeCloseTo(-3.4, 0);
+    expect(m.offset).toBeCloseTo(-3.5, 0);
+  });
+
+  it("același episod, replici împărțite altfel (The Rookie S08): tot se potrivește", () => {
+    // Traducătorul unește câte două replici consecutive într-una.
+    const merged: Array<[number, number]> = [];
+    for (let i = 0; i + 1 < e1.length; i += 2) merged.push([e1[i][0], e1[i + 1][1]]);
+    expect(speechCorrelation(merged, e1).score).toBeGreaterThan(0.45);
   });
 
   it("alt episod: sub prag (MobLand S02E02 cu subtitrarea lui E01)", () => {
-    expect(timingMatch(e2, e1).score).toBeLessThan(0.2);
+    expect(speechCorrelation(e2, e1).score).toBeLessThan(0.45);
   });
 });
