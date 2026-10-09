@@ -20,15 +20,32 @@ import {
   type SubtitleSource,
 } from "./subtitle-outcomes";
 import type { SubtitleCandidate } from "./subtitle-sources";
+import { describeSync, isWellSynced, type SyncMeasure } from "./subtitle-verify";
 
-// Descarcă și scrie pe disc o subtitrare din rankSubtitleCandidates,
-// convertind la UTF-8 dacă e cazul. `verify` (subtitle-verify.ts) se uită la
-// conținut înainte de scriere — ce respinge nu ajunge pe disc.
-export async function downloadAndWriteSubtitle(
-  winner: SubtitleCandidate,
-  confident: boolean,
+// Conținutul unei variante din rankSubtitleCandidates, ca text UTF-8 — null
+// dacă descărcarea a eșuat. Nu scrie nimic: pipeline-ul compară întâi mai
+// multe variante (subtitle-pipeline.ts), apoi o scrie pe cea aleasă.
+export async function fetchCandidateText(
+  candidate: SubtitleCandidate,
+): Promise<{ text: string; wasConverted: boolean } | null> {
+  const content = await candidate.getContent();
+  if (!content) {
+    console.warn(
+      `[subtitles] descărcare ${SUBTITLE_SOURCE_LABELS[candidate.source]} eșuată pentru release „${candidate.release}"`,
+    );
+    return null;
+  }
+  return decodeToUtf8Text(content);
+}
+
+// Scrie pe disc varianta aleasă. Cu sincronizarea măsurată (fișierul are o
+// subtitrare încorporată de comparat), ea decide dacă e o potrivire sigură
+// sau „aproximativă" — numele release-ului contează doar fără măsurătoare.
+export async function writeChosenSubtitle(
+  chosen: SubtitleCandidate,
   destPath: string,
-  verify: (text: string) => Promise<string | null>,
+  fetched: { text: string; wasConverted: boolean },
+  sync: SyncMeasure | null,
 ): Promise<{
   outcome: SubtitleOutcome;
   detail: string;
@@ -36,61 +53,15 @@ export async function downloadAndWriteSubtitle(
   maxCriteria: number;
   source: SubtitleSource;
 }> {
-  const sourceLabel = SUBTITLE_SOURCE_LABELS[winner.source];
-  const { matchedCriteria, maxCriteria } = winner;
+  const sourceLabel = SUBTITLE_SOURCE_LABELS[chosen.source];
+  const { matchedCriteria, maxCriteria } = chosen;
   const isPerfect = maxCriteria > 0 && matchedCriteria === maxCriteria;
-  const content = await winner.getContent();
-  if (!content) {
-    console.warn(`[subtitles] descărcare ${sourceLabel} eșuată pentru release „${winner.release}"`);
-    return {
-      outcome: "download_failed",
-      detail: `descărcarea subtitrării de pe ${sourceLabel} (release „${winner.release}") a eșuat`,
-      matchedCriteria,
-      maxCriteria,
-      source: winner.source,
-    };
-  }
+  const confident = sync ? isWellSynced(sync) : chosen.confident;
+  const syncNote = sync ? `; ${describeSync(sync)}` : "";
+  const encodingNote = fetched.wasConverted ? " (encoding convertit la UTF-8)" : "";
 
   try {
-    const { text, wasConverted } = decodeToUtf8Text(content);
-    const rejected = await verify(text);
-    if (rejected) {
-      console.warn(
-        `[subtitles] subtitrare ${sourceLabel} respinsă (${rejected}), release „${winner.release}"`,
-      );
-      return {
-        outcome: "no_subtitle_found",
-        detail: `${sourceLabel}, release „${winner.release}": respinsă — ${rejected}`,
-        matchedCriteria,
-        maxCriteria,
-        source: winner.source,
-      };
-    }
-    await writeFileWithRetry(destPath, text);
-    const encodingNote = wasConverted ? " (encoding convertit la UTF-8)" : "";
-    if (confident) {
-      console.log(`[subtitles] subtitrare ${sourceLabel} salvată → ${destPath}`);
-      const matchNote = isPerfect
-        ? "potrivire perfectă"
-        : `potrivire sursă+rezoluție confirmată, ${matchedCriteria}/${maxCriteria} criterii`;
-      return {
-        outcome: "downloaded",
-        detail: `${isPerfect ? "subtitrare perfectă" : "subtitrare"} descărcată de pe ${sourceLabel}, release „${winner.release}" (${matchNote})${encodingNote}`,
-        matchedCriteria,
-        maxCriteria,
-        source: winner.source,
-      };
-    }
-    console.warn(
-      `[subtitles] subtitrare aproximativă salvată (verifică sincronizarea) → ${destPath}`,
-    );
-    return {
-      outcome: "downloaded_approximate",
-      detail: `subtitrare aproximativă descărcată de pe ${sourceLabel}, release „${winner.release}" (${matchedCriteria}/${maxCriteria} criterii — fără potrivire clară de sursă/rezoluție, verifică sincronizarea)${encodingNote}`,
-      matchedCriteria,
-      maxCriteria,
-      source: winner.source,
-    };
+    await writeFileWithRetry(destPath, fetched.text);
   } catch (e) {
     console.warn(`[subtitles] scriere .srt eșuată (${destPath}):`, e);
     return {
@@ -98,9 +69,36 @@ export async function downloadAndWriteSubtitle(
       detail: `scrierea subtitrării descărcate pe disk a eșuat: ${e instanceof Error ? e.message : e}`,
       matchedCriteria,
       maxCriteria,
-      source: winner.source,
+      source: chosen.source,
     };
   }
+
+  if (confident) {
+    console.log(`[subtitles] subtitrare ${sourceLabel} salvată → ${destPath}`);
+    const matchNote = isPerfect
+      ? "potrivire perfectă"
+      : sync
+        ? `release ${matchedCriteria}/${maxCriteria} criterii`
+        : `potrivire sursă+rezoluție confirmată, ${matchedCriteria}/${maxCriteria} criterii`;
+    return {
+      outcome: "downloaded",
+      detail: `${isPerfect ? "subtitrare perfectă" : "subtitrare"} descărcată de pe ${sourceLabel}, release „${chosen.release}" (${matchNote}${syncNote})${encodingNote}`,
+      matchedCriteria,
+      maxCriteria,
+      source: chosen.source,
+    };
+  }
+  console.warn(
+    `[subtitles] subtitrare aproximativă salvată (verifică sincronizarea) → ${destPath}`,
+  );
+  const why = sync ? describeSync(sync) : "fără potrivire clară de sursă/rezoluție";
+  return {
+    outcome: "downloaded_approximate",
+    detail: `subtitrare aproximativă descărcată de pe ${sourceLabel}, release „${chosen.release}" (${matchedCriteria}/${maxCriteria} criterii — ${why}, verifică sincronizarea)${encodingNote}`,
+    matchedCriteria,
+    maxCriteria,
+    source: chosen.source,
+  };
 }
 
 interface TrackedSrtContext {

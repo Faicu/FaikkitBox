@@ -180,12 +180,19 @@ export function rankByRelease<T>(
     const platformMatch = !!target.platform && tags.platform === target.platform;
     const codecMatch = !!target.codec && tags.codec === target.codec;
     const groupMatch = !!target.group && tags.group === target.group;
+    // Ponderile urmăresc ce schimbă timpii subtitrării: sursa (WEB-DL față
+    // de BluRay — alt montaj, alte logouri la început) și grupul (aceeași
+    // codare) contează cel mai mult, platforma (AMZN/HULU…) mult, rezoluția
+    // și codecul aproape deloc — același stream la 1080p sau 2160p are
+    // aceiași timpi. Până pe 9 oct. 2026 rezoluția valora cel mai mult, iar
+    // The Invite (1080p AMZN WEB-DL) a primit o variantă BluRay 1080p
+    // decalată cu ~3 s în locul uneia WEB-DL 2160p fără decalaj.
     const score =
-      (resMatch ? 3 : 0) +
-      (acqMatch ? 2 : 0) +
+      (acqMatch ? 3 : 0) +
+      (groupMatch ? 3 : 0) +
       (platformMatch ? 2 : 0) +
-      (codecMatch ? 1 : 0) +
-      (groupMatch ? 2 : 0);
+      (resMatch ? 1 : 0) +
+      (codecMatch ? 1 : 0);
     const matchedCriteria = [resMatch, acqMatch, platformMatch, codecMatch, groupMatch].filter(
       Boolean,
     ).length;

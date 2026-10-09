@@ -177,36 +177,76 @@ function formatTime(s: number): string {
   return `${m}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 }
 
+// Sincronizare „bună": aproape aceleași momente de vorbire și practic fără
+// decalaj. Peste ea nu mai căutăm altă variantă (subtitle-pipeline.ts), iar
+// subtitrarea e raportată ca potrivire sigură, nu „aproximativă" — oricât de
+// diferit ar fi numele release-ului. The Invite: varianta cptclaudiu, pentru
+// alt release (2160p), dădea 0,91 fără decalaj; cea aleasă după nume
+// (BluRay 1080p) 0,53 cu ~3 s decalaj.
+const GOOD_SYNC_SCORE = 0.8;
+const GOOD_SYNC_MAX_OFFSET_S = 0.5;
+
+export interface SyncMeasure {
+  score: number;
+  offset: number;
+}
+
+export function isWellSynced(sync: SyncMeasure): boolean {
+  return sync.score >= GOOD_SYNC_SCORE && Math.abs(sync.offset) <= GOOD_SYNC_MAX_OFFSET_S;
+}
+
+export interface SubtitleCheck {
+  // null = pare în regulă (sau nu avem cum ști); altfel motivul respingerii.
+  reason: string | null;
+  // Sincronizarea măsurată față de subtitrarea încorporată; null dacă
+  // fișierul n-are una (sau sunt prea puține replici ca să conteze).
+  sync: SyncMeasure | null;
+}
+
 // Un verificator per fișier media: durata și subtitrarea de referință se
 // citesc o singură dată, chiar dacă verificăm mai mulți candidați (un .srt
-// existent, apoi unul descărcat).
+// existent, apoi variantele descărcate).
 export function createSubtitleVerifier(mediaAbsPath: string) {
   let duration: Promise<number | null> | null = null;
   let reference: Promise<SrtTiming | null> | null = null;
 
-  // null = pare în regulă (sau nu avem cum ști); altfel motivul respingerii.
-  return async function verify(text: string): Promise<string | null> {
-    if (!looksRomanian(text)) return "nu pare să fie în română";
+  return async function verify(text: string): Promise<SubtitleCheck> {
+    const reject = (reason: string): SubtitleCheck => ({ reason, sync: null });
+    if (!looksRomanian(text)) return reject("nu pare să fie în română");
 
     const timing = parseSrtTiming(text);
-    if (timing.starts.length === 0) return "nu conține nicio replică cu timp (nu e un SRT valid)";
+    if (timing.starts.length === 0)
+      return reject("nu conține nicio replică cu timp (nu e un SRT valid)");
 
     duration ??= mediaDurationSeconds(mediaAbsPath);
     const d = await duration;
     if (d != null && timing.lastEnd > d + DURATION_SLACK_S) {
-      return `ultima replică e la ${formatTime(timing.lastEnd)}, dar fișierul are doar ${formatTime(d)} — e pentru alt episod sau altă versiune`;
+      return reject(
+        `ultima replică e la ${formatTime(timing.lastEnd)}, dar fișierul are doar ${formatTime(d)} — e pentru alt episod sau altă versiune`,
+      );
     }
 
     reference ??= embeddedReferenceTiming(mediaAbsPath);
     const ref = await reference;
-    if (ref && ref.starts.length >= MIN_CUES && timing.starts.length >= MIN_CUES) {
-      const { score } = speechCorrelation(timing.intervals, ref.intervals);
-      if (score < MIN_SPEECH_CORRELATION) {
-        return `momentele de vorbire nu se potrivesc cu subtitrarea încorporată în fișier (corelație ${score.toFixed(2)}, minimum ${MIN_SPEECH_CORRELATION}) — e pentru alt episod`;
-      }
+    if (!ref || ref.starts.length < MIN_CUES || timing.starts.length < MIN_CUES) {
+      return { reason: null, sync: null };
     }
-    return null;
+    const sync = speechCorrelation(timing.intervals, ref.intervals);
+    if (sync.score < MIN_SPEECH_CORRELATION) {
+      return reject(
+        `momentele de vorbire nu se potrivesc cu subtitrarea încorporată în fișier (corelație ${sync.score.toFixed(2)}, minimum ${MIN_SPEECH_CORRELATION}) — e pentru alt episod`,
+      );
+    }
+    return { reason: null, sync };
   };
 }
 
 export type SubtitleVerifier = ReturnType<typeof createSubtitleVerifier>;
+
+export function describeSync(sync: SyncMeasure): string {
+  const offset =
+    Math.abs(sync.offset) <= GOOD_SYNC_MAX_OFFSET_S
+      ? "fără decalaj"
+      : `decalaj ~${Math.abs(sync.offset).toFixed(1)} s`;
+  return `sincronizare măsurată: corelație ${sync.score.toFixed(2)}, ${offset}`;
+}

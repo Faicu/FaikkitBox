@@ -24,13 +24,15 @@ import {
   extractEpisodeKey,
   looksRomanian,
 } from "./subtitle-checks";
-import { createSubtitleVerifier } from "./subtitle-verify";
+import { createSubtitleVerifier, isWellSynced, type SyncMeasure } from "./subtitle-verify";
+import { SUBTITLE_SOURCE_LABELS } from "./subtitle-outcomes";
 import { decodeToUtf8Text } from "./subtitle-encoding";
 import { rankSubtitleCandidates } from "./subtitle-sources";
 import {
   handleTrackedSrt,
   handleSidecarSrt,
-  downloadAndWriteSubtitle,
+  fetchCandidateText,
+  writeChosenSubtitle,
   renameToNonRomanian,
 } from "./subtitle-apply";
 
@@ -185,7 +187,7 @@ export async function processMediaFile(
   let rejectedSidecar: string | null = null;
   if (await fileExists(sidecarAbsPath)) {
     const sidecarBuf = await readFile(sidecarAbsPath).catch(() => null);
-    const reason = sidecarBuf ? await verify(decodeToUtf8Text(sidecarBuf).text) : null;
+    const reason = sidecarBuf ? (await verify(decodeToUtf8Text(sidecarBuf).text)).reason : null;
     if (!reason) {
       const { outcome, detail } = await handleSidecarSrt(sidecarAbsPath);
       return { outcome, detail };
@@ -215,34 +217,69 @@ export async function processMediaFile(
     };
   }
 
-  // Pas 4 — descarcă și scrie prima variantă care trece verificarea
-  // conținutului. Una respinsă (altă limbă, alt episod) sau nedescărcabilă
-  // nu mai oprește căutarea: se trece la următoarea.
+  // Pas 4 — alege și scrie o variantă. Una respinsă (altă limbă, alt
+  // episod) sau nedescărcabilă nu oprește căutarea: se trece la următoarea.
+  //
+  // Când fișierul are o subtitrare încorporată de comparat, alegerea se face
+  // după sincronizarea măsurată, nu după numele release-ului: se compară
+  // variantele în ordine și câștigă cea mai bine sincronizată, cu oprire la
+  // prima practic perfectă (fiecare variantă OpenSubtitles consumă o
+  // descărcare). The Invite primise după nume o variantă BluRay decalată cu
+  // ~3 s, deși subs.ro avea una WEB-DL fără decalaj. Fără subtitrare de
+  // comparat rămâne prima variantă care trece verificarea.
   const destPath = join(savePath, mediaDir === "." ? "" : mediaDir, `${mediaBaseName}.ro.srt`);
   const failures: string[] = [];
   let allDownloadsFailed = true;
+  let best: {
+    candidate: (typeof candidates)[number];
+    fetched: { text: string; wasConverted: boolean };
+    sync: SyncMeasure | null;
+  } | null = null;
+  let compared = 0;
   for (const candidate of candidates) {
-    const result = await downloadAndWriteSubtitle(candidate, candidate.confident, destPath, verify);
-    if (result.outcome === "downloaded" || result.outcome === "downloaded_approximate") {
-      const skipped =
-        failures.length > 0 ? `; variante sărite înainte: ${failures.join("; ")}` : "";
-      return {
-        outcome: result.outcome,
-        detail: withRejected(result.detail + skipped),
-        release: candidate.release,
-        path: destPath,
-        matchedCriteria: result.matchedCriteria,
-        maxCriteria: result.maxCriteria,
-        source: result.source,
-      };
+    const label = `${SUBTITLE_SOURCE_LABELS[candidate.source]}, release „${candidate.release}"`;
+    const fetched = await fetchCandidateText(candidate);
+    if (!fetched) {
+      failures.push(`${label}: descărcarea a eșuat`);
+      continue;
     }
-    if (result.outcome !== "download_failed") allDownloadsFailed = false;
-    failures.push(result.detail);
+    allDownloadsFailed = false;
+    const check = await verify(fetched.text);
+    if (check.reason) {
+      console.warn(`[subtitles] ${label} respinsă: ${check.reason}`);
+      failures.push(`${label}: respinsă — ${check.reason}`);
+      continue;
+    }
+    if (!check.sync) {
+      best = { candidate, fetched, sync: null };
+      break;
+    }
+    compared++;
+    if (!best?.sync || check.sync.score > best.sync.score)
+      best = { candidate, fetched, sync: check.sync };
+    if (isWellSynced(check.sync)) break;
   }
+
+  if (!best) {
+    return {
+      outcome: allDownloadsFailed ? "download_failed" : "no_subtitle_found",
+      detail: withRejected(
+        `nicio variantă potrivită din ${candidates.length} încercate: ${failures.join("; ")}`,
+      ),
+    };
+  }
+  const result = await writeChosenSubtitle(best.candidate, destPath, best.fetched, best.sync);
+  const notes = [
+    compared > 1 ? `aleasă după sincronizare dintre ${compared} variante` : null,
+    failures.length > 0 ? `sărite: ${failures.join("; ")}` : null,
+  ].filter(Boolean);
   return {
-    outcome: allDownloadsFailed ? "download_failed" : "no_subtitle_found",
-    detail: withRejected(
-      `nicio variantă potrivită din ${candidates.length} încercate: ${failures.join("; ")}`,
-    ),
+    outcome: result.outcome,
+    detail: withRejected(result.detail + (notes.length ? `; ${notes.join("; ")}` : "")),
+    release: best.candidate.release,
+    path: destPath,
+    matchedCriteria: result.matchedCriteria,
+    maxCriteria: result.maxCriteria,
+    source: result.source,
   };
 }
