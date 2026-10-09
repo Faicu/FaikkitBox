@@ -1,24 +1,35 @@
 // ---------------------------------------------------------------------------
-// Pas 2 — alegerea celei mai bune subtitrări dintre cele două surse externe.
+// Pas 2 — ordonarea subtitrărilor găsite pe cele două surse externe.
 // Clienții propriu-ziși (căutare + descărcare HTTP) rămân separați, în
-// opensubtitles-client.ts și subsro-client.ts — aici doar comparăm
-// candidații deja obținuți de la ei și alegem câștigătorul, folosind
-// scoring-ul comun din release-scoring.ts.
+// opensubtitles-client.ts și subsro-client.ts — aici doar filtrăm și ordonăm
+// candidații deja obținuți de la ei, folosind scoring-ul comun din
+// release-scoring.ts. Pipeline-ul (subtitle-pipeline.ts) îi încearcă în
+// ordine, până când unul trece verificarea conținutului.
 // ---------------------------------------------------------------------------
 
+import { createHash } from "node:crypto";
 import { downloadSubtitle, type OpenSubtitlesResult } from "./opensubtitles-client";
-import { pickBestByRelease } from "./release-scoring";
+import { rankByRelease } from "./release-scoring";
 import { looksRomanian, osResultMatchesEpisode } from "./subtitle-checks";
 import { decodeToUtf8Text } from "./subtitle-encoding";
 import { subsRoEntryEpisodeKey, type SubsRoSrtEntry } from "./subsro-client";
 
-export interface SubtitleWinner {
+export interface SubtitleCandidate {
   source: "opensubtitles" | "subsro";
   release: string;
   getContent: () => Promise<Buffer | null>;
   matchedCriteria: number;
   maxCriteria: number;
+  score: number;
+  confident: boolean;
 }
+
+// Câte variante de pe OpenSubtitles încercăm cel mult pentru un fișier:
+// fiecare consumă o descărcare din limita zilnică a contului (20), iar una
+// respinsă la verificare e o descărcare pierdută. Variantele subs.ro nu
+// costă nimic în plus — arhivele sunt deja descărcate când ajungem aici —
+// deci se încearcă toate.
+const MAX_OS_ATTEMPTS = 3;
 
 // Pentru un episod (`episodeKey` nenul) rămân doar candidații care sunt
 // sigur ai lui — filtrul stă aici, nu la apelanți, ca să nu existe cale prin
@@ -26,45 +37,27 @@ export interface SubtitleWinner {
 // primiseră subtitrarea lui E01, vezi subtitle-verify.ts). Filmele
 // (`episodeKey` null) rămân nefiltrate.
 //
-// Alege cea mai bună subtitrare disponibilă pentru un fișier țintă, din
-// ambele surse. La scor egal câștigă subs.ro (decizia userului, 9 oct. 2026):
-// acolo traduc traducători români, iar pe OpenSubtitles apar și traduceri
-// automate nemarcate ca AI — MobLand S02E03 de la ss_valis avea exact
-// replicile și timpii englezei din fișier și notele muzicale netraduse, deși
-// subs.ro avea traducerea SubRip pentru același release. Înainte, subs.ro
-// era întrebat doar dacă OpenSubtitles n-avea o potrivire „confident", deci
-// nici nu ajungea în comparație. OpenSubtitles câștigă doar cu un release
-// strict mai apropiat de fișier.
-export async function resolveBestSubtitle(
+// Ordinea: scorul release-ului față de fișier, iar la scor egal subs.ro
+// înaintea OpenSubtitles (decizia userului, 9 oct. 2026): acolo traduc
+// traducători români, iar pe OpenSubtitles apar și traduceri automate
+// nemarcate ca AI — MobLand S02E03 de la ss_valis avea exact replicile și
+// timpii englezei din fișier și notele muzicale netraduse, deși subs.ro avea
+// traducerea SubRip pentru același release.
+export async function rankSubtitleCandidates(
   targetName: string,
   episodeKey: string | null,
   allOsCandidates: OpenSubtitlesResult[],
   getSubsRoCandidates: () => Promise<SubsRoSrtEntry[]>,
-): Promise<{ winner: SubtitleWinner; confident: boolean } | null> {
+): Promise<SubtitleCandidate[]> {
   const osCandidates = episodeKey
     ? allOsCandidates.filter((r) => osResultMatchesEpisode(r, episodeKey))
     : allOsCandidates;
-  let winner: SubtitleWinner | null = null;
-  let winnerScore = -1;
-  let winnerConfident = false;
-
-  const osBest = pickBestByRelease(
+  const osRanked = rankByRelease(
     osCandidates,
     (r) => r.release,
     (r) => r.downloadCount,
     targetName,
-  );
-  if (osBest) {
-    winner = {
-      source: "opensubtitles",
-      release: osBest.candidate.release,
-      getContent: () => downloadSubtitle(osBest.candidate.fileId),
-      matchedCriteria: osBest.matchedCriteria,
-      maxCriteria: osBest.maxCriteria,
-    };
-    winnerScore = osBest.score;
-    winnerConfident = osBest.confident;
-  }
+  ).slice(0, MAX_OS_ATTEMPTS);
 
   // Doar fișierele chiar în română: pe subs.ro unii uploaderi (în special
   // „R.") pun subtitrarea originală în engleză, marcată „en", cu numele exact
@@ -77,37 +70,55 @@ export async function resolveBestSubtitle(
       (!episodeKey || subsRoEntryEpisodeKey(e) === episodeKey) &&
       looksRomanian(decodeToUtf8Text(e.content).text),
   );
-  const subsRoBest = pickBestByRelease(
+  // Fișierele identice (aceeași traducere copiată în arhivă pentru fiecare
+  // release) contează o singură dată, sub numele cel mai apropiat de fișier —
+  // una respinsă ar fi respinsă la fel și sub alt nume.
+  const seen = new Set<string>();
+  const subsRoRanked = rankByRelease(
     subsRoCandidates,
     (e) => e.release,
     () => 0,
     targetName,
-  );
+  ).filter((r) => {
+    const hash = createHash("sha1").update(r.candidate.content).digest("hex");
+    if (seen.has(hash)) return false;
+    seen.add(hash);
+    return true;
+  });
+
+  const describe = (r: { score: number; confident: boolean }, release: string) =>
+    `scor ${r.score} (release „${release}", confident=${r.confident})`;
   console.log(
     `[subtitles] „${targetName}" — OpenSubtitles: ${
-      osBest
-        ? `scor ${osBest.score} (release „${osBest.candidate.release}", confident=${osBest.confident})`
-        : "fără candidați"
+      osRanked.length ? describe(osRanked[0], osRanked[0].candidate.release) : "fără candidați"
     }; subs.ro: ${
-      subsRoCandidates.length === 0
-        ? "0 candidați"
-        : subsRoBest
-          ? `scor ${subsRoBest.score} (release „${subsRoBest.candidate.release}", confident=${subsRoBest.confident}) din ${subsRoCandidates.length} candidați`
-          : `niciun candidat scorat din ${subsRoCandidates.length} primiți`
+      subsRoRanked.length
+        ? `${describe(subsRoRanked[0], subsRoRanked[0].candidate.release)}, ${subsRoRanked.length} variante distincte`
+        : "0 candidați"
     }`,
   );
-  if (subsRoBest && subsRoBest.score >= winnerScore) {
-    const chosenContent = subsRoBest.candidate.content;
-    winner = {
-      source: "subsro",
-      release: subsRoBest.candidate.release,
-      getContent: async () => chosenContent,
-      matchedCriteria: subsRoBest.matchedCriteria,
-      maxCriteria: subsRoBest.maxCriteria,
-    };
-    winnerConfident = subsRoBest.confident;
-  }
 
-  if (!winner) return null;
-  return { winner, confident: winnerConfident };
+  const all: SubtitleCandidate[] = [
+    ...subsRoRanked.map((r) => ({
+      source: "subsro" as const,
+      release: r.candidate.release,
+      getContent: async () => r.candidate.content,
+      matchedCriteria: r.matchedCriteria,
+      maxCriteria: r.maxCriteria,
+      score: r.score,
+      confident: r.confident,
+    })),
+    ...osRanked.map((r) => ({
+      source: "opensubtitles" as const,
+      release: r.candidate.release,
+      getContent: () => downloadSubtitle(r.candidate.fileId),
+      matchedCriteria: r.matchedCriteria,
+      maxCriteria: r.maxCriteria,
+      score: r.score,
+      confident: r.confident,
+    })),
+  ];
+  // Sortare stabilă: la scor egal rămâne subs.ro înainte, apoi ordinea din
+  // fiecare sursă.
+  return all.sort((a, b) => b.score - a.score);
 }

@@ -18,6 +18,11 @@ const execFileAsync = promisify(execFile);
 
 const API_BASE = "https://api.subs.ro/v1.0";
 
+// Traducători ignorați: „Ai" publică traduceri automate (Teenage Sex and Death
+// at Camp Miasma: „mănâncă brioșe tot timpul", „ce ar trebui sa fac") —
+// userul a cerut ca traducerile automate să nu fie folosite deloc.
+const IGNORED_TRANSLATORS = ["ai"];
+
 export interface SubsRoItem {
   id: number;
   title: string;
@@ -72,13 +77,15 @@ export async function searchSubsRo(imdbId: string): Promise<SubsRoItem[]> {
         language?: string;
       }>;
     };
-    const items = (data.items ?? []).map((it) => ({
-      id: it.id,
-      title: it.title ?? "",
-      description: it.description ?? "",
-      translator: it.translator ?? "",
-      language: it.language ?? "ro",
-    }));
+    const items = (data.items ?? [])
+      .map((it) => ({
+        id: it.id,
+        title: it.title ?? "",
+        description: it.description ?? "",
+        translator: it.translator ?? "",
+        language: it.language ?? "ro",
+      }))
+      .filter((it) => !IGNORED_TRANSLATORS.includes(it.translator.trim().toLowerCase()));
     console.log(`[subsro] căutare ${ttImdbId} → ${items.length} rezultat(e)`);
     return items;
   } catch (err) {

@@ -41,6 +41,7 @@ interface OsSubtitleAttributes {
   feature_details?: OsFeatureDetails;
   ai_translated?: boolean;
   machine_translated?: boolean;
+  uploader?: { name?: string };
 }
 
 interface OsSearchResponse {
@@ -66,6 +67,11 @@ function parseSearchResponse(data: OsSearchResponse): OpenSubtitlesResult[] {
     // doar o astfel de variantă — mai bine fără subtitrare câteva zile decât
     // cu una proastă care pare „găsită".
     if (attrs?.ai_translated || attrs?.machine_translated) continue;
+    // La fel tot ce urcă „os-auto", contul automat al OpenSubtitles — și
+    // traducerile lui nemarcate: la The Invite avea una de 2.234 de replici,
+    // fără legătură cu cele două traduceri românești de pe subs.ro (7–8% text
+    // comun), în stilul celor marcate AI ale aceluiași cont.
+    if (attrs?.uploader?.name?.toLowerCase() === "os-auto") continue;
     results.push({
       fileId,
       release: attrs?.release ?? "",

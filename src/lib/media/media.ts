@@ -372,15 +372,24 @@ export function updateMediaSubtitleStatus(
   const source = isDownload
     ? (downloadedSource ?? null)
     : (SUBTITLE_SOURCE_BY_OUTCOME[outcome] ?? null);
+  // O reverificare care n-a schimbat nimic pe disc (`srt_already_ok`) nu
+  // rescrie sursa: subtitrarea e tot cea de dinainte. Altfel un .srt adus de
+  // pe subs.ro devenea „.srt din torrent" la primul „Corectează" (S.W.A.T.
+  // Exiles S01E01, 9 oct. 2026). „.srt din torrent" se scrie doar dacă nu
+  // era nicio sursă înregistrată.
+  const keepSource = outcome === "srt_already_ok";
   getDb()
     .prepare(
-      `UPDATE media SET has_romanian_subtitle = ?, subtitle_source = ?, subtitle_detail = ?,
+      `UPDATE media SET has_romanian_subtitle = ?,
+       subtitle_source = CASE WHEN ? AND subtitle_source IS NOT NULL THEN subtitle_source ELSE ? END,
+       subtitle_detail = ?,
        has_romanian_audio = CASE WHEN ? = 1 THEN 1 ELSE has_romanian_audio END,
        subtitle_checked_at = datetime('now'), updated_at = datetime('now')
        WHERE torrent_hash = ?`,
     )
     .run(
       HAS_ROMANIAN_OUTCOMES.has(outcome) ? 1 : 0,
+      keepSource ? 1 : 0,
       source,
       detail,
       outcome === "audio_already_romanian" ? 1 : 0,

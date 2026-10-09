@@ -151,8 +151,19 @@ export function pickBestByRelease<T>(
   popularityOf: (c: T) => number,
   targetName: string,
 ): ScoredRelease<T> | null {
-  if (!candidates.length) return null;
+  return rankByRelease(candidates, releaseOf, popularityOf, targetName)[0] ?? null;
+}
 
+// Toți candidații, de la cel mai apropiat de fișier la cel mai îndepărtat
+// (scor, apoi popularitate; la egalitate deplină rămâne ordinea primită) —
+// pentru când primul e respins la verificarea conținutului și trebuie
+// încercat următorul (subtitle-pipeline.ts).
+export function rankByRelease<T>(
+  candidates: T[],
+  releaseOf: (c: T) => string,
+  popularityOf: (c: T) => number,
+  targetName: string,
+): ScoredRelease<T>[] {
   const target = extractTags(targetName);
   const maxCriteria = [
     target.resolution,
@@ -162,58 +173,38 @@ export function pickBestByRelease<T>(
     target.group,
   ].filter((t) => t !== null).length;
 
-  let best: T | null = null;
-  let bestScore = -1;
-  let bestConfident = false;
-  let bestMatchedCriteria = 0;
-  let bestPopularity = -Infinity;
-
-  for (const c of candidates) {
+  const scored = candidates.map((c, index) => {
     const tags = extractTags(releaseOf(c) || "");
-    let score = 0;
-    let matchedCriteria = 0;
     const resMatch = !!target.resolution && tags.resolution === target.resolution;
     const acqMatch = !!target.acquisition && tags.acquisition === target.acquisition;
     const platformMatch = !!target.platform && tags.platform === target.platform;
     const codecMatch = !!target.codec && tags.codec === target.codec;
     const groupMatch = !!target.group && tags.group === target.group;
-    if (resMatch) {
-      score += 3;
-      matchedCriteria++;
-    }
-    if (acqMatch) {
-      score += 2;
-      matchedCriteria++;
-    }
-    if (platformMatch) {
-      score += 2;
-      matchedCriteria++;
-    }
-    if (codecMatch) {
-      score += 1;
-      matchedCriteria++;
-    }
-    if (groupMatch) {
-      score += 2;
-      matchedCriteria++;
-    }
-
-    const popularity = popularityOf(c);
-    if (score > bestScore || (score === bestScore && popularity > bestPopularity)) {
-      best = c;
-      bestScore = score;
-      bestConfident = resMatch && acqMatch;
-      bestMatchedCriteria = matchedCriteria;
-      bestPopularity = popularity;
-    }
-  }
-
-  if (!best) return null;
-  return {
-    candidate: best,
-    score: bestScore,
-    confident: bestConfident,
-    matchedCriteria: bestMatchedCriteria,
+    const score =
+      (resMatch ? 3 : 0) +
+      (acqMatch ? 2 : 0) +
+      (platformMatch ? 2 : 0) +
+      (codecMatch ? 1 : 0) +
+      (groupMatch ? 2 : 0);
+    const matchedCriteria = [resMatch, acqMatch, platformMatch, codecMatch, groupMatch].filter(
+      Boolean,
+    ).length;
+    return {
+      candidate: c,
+      score,
+      confident: resMatch && acqMatch,
+      matchedCriteria,
+      maxCriteria,
+      popularity: popularityOf(c),
+      index,
+    };
+  });
+  scored.sort((a, b) => b.score - a.score || b.popularity - a.popularity || a.index - b.index);
+  return scored.map(({ candidate, score, confident, matchedCriteria, maxCriteria }) => ({
+    candidate,
+    score,
+    confident,
+    matchedCriteria,
     maxCriteria,
-  };
+  }));
 }

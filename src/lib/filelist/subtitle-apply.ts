@@ -19,13 +19,13 @@ import {
   type SubtitleOutcome,
   type SubtitleSource,
 } from "./subtitle-outcomes";
-import type { SubtitleWinner } from "./subtitle-sources";
+import type { SubtitleCandidate } from "./subtitle-sources";
 
-// Descarcă și scrie pe disc subtitrarea aleasă de resolveBestSubtitle,
+// Descarcă și scrie pe disc o subtitrare din rankSubtitleCandidates,
 // convertind la UTF-8 dacă e cazul. `verify` (subtitle-verify.ts) se uită la
 // conținut înainte de scriere — ce respinge nu ajunge pe disc.
 export async function downloadAndWriteSubtitle(
-  winner: SubtitleWinner,
+  winner: SubtitleCandidate,
   confident: boolean,
   destPath: string,
   verify: (text: string) => Promise<string | null>,
@@ -60,7 +60,7 @@ export async function downloadAndWriteSubtitle(
       );
       return {
         outcome: "no_subtitle_found",
-        detail: `cea mai bună potrivire, de pe ${sourceLabel} (release „${winner.release}"), a fost respinsă: ${rejected}`,
+        detail: `${sourceLabel}, release „${winner.release}": respinsă — ${rejected}`,
         matchedCriteria,
         maxCriteria,
         source: winner.source,

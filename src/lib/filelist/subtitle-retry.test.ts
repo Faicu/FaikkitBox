@@ -81,3 +81,27 @@ describe("listTorrentsDueForSubtitleRetry", () => {
     expect(due()).toEqual(["p"]);
   });
 });
+
+describe("updateMediaSubtitleStatus — reverificare fără schimbări", () => {
+  const source = () =>
+    (
+      db.prepare("SELECT subtitle_source FROM media WHERE torrent_hash = 'a'").get() as {
+        subtitle_source: string | null;
+      }
+    ).subtitle_source;
+
+  it("păstrează sursa de la descărcare (S.W.A.T. Exiles S01E01)", async () => {
+    const { updateMediaSubtitleStatus } = await import("../media/media");
+    add("a");
+    updateMediaSubtitleStatus("a", "downloaded", "de pe subs.ro", "subsro");
+    updateMediaSubtitleStatus("a", "srt_already_ok", "are deja .srt");
+    expect(source()).toBe("subsro");
+  });
+
+  it("fără sursă înregistrată, rămâne „.srt din torrent”", async () => {
+    const { updateMediaSubtitleStatus } = await import("../media/media");
+    add("a");
+    updateMediaSubtitleStatus("a", "srt_already_ok", "are deja .srt");
+    expect(source()).toBe("tracked_srt");
+  });
+});
