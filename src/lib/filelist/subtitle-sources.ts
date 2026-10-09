@@ -25,11 +25,15 @@ export interface SubtitleWinner {
 // primiseră subtitrarea lui E01, vezi subtitle-verify.ts). Filmele
 // (`episodeKey` null) rămân nefiltrate.
 //
-// Alege cea mai bună subtitrare disponibilă pentru un fișier țintă: întâi
-// OpenSubtitles, apoi (doar dacă OpenSubtitles n-a dat o potrivire
-// "confident" de sursă+rezoluție) subs.ro. `getSubsRoCandidates` e lazy —
-// apelat doar dacă chiar e nevoie, ca să nu facem căutări/descărcări subs.ro
-// inutile când OpenSubtitles are deja o potrivire bună.
+// Alege cea mai bună subtitrare disponibilă pentru un fișier țintă, din
+// ambele surse. La scor egal câștigă subs.ro (decizia userului, 9 oct. 2026):
+// acolo traduc traducători români, iar pe OpenSubtitles apar și traduceri
+// automate nemarcate ca AI — MobLand S02E03 de la ss_valis avea exact
+// replicile și timpii englezei din fișier și notele muzicale netraduse, deși
+// subs.ro avea traducerea SubRip pentru același release. Înainte, subs.ro
+// era întrebat doar dacă OpenSubtitles n-avea o potrivire „confident", deci
+// nici nu ajungea în comparație. OpenSubtitles câștigă doar cu un release
+// strict mai apropiat de fișier.
 export async function resolveBestSubtitle(
   targetName: string,
   episodeKey: string | null,
@@ -61,40 +65,38 @@ export async function resolveBestSubtitle(
     winnerConfident = osBest.confident;
   }
 
-  if (!winnerConfident) {
-    const subsRoCandidates = (await getSubsRoCandidates()).filter(
-      (e) => !episodeKey || subsRoEntryEpisodeKey(e) === episodeKey,
-    );
-    const subsRoBest = pickBestByRelease(
-      subsRoCandidates,
-      (e) => e.release,
-      () => 0,
-      targetName,
-    );
-    console.log(
-      `[subtitles] „${targetName}" — OpenSubtitles: ${
-        osBest
-          ? `scor ${osBest.score} (release „${osBest.candidate.release}", confident=${osBest.confident})`
-          : "fără candidați"
-      }; subs.ro: ${
-        subsRoCandidates.length === 0
-          ? "0 candidați"
-          : subsRoBest
-            ? `scor ${subsRoBest.score} (release „${subsRoBest.candidate.release}", confident=${subsRoBest.confident}) din ${subsRoCandidates.length} candidați`
-            : `niciun candidat scorat din ${subsRoCandidates.length} primiți`
-      }`,
-    );
-    if (subsRoBest && subsRoBest.score > winnerScore) {
-      const chosenContent = subsRoBest.candidate.content;
-      winner = {
-        source: "subsro",
-        release: subsRoBest.candidate.release,
-        getContent: async () => chosenContent,
-        matchedCriteria: subsRoBest.matchedCriteria,
-        maxCriteria: subsRoBest.maxCriteria,
-      };
-      winnerConfident = subsRoBest.confident;
-    }
+  const subsRoCandidates = (await getSubsRoCandidates()).filter(
+    (e) => !episodeKey || subsRoEntryEpisodeKey(e) === episodeKey,
+  );
+  const subsRoBest = pickBestByRelease(
+    subsRoCandidates,
+    (e) => e.release,
+    () => 0,
+    targetName,
+  );
+  console.log(
+    `[subtitles] „${targetName}" — OpenSubtitles: ${
+      osBest
+        ? `scor ${osBest.score} (release „${osBest.candidate.release}", confident=${osBest.confident})`
+        : "fără candidați"
+    }; subs.ro: ${
+      subsRoCandidates.length === 0
+        ? "0 candidați"
+        : subsRoBest
+          ? `scor ${subsRoBest.score} (release „${subsRoBest.candidate.release}", confident=${subsRoBest.confident}) din ${subsRoCandidates.length} candidați`
+          : `niciun candidat scorat din ${subsRoCandidates.length} primiți`
+    }`,
+  );
+  if (subsRoBest && subsRoBest.score >= winnerScore) {
+    const chosenContent = subsRoBest.candidate.content;
+    winner = {
+      source: "subsro",
+      release: subsRoBest.candidate.release,
+      getContent: async () => chosenContent,
+      matchedCriteria: subsRoBest.matchedCriteria,
+      maxCriteria: subsRoBest.maxCriteria,
+    };
+    winnerConfident = subsRoBest.confident;
   }
 
   if (!winner) return null;
