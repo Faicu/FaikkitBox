@@ -96,6 +96,13 @@ describe("updateMediaSubtitleStatus — reverificare fără schimbări", () => {
     updateMediaSubtitleStatus("a", "downloaded", "de pe subs.ro", "subsro");
     updateMediaSubtitleStatus("a", "srt_already_ok", "are deja .srt");
     expect(source()).toBe("subsro");
+    expect(
+      (
+        db.prepare("SELECT subtitle_detail FROM media WHERE torrent_hash = 'a'").get() as {
+          subtitle_detail: string;
+        }
+      ).subtitle_detail,
+    ).toBe("de pe subs.ro");
   });
 
   it("fără sursă înregistrată, rămâne „.srt din torrent”", async () => {

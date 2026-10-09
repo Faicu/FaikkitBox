@@ -77,6 +77,15 @@ export const SHORT_LABELS: Record<SubtitleOutcome, string> = {
 // e singurul care o zice.
 export type SubtitleSource = "opensubtitles" | "subsro";
 
+// Sincronizarea măsurată a subtitrării descărcate față de subtitrarea
+// încorporată în fișier (subtitle-verify.ts) — `good` e calculat acolo, aici
+// doar se afișează (fișierul ăsta e importat și din client).
+export interface SubtitleSync {
+  score: number;
+  offset: number;
+  good: boolean;
+}
+
 export const SUBTITLE_SOURCE_LABELS: Record<SubtitleSource, string> = {
   opensubtitles: "OpenSubtitles",
   subsro: "subs.ro",
@@ -93,12 +102,21 @@ export function shortLabelFor(
     source?: SubtitleSource | null;
     matchedCriteria?: number | null;
     maxCriteria?: number | null;
+    sync?: SubtitleSync | null;
   },
 ): string {
   const isDownload = outcome === "downloaded" || outcome === "downloaded_approximate";
   if (!isDownload) return SHORT_LABELS[outcome];
 
   const sourceNote = info?.source ? ` de pe ${SUBTITLE_SOURCE_LABELS[info.source]}` : "";
+  // Cu sincronizarea măsurată, ea spune cât de bună e subtitrarea — nu câte
+  // criterii din nume se potrivesc. The Invite apărea „(1/5)" deși era
+  // sincronizată perfect, doar pentru alt release (2160p) decât fișierul.
+  if (info?.sync) {
+    return info.sync.good
+      ? `subtitrare descărcată${sourceNote} (sincronizare verificată)`
+      : `subtitrare aproximativă descărcată${sourceNote} (decalaj ~${Math.abs(info.sync.offset).toFixed(1).replace(".", ",")} s) — verifică sincronizarea`;
+  }
   const { matchedCriteria: matched, maxCriteria: max } = info ?? {};
   const matchNote =
     matched != null && max != null && max > 0

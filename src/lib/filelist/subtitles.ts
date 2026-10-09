@@ -43,6 +43,7 @@ import {
   OK_OUTCOMES,
   shortLabelFor,
   type SubtitleSource,
+  type SubtitleSync,
 } from "./subtitle-outcomes";
 import { lookupTitleByImdbId, searchImdbIdByReleaseName } from "../tmdb/tmdb-title-lookup";
 import { MEDIA_EXTENSIONS, parseSeasonEpisode, extractEpisodeKey } from "./subtitle-checks";
@@ -85,6 +86,9 @@ export interface SubtitleRunItem {
   // Sursa externă (OpenSubtitles / subs.ro) de unde a venit subtitrarea —
   // prezentă doar la outcome-urile de descărcare.
   source?: SubtitleSource;
+  // Sincronizarea măsurată a subtitrării descărcate, când fișierul avea o
+  // subtitrare încorporată de comparat.
+  sync?: SubtitleSync;
 }
 
 function item(
@@ -98,6 +102,7 @@ function item(
     matchedCriteria?: number;
     maxCriteria?: number;
     source?: SubtitleSource;
+    sync?: SubtitleSync;
   },
 ): SubtitleRunItem {
   return { torrentName, displayTitle, outcome, detail, ...extra };
@@ -231,6 +236,7 @@ export async function ensureRomanianSubtitle(
     matchedCriteria: result.matchedCriteria,
     maxCriteria: result.maxCriteria,
     source: result.source,
+    sync: result.sync,
   });
 }
 
@@ -468,6 +474,7 @@ export async function logSubtitleRun(
           source: items[0].source,
           matchedCriteria: items[0].matchedCriteria,
           maxCriteria: items[0].maxCriteria,
+          sync: items[0].sync,
         })}`
       : `Backfill subtitrări: ${items.length} verificate — ${corrected} corectate, ${ok} deja ok, ${rest} sărite/eșuate`;
 
@@ -499,6 +506,9 @@ export async function logSubtitleRun(
           matchedCriteria: it.matchedCriteria,
           maxCriteria: it.maxCriteria,
           source: it.source,
+          syncScore: it.sync?.score,
+          syncOffset: it.sync?.offset,
+          syncGood: it.sync?.good,
         })),
       },
       { skipPush },

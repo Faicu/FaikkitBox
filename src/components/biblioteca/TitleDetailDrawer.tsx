@@ -704,17 +704,28 @@ export function TitleDetailDrawer({
                         d.torrentHash && ["Torrent hash", d.torrentHash],
                       ]
                         .filter((row): row is [string, string] => !!row)
-                        .map(([label, value]) => (
-                          <div key={label} className="flex justify-between gap-3">
-                            <span className="shrink-0 text-muted-foreground">{label}</span>
-                            <span
-                              className="min-w-0 truncate text-right text-foreground"
-                              title={value}
-                            >
-                              {value}
-                            </span>
-                          </div>
-                        ))}
+                        // Valorile se afișează întregi, nu tăiate. Cele lungi
+                        // (detaliul subtitrării, numele torrentului) trec sub
+                        // etichetă, pe toată lățimea, aliniate la stânga — un
+                        // paragraf aliniat la dreapta pe 4-5 rânduri se citește
+                        // greu. `wrap-anywhere` rupe și șirurile fără spații
+                        // (hash, nume de release cu puncte) ca să nu iasă din
+                        // chenar.
+                        .map(([label, value]) =>
+                          value.length > 40 ? (
+                            <div key={label} className="flex flex-col gap-0.5">
+                              <span className="text-muted-foreground">{label}</span>
+                              <span className="wrap-anywhere text-foreground">{value}</span>
+                            </div>
+                          ) : (
+                            <div key={label} className="flex justify-between gap-3">
+                              <span className="shrink-0 text-muted-foreground">{label}</span>
+                              <span className="min-w-0 wrap-anywhere text-right text-foreground">
+                                {value}
+                              </span>
+                            </div>
+                          ),
+                        )}
                     </div>
                   )}
                 </div>

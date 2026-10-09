@@ -16,7 +16,7 @@ import { readFile, rename } from "node:fs/promises";
 import type { QbitFileInfo } from "../qbit-client";
 import type { OpenSubtitlesResult } from "./opensubtitles-client";
 import type { SubsRoSrtEntry } from "./subsro-client";
-import type { SubtitleOutcome, SubtitleSource } from "./subtitle-outcomes";
+import type { SubtitleOutcome, SubtitleSource, SubtitleSync } from "./subtitle-outcomes";
 import {
   fileExists,
   hasEmbeddedRomanianSubtitle,
@@ -72,6 +72,7 @@ export interface ProcessMediaFileResult {
   maxCriteria?: number;
   // Sursa externă reală a subtitrării descărcate (outcome-ul nu o mai spune).
   source?: SubtitleSource;
+  sync?: SubtitleSync;
 }
 
 export async function processMediaFile(
@@ -281,5 +282,6 @@ export async function processMediaFile(
     matchedCriteria: result.matchedCriteria,
     maxCriteria: result.maxCriteria,
     source: result.source,
+    sync: best.sync ? { ...best.sync, good: isWellSynced(best.sync) } : undefined,
   };
 }
