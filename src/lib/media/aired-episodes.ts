@@ -36,7 +36,9 @@ export function airedEpisodeKeys(
   const tomorrow = nextDay(opts.today);
   return schema.flatMap((s) =>
     s.episodes
-      .filter((e) => e.aired || (opts.includeUpcoming && e.airDate != null && e.airDate <= tomorrow))
+      .filter(
+        (e) => e.aired || (opts.includeUpcoming && e.airDate != null && e.airDate <= tomorrow),
+      )
       .map((e) => ({ season: s.seasonNumber, episode: e.episodeNum })),
   );
 }

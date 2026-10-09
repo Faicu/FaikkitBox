@@ -31,11 +31,15 @@ describe("airedEpisodeKeys", () => {
 
   it("episodul de mâine intră și el — Amazon îl publică cu o zi înainte (MobLand S02E04)", () => {
     expect(
-      airedEpisodeKeys(schema, { includeUpcoming: true, today: "2026-09-30" }).map((k) => k.episode),
+      airedEpisodeKeys(schema, { includeUpcoming: true, today: "2026-09-30" }).map(
+        (k) => k.episode,
+      ),
     ).toEqual([1, 2, 3]);
     // Trecerea peste sfârșit de lună.
     expect(
-      airedEpisodeKeys(schema, { includeUpcoming: true, today: "2026-10-01" }).map((k) => k.episode),
+      airedEpisodeKeys(schema, { includeUpcoming: true, today: "2026-10-01" }).map(
+        (k) => k.episode,
+      ),
     ).toEqual([1, 2, 3, 4]);
   });
 
