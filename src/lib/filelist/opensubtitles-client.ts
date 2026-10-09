@@ -17,6 +17,9 @@ export interface OpenSubtitlesResult {
   // pentru a asocia fiecare rezultat cu episodul corect.
   seasonNumber?: number;
   episodeNumber?: number;
+  // Numele fișierului .srt încărcat — a doua sursă pentru SxxExx, pe lângă
+  // release (vezi osResultMatchesEpisode).
+  fileName?: string;
 }
 
 interface OsSubtitleFile {
@@ -36,6 +39,8 @@ interface OsSubtitleAttributes {
   fps?: number;
   files?: OsSubtitleFile[];
   feature_details?: OsFeatureDetails;
+  ai_translated?: boolean;
+  machine_translated?: boolean;
 }
 
 interface OsSearchResponse {
@@ -49,6 +54,11 @@ function parseSearchResponse(data: OsSearchResponse): OpenSubtitlesResult[] {
     const attrs = item.attributes;
     const fileId = attrs?.files?.[0]?.file_id;
     if (!fileId) continue;
+    // Traducerile automate (AI sau mașină) sunt ignorate, la cererea
+    // userului (9 oct. 2026): româna lor e stângace, iar MobLand S02E04 avea
+    // doar o astfel de variantă — mai bine fără subtitrare câteva zile decât
+    // cu una proastă care pare „găsită".
+    if (attrs?.ai_translated || attrs?.machine_translated) continue;
     results.push({
       fileId,
       release: attrs?.release ?? "",
@@ -57,6 +67,7 @@ function parseSearchResponse(data: OsSearchResponse): OpenSubtitlesResult[] {
       fps: attrs?.fps,
       seasonNumber: attrs?.feature_details?.season_number,
       episodeNumber: attrs?.feature_details?.episode_number,
+      fileName: attrs?.files?.[0]?.file_name,
     });
   }
   return results;
@@ -97,21 +108,14 @@ async function getAuthToken(): Promise<string | null> {
   }
 }
 
-// Caută subtitrări pentru un IMDb id într-o limbă dată (implicit română).
-// Returnează listă goală dacă lipsește cheia API sau la orice eroare —
-// fail-soft, la fel ca restul integrărilor externe din proiect.
-export async function searchSubtitles(
-  imdbId: string,
-  language = "ro",
-): Promise<OpenSubtitlesResult[]> {
+// Parametrii în ordine alfabetică: altfel API-ul răspunde cu 301 către
+// varianta canonică (sortată) și fiecare căutare costă două cereri.
+async function osSearch(params: Record<string, string>): Promise<OpenSubtitlesResult[]> {
   const key = apiKey();
   if (!key) return [];
-
-  const cleanImdb = imdbId.replace(/^tt/i, "");
-  const params = new URLSearchParams({ imdb_id: cleanImdb, languages: language });
-
+  const query = new URLSearchParams(Object.entries(params).sort(([a], [b]) => a.localeCompare(b)));
   try {
-    const res = await fetch(`${API_BASE}/subtitles?${params.toString()}`, {
+    const res = await fetch(`${API_BASE}/subtitles?${query.toString()}`, {
       headers: { "Api-Key": key, Accept: "application/json" },
       signal: AbortSignal.timeout(15_000),
     });
@@ -120,6 +124,40 @@ export async function searchSubtitles(
   } catch {
     return [];
   }
+}
+
+// Caută subtitrări pentru un IMDb id într-o limbă dată (implicit română).
+// Returnează listă goală dacă lipsește cheia API sau la orice eroare —
+// fail-soft, la fel ca restul integrărilor externe din proiect.
+export async function searchSubtitles(
+  imdbId: string,
+  language = "ro",
+): Promise<OpenSubtitlesResult[]> {
+  return osSearch({ imdb_id: imdbId.replace(/^tt/i, ""), languages: language });
+}
+
+// Caută subtitrările unui singur episod. `imdb_id` cu id-ul SERIALULUI
+// întoarce mereu 0 rezultate (OpenSubtitles îl leagă doar de episoade/filme),
+// deci până pe 9 oct. 2026 niciun episod descărcat individual nu primea
+// subtitrare de pe OpenSubtitles — MobLand S02E03 avea una făcută de om,
+// exact pentru release-ul nostru, și n-a fost văzută. Episodul se caută prin
+// serial (`parent_imdb_id`) + sezon + episod; dacă id-ul primit e chiar al
+// episodului (torrent adăugat manual, IMDb găsit după nume), cădem pe
+// căutarea directă.
+export async function searchEpisodeSubtitles(
+  imdbId: string,
+  season: number,
+  episode: number,
+  language = "ro",
+): Promise<OpenSubtitlesResult[]> {
+  const cleanImdb = imdbId.replace(/^tt/i, "");
+  const byShow = await osSearch({
+    parent_imdb_id: cleanImdb,
+    season_number: String(season),
+    episode_number: String(episode),
+    languages: language,
+  });
+  return byShow.length > 0 ? byShow : searchSubtitles(imdbId, language);
 }
 
 // Caută subtitrări pentru TOT un sezon al unui serial, într-un singur apel —
@@ -132,26 +170,11 @@ export async function searchSeasonSubtitles(
   seasonNumber: number,
   language = "ro",
 ): Promise<OpenSubtitlesResult[]> {
-  const key = apiKey();
-  if (!key) return [];
-
-  const cleanImdb = showImdbId.replace(/^tt/i, "");
-  const params = new URLSearchParams({
-    parent_imdb_id: cleanImdb,
+  return osSearch({
+    parent_imdb_id: showImdbId.replace(/^tt/i, ""),
     season_number: String(seasonNumber),
     languages: language,
   });
-
-  try {
-    const res = await fetch(`${API_BASE}/subtitles?${params.toString()}`, {
-      headers: { "Api-Key": key, Accept: "application/json" },
-      signal: AbortSignal.timeout(15_000),
-    });
-    if (!res.ok) return [];
-    return parseSearchResponse((await res.json()) as OsSearchResponse);
-  } catch {
-    return [];
-  }
 }
 
 // Descarcă conținutul unei subtitrări identificate prin fileId (returnat de

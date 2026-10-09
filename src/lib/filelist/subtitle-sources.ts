@@ -8,6 +8,8 @@
 
 import { downloadSubtitle, type OpenSubtitlesResult } from "./opensubtitles-client";
 import { pickBestByRelease } from "./release-scoring";
+import { osResultMatchesEpisode } from "./subtitle-checks";
+import { subsRoEntryEpisodeKey, type SubsRoSrtEntry } from "./subsro-client";
 
 export interface SubtitleWinner {
   source: "opensubtitles" | "subsro";
@@ -17,6 +19,12 @@ export interface SubtitleWinner {
   maxCriteria: number;
 }
 
+// Pentru un episod (`episodeKey` nenul) rămân doar candidații care sunt
+// sigur ai lui — filtrul stă aici, nu la apelanți, ca să nu existe cale prin
+// care o subtitrare a altui episod să ajungă la scorare (MobLand S02E02/E03
+// primiseră subtitrarea lui E01, vezi subtitle-verify.ts). Filmele
+// (`episodeKey` null) rămân nefiltrate.
+//
 // Alege cea mai bună subtitrare disponibilă pentru un fișier țintă: întâi
 // OpenSubtitles, apoi (doar dacă OpenSubtitles n-a dat o potrivire
 // "confident" de sursă+rezoluție) subs.ro. `getSubsRoCandidates` e lazy —
@@ -24,9 +32,13 @@ export interface SubtitleWinner {
 // inutile când OpenSubtitles are deja o potrivire bună.
 export async function resolveBestSubtitle(
   targetName: string,
-  osCandidates: OpenSubtitlesResult[],
-  getSubsRoCandidates: () => Promise<Array<{ release: string; content: Buffer }>>,
+  episodeKey: string | null,
+  allOsCandidates: OpenSubtitlesResult[],
+  getSubsRoCandidates: () => Promise<SubsRoSrtEntry[]>,
 ): Promise<{ winner: SubtitleWinner; confident: boolean } | null> {
+  const osCandidates = episodeKey
+    ? allOsCandidates.filter((r) => osResultMatchesEpisode(r, episodeKey))
+    : allOsCandidates;
   let winner: SubtitleWinner | null = null;
   let winnerScore = -1;
   let winnerConfident = false;
@@ -50,7 +62,9 @@ export async function resolveBestSubtitle(
   }
 
   if (!winnerConfident) {
-    const subsRoCandidates = await getSubsRoCandidates();
+    const subsRoCandidates = (await getSubsRoCandidates()).filter(
+      (e) => !episodeKey || subsRoEntryEpisodeKey(e) === episodeKey,
+    );
     const subsRoBest = pickBestByRelease(
       subsRoCandidates,
       (e) => e.release,

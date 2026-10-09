@@ -12,6 +12,7 @@ import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, sep } from "node:path";
 import { promisify } from "node:util";
+import { agreedEpisodeKey, extractEpisodeKey } from "./subtitle-checks";
 
 const execFileAsync = promisify(execFile);
 
@@ -91,7 +92,10 @@ export async function searchSubsRo(imdbId: string): Promise<SubsRoItem[]> {
 export function subsRoItemMatchesSeason(item: SubsRoItem, seasonNumber: number): boolean {
   const text = `${item.title} ${item.description}`;
   const m = text.match(/sezon(?:ul)?\s+0*(\d{1,3})\b/i);
-  return m ? Number(m[1]) === seasonNumber : false;
+  if (m) return Number(m[1]) === seasonNumber;
+  // Și „S02E04" / „S02" în titlu, pentru arhivele fără „Sezonul N".
+  const se = text.match(/\bS(\d{1,3})(?:E\d{1,3})?\b/i);
+  return se ? Number(se[1]) === seasonNumber : false;
 }
 
 // Descarcă arhiva .zip a unei subtitrări (bytes bruți). null la orice eroare.
@@ -125,6 +129,10 @@ export interface SubsRoSrtEntry {
   // lansării exacte (ex. "Disclosure.Day.2026.1080p.MA.WEB-DL...-BYNDR"),
   // folosit pentru scorare la fel ca "release" de la OpenSubtitles.
   release: string;
+  // Numele fișierului din arhivă (fără folder și extensie) — reperul de
+  // episod: un folder „Serial.S02E01-E04" nu spune nimic despre fișierul din
+  // el, numele fișierului da (vezi subsRoEntryEpisodeKey).
+  fileName: string;
   content: Buffer;
 }
 
@@ -143,10 +151,20 @@ function isRarArchive(buf: Buffer): boolean {
 // scoring-ul din pickBestByRelease nu vedea niciun tag pe acest candidat și
 // nu-l alegea niciodată, chiar când era o potrivire perfectă (The Crown S02,
 // 2026-09-02) — de-asta combinăm folder + nume fișier.
-function releaseFromEntryPath(entryPath: string): string {
+function releaseFromEntryPath(entryPath: string): { release: string; fileName: string } {
   const fileName = (entryPath.split("/").pop() ?? entryPath).replace(/\.srt$/i, "");
   const dirName = entryPath.includes("/") ? entryPath.slice(0, entryPath.lastIndexOf("/")) : "";
-  return dirName ? `${dirName} ${fileName}` : fileName;
+  return { release: dirName ? `${dirName} ${fileName}` : fileName, fileName };
+}
+
+// Episodul unei subtitrări din arhivă: din numele fișierului; folderul
+// contează doar dacă fișierul n-are SxxExx deloc („Episode.rum.srt") și
+// folderul numește un singur episod.
+export function subsRoEntryEpisodeKey(entry: { release: string; fileName: string }): string | null {
+  return (
+    agreedEpisodeKey([entry.fileName]) ??
+    (extractEpisodeKey(entry.fileName) == null ? agreedEpisodeKey([entry.release]) : null)
+  );
 }
 
 function extractSrtEntriesFromZip(buf: Buffer): SubsRoSrtEntry[] {
@@ -155,7 +173,7 @@ function extractSrtEntriesFromZip(buf: Buffer): SubsRoSrtEntry[] {
     .getEntries()
     .filter((e) => !e.isDirectory && e.entryName.toLowerCase().endsWith(".srt"))
     .map((e) => ({
-      release: releaseFromEntryPath(e.entryName),
+      ...releaseFromEntryPath(e.entryName),
       content: e.getData(),
     }));
 }
@@ -176,7 +194,7 @@ async function extractSrtEntriesFromRar(buf: Buffer): Promise<SubsRoSrtEntry[]> 
     for (const name of names) {
       if (!name.toLowerCase().endsWith(".srt")) continue;
       entries.push({
-        release: releaseFromEntryPath(name.split(sep).join("/")),
+        ...releaseFromEntryPath(name.split(sep).join("/")),
         content: await readFile(join(dir, name)),
       });
     }

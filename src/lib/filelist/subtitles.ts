@@ -26,6 +26,7 @@ import { join, dirname, basename, extname } from "node:path";
 import { qbitGet, qbitListFiles, type QbitFileInfo } from "../qbit-client";
 import {
   searchSubtitles,
+  searchEpisodeSubtitles,
   searchSeasonSubtitles,
   type OpenSubtitlesResult,
 } from "./opensubtitles-client";
@@ -34,6 +35,7 @@ import {
   downloadSubsRoZip,
   extractSrtEntries,
   subsRoItemMatchesSeason,
+  type SubsRoSrtEntry,
 } from "./subsro-client";
 import {
   type SubtitleOutcome,
@@ -43,12 +45,7 @@ import {
   type SubtitleSource,
 } from "./subtitle-outcomes";
 import { lookupTitleByImdbId, searchImdbIdByReleaseName } from "../tmdb/tmdb-title-lookup";
-import {
-  MEDIA_EXTENSIONS,
-  parseSeasonEpisode,
-  extractEpisodeKey,
-  osResultMatchesEpisode,
-} from "./subtitle-checks";
+import { MEDIA_EXTENSIONS, parseSeasonEpisode, extractEpisodeKey } from "./subtitle-checks";
 import { processMediaFile } from "./subtitle-pipeline";
 
 export type { SubtitleOutcome };
@@ -183,11 +180,14 @@ export async function ensureRomanianSubtitle(
 
   const matchingSrtFiles = downloadedFiles.filter((f) => f.name.toLowerCase().endsWith(".srt"));
 
-  // Episod individual: căutările după IMDb id-ul serialului întorc subtitrări
-  // pentru orice episod (S.W.A.T. Exiles S01E02 a primit subtitrarea lui
-  // S01E01, 2 oct 2026), deci păstrăm doar candidații episodului nostru — la
-  // fel ca în processSeasonPack. Filmele (fără SxxExx) rămân nefiltrate.
-  const episodeKey = extractEpisodeKey(mediaFile.name);
+  // Episod individual: episodul vine din numele torrentului, iar fișierul
+  // din el trebuie să fie același (verificat în processMediaFile). Toți
+  // candidații externi trec prin filtrul de episod din resolveBestSubtitle —
+  // S.W.A.T. Exiles S01E02 primise subtitrarea lui S01E01 (2 oct 2026),
+  // MobLand S02E02/E03 pe a lui S02E01. Filmele (fără SxxExx) rămân
+  // nefiltrate.
+  const episode = parseSeasonEpisode(torrentName) ?? parseSeasonEpisode(mediaFile.name);
+  const episodeKey = extractEpisodeKey(torrentName);
 
   const result = await processMediaFile({
     mediaFile,
@@ -198,22 +198,30 @@ export async function ensureRomanianSubtitle(
     qbitUser,
     qbitPass,
     searchTargetName: torrentName,
-    getOsCandidates: async () => {
-      const results = await searchSubtitles(imdbId, "ro");
-      return episodeKey ? results.filter((r) => osResultMatchesEpisode(r, episodeKey)) : results;
-    },
+    expectedEpisodeKey: episodeKey,
+    getOsCandidates: () =>
+      episode
+        ? searchEpisodeSubtitles(imdbId, episode.season, episode.episode, "ro")
+        : searchSubtitles(imdbId, "ro"),
     getSubsRoCandidates: async () => {
       // O arhivă subs.ro poate conține mai multe variante (una per
       // sursă/rezoluție), fiecare tratată ca un candidat separat, scorat la fel.
+      // La un episod, arhivele sezonului lui au întâietate — altfel, la un
+      // serial cu multe sezoane, primele arhive puteau fi toate ale altor
+      // sezoane și episodul rămânea fără subtitrare.
       const subsRoItems = await searchSubsRo(imdbId);
-      const zipEntries: Array<{ release: string; content: Buffer }> = [];
-      for (const it of subsRoItems.slice(0, 3)) {
+      const ordered = episode
+        ? [
+            ...subsRoItems.filter((it) => subsRoItemMatchesSeason(it, episode.season)),
+            ...subsRoItems.filter((it) => !subsRoItemMatchesSeason(it, episode.season)),
+          ]
+        : subsRoItems;
+      const zipEntries: SubsRoSrtEntry[] = [];
+      for (const it of ordered.slice(0, episode ? 6 : 3)) {
         const zipBuf = await downloadSubsRoZip(it.id);
         if (zipBuf) zipEntries.push(...(await extractSrtEntries(zipBuf)));
       }
-      return episodeKey
-        ? zipEntries.filter((e) => extractEpisodeKey(e.release) === episodeKey)
-        : zipEntries;
+      return zipEntries;
     },
   });
 
@@ -361,8 +369,8 @@ async function processSeasonPack(params: ProcessSeasonPackParams): Promise<Subti
   // Rezultatele din toate pachetele sunt puse laolaltă și filtrate per
   // episod mai jos — un episod care nu apare în niciunul rămâne fără
   // subtitrare de pe subs.ro (raportat explicit, nu blochează restul).
-  let subsRoEntries: Array<{ release: string; content: Buffer }> | null = null;
-  async function getSubsRoEntries(): Promise<Array<{ release: string; content: Buffer }>> {
+  let subsRoEntries: SubsRoSrtEntry[] | null = null;
+  async function getSubsRoEntries(): Promise<SubsRoSrtEntry[]> {
     if (subsRoEntries) return subsRoEntries;
     subsRoEntries = [];
     const items = await searchSubsRo(imdbId!);
@@ -405,10 +413,10 @@ async function processSeasonPack(params: ProcessSeasonPackParams): Promise<Subti
       qbitUser,
       qbitPass,
       searchTargetName: mediaFile.name,
-      getOsCandidates: async () =>
-        (await getOsSeasonResults()).filter((r) => osResultMatchesEpisode(r, episodeKey)),
-      getSubsRoCandidates: async () =>
-        (await getSubsRoEntries()).filter((e) => extractEpisodeKey(e.release) === episodeKey),
+      expectedEpisodeKey: episodeKey,
+      // Filtrul pe episod e în resolveBestSubtitle.
+      getOsCandidates: getOsSeasonResults,
+      getSubsRoCandidates: getSubsRoEntries,
     });
 
     episodeResults.push({ episodeKey, outcome: result.outcome, detail: result.detail });

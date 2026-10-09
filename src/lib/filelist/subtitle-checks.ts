@@ -38,17 +38,30 @@ export function extractEpisodeKey(name: string): string | null {
   return se ? episodeKeyFrom(se.season, se.episode) : null;
 }
 
-// Un candidat OpenSubtitles e pentru episodul `episodeKey`? Preferă
-// sezon/episod din metadatele API-ului; fără ele, cade pe SxxExx din release.
-// Un candidat fără niciun reper de episod e respins — mai bine fără
-// subtitrare decât cu a altui episod.
+// Episodul pe care îl indică TOATE reperele unui candidat (metadatele API-ului,
+// numele release-ului, numele fișierului). null dacă niciunul nu are SxxExx
+// sau dacă se contrazic — un upload etichetat S02E04 dar cu fișierul
+// „…S02E01…" e o subtitrare de încredere zero, oricare ar fi adevărul.
+export function agreedEpisodeKey(signals: Array<string | null | undefined>): string | null {
+  const keys = new Set(
+    signals.map((s) => (s ? extractEpisodeKey(s) : null)).filter((k): k is string => k != null),
+  );
+  return keys.size === 1 ? [...keys][0] : null;
+}
+
+// Un candidat OpenSubtitles e pentru episodul `episodeKey`? Metadatele
+// API-ului, release-ul și numele fișierului trebuie să fie de acord (cele
+// care au SxxExx). Un candidat fără niciun reper de episod e respins — mai
+// bine fără subtitrare decât cu a altui episod.
 export function osResultMatchesEpisode(
-  r: { release: string; seasonNumber?: number; episodeNumber?: number },
+  r: { release: string; seasonNumber?: number; episodeNumber?: number; fileName?: string },
   episodeKey: string,
 ): boolean {
-  if (r.seasonNumber == null || r.episodeNumber == null)
-    return extractEpisodeKey(r.release) === episodeKey;
-  return episodeKeyFrom(r.seasonNumber, r.episodeNumber) === episodeKey;
+  const fromApi =
+    r.seasonNumber != null && r.episodeNumber != null
+      ? episodeKeyFrom(r.seasonNumber, r.episodeNumber)
+      : null;
+  return agreedEpisodeKey([fromApi, r.release, r.fileName]) === episodeKey;
 }
 
 // Verificare de limbă pentru un .srt deja bundle-uit în torrent — NU putem

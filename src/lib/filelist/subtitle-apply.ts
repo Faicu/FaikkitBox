@@ -22,11 +22,13 @@ import {
 import type { SubtitleWinner } from "./subtitle-sources";
 
 // Descarcă și scrie pe disc subtitrarea aleasă de resolveBestSubtitle,
-// convertind la UTF-8 dacă e cazul.
+// convertind la UTF-8 dacă e cazul. `verify` (subtitle-verify.ts) se uită la
+// conținut înainte de scriere — ce respinge nu ajunge pe disc.
 export async function downloadAndWriteSubtitle(
   winner: SubtitleWinner,
   confident: boolean,
   destPath: string,
+  verify: (text: string) => Promise<string | null>,
 ): Promise<{
   outcome: SubtitleOutcome;
   detail: string;
@@ -51,6 +53,19 @@ export async function downloadAndWriteSubtitle(
 
   try {
     const { text, wasConverted } = decodeToUtf8Text(content);
+    const rejected = await verify(text);
+    if (rejected) {
+      console.warn(
+        `[subtitles] subtitrare ${sourceLabel} respinsă (${rejected}), release „${winner.release}"`,
+      );
+      return {
+        outcome: "no_subtitle_found",
+        detail: `cea mai bună potrivire, de pe ${sourceLabel} (release „${winner.release}"), a fost respinsă: ${rejected}`,
+        matchedCriteria,
+        maxCriteria,
+        source: winner.source,
+      };
+    }
     await writeFileWithRetry(destPath, text);
     const encodingNote = wasConverted ? " (encoding convertit la UTF-8)" : "";
     if (confident) {
