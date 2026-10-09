@@ -177,13 +177,19 @@ function formatTime(s: number): string {
   return `${m}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 }
 
-// Sincronizare „bună": aproape aceleași momente de vorbire și practic fără
-// decalaj. Peste ea nu mai căutăm altă variantă (subtitle-pipeline.ts), iar
+// Sincronizare „bună": fără decalaj și cu momentele de vorbire potrivite.
+// Peste ea nu mai căutăm altă variantă (subtitle-pipeline.ts), iar
 // subtitrarea e raportată ca potrivire sigură, nu „aproximativă" — oricât de
 // diferit ar fi numele release-ului. The Invite: varianta cptclaudiu, pentru
 // alt release (2160p), dădea 0,91 fără decalaj; cea aleasă după nume
 // (BluRay 1080p) 0,53 cu ~3 s decalaj.
-const GOOD_SYNC_SCORE = 0.8;
+//
+// Pragul de corelație e calibrat pe auditul bibliotecii (9 oct. 2026):
+// traducerile făcute de om, sincronizate, dau 0,62–1,00 — cele sub 0,8 doar
+// fiindcă traducătorul unește sau taie replici. Ce contează e decalajul:
+// variantele pentru alt montaj (The Rookie S08E14 de la Amazon pe un fișier
+// HULU) ieșeau 0,67 cu 2 s decalaj, crescând spre final.
+const GOOD_SYNC_SCORE = 0.6;
 const GOOD_SYNC_MAX_OFFSET_S = 0.5;
 
 export interface SyncMeasure {
@@ -234,7 +240,7 @@ export function createSubtitleVerifier(mediaAbsPath: string) {
     const sync = speechCorrelation(timing.intervals, ref.intervals);
     if (sync.score < MIN_SPEECH_CORRELATION) {
       return reject(
-        `momentele de vorbire nu se potrivesc cu subtitrarea încorporată în fișier (corelație ${sync.score.toFixed(2)}, minimum ${MIN_SPEECH_CORRELATION}) — e pentru alt episod`,
+        `momentele de vorbire nu se potrivesc cu subtitrarea încorporată în fișier (corelație ${sync.score.toFixed(2)}, minimum ${MIN_SPEECH_CORRELATION}) — e pentru alt episod sau altă versiune`,
       );
     }
     return { reason: null, sync };
