@@ -70,8 +70,10 @@ export function osResultMatchesEpisode(
 // redenumită orbește în .ro.srt și afișată greșit în Plex ca română).
 // Diacriticele (ă/â/î/ș/ț) sunt un semnal aproape sigur — engleza nu le are
 // niciodată; cuvinte uzuale RO sunt rezervă pentru fișiere fără diacritice.
+// Și ş/ţ cu sedilă: subtitrările mai vechi (și unii traducători de azi, ex.
+// Snake_Eyes la Fall 2) le folosesc în locul celor cu virgulă.
 export function looksRomanian(text: string): boolean {
-  const diacritics = (text.match(/[ăâîșțĂÂÎȘȚ]/g) ?? []).length;
+  const diacritics = (text.match(/[ăâîșțşţĂÂÎȘȚŞŢ]/g) ?? []).length;
   if (diacritics >= 5) return true;
   const lower = ` ${text.toLowerCase()} `;
   const stopwords = [" și ", " pentru ", " este ", " sunt ", " care ", " această ", " nu "];

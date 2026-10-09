@@ -35,11 +35,13 @@ function withTtPrefix(imdbId: string): string {
   return /^tt/i.test(imdbId) ? imdbId : `tt${imdbId}`;
 }
 
-// Caută subtitrări pentru un IMDb id. Nu trimitem parametrul `language` —
-// subs.ro publică exclusiv subtitrări românești, dar eticheta internă
-// `language` a itemelor e uneori greșită (ex. "The Invite" 2026, marcată
-// "en" deși descrierea/traducătorul arată clar RO), iar filtrarea după ea
-// ratează rezultate reale.
+// Caută subtitrări pentru un IMDb id. Nu trimitem parametrul `language`:
+// subs.ro găzduiește și subtitrări în engleză (marcate „en", de obicei
+// originalul, urcat de ex. de „R."), dar limba se decide după conținutul
+// fiecărui fișier (resolveBestSubtitle), nu după etichetă — o arhivă poate
+// avea câte un fișier în fiecare limbă. (Nota veche de aici spunea că
+// arhiva „en" de la The Invite ar fi fost în română; verificat pe 9 oct.
+// 2026, e în engleză.)
 // Fail-soft: listă goală la orice eroare sau lipsă cheie API — consistent
 // cu restul integrărilor externe. Loghează distinct fiecare caz de eșec
 // (cheie lipsă / HTTP non-ok / excepție) ca să se poată diagnostica ulterior

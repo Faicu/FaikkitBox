@@ -684,36 +684,63 @@ export async function correctSubtitleForMediaCore(
       };
     }
 
-    const qbitBase = process.env.QBIT_URL ?? "http://192.168.1.192:25556";
-    const qbitUser = process.env.QBIT_USERNAME;
-    const qbitPass = process.env.QBIT_PASSWORD;
-    if (!qbitUser || !qbitPass) {
-      return { status: "error", error: "QBIT_USERNAME / QBIT_PASSWORD nu sunt configurate" };
-    }
-    const url = qbitBase.replace(/\/$/, "");
-
-    const { ensureRomanianSubtitle, logSubtitleRun } = await import("./subtitles");
-    const plexType = row.category !== null && isMovieCategory(row.category) ? "movie" : "show";
-
-    const result = await ensureRomanianSubtitle({
-      qbitUrl: url,
-      qbitUser,
-      qbitPass,
-      torrentHash: row.torrent_hash,
-      torrentName: row.torrent_name ?? "",
-      imdbId: row.imdb_id ?? undefined,
-      mediaType: plexType === "movie" ? "movie" : "tv",
-    });
-
-    await logSubtitleRun([result], "download");
-    const { updateMediaSubtitleStatus } = await import("../media/media");
-    updateMediaSubtitleStatus(row.torrent_hash, result.outcome, result.detail, result.source);
-    if (CORRECTED_OUTCOMES.includes(result.outcome)) {
-      await refreshPlexLibrary(plexType).catch(() => {});
-    }
-
-    return { status: "ok", ...result };
+    return checkSubtitleForTorrent(
+      {
+        torrentName: row.torrent_name,
+        torrentHash: row.torrent_hash,
+        imdbId: row.imdb_id,
+        category: row.category,
+      },
+      { logRun: "always" },
+    );
   }
+}
+
+// Verificarea/corectarea subtitrării unui torrent din `media`, cu tot ce urmează
+// după: jurnal, starea din DB, refresh Plex dacă s-a schimbat ceva pe disc.
+// Folosită de „Corectează subtitrare" și de reîncercarea zilnică
+// (subtitle-retry.ts). `logRun: "corrected"` scrie în jurnal (și trimite
+// push) doar când s-a pus efectiv o subtitrare — reîncercarea zilnică nu
+// trebuie să umple jurnalul cu „tot nimic" în fiecare zi.
+export async function checkSubtitleForTorrent(
+  row: {
+    torrentName: string | null;
+    torrentHash: string;
+    imdbId: string | null;
+    category: number | null;
+  },
+  opts: { logRun: "always" | "corrected" },
+): Promise<CorrectSubtitleResult> {
+  const qbitBase = process.env.QBIT_URL ?? "http://192.168.1.192:25556";
+  const qbitUser = process.env.QBIT_USERNAME;
+  const qbitPass = process.env.QBIT_PASSWORD;
+  if (!qbitUser || !qbitPass) {
+    return { status: "error", error: "QBIT_USERNAME / QBIT_PASSWORD nu sunt configurate" };
+  }
+  const url = qbitBase.replace(/\/$/, "");
+
+  const { ensureRomanianSubtitle, logSubtitleRun } = await import("./subtitles");
+  const plexType = row.category !== null && isMovieCategory(row.category) ? "movie" : "show";
+
+  const result = await ensureRomanianSubtitle({
+    qbitUrl: url,
+    qbitUser,
+    qbitPass,
+    torrentHash: row.torrentHash,
+    torrentName: row.torrentName ?? "",
+    imdbId: row.imdbId ?? undefined,
+    mediaType: plexType === "movie" ? "movie" : "tv",
+  });
+
+  const corrected = CORRECTED_OUTCOMES.includes(result.outcome);
+  if (opts.logRun === "always" || corrected) await logSubtitleRun([result], "download");
+  const { updateMediaSubtitleStatus } = await import("../media/media");
+  updateMediaSubtitleStatus(row.torrentHash, result.outcome, result.detail, result.source);
+  if (corrected) {
+    await refreshPlexLibrary(plexType).catch(() => {});
+  }
+
+  return { status: "ok", ...result };
 }
 
 export async function deleteSubtitleForMediaCore(

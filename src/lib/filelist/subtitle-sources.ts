@@ -8,7 +8,8 @@
 
 import { downloadSubtitle, type OpenSubtitlesResult } from "./opensubtitles-client";
 import { pickBestByRelease } from "./release-scoring";
-import { osResultMatchesEpisode } from "./subtitle-checks";
+import { looksRomanian, osResultMatchesEpisode } from "./subtitle-checks";
+import { decodeToUtf8Text } from "./subtitle-encoding";
 import { subsRoEntryEpisodeKey, type SubsRoSrtEntry } from "./subsro-client";
 
 export interface SubtitleWinner {
@@ -65,8 +66,16 @@ export async function resolveBestSubtitle(
     winnerConfident = osBest.confident;
   }
 
+  // Doar fișierele chiar în română: pe subs.ro unii uploaderi (în special
+  // „R.") pun subtitrarea originală în engleză, marcată „en", cu numele exact
+  // al release-ului — deci câștiga scorarea. Așa au primit Fall 2, The
+  // Invite, Teenage Sex… și Mutiny un `.ro.srt` în engleză (audit 9 oct.
+  // 2026). Decidem după conținut, nu după eticheta de limbă: o arhivă poate
+  // avea un fișier în fiecare limbă.
   const subsRoCandidates = (await getSubsRoCandidates()).filter(
-    (e) => !episodeKey || subsRoEntryEpisodeKey(e) === episodeKey,
+    (e) =>
+      (!episodeKey || subsRoEntryEpisodeKey(e) === episodeKey) &&
+      looksRomanian(decodeToUtf8Text(e.content).text),
   );
   const subsRoBest = pickBestByRelease(
     subsRoCandidates,

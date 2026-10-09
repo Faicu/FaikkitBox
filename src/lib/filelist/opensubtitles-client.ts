@@ -45,7 +45,14 @@ interface OsSubtitleAttributes {
 
 interface OsSearchResponse {
   data?: Array<{ attributes?: OsSubtitleAttributes }>;
+  total_pages?: number;
 }
+
+// Câte pagini (50 de rezultate fiecare) citim cel mult dintr-o căutare. Un
+// sezon întreg în română are de obicei sub 50 (The Rookie S08, 18 episoade:
+// exact 50), dar un sezon lung cu multe variante per episod ar depăși —
+// iar episoadele de pe pagina a doua ar fi rămas fără subtitrare.
+const MAX_PAGES = 5;
 
 function parseSearchResponse(data: OsSearchResponse): OpenSubtitlesResult[] {
   if (!Array.isArray(data.data)) return [];
@@ -113,17 +120,27 @@ async function getAuthToken(): Promise<string | null> {
 async function osSearch(params: Record<string, string>): Promise<OpenSubtitlesResult[]> {
   const key = apiKey();
   if (!key) return [];
-  const query = new URLSearchParams(Object.entries(params).sort(([a], [b]) => a.localeCompare(b)));
-  try {
-    const res = await fetch(`${API_BASE}/subtitles?${query.toString()}`, {
-      headers: { "Api-Key": key, Accept: "application/json" },
-      signal: AbortSignal.timeout(15_000),
-    });
-    if (!res.ok) return [];
-    return parseSearchResponse((await res.json()) as OsSearchResponse);
-  } catch {
-    return [];
+  const results: OpenSubtitlesResult[] = [];
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    const query = new URLSearchParams(
+      Object.entries(page > 1 ? { ...params, page: String(page) } : params).sort(([a], [b]) =>
+        a.localeCompare(b),
+      ),
+    );
+    try {
+      const res = await fetch(`${API_BASE}/subtitles?${query.toString()}`, {
+        headers: { "Api-Key": key, Accept: "application/json" },
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (!res.ok) break;
+      const data = (await res.json()) as OsSearchResponse;
+      results.push(...parseSearchResponse(data));
+      if (page >= (data.total_pages ?? 1)) break;
+    } catch {
+      break;
+    }
   }
+  return results;
 }
 
 // Caută subtitrări pentru un IMDb id într-o limbă dată (implicit română).
