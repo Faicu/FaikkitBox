@@ -86,6 +86,44 @@ export interface SubtitleSync {
   good: boolean;
 }
 
+// O variantă găsită, dar nefolosită — afișată în jurnal sub „Respinse".
+export interface RejectedVariant {
+  source: SubtitleSource;
+  release: string;
+  reason: string;
+}
+
+// Ce s-a întâmplat cu subtitrarea unui fișier media (un film, sau un episod
+// dintr-un pachet), pe câmpuri separate, pentru afișarea structurată din
+// jurnal (SubtitleFixDrawer). În meta-ul jurnalului se salvează „plat" —
+// fără obiecte imbricate — de-asta sincronizarea e desfăcută în trei câmpuri.
+export interface SubtitleFileReport {
+  // Numele torrentului din care face parte — legătura cu itemul rulării.
+  torrent: string;
+  // „S01E03" la episoade, null la filme.
+  episode: string | null;
+  outcome: SubtitleOutcome;
+  // Varianta aleasă (doar la descărcări).
+  source: SubtitleSource | null;
+  release: string | null;
+  matchedCriteria: number | null;
+  maxCriteria: number | null;
+  syncScore: number | null;
+  syncOffset: number | null;
+  syncGood: boolean | null;
+  // Câte variante au fost comparate după sincronizare.
+  compared: number | null;
+  // Motivul pentru care .srt-ul de dinainte a fost mutat deoparte.
+  movedAside: string | null;
+  // A înlocuit o subtitrare „aproximativă" (reîncercarea zilnică).
+  replacedApproximate: boolean;
+}
+
+export interface SubtitleRejectionReport extends RejectedVariant {
+  torrent: string;
+  episode: string | null;
+}
+
 export const SUBTITLE_SOURCE_LABELS: Record<SubtitleSource, string> = {
   opensubtitles: "OpenSubtitles",
   subsro: "subs.ro",

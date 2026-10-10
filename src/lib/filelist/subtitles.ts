@@ -44,10 +44,38 @@ import {
   shortLabelFor,
   type SubtitleSource,
   type SubtitleSync,
+  type SubtitleFileReport,
+  type SubtitleRejectionReport,
 } from "./subtitle-outcomes";
 import { lookupTitleByImdbId, searchImdbIdByReleaseName } from "../tmdb/tmdb-title-lookup";
 import { MEDIA_EXTENSIONS, parseSeasonEpisode, extractEpisodeKey } from "./subtitle-checks";
-import { processMediaFile } from "./subtitle-pipeline";
+import { processMediaFile, type ProcessMediaFileResult } from "./subtitle-pipeline";
+
+// Rezultatul unui fișier media, ca rapoarte pentru jurnalul structurat.
+function reportsOf(
+  torrent: string,
+  episode: string | null,
+  r: ProcessMediaFileResult,
+): { file: SubtitleFileReport; rejected: SubtitleRejectionReport[] } {
+  return {
+    file: {
+      torrent,
+      episode,
+      outcome: r.outcome,
+      source: r.source ?? null,
+      release: r.release ?? null,
+      matchedCriteria: r.matchedCriteria ?? null,
+      maxCriteria: r.maxCriteria ?? null,
+      syncScore: r.sync?.score ?? null,
+      syncOffset: r.sync?.offset ?? null,
+      syncGood: r.sync?.good ?? null,
+      compared: r.compared ?? null,
+      movedAside: r.movedAside ?? null,
+      replacedApproximate: r.replacedApproximate ?? false,
+    },
+    rejected: (r.rejected ?? []).map((v) => ({ torrent, episode, ...v })),
+  };
+}
 
 export type { SubtitleOutcome };
 
@@ -92,6 +120,11 @@ export interface SubtitleRunItem {
   // Sincronizarea măsurată a subtitrării descărcate, când fișierul avea o
   // subtitrare încorporată de comparat.
   sync?: SubtitleSync;
+  // Jurnalul structurat: un raport per fișier media (un film, sau fiecare
+  // episod dintr-un pachet) și variantele respinse. Lipsesc la rezultatele
+  // de dinainte de a ajunge la vreun fișier (ex. torrent negăsit).
+  files?: SubtitleFileReport[];
+  rejected?: SubtitleRejectionReport[];
 }
 
 function item(
@@ -106,6 +139,8 @@ function item(
     maxCriteria?: number;
     source?: SubtitleSource;
     sync?: SubtitleSync;
+    files?: SubtitleFileReport[];
+    rejected?: SubtitleRejectionReport[];
   },
 ): SubtitleRunItem {
   return { torrentName, displayTitle, outcome, detail, ...extra };
@@ -238,6 +273,7 @@ export async function ensureRomanianSubtitle(
     },
   });
 
+  const report = reportsOf(torrentName, extractEpisodeKey(mediaFile.name), result);
   return item(torrentName, displayTitle, result.outcome, result.detail, {
     release: result.release,
     path: result.path,
@@ -245,6 +281,8 @@ export async function ensureRomanianSubtitle(
     maxCriteria: result.maxCriteria,
     source: result.source,
     sync: result.sync,
+    files: [report.file],
+    rejected: report.rejected,
   });
 }
 
@@ -404,6 +442,8 @@ async function processSeasonPack(params: ProcessSeasonPackParams): Promise<Subti
     detail: string;
   }
   const episodeResults: EpisodeResult[] = [];
+  const files: SubtitleFileReport[] = [];
+  const rejected: SubtitleRejectionReport[] = [];
 
   for (const mediaFile of mediaFiles) {
     const episodeKey = extractEpisodeKey(mediaFile.name);
@@ -436,6 +476,9 @@ async function processSeasonPack(params: ProcessSeasonPackParams): Promise<Subti
     });
 
     episodeResults.push({ episodeKey, outcome: result.outcome, detail: result.detail });
+    const report = reportsOf(torrentName, episodeKey, result);
+    files.push(report.file);
+    rejected.push(...report.rejected);
   }
 
   const corrected = episodeResults.filter((r) => CORRECTED_OUTCOMES.includes(r.outcome)).length;
@@ -454,7 +497,10 @@ async function processSeasonPack(params: ProcessSeasonPackParams): Promise<Subti
       : failed > 0
         ? "season_no_subtitle_found"
         : "season_already_ok";
-  return item(torrentName, displayTitle, outcome, `${summary} — ${perEpisode}`);
+  return item(torrentName, displayTitle, outcome, `${summary} — ${perEpisode}`, {
+    files: files.sort((a, b) => (a.episode ?? "").localeCompare(b.episode ?? "")),
+    rejected,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -520,6 +566,10 @@ export async function logSubtitleRun(
           syncOffset: it.sync?.offset,
           syncGood: it.sync?.good,
         })),
+        // Jurnalul structurat (SubtitleFixDrawer) — plat, legat de itemi
+        // prin `torrent`.
+        files: items.flatMap((it) => (it.files ?? []).map((f) => ({ ...f }))),
+        rejected: items.flatMap((it) => (it.rejected ?? []).map((r) => ({ ...r }))),
       },
       { skipPush },
     );

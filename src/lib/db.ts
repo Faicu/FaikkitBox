@@ -814,7 +814,10 @@ function applyCleanups(database: DatabaseSync): void {
       // fiecare pornire, pentru un torrent care nu mai există în qBittorrent.
       const fixed = database
         .prepare(
-          `UPDATE media SET completed_at = COALESCE(plex_added_at, added_at)
+          // plex_added_at e un timestamp Unix (INTEGER), completed_at un text
+          // SQLite — copiat direct, ajungea „1786788281" în loc de dată (53 de
+          // rânduri, reparate în v38).
+          `UPDATE media SET completed_at = COALESCE(datetime(plex_added_at, 'unixepoch'), added_at)
             WHERE completed_at IS NULL AND plex_rating_key IS NOT NULL`,
         )
         .run();
@@ -1077,6 +1080,24 @@ function applyCleanups(database: DatabaseSync): void {
           WHERE has_romanian_subtitle = 1 AND subtitle_detail LIKE 'subtitrare aproximativă%'`,
       );
       database.exec("PRAGMA user_version = 37");
+    }
+
+    if (version < 38) {
+      // v38: completed_at scris de v24 ca timestamp Unix în text
+      // („1786788281"), nu ca dată SQLite — copiat din plex_added_at. Orice
+      // comparație de dată îl trata greșit: reîncercarea zilnică a
+      // subtitrărilor (completed_at în ultimele 14 zile) îl vedea mereu ca
+      // „mai vechi", iar „Finalizat" din Detalii tehnice ieșea dată invalidă.
+      const fixed = database
+        .prepare(
+          `UPDATE media SET completed_at = datetime(CAST(completed_at AS INTEGER), 'unixepoch')
+            WHERE completed_at GLOB '[0-9]*' AND completed_at NOT GLOB '*[^0-9]*'`,
+        )
+        .run();
+      console.log(
+        `[db] Migrare v38: ${fixed.changes} date de finalizare convertite din timestamp Unix`,
+      );
+      database.exec("PRAGMA user_version = 38");
     }
   }
 }

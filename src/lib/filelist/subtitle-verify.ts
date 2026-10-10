@@ -204,6 +204,8 @@ export function isWellSynced(sync: SyncMeasure): boolean {
 export interface SubtitleCheck {
   // null = pare în regulă (sau nu avem cum ști); altfel motivul respingerii.
   reason: string | null;
+  // Același motiv, scurt, pentru afișarea structurată din jurnal.
+  short?: string;
   // Sincronizarea măsurată față de subtitrarea încorporată; null dacă
   // fișierul n-are una (sau sunt prea puține replici ca să conteze).
   sync: SyncMeasure | null;
@@ -217,18 +219,23 @@ export function createSubtitleVerifier(mediaAbsPath: string) {
   let reference: Promise<SrtTiming | null> | null = null;
 
   return async function verify(text: string): Promise<SubtitleCheck> {
-    const reject = (reason: string): SubtitleCheck => ({ reason, sync: null });
-    if (!looksRomanian(text)) return reject("nu pare să fie în română");
+    const reject = (reason: string, short: string): SubtitleCheck => ({
+      reason,
+      short,
+      sync: null,
+    });
+    if (!looksRomanian(text)) return reject("nu pare să fie în română", "nu e în română");
 
     const timing = parseSrtTiming(text);
     if (timing.starts.length === 0)
-      return reject("nu conține nicio replică cu timp (nu e un SRT valid)");
+      return reject("nu conține nicio replică cu timp (nu e un SRT valid)", "nu e un SRT valid");
 
     duration ??= mediaDurationSeconds(mediaAbsPath);
     const d = await duration;
     if (d != null && timing.lastEnd > d + DURATION_SLACK_S) {
       return reject(
         `ultima replică e la ${formatTime(timing.lastEnd)}, dar fișierul are doar ${formatTime(d)} — e pentru alt episod sau altă versiune`,
+        `mai lungă decât fișierul (${formatTime(timing.lastEnd)} față de ${formatTime(d)}) — alt episod sau altă versiune`,
       );
     }
 
@@ -241,6 +248,7 @@ export function createSubtitleVerifier(mediaAbsPath: string) {
     if (sync.score < MIN_SPEECH_CORRELATION) {
       return reject(
         `momentele de vorbire nu se potrivesc cu subtitrarea încorporată în fișier (corelație ${sync.score.toFixed(2)}, minimum ${MIN_SPEECH_CORRELATION}) — e pentru alt episod sau altă versiune`,
+        `nesincronizată (${sync.score.toFixed(2).replace(".", ",")}) — alt episod sau alt montaj`,
       );
     }
     return { reason: null, sync };

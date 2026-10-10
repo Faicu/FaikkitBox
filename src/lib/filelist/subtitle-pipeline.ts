@@ -16,7 +16,12 @@ import { readFile, rename } from "node:fs/promises";
 import type { QbitFileInfo } from "../qbit-client";
 import type { OpenSubtitlesResult } from "./opensubtitles-client";
 import type { SubsRoSrtEntry } from "./subsro-client";
-import type { SubtitleOutcome, SubtitleSource, SubtitleSync } from "./subtitle-outcomes";
+import type {
+  RejectedVariant,
+  SubtitleOutcome,
+  SubtitleSource,
+  SubtitleSync,
+} from "./subtitle-outcomes";
 import {
   fileExists,
   hasEmbeddedRomanianSubtitle,
@@ -77,6 +82,11 @@ export interface ProcessMediaFileResult {
   // Sursa externă reală a subtitrării descărcate (outcome-ul nu o mai spune).
   source?: SubtitleSource;
   sync?: SubtitleSync;
+  // Pentru jurnalul structurat (SubtitleFileReport).
+  rejected?: RejectedVariant[];
+  movedAside?: string;
+  compared?: number;
+  replacedApproximate?: boolean;
 }
 
 export async function processMediaFile(
@@ -191,6 +201,7 @@ export async function processMediaFile(
   // se pune deoparte (`.ro.srt.respins`, ignorat de Plex) și căutăm din nou.
   const sidecarAbsPath = join(savePath, targetSrtRelPath);
   let rejectedSidecar: string | null = null;
+  let movedAside: string | undefined;
   // Setat când păstrăm .srt-ul existent doar până găsim unul mai bun.
   let upgrading: { sync: SyncMeasure | null } | null = null;
   if (await fileExists(sidecarAbsPath)) {
@@ -209,6 +220,7 @@ export async function processMediaFile(
       await rename(sidecarAbsPath, `${sidecarAbsPath}.respins`);
       console.warn(`[subtitles] .srt existent respins (${reason}) → ${sidecarAbsPath}.respins`);
       rejectedSidecar = `.srt-ul existent a fost respins (${reason}) și mutat deoparte`;
+      movedAside = check?.short ?? reason;
     }
   }
   // Rezultatul când căutarea unei variante mai bune nu găsește nimic: .srt-ul
@@ -219,6 +231,7 @@ export async function processMediaFile(
   });
   const withRejected = (detail: string) =>
     rejectedSidecar ? `${rejectedSidecar}; ${detail}` : detail;
+  const rejected: RejectedVariant[] = [];
 
   // Pas 2 — nicio subtitrare deloc: caută pe cele două surse externe și
   // ordonează variantele după cât de apropiate sunt de fișierul țintă.
@@ -245,6 +258,7 @@ export async function processMediaFile(
       detail: withRejected(
         `niciun rezultat pe OpenSubtitles sau subs.ro${episodeKey ? ` pentru ${episodeKey}` : ""}`,
       ),
+      movedAside,
     };
   }
 
@@ -272,6 +286,11 @@ export async function processMediaFile(
     const fetched = await fetchCandidateText(candidate);
     if (!fetched) {
       failures.push(`${label}: descărcarea a eșuat`);
+      rejected.push({
+        source: candidate.source,
+        release: candidate.release,
+        reason: "descărcarea a eșuat",
+      });
       continue;
     }
     allDownloadsFailed = false;
@@ -279,6 +298,11 @@ export async function processMediaFile(
     if (check.reason) {
       console.warn(`[subtitles] ${label} respinsă: ${check.reason}`);
       failures.push(`${label}: respinsă — ${check.reason}`);
+      rejected.push({
+        source: candidate.source,
+        release: candidate.release,
+        reason: check.short ?? check.reason,
+      });
       continue;
     }
     if (!check.sync) {
@@ -308,6 +332,8 @@ export async function processMediaFile(
       detail: withRejected(
         `nicio variantă potrivită din ${candidates.length} încercate: ${failures.join("; ")}`,
       ),
+      rejected,
+      movedAside,
     };
   }
   const result = await writeChosenSubtitle(best.candidate, destPath, best.fetched, best.sync);
@@ -325,5 +351,9 @@ export async function processMediaFile(
     maxCriteria: result.maxCriteria,
     source: result.source,
     sync: best.sync ? { ...best.sync, good: isWellSynced(best.sync) } : undefined,
+    rejected,
+    movedAside,
+    compared,
+    replacedApproximate: upgrading != null,
   };
 }
