@@ -61,6 +61,10 @@ export interface ProcessMediaFileParams {
   // căutare externă.
   getOsCandidates: () => Promise<OpenSubtitlesResult[]>;
   getSubsRoCandidates: () => Promise<SubsRoSrtEntry[]>;
+  // Subtitrarea existentă e „aproximativă": dacă .srt-ul trece verificarea,
+  // nu ne oprim la el, ci căutăm o variantă mai bună și îl înlocuim doar cu
+  // una sigur mai bună (reîncercarea zilnică, subtitle-retry.ts).
+  upgradeApproximate?: boolean;
 }
 
 export interface ProcessMediaFileResult {
@@ -90,6 +94,7 @@ export async function processMediaFile(
     expectedEpisodeKey,
     getOsCandidates,
     getSubsRoCandidates,
+    upgradeApproximate = false,
   } = params;
 
   // Episodul țintă: cel din numele fișierului media. Dacă torrentul anunță
@@ -186,29 +191,54 @@ export async function processMediaFile(
   // se pune deoparte (`.ro.srt.respins`, ignorat de Plex) și căutăm din nou.
   const sidecarAbsPath = join(savePath, targetSrtRelPath);
   let rejectedSidecar: string | null = null;
+  // Setat când păstrăm .srt-ul existent doar până găsim unul mai bun.
+  let upgrading: { sync: SyncMeasure | null } | null = null;
   if (await fileExists(sidecarAbsPath)) {
     const sidecarBuf = await readFile(sidecarAbsPath).catch(() => null);
-    const reason = sidecarBuf ? (await verify(decodeToUtf8Text(sidecarBuf).text)).reason : null;
+    const check = sidecarBuf ? await verify(decodeToUtf8Text(sidecarBuf).text) : null;
+    const reason = check?.reason ?? null;
     if (!reason) {
-      const { outcome, detail } = await handleSidecarSrt(sidecarAbsPath);
-      return { outcome, detail };
+      // Deja bine sincronizată (aproximativă era doar după nume) — nimic de
+      // îmbunătățit.
+      if (!upgradeApproximate || (check?.sync && isWellSynced(check.sync))) {
+        const { outcome, detail } = await handleSidecarSrt(sidecarAbsPath);
+        return { outcome, detail };
+      }
+      upgrading = { sync: check?.sync ?? null };
+    } else {
+      await rename(sidecarAbsPath, `${sidecarAbsPath}.respins`);
+      console.warn(`[subtitles] .srt existent respins (${reason}) → ${sidecarAbsPath}.respins`);
+      rejectedSidecar = `.srt-ul existent a fost respins (${reason}) și mutat deoparte`;
     }
-    await rename(sidecarAbsPath, `${sidecarAbsPath}.respins`);
-    console.warn(`[subtitles] .srt existent respins (${reason}) → ${sidecarAbsPath}.respins`);
-    rejectedSidecar = `.srt-ul existent a fost respins (${reason}) și mutat deoparte`;
   }
+  // Rezultatul când căutarea unei variante mai bune nu găsește nimic: .srt-ul
+  // existent rămâne, iar starea din DB nu se schimbă (srt_already_ok).
+  const keepExisting = (why: string): ProcessMediaFileResult => ({
+    outcome: "srt_already_ok",
+    detail: `subtitrarea aproximativă existentă rămâne — ${why}`,
+  });
   const withRejected = (detail: string) =>
     rejectedSidecar ? `${rejectedSidecar}; ${detail}` : detail;
 
   // Pas 2 — nicio subtitrare deloc: caută pe cele două surse externe și
   // ordonează variantele după cât de apropiate sunt de fișierul țintă.
   const osCandidates = await getOsCandidates();
-  const candidates = await rankSubtitleCandidates(
+  const ranked = await rankSubtitleCandidates(
     searchTargetName,
     episodeKey,
     osCandidates,
     getSubsRoCandidates,
   );
+  // La înlocuirea uneia aproximative: de pe subs.ro toate (gratuite), de pe
+  // OpenSubtitles doar cele cu numele release-ului identic cu fișierul —
+  // altfel fiecare titlu aproximativ ar consuma zilnic până la 3 descărcări
+  // din limita contului, pentru variante care probabil nu sunt mai bune.
+  const candidates = upgrading
+    ? ranked.filter(
+        (c) => c.source === "subsro" || (c.maxCriteria > 0 && c.matchedCriteria === c.maxCriteria),
+      )
+    : ranked;
+  if (upgrading && candidates.length === 0) return keepExisting("nicio variantă nouă");
   if (candidates.length === 0) {
     return {
       outcome: "no_subtitle_found",
@@ -261,6 +291,17 @@ export async function processMediaFile(
     if (isWellSynced(check.sync)) break;
   }
 
+  if (upgrading) {
+    // Mai bună înseamnă: bine sincronizată (când se poate măsura), sau, fără
+    // măsurătoare, cu numele release-ului identic cu fișierul.
+    const better =
+      best &&
+      (best.sync
+        ? isWellSynced(best.sync)
+        : best.candidate.maxCriteria > 0 &&
+          best.candidate.matchedCriteria === best.candidate.maxCriteria);
+    if (!best || !better) return keepExisting("nicio variantă mai bună");
+  }
   if (!best) {
     return {
       outcome: allDownloadsFailed ? "download_failed" : "no_subtitle_found",
@@ -271,6 +312,7 @@ export async function processMediaFile(
   }
   const result = await writeChosenSubtitle(best.candidate, destPath, best.fetched, best.sync);
   const notes = [
+    upgrading ? "a înlocuit subtitrarea aproximativă de dinainte" : null,
     compared > 1 ? `aleasă după sincronizare dintre ${compared} variante` : null,
     failures.length > 0 ? `sărite: ${failures.join("; ")}` : null,
   ].filter(Boolean);

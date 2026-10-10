@@ -158,6 +158,10 @@ export function getDb(): DatabaseSync {
       subtitle_source TEXT,
       subtitle_detail TEXT,
       subtitle_checked_at TEXT,
+      -- 1 = subtitrarea pusă e „aproximativă" (alt release, sincronizare
+      -- slabă) — reverificată zilnic 14 zile, ca să fie înlocuită dacă apare
+      -- varianta exactă (subtitle-retry.ts).
+      subtitle_approximate INTEGER NOT NULL DEFAULT 0,
       quality TEXT,
       duration_ms INTEGER,
       -- Titlul episodului (doar pe rândurile 'episode'): coloana title ține
@@ -1054,6 +1058,25 @@ function applyCleanups(database: DatabaseSync): void {
         // coloana există deja (bază nouă, creată direct cu schema curentă)
       }
       database.exec("PRAGMA user_version = 36");
+    }
+
+    if (version < 37) {
+      // v37: media.subtitle_approximate — vezi CREATE TABLE. Completat din
+      // detaliul existent: doar descărcările marcate „aproximativă" de
+      // pipeline încep cu textul ăsta.
+      try {
+        database.exec(
+          "ALTER TABLE media ADD COLUMN subtitle_approximate INTEGER NOT NULL DEFAULT 0",
+        );
+        console.log("[db] Migrare v37: adăugat media.subtitle_approximate");
+      } catch {
+        // coloana există deja (bază nouă, creată direct cu schema curentă)
+      }
+      database.exec(
+        `UPDATE media SET subtitle_approximate = 1
+          WHERE has_romanian_subtitle = 1 AND subtitle_detail LIKE 'subtitrare aproximativă%'`,
+      );
+      database.exec("PRAGMA user_version = 37");
     }
   }
 }

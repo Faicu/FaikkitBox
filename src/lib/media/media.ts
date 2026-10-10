@@ -386,6 +386,8 @@ export function updateMediaSubtitleStatus(
        subtitle_source = CASE WHEN ? AND subtitle_source IS NOT NULL THEN subtitle_source ELSE ? END,
        subtitle_detail = CASE WHEN ? AND subtitle_source IS NOT NULL AND subtitle_detail IS NOT NULL
                               THEN subtitle_detail ELSE ? END,
+       subtitle_approximate = CASE WHEN ? AND subtitle_source IS NOT NULL
+                                   THEN subtitle_approximate ELSE ? END,
        has_romanian_audio = CASE WHEN ? = 1 THEN 1 ELSE has_romanian_audio END,
        subtitle_checked_at = datetime('now'), updated_at = datetime('now')
        WHERE torrent_hash = ?`,
@@ -396,6 +398,8 @@ export function updateMediaSubtitleStatus(
       source,
       keepPrevious ? 1 : 0,
       detail,
+      keepPrevious ? 1 : 0,
+      outcome === "downloaded_approximate" ? 1 : 0,
       outcome === "audio_already_romanian" ? 1 : 0,
       torrentHash,
     );

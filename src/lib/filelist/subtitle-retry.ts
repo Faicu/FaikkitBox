@@ -9,7 +9,10 @@
 //
 // Regula: o dată pe zi, timp de 14 zile de la finalizarea descărcării, pentru
 // orice torrent fără subtitrare română (nici încorporată, nici .srt, nici
-// audio în română). Ceasul e `subtitle_checked_at` din DB, nu un timer în
+// audio în română) — și pentru cele cu o subtitrare „aproximativă": la
+// episoadele noi apare des întâi varianta pentru alt release, iar cea exactă
+// abia peste una-două zile. Aproximativa se înlocuiește doar cu una sigur mai
+// bună (processMediaFile, `upgradeApproximate`), altfel rămâne. Ceasul e `subtitle_checked_at` din DB, nu un timer în
 // memorie — un deploy nu-l resetează. Jurnalul și push-ul apar doar când s-a
 // găsit ceva (checkSubtitleForTorrent cu `logRun: "corrected"`).
 // ---------------------------------------------------------------------------
@@ -26,6 +29,7 @@ interface DueTorrent {
   torrent_name: string | null;
   imdb_id: string | null;
   category: number | null;
+  has_ro: number;
 }
 
 // Un pachet de sezon are câte un rând per episod, toate cu același hash și
@@ -34,14 +38,14 @@ export function listTorrentsDueForSubtitleRetry(): DueTorrent[] {
   return getDb()
     .prepare(
       `SELECT torrent_hash, MIN(torrent_name) AS torrent_name, MIN(imdb_id) AS imdb_id,
-              MIN(category) AS category
+              MIN(category) AS category, MAX(has_romanian_subtitle) AS has_ro
          FROM media
         WHERE torrent_hash IS NOT NULL
           AND completed_at IS NOT NULL
           AND completed_at >= datetime('now', ?)
         GROUP BY torrent_hash
-       HAVING MAX(has_romanian_subtitle) = 0
-          AND MAX(has_romanian_audio) = 0
+       HAVING ((MAX(has_romanian_subtitle) = 0 AND MAX(has_romanian_audio) = 0)
+               OR MAX(subtitle_approximate) = 1)
           AND (MAX(subtitle_checked_at) IS NULL
                OR MAX(subtitle_checked_at) <= datetime('now', ?))`,
     )
@@ -61,7 +65,7 @@ export async function retryMissingSubtitles(): Promise<void> {
           imdbId: t.imdb_id,
           category: t.category,
         },
-        { logRun: "corrected" },
+        { logRun: "corrected", upgradeApproximate: t.has_ro === 1 },
       );
       console.log(
         `[subtitle-retry] „${t.torrent_name}" — ${result.status === "ok" ? result.outcome : result.error}`,

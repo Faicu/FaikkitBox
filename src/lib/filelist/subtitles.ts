@@ -61,6 +61,9 @@ interface EnsureRomanianSubtitleParams {
   // Ajută căutarea TMDB de rezervă (când imdbId lipsește) să aleagă corect
   // între /search/movie și /search/tv. Fără el, se încearcă ambele.
   mediaType?: "movie" | "tv";
+  // Caută o variantă mai bună pentru o subtitrare „aproximativă" deja pusă
+  // (vezi processMediaFile, subtitle-retry.ts).
+  upgradeApproximate?: boolean;
 }
 
 // Rezultatul unei singure verificări/corectări — nu mai loghează nimic
@@ -169,6 +172,7 @@ export async function ensureRomanianSubtitle(
       torrentName,
       displayTitle,
       imdbId,
+      upgradeApproximate: params.upgradeApproximate,
     });
   }
   const mediaFile = mediaFiles[0];
@@ -204,6 +208,7 @@ export async function ensureRomanianSubtitle(
     qbitPass,
     searchTargetName: torrentName,
     expectedEpisodeKey: episodeKey,
+    upgradeApproximate: params.upgradeApproximate,
     getOsCandidates: () =>
       episode
         ? searchEpisodeSubtitles(imdbId, episode.season, episode.episode, "ro")
@@ -222,7 +227,10 @@ export async function ensureRomanianSubtitle(
           ]
         : subsRoItems;
       const zipEntries: SubsRoSrtEntry[] = [];
-      for (const it of ordered.slice(0, episode ? 6 : 3)) {
+      // Până la 6 arhive și la filme: cele populare au des mai multe
+      // traduceri (The Invite: SubRip, cptclaudiu, plus una în engleză), iar
+      // cea potrivită release-ului putea fi a patra.
+      for (const it of ordered.slice(0, 6)) {
         const zipBuf = await downloadSubsRoZip(it.id);
         if (zipBuf) zipEntries.push(...(await extractSrtEntries(zipBuf)));
       }
@@ -325,6 +333,7 @@ interface ProcessSeasonPackParams {
   torrentName: string;
   displayTitle: string;
   imdbId: string | null;
+  upgradeApproximate?: boolean;
 }
 
 async function processSeasonPack(params: ProcessSeasonPackParams): Promise<SubtitleRunItem> {
@@ -339,6 +348,7 @@ async function processSeasonPack(params: ProcessSeasonPackParams): Promise<Subti
     torrentName,
     displayTitle,
     imdbId,
+    upgradeApproximate,
   } = params;
 
   const seasonNumber =

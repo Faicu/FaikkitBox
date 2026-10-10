@@ -28,13 +28,15 @@ function add(
     audioRo?: 0 | 1;
     checkedHoursAgo?: number | null;
     episode?: number;
+    approximate?: 0 | 1;
   } = {},
 ) {
   db.prepare(
     `INSERT INTO media (media_type, title, season, episode, torrent_name, torrent_hash,
-                        completed_at, has_romanian_subtitle, has_romanian_audio, subtitle_checked_at)
+                        completed_at, has_romanian_subtitle, has_romanian_audio, subtitle_checked_at,
+                        subtitle_approximate)
      VALUES ('episode', 'Serial', 1, ?, ?, ?, datetime('now', ?), ?, ?,
-             CASE WHEN ? IS NULL THEN NULL ELSE datetime('now', ?) END)`,
+             CASE WHEN ? IS NULL THEN NULL ELSE datetime('now', ?) END, ?)`,
   ).run(
     o.episode ?? 1,
     `Serial.S01E0${o.episode ?? 1}`,
@@ -44,6 +46,7 @@ function add(
     o.audioRo ?? 0,
     o.checkedHoursAgo === undefined ? 30 : o.checkedHoursAgo,
     `-${o.checkedHoursAgo ?? 30} hours`,
+    o.approximate ?? 0,
   );
 }
 const due = () => retry.listTorrentsDueForSubtitleRetry().map((t) => t.torrent_hash);
@@ -68,6 +71,13 @@ describe("listTorrentsDueForSubtitleRetry", () => {
     add("a", { ro: 1 });
     add("b", { audioRo: 1 });
     expect(due()).toEqual([]);
+  });
+
+  it("subtitrare aproximativă: reîncearcă, ca s-o înlocuiască (cu has_ro=1)", () => {
+    add("a", { ro: 1, approximate: 1 });
+    expect(retry.listTorrentsDueForSubtitleRetry()).toMatchObject([
+      { torrent_hash: "a", has_ro: 1 },
+    ]);
   });
 
   it("descărcat acum peste 14 zile: renunță", () => {
@@ -110,5 +120,25 @@ describe("updateMediaSubtitleStatus — reverificare fără schimbări", () => {
     add("a");
     updateMediaSubtitleStatus("a", "srt_already_ok", "are deja .srt");
     expect(source()).toBe("tracked_srt");
+  });
+});
+
+describe("updateMediaSubtitleStatus — subtitle_approximate", () => {
+  const approx = () =>
+    (
+      db.prepare("SELECT subtitle_approximate FROM media WHERE torrent_hash = 'a'").get() as {
+        subtitle_approximate: number;
+      }
+    ).subtitle_approximate;
+
+  it("se setează la o descărcare aproximativă, rămâne la reverificare, se șterge la înlocuire", async () => {
+    const { updateMediaSubtitleStatus } = await import("../media/media");
+    add("a");
+    updateMediaSubtitleStatus("a", "downloaded_approximate", "aproximativă", "subsro");
+    expect(approx()).toBe(1);
+    updateMediaSubtitleStatus("a", "srt_already_ok", "rămâne");
+    expect(approx()).toBe(1);
+    updateMediaSubtitleStatus("a", "downloaded", "exactă", "subsro");
+    expect(approx()).toBe(0);
   });
 });
