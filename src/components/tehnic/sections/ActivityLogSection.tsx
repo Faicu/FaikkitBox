@@ -184,14 +184,14 @@ export function ActivityLogSection() {
         <div className={rowClass}>
           <div className="mt-0.5 shrink-0">
             <PlayCircle
-              className={`h-3.5 w-3.5 ${item.ongoing ? "text-amber-400" : "text-muted-foreground"}`}
+              className={`h-3.5 w-3.5 ${item.ongoing ? "text-emerald-400" : "text-amber-400"}`}
             />
           </div>
           <div className="min-w-0 flex-1">
             <div className="text-sm leading-tight break-words">{what}</div>
             <div className="mt-0.5 text-[11px] text-muted-foreground">
               {range}
-              {item.ongoing && <span className="text-amber-400"> · în curs</span>}
+              {item.ongoing && <span className="text-emerald-400"> · în curs</span>}
               {progress && ` · ${progress}`}
             </div>
           </div>
