@@ -172,8 +172,13 @@ async function pollUntilComplete(
                 logActivity(
                   "torrent_complete",
                   n.body,
-                  { torrentId },
-                  { image: n.image, url: n.url, title: n.title },
+                  { torrentId, torrentHash },
+                  {
+                    image: n.image,
+                    url: n.url,
+                    title: n.title,
+                    tag: `torrent-${torrentHash}`,
+                  },
                 ),
               ),
             )
@@ -609,8 +614,16 @@ async function finishFilelistDownload(ctx: {
             category: catName,
             savePath,
             size: params.size,
+            torrentHash: torrentHash ?? undefined,
           },
-          { image: n.image, url: n.url, title: n.title },
+          {
+            image: n.image,
+            url: n.url,
+            title: n.title,
+            // Fără hash, fără tag — un tag comun ar face torrente diferite să
+            // se înlocuiască între ele.
+            tag: torrentHash ? `torrent-${torrentHash}` : undefined,
+          },
         ),
       ),
     )

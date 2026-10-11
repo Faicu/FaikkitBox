@@ -47,7 +47,7 @@ async function sendWithRetry(
 export async function sendPushToAll(
   title: string,
   body: string,
-  opts?: { image?: string | null; url?: string },
+  opts?: { image?: string | null; url?: string; tag?: string },
 ): Promise<void> {
   try {
     ensureVapid();
@@ -65,6 +65,9 @@ export async function sendPushToAll(
       body,
       image: opts?.image ?? undefined,
       url: opts?.url ?? "/",
+      // Notificările cu același tag se înlocuiesc pe dispozitiv în loc să se
+      // adune (vezi sw.js) — ex. "Descărcare completă" peste "Inițiată".
+      tag: opts?.tag,
     });
     const dead: string[] = [];
     const alive: string[] = [];

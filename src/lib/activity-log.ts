@@ -45,6 +45,9 @@ export interface ActivityEntry {
   type: ActivityType;
   message: string;
   meta?: Record<string, ActivityMetaValue>;
+  // Doar la torrente: titlul din Bibliotecă (filmul sau serialul), rezolvat
+  // la citire din `media` — lipsește dacă titlul a fost șters între timp.
+  mediaId?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -60,6 +63,10 @@ export async function logActivity(
     image?: string | null;
     url?: string;
     title?: string;
+    // Tag-ul notificării push: una nouă cu același tag o înlocuiește pe cea
+    // veche pe dispozitiv (torrent: inițiată → completă; Plex: început →
+    // încheiat).
+    tag?: string;
     // Momentul real al evenimentului, când diferă de "acum" — folosit pentru
     // opririle detectate retroactiv la pornirea următoare (SIGKILL, pană de
     // curent). Fără el, o oprire de acum două zile ar apărea în jurnal ca
@@ -93,6 +100,7 @@ export async function logActivity(
         sendPushToAll(pushTitle, message, {
           image: options?.image,
           url: options?.url ?? PUSH_URLS[type],
+          tag: options?.tag,
         }),
       )
       .catch(() => {});
@@ -121,13 +129,43 @@ export async function readActivityLog(): Promise<ActivityEntry[]> {
       message: string;
       meta: string | null;
     }>;
-    return rows.map((r) => ({
-      id: r.id,
-      timestamp: r.timestamp,
-      type: r.type as ActivityType,
-      message: r.message,
-      ...(r.meta ? { meta: JSON.parse(r.meta) } : {}),
-    }));
+    const db = getDb();
+    // Titlul din Bibliotecă pentru rândurile de torrent, ca jurnalul să le
+    // poată deschide. Episoadele duc la serialul lor (parent_id) — drawer-ul
+    // Bibliotecii se deschide pe film/serial. Intrările vechi au doar
+    // torrentId (id-ul Filelist), cele noi și hash-ul.
+    const byHash = db.prepare(
+      "SELECT COALESCE(parent_id, id) AS id FROM media WHERE torrent_hash = ? ORDER BY id LIMIT 1",
+    );
+    const byFilelistId = db.prepare(
+      "SELECT COALESCE(parent_id, id) AS id FROM media WHERE filelist_id = ? ORDER BY id LIMIT 1",
+    );
+    function resolveMediaId(meta: Record<string, ActivityMetaValue>): number | undefined {
+      const row = (
+        typeof meta.torrentHash === "string"
+          ? byHash.get(meta.torrentHash)
+          : typeof meta.torrentId === "number"
+            ? byFilelistId.get(meta.torrentId)
+            : undefined
+      ) as { id: number } | undefined;
+      return row?.id;
+    }
+
+    return rows.map((r) => {
+      const meta = r.meta ? (JSON.parse(r.meta) as Record<string, ActivityMetaValue>) : undefined;
+      const mediaId =
+        meta && (r.type === "torrent_added" || r.type === "torrent_complete")
+          ? resolveMediaId(meta)
+          : undefined;
+      return {
+        id: r.id,
+        timestamp: r.timestamp,
+        type: r.type as ActivityType,
+        message: r.message,
+        ...(meta ? { meta } : {}),
+        ...(mediaId != null ? { mediaId } : {}),
+      };
+    });
   } catch (e) {
     console.warn("[activity-log] Eroare la citire:", e);
     return [];
@@ -213,11 +251,16 @@ export async function trackPlexSessions(
       db.prepare("DELETE FROM plex_active_sessions WHERE key = ?").run(key);
       const what = row.grandparent_title ? `${row.grandparent_title} — ${row.title}` : row.title;
       const progress = fmtProgress(row.last_view_offset_ms, row.duration_ms);
-      await logActivity("plex_watch_stop", buildPlexWatchStopMessage(row.user, what, progress), {
-        user: row.user,
-        title: row.title,
-        grandparentTitle: row.grandparent_title || undefined,
-      });
+      await logActivity(
+        "plex_watch_stop",
+        buildPlexWatchStopMessage(row.user, what, progress),
+        {
+          user: row.user,
+          title: row.title,
+          grandparentTitle: row.grandparent_title || undefined,
+        },
+        { tag: `plex-${key}` },
+      );
 
       // Vizionare oprită/întreruptă înainte ca Plex să o marcheze "văzută" în
       // istoric (sub pragul lui de completare) — o ținem minte aici, cu
@@ -287,12 +330,17 @@ export async function trackPlexSessions(
       const what = displayGrandparentTitle
         ? `${displayGrandparentTitle} — ${displayTitle}`
         : displayTitle;
-      await logActivity("plex_watch_start", buildPlexWatchStartMessage(s.user, what), {
-        user: s.user,
-        title: displayTitle,
-        grandparentTitle: displayGrandparentTitle,
-        player: s.player,
-      });
+      await logActivity(
+        "plex_watch_start",
+        buildPlexWatchStartMessage(s.user, what),
+        {
+          user: s.user,
+          title: displayTitle,
+          grandparentTitle: displayGrandparentTitle,
+          player: s.player,
+        },
+        { tag: `plex-${key}` },
+      );
     }
   }
 }

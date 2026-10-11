@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -23,7 +23,13 @@ import {
 
 const PAGE_SIZE = 20;
 
-export function BibliotecaList() {
+export function BibliotecaList({
+  openMediaId = null,
+  onOpenHandled,
+}: {
+  openMediaId?: number | null;
+  onOpenHandled?: () => void;
+} = {}) {
   const queryClient = useQueryClient();
   const browse = useQuery(plexLibraryBrowseQuery);
   const [query, setQuery] = useState("");
@@ -37,6 +43,13 @@ export function BibliotecaList() {
     isCancel: boolean;
   } | null>(null);
   const deleteEntryFn = useServerFn(deleteMediaEntry);
+
+  useEffect(() => {
+    if (openMediaId == null) return;
+    setSelectedMediaId(openMediaId);
+    onOpenHandled?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- doar la schimbarea id-ului
+  }, [openMediaId]);
 
   const browseItems = browse.data?.status === "ok" ? browse.data.items : null;
   const allItems = useMemo(() => browseItems ?? [], [browseItems]);

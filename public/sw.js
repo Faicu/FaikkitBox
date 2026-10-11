@@ -85,12 +85,14 @@ self.addEventListener("push", (event) => {
   let body = "";
   let image;
   let url = "/";
+  let tag;
   try {
     const data = event.data.json();
     title = data.title ?? title;
     body = data.body ?? "";
     image = data.image ?? undefined;
     url = data.url ?? "/";
+    tag = data.tag ?? undefined;
   } catch {
     body = event.data.text();
   }
@@ -111,6 +113,11 @@ self.addEventListener("push", (event) => {
         // notificarea fără imaginea mare — restul iconițelor sunt neatinse.
         image,
         vibrate: [100, 50, 100],
+        // Același tag = înlocuiește notificarea anterioară (descărcare
+        // inițiată → completă, vizionare începută → încheiată), în loc să se
+        // adune. renotify: înlocuirea sună/vibrează din nou, altfel
+        // "Descărcare completă" ar apărea în tăcere.
+        ...(tag ? { tag, renotify: true } : {}),
         data: { url },
       });
     })(),
@@ -120,5 +127,24 @@ self.addEventListener("push", (event) => {
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const url = event.notification.data?.url ?? "/";
-  event.waitUntil(clients.openWindow(url));
+  event.waitUntil(
+    (async () => {
+      // Dacă aplicația e deja deschisă, o aducem în față și o ducem la pagina
+      // notificării, în loc să deschidem încă o fereastră.
+      const target = new URL(url, self.location.origin).href;
+      const windows = await clients.matchAll({ type: "window", includeUncontrolled: true });
+      const existing = windows.find((c) => new URL(c.url).origin === self.location.origin);
+      if (existing) {
+        try {
+          const focused = await existing.focus();
+          if (focused.url !== target && "navigate" in focused) await focused.navigate(target);
+          return;
+        } catch {
+          // navigate() refuză clienții necontrolați de acest SW — cădem pe
+          // fereastră nouă, ca înainte.
+        }
+      }
+      await clients.openWindow(target);
+    })(),
+  );
 });

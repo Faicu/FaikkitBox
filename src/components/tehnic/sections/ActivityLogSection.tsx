@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
   ScrollText,
@@ -16,6 +17,8 @@ import {
   UserPlus,
   DatabaseZap,
   ArrowUpCircle,
+  Search,
+  ChevronRight,
 } from "lucide-react";
 
 import { activityLogQuery, recentCommitsQuery, commitsFromDbQuery } from "@/lib/queries";
@@ -26,10 +29,18 @@ import { SubtitleFixDrawer } from "../SubtitleFixDrawer";
 import { MetaRefreshDrawer } from "../MetaRefreshDetails";
 import { metaItems } from "../meta-items";
 import { relativeTime } from "../utils";
-
-type TimelineItem =
-  | { kind: "activity"; ts: number; entry: ActivityEntry }
-  | { kind: "commit"; ts: number; commit: GitHubCommit };
+import {
+  buildTimeline,
+  clock,
+  dayKey,
+  dayLabel,
+  itemType,
+  normalizeSearch,
+  plexParts,
+  searchText,
+  shortDuration,
+  type TimelineItem,
+} from "../activity-timeline";
 
 const FILTER_GROUPS: { key: string; label: string }[] = [
   { key: "all", label: "Toate" },
@@ -93,22 +104,21 @@ export function ActivityLogSection() {
     update_available: <ArrowUpCircle className="h-3.5 w-3.5 text-amber-400" />,
   };
 
-  const timeline: TimelineItem[] = [
-    ...(Array.isArray(log) ? log : []).map((entry): TimelineItem => ({
-      kind: "activity",
-      ts: new Date(entry.timestamp).getTime(),
-      entry,
-    })),
-    ...(commitsData?.status === "ok" ? commitsData.commits : []).map((commit): TimelineItem => ({
-      kind: "commit",
-      ts: new Date(commit.date).getTime(),
-      commit,
-    })),
-  ].sort((a, b) => b.ts - a.ts);
+  const [query, setQuery] = useState("");
+  const navigate = useNavigate();
+
+  const timeline = useMemo(
+    () =>
+      buildTimeline(
+        Array.isArray(log) ? log : [],
+        commitsData?.status === "ok" ? commitsData.commits : [],
+      ),
+    [log, commitsData],
+  );
 
   const isLoading = logLoading || commitsLoading;
 
-  const filtered =
+  const byTab =
     filter === "all"
       ? // "Toate" exclude intenționat evenimentele de server (pornire/oprire):
         // se produc la fiecare deploy, deci ar îneca activitatea reală
@@ -118,20 +128,162 @@ export function ActivityLogSection() {
         timeline.filter(
           (item) =>
             item.kind === "commit" ||
-            (TYPE_TO_GROUP[item.entry.type] !== "server" &&
-              TYPE_TO_GROUP[item.entry.type] !== "metadate"),
+            (TYPE_TO_GROUP[itemType(item)] !== "server" &&
+              TYPE_TO_GROUP[itemType(item)] !== "metadate"),
         )
       : timeline.filter((item) => {
           if (item.kind === "commit") return filter === "commits";
-          return TYPE_TO_GROUP[item.entry.type] === filter;
+          return TYPE_TO_GROUP[itemType(item)] === filter;
         });
+
+  const needle = normalizeSearch(query.trim());
+  const filtered = needle
+    ? byTab.filter((item) => normalizeSearch(searchText(item)).includes(needle))
+    : byTab;
 
   useEffect(() => {
     setVisible(10);
-  }, [filter]);
+  }, [filter, needle]);
 
   const shown = filtered.slice(0, visible);
   const hasMore = filtered.length > visible;
+
+  // Ora exactă lângă cea relativă; pentru zilele trecute antetul zilei spune
+  // deja "când", deci rămâne doar ora.
+  function when(t: number | string) {
+    const time = new Date(t).getTime();
+    return dayKey(time) === dayKey(Date.now())
+      ? `${relativeTime(new Date(time).toISOString())} · ${clock(time)}`
+      : clock(time);
+  }
+
+  function itemKey(item: TimelineItem): string {
+    switch (item.kind) {
+      case "activity":
+        return item.entry.id;
+      case "commit":
+        return item.commit.sha;
+      case "plex":
+        return (item.start ?? item.stop)!.id;
+      case "deploy":
+        return item.start.id;
+    }
+  }
+
+  const rowClass = "w-full flex items-start gap-2.5 px-3 py-2.5 text-left";
+  const clickableClass = "hover:bg-muted/40 transition-colors cursor-pointer";
+
+  function renderItem(item: TimelineItem) {
+    if (item.kind === "plex") {
+      const { what, progress } = plexParts(item);
+      const range =
+        item.start && item.stop
+          ? `${clock(item.start.timestamp)}–${clock(item.stop.timestamp)}`
+          : clock((item.start ?? item.stop)!.timestamp);
+      return (
+        <div className={rowClass}>
+          <div className="mt-0.5 shrink-0">
+            <PlayCircle
+              className={`h-3.5 w-3.5 ${item.ongoing ? "text-amber-400" : "text-muted-foreground"}`}
+            />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm leading-tight break-words">{what}</div>
+            <div className="mt-0.5 text-[11px] text-muted-foreground">
+              {range}
+              {item.ongoing && <span className="text-amber-400"> · în curs</span>}
+              {progress && ` · ${progress}`}
+            </div>
+          </div>
+          <div className="shrink-0 text-[11px] text-muted-foreground whitespace-nowrap">
+            {item.ongoing ? "acum" : when(item.ts)}
+          </div>
+        </div>
+      );
+    }
+
+    if (item.kind === "deploy") {
+      const down =
+        new Date(item.start.timestamp).getTime() - new Date(item.stop.timestamp).getTime();
+      return (
+        <div className={rowClass}>
+          <div className="mt-0.5 shrink-0">
+            <RefreshCw className="h-3.5 w-3.5 text-sky-400" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm leading-tight break-words">
+              Deploy · oprit {shortDuration(down)}
+            </div>
+          </div>
+          <div className="shrink-0 text-[11px] text-muted-foreground whitespace-nowrap">
+            {when(item.ts)}
+          </div>
+        </div>
+      );
+    }
+
+    if (item.kind === "activity") {
+      const entry = item.entry;
+      const hasSubtitleDetails =
+        entry.type === "subtitle_fix" &&
+        Array.isArray(entry.meta?.items) &&
+        (entry.meta.items as unknown[]).length > 0;
+      const hasMetaDetails = entry.type === "metadata_refresh" && metaItems(entry).length > 0;
+      // Torrentele duc la titlul lor din Bibliotecă (mediaId rezolvat de
+      // server; lipsește dacă titlul a fost șters).
+      const mediaId = entry.mediaId;
+      const clickable = hasSubtitleDetails || hasMetaDetails || mediaId != null;
+      const Row = clickable ? "button" : "div";
+      return (
+        <Row
+          onClick={
+            hasSubtitleDetails
+              ? () => setSelectedSubtitleEntry(entry)
+              : hasMetaDetails
+                ? () => setSelectedMetaEntry(entry)
+                : mediaId != null
+                  ? () => navigate({ to: "/biblioteca", search: { titlu: mediaId } })
+                  : undefined
+          }
+          className={`${rowClass} ${clickable ? clickableClass : ""}`}
+        >
+          <div className="mt-0.5 shrink-0">
+            {iconMap[entry.type] ?? <Activity className="h-3.5 w-3.5 text-muted-foreground" />}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm leading-tight break-words">{entry.message}</div>
+          </div>
+          <div className="shrink-0 flex items-center gap-0.5 text-[11px] text-muted-foreground whitespace-nowrap">
+            {when(entry.timestamp)}
+            {mediaId != null && <ChevronRight className="h-3 w-3" />}
+          </div>
+        </Row>
+      );
+    }
+
+    const c = item.commit;
+    return (
+      <button
+        onClick={() => setSelectedCommit(c)}
+        className={`${rowClass} hover:bg-muted/40 transition-colors group`}
+      >
+        <div className="mt-0.5 shrink-0">
+          <GitCommitHorizontal className="h-3.5 w-3.5 text-sky-400" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-sm leading-tight break-words group-hover:text-sky-400 transition-colors">
+            {c.message}
+          </div>
+          <div className="mt-0.5 text-[11px] text-muted-foreground">
+            {c.author} · <span className="font-mono">{c.shortSha}</span>
+          </div>
+        </div>
+        <div className="shrink-0 text-[11px] text-muted-foreground whitespace-nowrap">
+          {when(c.date)}
+        </div>
+      </button>
+    );
+  }
 
   return (
     <>
@@ -139,6 +291,15 @@ export function ActivityLogSection() {
         <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
           <ScrollText className="h-3.5 w-3.5" /> Jurnal activitate
         </h2>
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Caută în jurnal (titlu, utilizator…)"
+            className="w-full rounded-xl glass-card py-2 pl-8 pr-3 text-sm outline-none focus:ring-1 focus:ring-primary"
+          />
+        </div>
         <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
           {FILTER_GROUPS.map((g) => (
             <button
@@ -164,72 +325,25 @@ export function ActivityLogSection() {
           )}
           {!isLoading && filtered.length === 0 && (
             <div className="px-3 py-4 text-xs text-muted-foreground text-center">
-              {filter === "all"
-                ? "Nicio activitate înregistrată încă."
-                : "Nicio activitate pentru acest filtru."}
+              {needle
+                ? "Nimic găsit pentru această căutare."
+                : filter === "all"
+                  ? "Nicio activitate înregistrată încă."
+                  : "Nicio activitate pentru acest filtru."}
             </div>
           )}
-          {shown.map((item) => {
-            if (item.kind === "activity") {
-              const entry = item.entry;
-              const hasSubtitleDetails =
-                entry.type === "subtitle_fix" &&
-                Array.isArray(entry.meta?.items) &&
-                (entry.meta.items as unknown[]).length > 0;
-              const hasMetaDetails =
-                entry.type === "metadata_refresh" && metaItems(entry).length > 0;
-              const clickable = hasSubtitleDetails || hasMetaDetails;
-              const Row = clickable ? "button" : "div";
-              return (
-                <Row
-                  key={entry.id}
-                  onClick={
-                    hasSubtitleDetails
-                      ? () => setSelectedSubtitleEntry(entry)
-                      : hasMetaDetails
-                        ? () => setSelectedMetaEntry(entry)
-                        : undefined
-                  }
-                  className={`w-full flex items-start gap-2.5 px-3 py-2.5 text-left ${
-                    clickable ? "hover:bg-muted/40 transition-colors cursor-pointer" : ""
-                  }`}
-                >
-                  <div className="mt-0.5 shrink-0">
-                    {iconMap[entry.type] ?? (
-                      <Activity className="h-3.5 w-3.5 text-muted-foreground" />
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm leading-tight break-words">{entry.message}</div>
-                  </div>
-                  <div className="shrink-0 text-[11px] text-muted-foreground whitespace-nowrap">
-                    {relativeTime(entry.timestamp)}
-                  </div>
-                </Row>
-              );
-            }
-            const c = item.commit;
+          {shown.map((item, i) => {
+            const day = dayKey(item.ts);
+            const newDay = i === 0 || dayKey(shown[i - 1].ts) !== day;
             return (
-              <button
-                key={c.sha}
-                onClick={() => setSelectedCommit(c)}
-                className="w-full flex items-start gap-2.5 px-3 py-2.5 hover:bg-muted/40 transition-colors group text-left"
-              >
-                <div className="mt-0.5 shrink-0">
-                  <GitCommitHorizontal className="h-3.5 w-3.5 text-sky-400" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm leading-tight break-words group-hover:text-sky-400 transition-colors">
-                    {c.message}
+              <div key={itemKey(item)}>
+                {newDay && (
+                  <div className="bg-muted/30 px-3 py-1 text-[11px] font-medium text-muted-foreground">
+                    {dayLabel(item.ts)}
                   </div>
-                  <div className="mt-0.5 text-[11px] text-muted-foreground">
-                    {c.author} · <span className="font-mono">{c.shortSha}</span>
-                  </div>
-                </div>
-                <div className="shrink-0 text-[11px] text-muted-foreground whitespace-nowrap">
-                  {relativeTime(c.date)}
-                </div>
-              </button>
+                )}
+                {renderItem(item)}
+              </div>
             );
           })}
           {hasMore && (
