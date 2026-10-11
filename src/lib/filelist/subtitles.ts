@@ -514,6 +514,9 @@ export type SubtitleRunTrigger = "download" | "backfill";
 export async function logSubtitleRun(
   items: SubtitleRunItem[],
   trigger: SubtitleRunTrigger,
+  // `via: "retry"` — găsită de reîncercarea zilnică (subtitle-retry.ts);
+  // lista „Găsite" din Tehnic → Plugin-uri se citește după marcajul ăsta.
+  extra?: { via?: "retry" },
 ): Promise<void> {
   if (!items.length) return;
 
@@ -547,6 +550,7 @@ export async function logSubtitleRun(
       message,
       {
         trigger,
+        via: extra?.via,
         total: items.length,
         corrected,
         ok,

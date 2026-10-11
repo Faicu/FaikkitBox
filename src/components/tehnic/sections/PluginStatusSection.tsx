@@ -6,6 +6,7 @@ import {
   activityLogQuery,
   dbBackupQuery,
   showWatchStatusQuery,
+  subtitleRetryStatusQuery,
   wantedMoviesQuery,
 } from "@/lib/queries";
 import { PLUGINS, type PluginInfo } from "../plugins";
@@ -17,6 +18,7 @@ export function PluginStatusSection() {
   const { data: watch } = useQuery(showWatchStatusQuery);
   const { data: wanted } = useQuery(wantedMoviesQuery);
   const { data: backup } = useQuery(dbBackupQuery);
+  const { data: subRetry } = useQuery(subtitleRetryStatusQuery);
   const [openPlugin, setOpenPlugin] = useState<PluginInfo | null>(null);
 
   function lastActivity(type: string | null): string | null {
@@ -44,12 +46,21 @@ export function PluginStatusSection() {
 
   function lastTsFor(p: PluginInfo): string | null {
     if (p.id === "show-watcher") return lastShowWatch();
+    // Tic-ul din oră în oră, în format SQLite UTC (vezi lastShowWatch).
+    if (p.id === "subtitle-retry")
+      return subRetry?.lastTickAt ? `${subRetry.lastTickAt.replace(" ", "T")}Z` : null;
     if (p.id === "maintenance") return lastMaintenance(p);
     return lastActivity(p.activityType);
   }
 
   // Filmele așteptate apar doar când există.
   function descriptionFor(p: PluginInfo): string {
+    if (p.id === "subtitle-retry" && subRetry) {
+      const n = subRetry.searching.length;
+      return n === 0
+        ? "nimic de căutat acum"
+        : `${n} ${n === 1 ? "titlu" : "titluri"} în căutare zilnică`;
+    }
     if (p.id !== "show-watcher" || !watch) return p.description;
     const n = watch.shows.length;
     const shows =

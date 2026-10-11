@@ -15,6 +15,11 @@ import {
   Clapperboard,
   Film,
   Star,
+  Captions,
+  Search,
+  ShieldCheck,
+  Replace,
+  BellRing,
 } from "lucide-react";
 import { Orb } from "@/components/ui/orb";
 
@@ -114,6 +119,65 @@ export const PLUGINS: PluginInfo[] = [
       },
     ],
     icon: <Orb state="searching" />,
+    activityType: null,
+  },
+  {
+    id: "subtitle-retry",
+    label: "Reîncercare Subtitrări",
+    description: "Caută zilnic subtitrările care lipsesc, 14 zile de la descărcare",
+    cadence: "zilnic per titlu, 14 zile",
+    details:
+      "Subtitrarea se caută prima dată la finalul descărcării — exact când e cel mai puțin probabil să existe: episoadele apar pe Filelist în aceeași zi, iar traducerile românești vin abia peste una-trei zile. Plugin-ul o mai caută o dată pe zi, timp de două săptămâni.",
+    steps: [
+      {
+        title: "Ce caută",
+        cadence: "o dată pe zi / titlu",
+        summary: "Titlurile fără subtitrare română, în primele 14 zile de la descărcare.",
+        points: [
+          "Intră filmele și episoadele fără nicio subtitrare română. Cele cu subtitrare inclusă în video sau cu audio în română nu au nevoie.",
+          "La un pachet de sezon caută doar episoadele care încă n-au subtitrare; cele în regulă rămân neatinse.",
+          "După 14 zile se oprește. Titlul rămâne în lista „Căutare încheiată” de mai jos, iar de-acolo se încearcă din nou cu „Corectează subtitrare”, din Bibliotecă.",
+          "Ceasul fiecărui titlu e data ultimei lui verificări, ținută în baza de date — o repornire sau un deploy nu-l resetează și nu provoacă o căutare în plus.",
+        ],
+        icon: <Search className="h-3.5 w-3.5 text-sky-400" />,
+      },
+      {
+        title: "Ce acceptă",
+        cadence: "aceleași reguli ca la descărcare",
+        summary: "Doar traduceri făcute de om, pentru episodul exact, bine sincronizate.",
+        points: [
+          "Caută pe subs.ro și pe OpenSubtitles. La scor egal are prioritate subs.ro, unde traduc traducători români.",
+          "Ignoră traducerile automate: cele marcate AI pe OpenSubtitles, tot ce urcă contul „os-auto” și traducătorul „Ai” de pe subs.ro.",
+          "Ia doar fișiere chiar în română — pe subs.ro există și originale în engleză (de ex. de la „R.”), marcate „en”.",
+          "Episodul trebuie să fie exact al tău: verificat după nume (datele sursei, release-ul, fișierul) și după conținut (durata și momentele de vorbire).",
+          "Dintre variantele valide o alege pe cea mai bine sincronizată cu subtitrarea inclusă în fișier, nu pe cea cu numele cel mai apropiat.",
+        ],
+        icon: <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />,
+      },
+      {
+        title: "Subtitrări aproximative",
+        cadence: "tot 14 zile",
+        summary: "Le înlocuiește doar cu una sigur mai bună.",
+        points: [
+          "Aproximativă înseamnă pentru alt release sau cu decalaj măsurat. La episoadele noi apare des întâi varianta pentru alt release, iar cea exactă abia peste una-două zile.",
+          "Se înlocuiește doar cu o variantă bine sincronizată (sau, fără nimic de comparat, cu numele release-ului identic). Altfel rămâne ce era.",
+          "De pe OpenSubtitles încearcă atunci doar variante cu numele identic: fiecare descărcare de acolo consumă din limita de 20 pe zi a contului.",
+        ],
+        icon: <Replace className="h-3.5 w-3.5 text-amber-400" />,
+      },
+      {
+        title: "Notificări",
+        cadence: "doar la succes",
+        summary: "Jurnal și push doar când pune o subtitrare.",
+        points: [
+          "O căutare fără rezultat nu scrie în jurnal — altfel ar apărea în fiecare zi câte un „tot nimic” pentru fiecare titlu.",
+          "Ca să se vadă totuși că lucrează, mai jos sunt titlurile căutate acum, când a rulat ultima dată și ce a găsit.",
+        ],
+        icon: <BellRing className="h-3.5 w-3.5 text-purple-400" />,
+      },
+    ],
+    icon: <Captions className="h-4 w-4 text-teal-400" />,
+    // Ultimul tic vine din subtitle_retry_state — vezi PluginStatusSection.
     activityType: null,
   },
   {

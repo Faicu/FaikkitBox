@@ -11,6 +11,10 @@ import {
   Film,
   ChevronDown,
   History,
+  Captions,
+  CaptionsOff,
+  CheckCircle2,
+  Search,
 } from "lucide-react";
 import { Orb } from "@/components/ui/orb";
 
@@ -25,6 +29,7 @@ import {
   activityLogQuery,
   immichTrackerQuery,
   showWatchStatusQuery,
+  subtitleRetryStatusQuery,
   wantedMoviesQuery,
 } from "@/lib/queries";
 import type { ActivityEntry } from "@/lib/activity-log.functions";
@@ -51,6 +56,7 @@ export function PluginDetailDrawer({
   // Datele în plus se cer doar pentru plugin-ul care le afișează.
   const isWatcher = plugin?.id === "show-watcher";
   const isImmich = plugin?.id === "immich-upload-tracker";
+  const isSubRetry = plugin?.id === "subtitle-retry";
   const { data: watch } = useQuery({ ...showWatchStatusQuery, enabled: isWatcher });
   const { data: wanted } = useQuery({ ...wantedMoviesQuery, enabled: isWatcher });
   const { data: log } = useQuery({ ...activityLogQuery, enabled: isWatcher || isImmich });
@@ -124,6 +130,8 @@ export function PluginDetailDrawer({
                 din altă sursă doar ca să pară toate la fel.
               </div>
             )}
+
+            {isSubRetry && <SubtitleRetryCards />}
 
             {isImmich && (
               <ImmichUploadsCard
@@ -447,4 +455,141 @@ function FlashValue({
 }) {
   const flash = useFlashOnChange(flashKey);
   return <span className={`tabular-nums ${flash ? "tick-flash" : ""}`}>{children}</span>;
+}
+
+// Data în formatul SQLite (UTC) → Date.
+const sqliteDate = (v: string) => new Date(`${v.replace(" ", "T")}Z`);
+const shortDay = (v: string) =>
+  sqliteDate(v).toLocaleDateString("ro-RO", { day: "numeric", month: "short" });
+
+// Reîncercarea subtitrărilor: ce se caută acum și până când, ce s-a încheiat
+// fără rezultat, ce a găsit și când a rulat ultima dată. O căutare fără
+// rezultat nu scrie în jurnal (ar fi zilnic „tot nimic"), deci locul ăsta e
+// singura dovadă că lucrează.
+function SubtitleRetryCards() {
+  const { data } = useQuery(subtitleRetryStatusQuery);
+  if (!data) return null;
+  const now = Date.now();
+  const daysLeft = (until: string) =>
+    Math.max(0, Math.ceil((sqliteDate(until).getTime() - now) / (24 * 60 * 60 * 1000)));
+  const lastCheck = data.lastCheckAt ? `${data.lastCheckAt.replace(" ", "T")}Z` : null;
+
+  return (
+    <>
+      <div className="rounded-2xl glass-card divide-y divide-border/50 text-xs">
+        <Row
+          icon={<Search className="h-3.5 w-3.5" />}
+          label="Ultima căutare"
+          flashKey={data.lastCheckAt}
+        >
+          {lastCheck ? (
+            <span title={formatDateTime(lastCheck)}>
+              {relativeTime(lastCheck)} · {data.lastChecked}{" "}
+              {data.lastChecked === 1 ? "titlu" : "titluri"},{" "}
+              {data.lastFound === 0
+                ? "nimic găsit"
+                : `${data.lastFound} ${data.lastFound === 1 ? "găsită" : "găsite"}`}
+            </span>
+          ) : (
+            <span className="text-muted-foreground">încă niciuna</span>
+          )}
+        </Row>
+      </div>
+
+      <div className="rounded-2xl glass-card p-3 text-xs">
+        <div className="mb-2 flex items-center gap-1.5 text-muted-foreground">
+          <Captions className="h-3.5 w-3.5" /> În căutare acum
+          {data.searching.length > 0 && (
+            <span className="ml-auto tabular-nums">{data.searching.length}</span>
+          )}
+        </div>
+        {data.searching.length === 0 ? (
+          <div className="text-muted-foreground">
+            Nimic. Toate titlurile descărcate în ultimele 14 zile au subtitrare română.
+          </div>
+        ) : (
+          <div className="space-y-1.5 stagger-in">
+            {data.searching.map((t) => {
+              const left = daysLeft(t.until);
+              return (
+                <div key={t.mediaId} className="rounded-lg bg-muted/40 px-2 py-1.5">
+                  <div className="flex items-center gap-2">
+                    <Captions
+                      className={`h-3 w-3 shrink-0 ${t.kind === "approximate" ? "text-amber-400" : "text-teal-400"}`}
+                    />
+                    <span className="min-w-0 flex-1 truncate font-medium">{t.title}</span>
+                    <span
+                      className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+                        t.kind === "approximate"
+                          ? "bg-amber-500/15 text-amber-400"
+                          : "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      {t.kind === "approximate" ? "aproximativă" : "fără subtitrare"}
+                    </span>
+                  </div>
+                  <div className="mt-0.5 text-[10px] leading-relaxed text-muted-foreground">
+                    până pe {shortDay(t.until)} · {left <= 1 ? "ultima zi" : `mai are ${left} zile`}
+                    {" · "}
+                    <FlashValue flashKey={t.lastCheckedAt}>
+                      {t.lastCheckedAt
+                        ? `verificat ${relativeTime(`${t.lastCheckedAt.replace(" ", "T")}Z`)}`
+                        : "încă neverificat"}
+                    </FlashValue>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {data.ended.length > 0 && (
+        <div className="rounded-2xl glass-card p-3 text-xs">
+          <div className="mb-2 flex items-center gap-1.5 text-muted-foreground">
+            <CaptionsOff className="h-3.5 w-3.5" /> Căutare încheiată, fără rezultat
+            <span className="ml-auto tabular-nums">{data.ended.length}</span>
+          </div>
+          <div className="space-y-1.5">
+            {data.ended.map((t) => (
+              <div key={t.mediaId} className="rounded-lg bg-muted/40 px-2 py-1.5">
+                <div className="truncate font-medium">{t.title}</div>
+                <div className="mt-0.5 text-[10px] leading-relaxed text-muted-foreground">
+                  încheiată pe {shortDay(t.until)} · din Bibliotecă, cu „Corectează subtitrare”
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="rounded-2xl glass-card p-3 text-xs">
+        <div className="mb-2 flex items-center gap-1.5 text-muted-foreground">
+          <CheckCircle2 className="h-3.5 w-3.5" /> Găsite de reîncercare
+        </div>
+        {data.found.length === 0 ? (
+          <div className="text-muted-foreground">
+            Niciuna încă. Când găsește una, apare aici și în jurnal, cu notificare.
+          </div>
+        ) : (
+          <div className="space-y-1.5 stagger-in">
+            {data.found.map((e) => (
+              <div
+                key={e.id}
+                className="flex items-start justify-between gap-2 rounded-lg bg-muted/40 px-2 py-1.5"
+              >
+                <span className="min-w-0 leading-relaxed">{e.message}</span>
+                <span
+                  className="shrink-0 text-[10px] text-muted-foreground"
+                  title={formatDateTime(e.timestamp)}
+                >
+                  {relativeTime(e.timestamp)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </>
+  );
 }

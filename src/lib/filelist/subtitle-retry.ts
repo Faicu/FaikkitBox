@@ -18,8 +18,7 @@
 // ---------------------------------------------------------------------------
 
 import { getDb } from "../db";
-
-const RETRY_DAYS = 14;
+import { SUBTITLE_RETRY_DAYS as RETRY_DAYS } from "./subtitle-outcomes";
 // 23h, nu 24h: cu verificare din oră în oră, pauza reală e pragul plus cel
 // mult o oră.
 const RETRY_MIN_AGE_HOURS = 23;
@@ -53,9 +52,18 @@ export function listTorrentsDueForSubtitleRetry(): DueTorrent[] {
 }
 
 export async function retryMissingSubtitles(): Promise<void> {
+  const db = getDb();
+  // Tic-ul se notează mereu — e dovada că plugin-ul rulează, chiar și în
+  // orele în care n-are nimic de căutat.
+  db.prepare(
+    `INSERT INTO subtitle_retry_state (id, last_tick_at) VALUES (1, datetime('now'))
+       ON CONFLICT(id) DO UPDATE SET last_tick_at = excluded.last_tick_at`,
+  ).run();
   const due = listTorrentsDueForSubtitleRetry();
   if (due.length === 0) return;
   const { checkSubtitleForTorrent } = await import("./download");
+  const { CORRECTED_OUTCOMES } = await import("./subtitle-outcomes");
+  let found = 0;
   for (const t of due) {
     try {
       const result = await checkSubtitleForTorrent(
@@ -65,8 +73,9 @@ export async function retryMissingSubtitles(): Promise<void> {
           imdbId: t.imdb_id,
           category: t.category,
         },
-        { logRun: "corrected", upgradeApproximate: t.has_ro === 1 },
+        { logRun: "corrected", upgradeApproximate: t.has_ro === 1, via: "retry" },
       );
+      if (result.status === "ok" && CORRECTED_OUTCOMES.includes(result.outcome)) found++;
       console.log(
         `[subtitle-retry] „${t.torrent_name}" — ${result.status === "ok" ? result.outcome : result.error}`,
       );
@@ -74,4 +83,135 @@ export async function retryMissingSubtitles(): Promise<void> {
       console.warn(`[subtitle-retry] „${t.torrent_name}" — eroare:`, e);
     }
   }
+  db.prepare(
+    `UPDATE subtitle_retry_state
+        SET last_check_at = datetime('now'), last_checked = ?, last_found = ?
+      WHERE id = 1`,
+  ).run(due.length, found);
+}
+
+// ---------------------------------------------------------------------------
+// Starea, pentru Tehnic → Plugin-uri și pentru drawer-ul din Bibliotecă.
+// ---------------------------------------------------------------------------
+
+export interface SubtitleRetryTitle {
+  mediaId: number;
+  // „Imperiul Mafiei S02E04", „The Rookie S08 (pachet)" sau titlul filmului.
+  title: string;
+  torrentName: string | null;
+  // missing = fără subtitrare română; approximate = are una aproximativă,
+  // care se înlocuiește dacă apare una sigur mai bună.
+  kind: "missing" | "approximate";
+  // Datele în formatul SQLite, UTC.
+  completedAt: string;
+  until: string;
+  lastCheckedAt: string | null;
+}
+
+export interface SubtitleRetryStatus {
+  lastTickAt: string | null;
+  lastCheckAt: string | null;
+  lastChecked: number;
+  lastFound: number;
+  // În fereastra de 14 zile, căutate zilnic.
+  searching: SubtitleRetryTitle[];
+  // Tot fără subtitrare, dar fereastra s-a încheiat în ultimele 30 de zile —
+  // de-acum doar „Corectează subtitrare".
+  ended: SubtitleRetryTitle[];
+  // Subtitrări găsite de reîncercare, din jurnal (ultimele 10).
+  found: Array<{ id: string; timestamp: string; message: string }>;
+}
+
+const ENDED_SHOWN_DAYS = 30;
+
+export function getSubtitleRetryStatus(): SubtitleRetryStatus {
+  const db = getDb();
+  const state = db
+    .prepare(
+      "SELECT last_tick_at, last_check_at, last_checked, last_found FROM subtitle_retry_state WHERE id = 1",
+    )
+    .get() as
+    | {
+        last_tick_at: string | null;
+        last_check_at: string | null;
+        last_checked: number;
+        last_found: number;
+      }
+    | undefined;
+
+  // Un rând per torrent (un pachet are câte un rând per episod, cu aceeași
+  // stare). Titlul afișat: serialul (rândul-părinte, în română) + episodul.
+  const rows = db
+    .prepare(
+      `SELECT MIN(m.id) AS mediaId, MIN(m.torrent_name) AS torrentName,
+              COALESCE(MIN(p.title), MIN(m.title)) AS baseTitle,
+              MIN(m.season) AS season, MIN(m.episode) AS episode, MAX(m.is_season_pack) AS isPack,
+              MIN(m.completed_at) AS completedAt,
+              datetime(MIN(m.completed_at), ?) AS until,
+              MAX(m.subtitle_checked_at) AS lastCheckedAt,
+              MAX(m.has_romanian_subtitle) AS hasRo, MAX(m.has_romanian_audio) AS hasAudio,
+              MAX(m.subtitle_approximate) AS approximate
+         FROM media m LEFT JOIN media p ON p.id = m.parent_id
+        WHERE m.torrent_hash IS NOT NULL AND m.completed_at IS NOT NULL
+          AND m.completed_at >= datetime('now', ?)
+        GROUP BY m.torrent_hash
+       HAVING (hasRo = 0 AND hasAudio = 0) OR approximate = 1
+        ORDER BY until`,
+    )
+    .all(`+${RETRY_DAYS} days`, `-${RETRY_DAYS + ENDED_SHOWN_DAYS} days`) as unknown as Array<{
+    mediaId: number;
+    torrentName: string | null;
+    baseTitle: string;
+    season: number | null;
+    episode: number | null;
+    isPack: number;
+    completedAt: string;
+    until: string;
+    lastCheckedAt: string | null;
+    hasRo: number;
+    approximate: number;
+  }>;
+
+  const now = (db.prepare("SELECT datetime('now') AS n").get() as { n: string }).n;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const toTitle = (r: (typeof rows)[number]) =>
+    r.season == null
+      ? r.baseTitle
+      : r.episode == null || r.isPack
+        ? `${r.baseTitle} S${pad(r.season)} (pachet)`
+        : `${r.baseTitle} S${pad(r.season)}E${pad(r.episode)}`;
+  const toItem = (r: (typeof rows)[number]): SubtitleRetryTitle => ({
+    mediaId: r.mediaId,
+    title: toTitle(r),
+    torrentName: r.torrentName,
+    kind: r.hasRo ? "approximate" : "missing",
+    completedAt: r.completedAt,
+    until: r.until,
+    lastCheckedAt: r.lastCheckedAt,
+  });
+
+  const found = (
+    db
+      .prepare(
+        `SELECT id, timestamp, message FROM activity
+          WHERE type = 'subtitle_fix' AND meta LIKE '%"via":"retry"%'
+          ORDER BY timestamp DESC LIMIT 10`,
+      )
+      .all() as unknown as Array<{ id: string; timestamp: string; message: string }>
+  ).map((e) => ({ id: String(e.id), timestamp: e.timestamp, message: e.message }));
+
+  return {
+    lastTickAt: state?.last_tick_at ?? null,
+    lastCheckAt: state?.last_check_at ?? null,
+    lastChecked: state?.last_checked ?? 0,
+    lastFound: state?.last_found ?? 0,
+    searching: rows.filter((r) => r.until > now).map(toItem),
+    // Aproximativele ieșite din fereastră au totuși subtitrare — nu le
+    // trecem la „fără subtitrare".
+    ended: rows
+      .filter((r) => r.until <= now && !r.hasRo)
+      .map(toItem)
+      .reverse(),
+    found,
+  };
 }

@@ -18,6 +18,7 @@ import { createServerFn } from "@tanstack/react-start";
 import type { FilelistDownloadResult } from "./types";
 import type { DeleteSubtitleResult } from "./subtitles";
 import type { CorrectSubtitleResult, DownloadFilelistParams } from "./download";
+import type { SubtitleRetryStatus } from "./subtitle-retry";
 
 export type { CorrectSubtitleResult } from "./download";
 
@@ -67,3 +68,13 @@ export const deleteSubtitleForMedia = createServerFn({ method: "POST" })
     const { deleteSubtitleForMediaCore } = await import("./download");
     return deleteSubtitleForMediaCore(session, data);
   });
+
+// Tehnic → Plugin-uri → Reîncercare subtitrări.
+export const getSubtitleRetryStatus = createServerFn({ method: "GET" }).handler(
+  async (): Promise<SubtitleRetryStatus> => {
+    const { requireAuth } = await import("../auth/admin.server");
+    await requireAuth();
+    const { getSubtitleRetryStatus: core } = await import("./subtitle-retry");
+    return core();
+  },
+);

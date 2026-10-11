@@ -722,7 +722,7 @@ export async function checkSubtitleForTorrent(
     imdbId: string | null;
     category: number | null;
   },
-  opts: { logRun: "always" | "corrected"; upgradeApproximate?: boolean },
+  opts: { logRun: "always" | "corrected"; upgradeApproximate?: boolean; via?: "retry" },
 ): Promise<CorrectSubtitleResult> {
   const qbitBase = process.env.QBIT_URL ?? "http://192.168.1.192:25556";
   const qbitUser = process.env.QBIT_USERNAME;
@@ -747,7 +747,8 @@ export async function checkSubtitleForTorrent(
   });
 
   const corrected = CORRECTED_OUTCOMES.includes(result.outcome);
-  if (opts.logRun === "always" || corrected) await logSubtitleRun([result], "download");
+  if (opts.logRun === "always" || corrected)
+    await logSubtitleRun([result], "download", { via: opts.via });
   const { updateMediaSubtitleStatus } = await import("../media/media");
   updateMediaSubtitleStatus(row.torrentHash, result.outcome, result.detail, result.source);
   if (corrected) {

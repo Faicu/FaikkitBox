@@ -311,6 +311,18 @@ export function getDb(): DatabaseSync {
       checked_until TEXT NOT NULL,
       pending TEXT NOT NULL DEFAULT '{}'
     );
+
+    -- Reîncercarea zilnică a subtitrărilor (src/lib/filelist/subtitle-retry.ts).
+    -- Doar pentru afișare (Tehnic → Plugin-uri): ultimul tic al plugin-ului
+    -- (dovada că rulează, din oră în oră) și ultima verificare care chiar a
+    -- avut ce căuta. Cadența per titlu stă pe media.subtitle_checked_at.
+    CREATE TABLE IF NOT EXISTS subtitle_retry_state (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      last_tick_at TEXT,
+      last_check_at TEXT,
+      last_checked INTEGER NOT NULL DEFAULT 0,
+      last_found INTEGER NOT NULL DEFAULT 0
+    );
   `);
 
   // Curățări one-time, versionate cu PRAGMA user_version

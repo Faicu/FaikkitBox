@@ -142,3 +142,29 @@ describe("updateMediaSubtitleStatus — subtitle_approximate", () => {
     expect(approx()).toBe(0);
   });
 });
+
+describe("getSubtitleRetryStatus", () => {
+  it("în căutare (14 zile), încheiate fără subtitrare, aproximativele doar cât durează căutarea", () => {
+    add("a", { completedDaysAgo: 2, episode: 4 });
+    add("b", { completedDaysAgo: 20, episode: 5 });
+    add("c", { completedDaysAgo: 3, ro: 1, approximate: 1, episode: 6 });
+    add("d", { completedDaysAgo: 20, ro: 1, approximate: 1, episode: 7 });
+    add("e", { completedDaysAgo: 1, ro: 1, episode: 8 });
+    const s = retry.getSubtitleRetryStatus();
+    // Ordonate după cât mai au: cel care se încheie primul, primul.
+    expect(s.searching.map((t) => [t.title, t.kind])).toEqual([
+      ["Serial S01E06", "approximate"],
+      ["Serial S01E04", "missing"],
+    ]);
+    expect(s.ended.map((t) => t.title)).toEqual(["Serial S01E05"]);
+  });
+
+  it("un pachet apare o singură dată, ca sezon", () => {
+    add("p", { episode: 1 });
+    add("p", { episode: 2 });
+    db.prepare("UPDATE media SET is_season_pack = 1 WHERE torrent_hash = 'p'").run();
+    expect(retry.getSubtitleRetryStatus().searching.map((t) => t.title)).toEqual([
+      "Serial S01 (pachet)",
+    ]);
+  });
+});

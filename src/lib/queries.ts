@@ -24,6 +24,7 @@ import { getRefreshMs, getFastRefreshMs, REFRESH_DEFAULT_MS } from "./refresh-ra
 import { getNetworkLink } from "./system/network-link.functions";
 import { getDbBackupStatus } from "./system/db-backup.functions";
 import { getShowWatchStatus } from "./media/media.functions";
+import { getSubtitleRetryStatus } from "./filelist/download.functions";
 
 // Ritmul statisticilor live e reglabil din pagina Sistem — vezi
 // lib/refresh-rate.ts. `refetchInterval` primește o funcție, evaluată la
@@ -272,6 +273,16 @@ export const showWatchStatusQuery = queryOptions({
   queryFn: () => getShowWatchStatus(),
   staleTime: 60_000,
   refetchInterval: 120_000,
+});
+
+// Reîncercarea zilnică a subtitrărilor, pentru „Plugin-uri active" din
+// Tehnic. Puls lent: plugin-ul are tic din oră în oră, iar fiecare titlu e
+// căutat o dată pe zi.
+export const subtitleRetryStatusQuery = queryOptions({
+  queryKey: ["subtitleRetryStatus"],
+  queryFn: () => getSubtitleRetryStatus(),
+  staleTime: 60_000,
+  refetchInterval: 5 * 60_000,
 });
 
 // Filmele așteptate (urmărire pornită, dar încă negăsite pe Filelist) — vezi

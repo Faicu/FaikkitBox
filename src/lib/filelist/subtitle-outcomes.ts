@@ -77,6 +77,11 @@ export const SHORT_LABELS: Record<SubtitleOutcome, string> = {
 // e singurul care o zice.
 export type SubtitleSource = "opensubtitles" | "subsro";
 
+// Câte zile de la finalizarea descărcării caută zilnic reîncercarea
+// subtitrărilor (subtitle-retry.ts). Aici, nu acolo, ca s-o poată folosi și
+// detaliul din Bibliotecă (plex-browse.ts), importat și din client.
+export const SUBTITLE_RETRY_DAYS = 14;
+
 // Sincronizarea măsurată a subtitrării descărcate față de subtitrarea
 // încorporată în fișier (subtitle-verify.ts) — `good` e calculat acolo, aici
 // doar se afișează (fișierul ăsta e importat și din client).

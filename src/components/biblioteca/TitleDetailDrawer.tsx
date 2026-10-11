@@ -25,6 +25,7 @@ import {
   CheckCheck,
   RefreshCw,
   Download,
+  Search,
 } from "lucide-react";
 import { Orb } from "@/components/ui/orb";
 
@@ -424,6 +425,12 @@ export function TitleDetailDrawer({
                     </span>
                   )}
                 </div>
+              )}
+              {/* Reîncercarea zilnică a subtitrării (Tehnic → Plugin-uri →
+                  Reîncercare Subtitrări): dacă titlul e în căutare și până
+                  când, sau că fereastra de 14 zile s-a încheiat. */}
+              {d && d.subtitleRetry && d.status !== "downloading" && (
+                <SubtitleRetryLine retry={d.subtitleRetry} />
               )}
               {/* Text simplu, nu pastile: e informație secundară, iar
                   pastilele ocupau un rând întreg. */}
@@ -1009,6 +1016,48 @@ function NextEpisodeLine({ detail, trailing }: { detail: PlexTitleDetail; traili
     <div className="flex items-center justify-between gap-2 text-xs">
       {content}
       {trailing}
+    </div>
+  );
+}
+
+// Data în formatul SQLite (UTC) → „22 oct.".
+function retryDay(v: string): string {
+  return new Date(`${v.replace(" ", "T")}Z`).toLocaleDateString("ro-RO", {
+    day: "numeric",
+    month: "short",
+  });
+}
+
+function SubtitleRetryLine({ retry }: { retry: NonNullable<PlexTitleDetail["subtitleRetry"]> }) {
+  if (retry.state === "ended") {
+    return (
+      <div className="flex items-start gap-1.5 text-[11px] leading-snug text-muted-foreground">
+        <CaptionsOff className="mt-px h-3 w-3 shrink-0" />
+        <span>
+          Căutarea automată a subtitrării s-a încheiat pe {retryDay(retry.until)} — poți încerca din
+          nou cu „Corectează subtitrare”.
+        </span>
+      </div>
+    );
+  }
+  // Același format ca „Verificat azi, 20:54" de la urmărirea serialelor.
+  const checked = retry.lastCheckedAt
+    ? ` · ${lastCheckedLabel(retry.lastCheckedAt).toLowerCase()}`
+    : "";
+  return (
+    <div
+      className={`flex items-start gap-1.5 text-[11px] leading-snug ${
+        retry.kind === "approximate" ? "text-amber-400/90" : "text-teal-400/90"
+      }`}
+    >
+      <Search className="mt-px h-3 w-3 shrink-0" />
+      <span>
+        {retry.kind === "approximate"
+          ? "Se caută zilnic o subtitrare mai bună"
+          : "Se caută zilnic subtitrare RO"}
+        , până pe {retryDay(retry.until)}
+        <span className="text-muted-foreground">{checked}</span>
+      </span>
     </div>
   );
 }

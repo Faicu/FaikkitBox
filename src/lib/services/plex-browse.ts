@@ -13,6 +13,7 @@
 // ---------------------------------------------------------------------------
 
 import { createServerFn } from "@tanstack/react-start";
+import { SUBTITLE_RETRY_DAYS as RETRY_DAYS } from "../filelist/subtitle-outcomes";
 
 // Un rând din Bibliotecă = un film SAU un serial întreg. Episoadele nu mai
 // apar niciodată la nivelul listei: se văd doar înăuntrul serialului, în
@@ -451,6 +452,17 @@ export interface PlexTitleDetail {
   // Pagina torrent-ului pe Filelist — doar descărcările de după migrarea v36
   // au ID-ul; pentru rest, butonul lipsește.
   filelistId: number | null;
+  // Reîncercarea zilnică a subtitrării (subtitle-retry.ts), pentru rândul de
+  // sub insigne: „se caută zilnic până pe…" sau „căutarea s-a încheiat".
+  // null când nu e cazul (are subtitrare bună, audio în română, încă se
+  // descarcă, sau e rândul-serial).
+  subtitleRetry: {
+    state: "searching" | "ended";
+    kind: "missing" | "approximate";
+    // Formatul SQLite, UTC.
+    until: string;
+    lastCheckedAt: string | null;
+  } | null;
   // true dacă intrarea găsită e un pachet de sezon întreg, nu doar acest
   // episod — ștergerea/corectarea ar afecta atunci tot pachetul.
   isSeasonPack: boolean;
@@ -532,6 +544,7 @@ interface MediaRow {
   subtitle_source: string | null;
   subtitle_detail: string | null;
   subtitle_checked_at: string | null;
+  subtitle_approximate: number;
   episode_title: string | null;
   episode_overview: string | null;
   episode_still: string | null;
@@ -545,6 +558,32 @@ interface MediaRow {
   next_episode: string | null;
   next_episode_air_date: string | null;
   next_episode_airstamp: string | null;
+}
+
+// Aceeași regulă ca listTorrentsDueForSubtitleRetry (subtitle-retry.ts): fără
+// subtitrare română (nici audio) sau cu una aproximativă, în primele
+// RETRY_DAYS zile de la finalizarea descărcării.
+function subtitleRetryOf(row: MediaRow): PlexTitleDetail["subtitleRetry"] {
+  if (row.media_type === "tv_show" || !row.torrent_hash || !row.completed_at) return null;
+  const missing = !row.has_romanian_subtitle && !row.has_romanian_audio;
+  const approximate = !!row.has_romanian_subtitle && !!row.subtitle_approximate;
+  if (!missing && !approximate) return null;
+  const completed = new Date(`${row.completed_at.replace(" ", "T")}Z`).getTime();
+  if (!Number.isFinite(completed)) return null;
+  const untilMs = completed + RETRY_DAYS * 24 * 60 * 60 * 1000;
+  const until = new Date(untilMs).toISOString().slice(0, 19).replace("T", " ");
+  if (untilMs > Date.now()) {
+    return {
+      state: "searching",
+      kind: missing ? "missing" : "approximate",
+      until,
+      lastCheckedAt: row.subtitle_checked_at,
+    };
+  }
+  // După fereastră, o aproximativă rămâne pur și simplu subtitrarea titlului.
+  return missing
+    ? { state: "ended", kind: "missing", until, lastCheckedAt: row.subtitle_checked_at }
+    : null;
 }
 
 // Orice titlu clicabil din Bibliotecă are un rând `media` (lista provine
@@ -762,6 +801,7 @@ async function buildDetailFromMediaRow(
     eta,
     torrentHash: row.torrent_hash,
     filelistId: row.filelist_id,
+    subtitleRetry: subtitleRetryOf(row),
     isSeasonPack: !!row.is_season_pack,
     canManage,
     tmdbId: row.tmdb_id,
@@ -813,7 +853,7 @@ export const getPlexTitleDetail = createServerFn({ method: "GET" })
            overview_ro, genres, quality, has_romanian_subtitle, has_romanian_audio, duration_ms, torrent_name, torrent_hash,
            filelist_id, category_name, size, freeleech, internal, save_path, added_via,
            plex_rating_key, is_season_pack, requested_by_user_id, added_at, completed_at,
-           subtitle_source, subtitle_detail, subtitle_checked_at, episode_title,
+           subtitle_source, subtitle_detail, subtitle_checked_at, subtitle_approximate, episode_title,
            episode_overview, episode_still, episode_air_date,
            tv_status, auto_download, auto_download_quality, auto_download_fallback_quality,
            auto_download_from, watch_last_checked_at,
