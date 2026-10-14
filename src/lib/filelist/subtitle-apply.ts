@@ -88,7 +88,7 @@ export async function writeChosenSubtitle(
       source: chosen.source,
     };
   }
-  console.warn(
+  console.log(
     `[subtitles] subtitrare aproximativă salvată (verifică sincronizarea) → ${destPath}`,
   );
   const why = sync ? describeSync(sync) : "fără potrivire clară de sursă/rezoluție";

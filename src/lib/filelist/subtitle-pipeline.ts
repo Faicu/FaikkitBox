@@ -218,7 +218,7 @@ export async function processMediaFile(
       upgrading = { sync: check?.sync ?? null };
     } else {
       await rename(sidecarAbsPath, `${sidecarAbsPath}.respins`);
-      console.warn(`[subtitles] .srt existent respins (${reason}) → ${sidecarAbsPath}.respins`);
+      console.log(`[subtitles] .srt existent respins (${reason}) → ${sidecarAbsPath}.respins`);
       rejectedSidecar = `.srt-ul existent a fost respins (${reason}) și mutat deoparte`;
       movedAside = check?.short ?? reason;
     }
@@ -296,7 +296,9 @@ export async function processMediaFile(
     allDownloadsFailed = false;
     const check = await verify(fetched.text);
     if (check.reason) {
-      console.warn(`[subtitles] ${label} respinsă: ${check.reason}`);
+      // console.log, nu warn: o variantă respinsă e un rezultat obișnuit
+      // (apare în jurnal), nu o eroare — warn/error ajung în „Erori aplicație".
+      console.log(`[subtitles] ${label} respinsă: ${check.reason}`);
       failures.push(`${label}: respinsă — ${check.reason}`);
       rejected.push({
         source: candidate.source,

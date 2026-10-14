@@ -14,6 +14,7 @@
 
 import { createServerFn } from "@tanstack/react-start";
 import { SUBTITLE_RETRY_DAYS as RETRY_DAYS } from "../filelist/subtitle-outcomes";
+import type { FileSubtitleReport } from "../filelist/subtitle-outcomes";
 
 // Un rând din Bibliotecă = un film SAU un serial întreg. Episoadele nu mai
 // apar niciodată la nivelul listei: se văd doar înăuntrul serialului, în
@@ -505,9 +506,25 @@ export interface PlexTitleDetail {
     completedAt: string | null;
     subtitleSource: string | null;
     subtitleDetail: string | null;
+    // Raportul structurat al rândului (varianta aleasă + respinsele) — null
+    // la rânduri vechi sau la placeholder-ul unui pachet; atunci rămâne
+    // detaliul text.
+    subtitleReport: FileSubtitleReport | null;
     subtitleCheckedAt: string | null;
     plexRatingKey: string | null;
   } | null;
+}
+
+// Doar raportul unui fișier (`file`); cel al unui pachet întreg nu se
+// afișează pe rând — drawer-ul cade pe detaliul text.
+function parseFileSubtitleReport(raw: string | null): FileSubtitleReport | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as Partial<FileSubtitleReport>;
+    return parsed.file ? { file: parsed.file, rejected: parsed.rejected ?? [] } : null;
+  } catch {
+    return null;
+  }
 }
 
 interface MediaRow {
@@ -543,6 +560,7 @@ interface MediaRow {
   completed_at: string | null;
   subtitle_source: string | null;
   subtitle_detail: string | null;
+  subtitle_report: string | null;
   subtitle_checked_at: string | null;
   subtitle_approximate: number;
   episode_title: string | null;
@@ -830,6 +848,7 @@ async function buildDetailFromMediaRow(
           completedAt: row.completed_at,
           subtitleSource: row.subtitle_source,
           subtitleDetail: row.subtitle_detail,
+          subtitleReport: parseFileSubtitleReport(row.subtitle_report),
           subtitleCheckedAt: row.subtitle_checked_at,
           plexRatingKey: row.plex_rating_key,
         }
@@ -853,7 +872,7 @@ export const getPlexTitleDetail = createServerFn({ method: "GET" })
            overview_ro, genres, quality, has_romanian_subtitle, has_romanian_audio, duration_ms, torrent_name, torrent_hash,
            filelist_id, category_name, size, freeleech, internal, save_path, added_via,
            plex_rating_key, is_season_pack, requested_by_user_id, added_at, completed_at,
-           subtitle_source, subtitle_detail, subtitle_checked_at, subtitle_approximate, episode_title,
+           subtitle_source, subtitle_detail, subtitle_report, subtitle_checked_at, subtitle_approximate, episode_title,
            episode_overview, episode_still, episode_air_date,
            tv_status, auto_download, auto_download_quality, auto_download_fallback_quality,
            auto_download_from, watch_last_checked_at,

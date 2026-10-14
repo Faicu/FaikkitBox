@@ -90,6 +90,12 @@ describe("listTorrentsDueForSubtitleRetry", () => {
     add("p", { episode: 2 });
     expect(due()).toEqual(["p"]);
   });
+
+  it("un pachet cu un singur episod fără subtitrare: reîncearcă", () => {
+    add("p", { episode: 1, ro: 1 });
+    add("p", { episode: 2 });
+    expect(due()).toEqual(["p"]);
+  });
 });
 
 describe("updateMediaSubtitleStatus — reverificare fără schimbări", () => {
@@ -103,8 +109,8 @@ describe("updateMediaSubtitleStatus — reverificare fără schimbări", () => {
   it("păstrează sursa de la descărcare (S.W.A.T. Exiles S01E01)", async () => {
     const { updateMediaSubtitleStatus } = await import("../media/media");
     add("a");
-    updateMediaSubtitleStatus("a", "downloaded", "de pe subs.ro", "subsro");
-    updateMediaSubtitleStatus("a", "srt_already_ok", "are deja .srt");
+    updateMediaSubtitleStatus("a", { outcome: "downloaded", detail: "de pe subs.ro", source: "subsro" });
+    updateMediaSubtitleStatus("a", { outcome: "srt_already_ok", detail: "are deja .srt" });
     expect(source()).toBe("subsro");
     expect(
       (
@@ -118,8 +124,111 @@ describe("updateMediaSubtitleStatus — reverificare fără schimbări", () => {
   it("fără sursă înregistrată, rămâne „.srt din torrent”", async () => {
     const { updateMediaSubtitleStatus } = await import("../media/media");
     add("a");
-    updateMediaSubtitleStatus("a", "srt_already_ok", "are deja .srt");
+    updateMediaSubtitleStatus("a", { outcome: "srt_already_ok", detail: "are deja .srt" });
     expect(source()).toBe("tracked_srt");
+  });
+});
+
+describe("updateMediaSubtitleStatus — pachet de sezon", () => {
+  const file = (episode: string, outcome: string, source: "subsro" | null) => ({
+    torrent: "Serial.S01",
+    episode,
+    outcome: outcome as never,
+    source,
+    release: source ? `Serial.${episode}.WEB` : null,
+    matchedCriteria: null,
+    maxCriteria: null,
+    syncScore: null,
+    syncOffset: null,
+    syncGood: null,
+    compared: null,
+    movedAside: null,
+    replacedApproximate: false,
+  });
+  const rows = () =>
+    db
+      .prepare(
+        `SELECT episode, has_romanian_subtitle AS ro, subtitle_source AS source,
+                subtitle_detail AS detail, subtitle_report AS report
+           FROM media WHERE torrent_hash = 'p' ORDER BY episode`,
+      )
+      .all() as unknown as Array<{
+      episode: number;
+      ro: number;
+      source: string | null;
+      detail: string;
+      report: string | null;
+    }>;
+
+  it("fiecare episod primește rezultatul lui, nu agregatul sezonului", async () => {
+    const { updateMediaSubtitleStatus } = await import("../media/media");
+    add("p", { episode: 1 });
+    add("p", { episode: 2 });
+    add("p", { episode: 3 });
+    updateMediaSubtitleStatus("p", {
+      outcome: "season_corrected",
+      detail: "3 episoade — agregat",
+      files: [file("S01E01", "downloaded", "subsro"), file("S01E02", "no_subtitle_found", null)],
+      rejected: [
+        { torrent: "Serial.S01", episode: "S01E02", source: "opensubtitles", release: "x", reason: "nu e în română" },
+      ],
+      episodeDetails: { S01E01: "descărcată de pe subs.ro", S01E02: "nicio variantă" },
+    });
+    const [e1, e2, e3] = rows();
+    expect([e1.ro, e1.source, e1.detail]).toEqual([1, "subsro", "descărcată de pe subs.ro"]);
+    expect(JSON.parse(e1.report!).rejected).toEqual([]);
+    expect([e2.ro, e2.source, e2.detail]).toEqual([0, null, "nicio variantă"]);
+    expect(JSON.parse(e2.report!).rejected).toHaveLength(1);
+    // Fără raport propriu (episod nerecunoscut în pachet): agregatul, cu
+    // raportul întregului pachet.
+    expect([e3.ro, e3.source, e3.detail]).toEqual([1, "season_aggregate", "3 episoade — agregat"]);
+    expect(JSON.parse(e3.report!).files).toHaveLength(2);
+  });
+
+  it("episoadele create din placeholder primesc partea lor din raportul pachetului", async () => {
+    const { updateMediaSubtitleStatus, episodeSubtitleState } = await import("../media/media");
+    add("p", { episode: 1 });
+    updateMediaSubtitleStatus("p", {
+      outcome: "season_corrected",
+      detail: "agregat",
+      files: [file("S01E07", "downloaded", "subsro"), file("S01E08", "no_subtitle_found", null)],
+      rejected: [
+        { torrent: "Serial.S01", episode: "S01E08", source: "opensubtitles", release: "x", reason: "nu e în română" },
+      ],
+      episodeDetails: { S01E07: "de pe subs.ro", S01E08: "nicio variantă" },
+    });
+    const pack = db
+      .prepare("SELECT * FROM media WHERE torrent_hash = 'p'")
+      .get() as unknown as Parameters<typeof episodeSubtitleState>[0];
+    expect(episodeSubtitleState(pack, 1, 7)).toMatchObject({
+      hasRo: 1,
+      source: "subsro",
+      detail: "de pe subs.ro",
+    });
+    const e8 = episodeSubtitleState(pack, 1, 8);
+    expect([e8.hasRo, e8.source, e8.detail]).toEqual([0, null, "nicio variantă"]);
+    expect(JSON.parse(e8.report!).rejected).toHaveLength(1);
+    // Episod absent din raport: moștenește starea pachetului.
+    expect(episodeSubtitleState(pack, 1, 9)).toMatchObject({ detail: "agregat", report: null });
+  });
+
+  it("reverificarea fără schimbări păstrează sursa, detaliul și raportul episodului", async () => {
+    const { updateMediaSubtitleStatus } = await import("../media/media");
+    add("p", { episode: 1 });
+    updateMediaSubtitleStatus("p", {
+      outcome: "season_corrected",
+      detail: "agregat",
+      files: [file("S01E01", "downloaded", "subsro")],
+      episodeDetails: { S01E01: "de pe subs.ro" },
+    });
+    const before = rows()[0];
+    updateMediaSubtitleStatus("p", {
+      outcome: "season_already_ok",
+      detail: "agregat nou",
+      files: [file("S01E01", "srt_already_ok", null)],
+      episodeDetails: { S01E01: "are deja .srt" },
+    });
+    expect(rows()[0]).toEqual(before);
   });
 });
 
@@ -134,11 +243,11 @@ describe("updateMediaSubtitleStatus — subtitle_approximate", () => {
   it("se setează la o descărcare aproximativă, rămâne la reverificare, se șterge la înlocuire", async () => {
     const { updateMediaSubtitleStatus } = await import("../media/media");
     add("a");
-    updateMediaSubtitleStatus("a", "downloaded_approximate", "aproximativă", "subsro");
+    updateMediaSubtitleStatus("a", { outcome: "downloaded_approximate", detail: "aproximativă", source: "subsro" });
     expect(approx()).toBe(1);
-    updateMediaSubtitleStatus("a", "srt_already_ok", "rămâne");
+    updateMediaSubtitleStatus("a", { outcome: "srt_already_ok", detail: "rămâne" });
     expect(approx()).toBe(1);
-    updateMediaSubtitleStatus("a", "downloaded", "exactă", "subsro");
+    updateMediaSubtitleStatus("a", { outcome: "downloaded", detail: "exactă", source: "subsro" });
     expect(approx()).toBe(0);
   });
 });

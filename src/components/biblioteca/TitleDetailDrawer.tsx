@@ -42,6 +42,7 @@ import { correctSubtitleForMedia, deleteSubtitleForMedia } from "@/lib/filelist.
 import { setShowWatch, checkShowNow } from "@/lib/media/media.functions";
 import { formatMs, formatBytes, formatSpeed, formatEta } from "@/lib/format";
 import { subtitleSourceDisplay } from "@/lib/filelist/subtitle-outcomes";
+import { FileReport } from "@/components/tehnic/SubtitleFixDrawer";
 import { Progress } from "@/components/ui/progress";
 import { StatusBadge } from "./StatusBadge";
 import { EpisodeList } from "./EpisodeList";
@@ -692,11 +693,15 @@ export function TitleDetailDrawer({
                             ),
                           ),
                         ],
-                        d.tech.subtitleSource && [
-                          "Sursă subtitrare",
-                          subtitleSourceDisplay(d.tech.subtitleSource),
-                        ],
-                        d.tech.subtitleDetail && ["Detaliu subtitrare", d.tech.subtitleDetail],
+                        // Cu raport structurat, sursa și detaliul apar în
+                        // blocul „Subtitrare" de dedesubt.
+                        !d.tech.subtitleReport &&
+                          d.tech.subtitleSource && [
+                            "Sursă subtitrare",
+                            subtitleSourceDisplay(d.tech.subtitleSource),
+                          ],
+                        !d.tech.subtitleReport &&
+                          d.tech.subtitleDetail && ["Detaliu subtitrare", d.tech.subtitleDetail],
                         d.tech.subtitleCheckedAt && [
                           "Subtitrare verificată",
                           addedDate(
@@ -733,6 +738,16 @@ export function TitleDetailDrawer({
                             </div>
                           ),
                         )}
+                      {d.tech.subtitleReport && (
+                        <div className="mt-1 flex flex-col gap-1.5 border-t border-border/60 pt-1.5">
+                          <span className="text-muted-foreground">Subtitrare</span>
+                          <FileReport
+                            file={d.tech.subtitleReport.file}
+                            rejected={d.tech.subtitleReport.rejected}
+                            showEpisode={false}
+                          />
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

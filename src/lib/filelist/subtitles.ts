@@ -125,6 +125,9 @@ export interface SubtitleRunItem {
   // de dinainte de a ajunge la vreun fișier (ex. torrent negăsit).
   files?: SubtitleFileReport[];
   rejected?: SubtitleRejectionReport[];
+  // La un pachet: detaliul fiecărui episod („S01E07" → text), scris pe
+  // rândul episodului în `media` — `detail` e agregatul pentru jurnal.
+  episodeDetails?: Record<string, string>;
 }
 
 function item(
@@ -141,6 +144,7 @@ function item(
     sync?: SubtitleSync;
     files?: SubtitleFileReport[];
     rejected?: SubtitleRejectionReport[];
+    episodeDetails?: Record<string, string>;
   },
 ): SubtitleRunItem {
   return { torrentName, displayTitle, outcome, detail, ...extra };
@@ -213,7 +217,7 @@ export async function ensureRomanianSubtitle(
   const mediaFile = mediaFiles[0];
 
   if (!imdbId) {
-    console.warn(`[subtitles] "${torrentName}": fără IMDb id, nu pot căuta subtitrare`);
+    console.log(`[subtitles] "${torrentName}": fără IMDb id, nu pot căuta subtitrare`);
     return item(
       torrentName,
       displayTitle,
@@ -500,6 +504,7 @@ async function processSeasonPack(params: ProcessSeasonPackParams): Promise<Subti
   return item(torrentName, displayTitle, outcome, `${summary} — ${perEpisode}`, {
     files: files.sort((a, b) => (a.episode ?? "").localeCompare(b.episode ?? "")),
     rejected,
+    episodeDetails: Object.fromEntries(episodeResults.map((r) => [r.episodeKey, r.detail])),
   });
 }
 

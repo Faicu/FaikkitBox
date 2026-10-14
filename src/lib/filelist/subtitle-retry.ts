@@ -28,22 +28,28 @@ interface DueTorrent {
   torrent_name: string | null;
   imdb_id: string | null;
   category: number | null;
+  // 1 doar dacă TOATE rândurile torrentului au subtitrare.
   has_ro: number;
+  // 1 dacă măcar un rând are o subtitrare aproximativă de înlocuit.
+  approximate: number;
 }
 
-// Un pachet de sezon are câte un rând per episod, toate cu același hash și
-// aceeași stare (updateMediaSubtitleStatus scrie pe hash) — deci GROUP BY.
+// Un pachet de sezon are câte un rând per episod, cu același hash — deci
+// GROUP BY. Fiecare episod își are starea lui (updateMediaSubtitleStatus),
+// așa că pachetul se reia cât timp măcar un episod e fără subtitrare (MIN),
+// nu doar când niciunul n-are (MAX).
 export function listTorrentsDueForSubtitleRetry(): DueTorrent[] {
   return getDb()
     .prepare(
       `SELECT torrent_hash, MIN(torrent_name) AS torrent_name, MIN(imdb_id) AS imdb_id,
-              MIN(category) AS category, MAX(has_romanian_subtitle) AS has_ro
+              MIN(category) AS category, MIN(has_romanian_subtitle) AS has_ro,
+              MAX(subtitle_approximate) AS approximate
          FROM media
         WHERE torrent_hash IS NOT NULL
           AND completed_at IS NOT NULL
           AND completed_at >= datetime('now', ?)
         GROUP BY torrent_hash
-       HAVING ((MAX(has_romanian_subtitle) = 0 AND MAX(has_romanian_audio) = 0)
+       HAVING ((MIN(has_romanian_subtitle) = 0 AND MAX(has_romanian_audio) = 0)
                OR MAX(subtitle_approximate) = 1)
           AND (MAX(subtitle_checked_at) IS NULL
                OR MAX(subtitle_checked_at) <= datetime('now', ?))`,
@@ -73,7 +79,7 @@ export async function retryMissingSubtitles(): Promise<void> {
           imdbId: t.imdb_id,
           category: t.category,
         },
-        { logRun: "corrected", upgradeApproximate: t.has_ro === 1, via: "retry" },
+        { logRun: "corrected", upgradeApproximate: t.approximate === 1, via: "retry" },
       );
       if (result.status === "ok" && CORRECTED_OUTCOMES.includes(result.outcome)) found++;
       console.log(
@@ -139,8 +145,9 @@ export function getSubtitleRetryStatus(): SubtitleRetryStatus {
       }
     | undefined;
 
-  // Un rând per torrent (un pachet are câte un rând per episod, cu aceeași
-  // stare). Titlul afișat: serialul (rândul-părinte, în română) + episodul.
+  // Un rând per torrent (un pachet are câte un rând per episod; „missing"
+  // cât timp măcar unul e fără subtitrare). Titlul afișat: serialul
+  // (rândul-părinte, în română) + episodul.
   const rows = db
     .prepare(
       `SELECT MIN(m.id) AS mediaId, MIN(m.torrent_name) AS torrentName,
@@ -149,7 +156,7 @@ export function getSubtitleRetryStatus(): SubtitleRetryStatus {
               MIN(m.completed_at) AS completedAt,
               datetime(MIN(m.completed_at), ?) AS until,
               MAX(m.subtitle_checked_at) AS lastCheckedAt,
-              MAX(m.has_romanian_subtitle) AS hasRo, MAX(m.has_romanian_audio) AS hasAudio,
+              MIN(m.has_romanian_subtitle) AS hasRo, MAX(m.has_romanian_audio) AS hasAudio,
               MAX(m.subtitle_approximate) AS approximate
          FROM media m LEFT JOIN media p ON p.id = m.parent_id
         WHERE m.torrent_hash IS NOT NULL AND m.completed_at IS NOT NULL

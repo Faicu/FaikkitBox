@@ -162,6 +162,11 @@ export function getDb(): DatabaseSync {
       -- slabă) — reverificată zilnic 14 zile, ca să fie înlocuită dacă apare
       -- varianta exactă (subtitle-retry.ts).
       subtitle_approximate INTEGER NOT NULL DEFAULT 0,
+      -- Raportul structurat al ultimei verificări pentru ACEST rând (JSON:
+      -- { file: SubtitleFileReport, rejected: SubtitleRejectionReport[] }) —
+      -- varianta aleasă și cele respinse, afișate în drawer-ul din
+      -- Bibliotecă. La un pachet, fiecare episod îl are pe al lui.
+      subtitle_report TEXT,
       quality TEXT,
       duration_ms INTEGER,
       -- Titlul episodului (doar pe rândurile 'episode'): coloana title ține
@@ -1111,5 +1116,59 @@ function applyCleanups(database: DatabaseSync): void {
       );
       database.exec("PRAGMA user_version = 38");
     }
+
+    if (version < 39) {
+      // v39: media.subtitle_report (vezi CREATE TABLE) și detaliul pe
+      // episod la pachete. Până acum fiecare episod dintr-un pachet primea
+      // agregatul întregului sezon („7 episoade — … — S01E01: …; S01E02:
+      // …"); păstrăm pe fiecare rând doar bucata lui și, din ea, sursa reală.
+      try {
+        database.exec("ALTER TABLE media ADD COLUMN subtitle_report TEXT");
+        console.log("[db] Migrare v39: adăugat media.subtitle_report");
+      } catch {
+        // coloana există deja (bază nouă, creată direct cu schema curentă)
+      }
+      const rows = database
+        .prepare(
+          `SELECT id, season, episode, subtitle_detail FROM media
+            WHERE media_type = 'episode' AND subtitle_source = 'season_aggregate'
+              AND season IS NOT NULL AND episode IS NOT NULL AND subtitle_detail IS NOT NULL`,
+        )
+        .all() as unknown as Array<{
+        id: number;
+        season: number;
+        episode: number;
+        subtitle_detail: string;
+      }>;
+      const update = database.prepare(
+        "UPDATE media SET subtitle_detail = ?, subtitle_source = ? WHERE id = ?",
+      );
+      let split = 0;
+      for (const r of rows) {
+        const own = episodeSegment(r.subtitle_detail, r.season, r.episode);
+        if (!own) continue;
+        const source = own.includes("descărcată de pe subs.ro")
+          ? "subsro"
+          : own.includes("descărcată de pe OpenSubtitles")
+            ? "opensubtitles"
+            : "season_aggregate";
+        update.run(own, source, r.id);
+        split++;
+      }
+      console.log(`[db] Migrare v39: detaliul subtitrării separat pe ${split} episoade`);
+      database.exec("PRAGMA user_version = 39");
+    }
   }
+}
+
+// Bucata unui episod din detaliul agregat al unui pachet: „… — S01E01: …;
+// S01E02: …" → textul de după „S01E02: ", până la următorul „; SxxEyy: ".
+export function episodeSegment(detail: string, season: number, episode: number): string | null {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const key = `S${pad(season)}E${pad(episode)}: `;
+  const start = detail.indexOf(key);
+  if (start < 0) return null;
+  const rest = detail.slice(start + key.length);
+  const end = rest.search(/; S\d{2,}E\d{2,}: /);
+  return (end < 0 ? rest : rest.slice(0, end)).trim();
 }

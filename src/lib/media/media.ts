@@ -7,7 +7,12 @@
 import { getDb } from "../db";
 // Doar tipuri: `import type` dispare la compilare, deci nu trage modulele Plex
 // în graf — restul fișierului le încarcă dinamic, exact ca până acum.
-import type { SubtitleSource } from "../filelist/subtitle-outcomes";
+import type {
+  FileSubtitleReport,
+  SubtitleFileReport,
+  SubtitleRejectionReport,
+  SubtitleSource,
+} from "../filelist/subtitle-outcomes";
 import type { PlexItemLink } from "../services/plex-library";
 import type { PlexMetadataItem } from "../services/plex-shared";
 
@@ -357,51 +362,177 @@ const HAS_ROMANIAN_OUTCOMES = new Set([
   "season_already_ok",
 ]);
 
+// Ce stă în `media.subtitle_report`: raportul unui singur fișier (film,
+// episod) sau, pe placeholder-ul unui pachet, al întregului pachet.
+interface PackSubtitleReport {
+  files: SubtitleFileReport[];
+  rejected: SubtitleRejectionReport[];
+  episodeDetails: Record<string, string>;
+}
+
+function episodeReport(
+  file: SubtitleFileReport,
+  rejected: SubtitleRejectionReport[],
+): FileSubtitleReport {
+  return { file, rejected: rejected.filter((r) => r.episode === file.episode) };
+}
+
+const isDownloadOutcome = (outcome: string) =>
+  outcome === "downloaded" || outcome === "downloaded_approximate";
+
+// Starea unui episod nou creat din placeholder-ul unui pachet: partea lui din
+// raportul pachetului, sau — fără una (rânduri vechi, episod nerecunoscut în
+// pachet) — starea pachetului, ca înainte.
+export function episodeSubtitleState(
+  pack: {
+    has_romanian_subtitle: number;
+    subtitle_source: string | null;
+    subtitle_detail: string | null;
+    subtitle_approximate: number;
+    subtitle_report: string | null;
+  },
+  season: number,
+  episode: number,
+) {
+  const inherited = {
+    hasRo: pack.has_romanian_subtitle,
+    source: pack.subtitle_source,
+    detail: pack.subtitle_detail,
+    approximate: pack.subtitle_approximate,
+    report: null as string | null,
+  };
+  let report: PackSubtitleReport;
+  try {
+    report = JSON.parse(pack.subtitle_report ?? "null");
+  } catch {
+    return inherited;
+  }
+  const key = `S${String(season).padStart(2, "0")}E${String(episode).padStart(2, "0")}`;
+  const file = Array.isArray(report?.files) ? report.files.find((f) => f.episode === key) : null;
+  if (!file) return inherited;
+  return {
+    hasRo: HAS_ROMANIAN_OUTCOMES.has(file.outcome) ? 1 : 0,
+    source: isDownloadOutcome(file.outcome)
+      ? file.source
+      : (SUBTITLE_SOURCE_BY_OUTCOME[file.outcome] ?? null),
+    detail: report.episodeDetails?.[key] ?? pack.subtitle_detail,
+    approximate: file.outcome === "downloaded_approximate" ? 1 : 0,
+    report: JSON.stringify(episodeReport(file, report.rejected ?? [])),
+  };
+}
+
 // Apelat după fiecare verificare/corectare de subtitrare (finalul unei
 // descărcări, "Corectează subtitrare" din Lansări/Bibliotecă, backfill).
+// Întâi starea întregului torrent (toate rândurile cu hash-ul lui), apoi, la
+// un pachet, fiecare episod cu rezultatul lui: sursa, detaliul, dacă are
+// subtitrare și raportul structurat. Înainte, fiecare episod primea
+// agregatul sezonului — și „are subtitrare" pentru tot sezonul de îndată ce
+// un singur episod fusese corectat.
 export function updateMediaSubtitleStatus(
   torrentHash: string,
+  result: {
+    outcome: string;
+    detail: string;
+    source?: SubtitleSource | null;
+    files?: SubtitleFileReport[];
+    rejected?: SubtitleRejectionReport[];
+    episodeDetails?: Record<string, string>;
+  },
+): void {
+  const files = result.files ?? [];
+  const isPack = result.episodeDetails !== undefined;
+  const reportOf = (file: SubtitleFileReport) =>
+    JSON.stringify(episodeReport(file, result.rejected ?? []));
+  // La un pachet, rândurile fără raport propriu (placeholder-ul pachetului,
+  // înainte ca Plex să indexeze episoadele) primesc raportul întregului
+  // pachet — din el resolveSeasonPackPlexLinks scoate starea fiecărui episod
+  // când îi creează rândul.
+  const packReport: PackSubtitleReport | null = isPack
+    ? { files, rejected: result.rejected ?? [], episodeDetails: result.episodeDetails ?? {} }
+    : null;
+  // La un pachet, rândurile episoadelor cu raport propriu se scriu doar mai
+  // jos — altfel agregatul le-ar suprascrie întâi, iar o reverificare fără
+  // schimbări (`srt_already_ok`) n-ar mai avea ce păstra.
+  const ownKeys = isPack
+    ? files.map((f) => f.episode).filter((k): k is string => !!k && /^S\d+E\d+$/.test(k))
+    : [];
+  const exclude = ownKeys.length
+    ? ` AND (season IS NULL OR episode IS NULL OR printf('S%02dE%02d', season, episode) NOT IN (${ownKeys.map(() => "?").join(", ")}))`
+    : "";
+  writeSubtitleStatus(
+    `WHERE torrent_hash = ?${exclude}`,
+    [torrentHash, ...ownKeys],
+    result.outcome,
+    result.detail,
+    result.source ?? null,
+    packReport
+      ? JSON.stringify(packReport)
+      : files.length === 1
+        ? reportOf(files[0])
+        : null,
+  );
+  if (!isPack) return;
+  for (const file of files) {
+    const m = file.episode?.match(/^S(\d+)E(\d+)$/);
+    if (!m) continue;
+    writeSubtitleStatus(
+      "WHERE torrent_hash = ? AND season = ? AND episode = ?",
+      [torrentHash, Number(m[1]), Number(m[2])],
+      file.outcome,
+      result.episodeDetails?.[file.episode!] ?? result.detail,
+      file.source,
+      reportOf(file),
+    );
+  }
+}
+
+function writeSubtitleStatus(
+  where: string,
+  whereArgs: Array<string | number>,
   outcome: string,
   detail: string,
-  downloadedSource?: SubtitleSource | null,
+  downloadedSource: SubtitleSource | null,
+  report: string | null,
 ): void {
   // Sursa transmisă contează doar la o descărcare reușită — la
   // `download_failed` apelantul o trimite oricum (știe de unde a încercat),
   // dar pe disc n-a ajuns nimic, deci rândul rămâne fără sursă.
-  const isDownload = outcome === "downloaded" || outcome === "downloaded_approximate";
-  const source = isDownload
-    ? (downloadedSource ?? null)
-    : (SUBTITLE_SOURCE_BY_OUTCOME[outcome] ?? null);
+  const source = isDownloadOutcome(outcome) ? downloadedSource : (SUBTITLE_SOURCE_BY_OUTCOME[outcome] ?? null);
   // O reverificare care n-a schimbat nimic pe disc (`srt_already_ok`, sau
-  // `season_already_ok` la un pachet) nu rescrie sursa și nici detaliul:
-  // subtitrarea e tot cea de dinainte, iar detaliul spune de unde a venit
-  // (release, sincronizare). Altfel un .srt adus de pe subs.ro devenea „.srt
-  // din torrent" la primul „Corectează" (S.W.A.T. Exiles S01E01, 9 oct.
+  // `season_already_ok` la un pachet) nu rescrie sursa, detaliul și nici
+  // raportul: subtitrarea e tot cea de dinainte, iar detaliul spune de unde a
+  // venit (release, sincronizare). Altfel un .srt adus de pe subs.ro devenea
+  // „.srt din torrent" la primul „Corectează" (S.W.A.T. Exiles S01E01, 9 oct.
   // 2026), iar detaliul devenea „are deja un .srt…". Doar data verificării
   // se actualizează. Fără nimic înregistrat înainte, se scrie ce știm acum.
   const keepPrevious = outcome === "srt_already_ok" || outcome === "season_already_ok";
+  const keep = keepPrevious ? 1 : 0;
   getDb()
     .prepare(
       `UPDATE media SET has_romanian_subtitle = ?,
        subtitle_source = CASE WHEN ? AND subtitle_source IS NOT NULL THEN subtitle_source ELSE ? END,
        subtitle_detail = CASE WHEN ? AND subtitle_source IS NOT NULL AND subtitle_detail IS NOT NULL
                               THEN subtitle_detail ELSE ? END,
+       subtitle_report = CASE WHEN ? AND subtitle_source IS NOT NULL AND subtitle_report IS NOT NULL
+                              THEN subtitle_report ELSE ? END,
        subtitle_approximate = CASE WHEN ? AND subtitle_source IS NOT NULL
                                    THEN subtitle_approximate ELSE ? END,
        has_romanian_audio = CASE WHEN ? = 1 THEN 1 ELSE has_romanian_audio END,
        subtitle_checked_at = datetime('now'), updated_at = datetime('now')
-       WHERE torrent_hash = ?`,
+       ${where}`,
     )
     .run(
       HAS_ROMANIAN_OUTCOMES.has(outcome) ? 1 : 0,
-      keepPrevious ? 1 : 0,
+      keep,
       source,
-      keepPrevious ? 1 : 0,
+      keep,
       detail,
-      keepPrevious ? 1 : 0,
+      keep,
+      report,
+      keep,
       outcome === "downloaded_approximate" ? 1 : 0,
       outcome === "audio_already_romanian" ? 1 : 0,
-      torrentHash,
+      ...whereArgs,
     );
 }
 
@@ -411,6 +542,7 @@ export function clearMediaSubtitleStatus(torrentHash: string): void {
   getDb()
     .prepare(
       `UPDATE media SET has_romanian_subtitle = 0, subtitle_source = NULL, subtitle_detail = NULL,
+       subtitle_report = NULL, subtitle_approximate = 0,
        subtitle_checked_at = datetime('now'), updated_at = datetime('now')
        WHERE torrent_hash = ?`,
     )
@@ -728,6 +860,8 @@ interface SeasonPackMediaRow {
   subtitle_source: string | null;
   subtitle_detail: string | null;
   subtitle_checked_at: string | null;
+  subtitle_approximate: number;
+  subtitle_report: string | null;
 }
 
 // Câte episoade difuzate are sezonul, după TMDB — reperul față de care
@@ -807,8 +941,9 @@ export async function resolveSeasonPackPlexLinks(torrentHash: string): Promise<b
       plex_rating_key, plex_added_at, torrent_name, torrent_hash, filelist_id, category,
       category_name, size, freeleech, internal, save_path, is_season_pack, added_via,
       requested_by_user_id, completed_at, has_romanian_subtitle, has_romanian_audio,
-      subtitle_source, subtitle_detail, subtitle_checked_at, quality, duration_ms
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      subtitle_source, subtitle_detail, subtitle_checked_at, subtitle_approximate,
+      subtitle_report, quality, duration_ms
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
   );
   const updateExisting = db.prepare(
     `UPDATE media SET plex_rating_key = ?, quality = ?, duration_ms = ?, plex_added_at = ?,
@@ -839,6 +974,7 @@ export async function resolveSeasonPackPlexLinks(torrentHash: string): Promise<b
       updateExisting.run(link.ratingKey, link.quality, link.durationMs, link.addedAt, existing.id);
       continue;
     }
+    const sub = episodeSubtitleState(row, row.season, episodeNum);
     insert.run(
       row.media_type,
       row.parent_id,
@@ -874,11 +1010,13 @@ export async function resolveSeasonPackPlexLinks(torrentHash: string): Promise<b
       row.added_via,
       row.requested_by_user_id,
       row.completed_at,
-      row.has_romanian_subtitle,
+      sub.hasRo,
       row.has_romanian_audio,
-      row.subtitle_source,
-      row.subtitle_detail,
+      sub.source,
+      sub.detail,
       row.subtitle_checked_at,
+      sub.approximate,
+      sub.report,
       link.quality,
       link.durationMs,
     );

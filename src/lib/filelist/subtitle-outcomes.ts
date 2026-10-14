@@ -129,6 +129,13 @@ export interface SubtitleRejectionReport extends RejectedVariant {
   episode: string | null;
 }
 
+// Raportul unui singur fișier (film sau episod), așa cum stă în
+// `media.subtitle_report` și cum îl afișează drawer-ul din Bibliotecă.
+export interface FileSubtitleReport {
+  file: SubtitleFileReport;
+  rejected: SubtitleRejectionReport[];
+}
+
 export const SUBTITLE_SOURCE_LABELS: Record<SubtitleSource, string> = {
   opensubtitles: "OpenSubtitles",
   subsro: "subs.ro",

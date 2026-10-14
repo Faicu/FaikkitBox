@@ -101,8 +101,9 @@ function SourceChip({ source }: { source: SubtitleSource }) {
 }
 
 // Un fișier media: rezultatul, varianta aleasă (sursă, release, sincronizare),
-// subtitrarea veche mutată deoparte și variantele respinse.
-function FileReport({
+// subtitrarea veche mutată deoparte și variantele respinse. Folosit și de
+// drawer-ul din Bibliotecă (TitleDetailDrawer), pentru rândul deschis.
+export function FileReport({
   file,
   rejected,
   showEpisode,
