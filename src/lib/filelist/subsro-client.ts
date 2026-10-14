@@ -98,13 +98,30 @@ export async function searchSubsRo(imdbId: string): Promise<SubsRoItem[]> {
 // pentru toate sezoanele — filtrăm după numărul sezonului căutat, extras din
 // title/description (ex. "The Rookie - Sezonul 8", "Sezonul 8 complet, 18
 // episoade..."). Case insensitive, acceptă și "sezon" fără "ul".
+// Pachetele cu mai multe sezoane vin ca interval sau listă: „Ted - Sezoanele
+// 1-2", „Sezonul 1-3", „Sezoanele 1, 2 și 3". Lista (virgulă/„și") doar la
+// plural — la „Sezonul 8, 18 episoade" virgula nu leagă alt sezon.
 export function subsRoItemMatchesSeason(item: SubsRoItem, seasonNumber: number): boolean {
   const text = `${item.title} ${item.description}`;
+  const plural = text.match(
+    /sezoanele\s+(\d{1,3}(?:(?:\s*[-–,&]\s*|\s+(?:și|si)\s+)\d{1,3})*)\b/i,
+  );
+  if (plural) return seasonInList(plural[1], seasonNumber);
+  const range = text.match(/sezon(?:ul)?\s+0*(\d{1,3})\s*[-–]\s*0*(\d{1,3})\b/i);
+  if (range) return Number(range[1]) <= seasonNumber && seasonNumber <= Number(range[2]);
   const m = text.match(/sezon(?:ul)?\s+0*(\d{1,3})\b/i);
   if (m) return Number(m[1]) === seasonNumber;
   // Și „S02E04" / „S02" în titlu, pentru arhivele fără „Sezonul N".
   const se = text.match(/\bS(\d{1,3})(?:E\d{1,3})?\b/i);
   return se ? Number(se[1]) === seasonNumber : false;
+}
+
+// „1-2", „1, 2 și 3", „1-3, 5" → dacă sezonul e printre ele.
+function seasonInList(list: string, seasonNumber: number): boolean {
+  return list.split(/\s*[,&]\s*|\s+(?:și|si)\s+/i).some((part) => {
+    const [from, to] = part.split(/\s*[-–]\s*/).map(Number);
+    return to === undefined ? from === seasonNumber : from <= seasonNumber && seasonNumber <= to;
+  });
 }
 
 // Descarcă arhiva .zip a unei subtitrări (bytes bruți). null la orice eroare.

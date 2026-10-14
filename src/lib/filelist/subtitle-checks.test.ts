@@ -98,4 +98,19 @@ describe("subsRoItemMatchesSeason", () => {
     expect(subsRoItemMatchesSeason(it_("MobLand S01E04"), 2)).toBe(false);
     expect(subsRoItemMatchesSeason(it_("MobLand (2025)"), 2)).toBe(false);
   });
+
+  it("acceptă pachete cu mai multe sezoane (interval sau listă)", () => {
+    expect(subsRoItemMatchesSeason(it_("Ted - Sezoanele 1-2"), 1)).toBe(true);
+    expect(subsRoItemMatchesSeason(it_("Ted - Sezoanele 1-2"), 2)).toBe(true);
+    expect(subsRoItemMatchesSeason(it_("Ted - Sezoanele 1-2"), 3)).toBe(false);
+    expect(subsRoItemMatchesSeason(it_("Show - Sezonul 1–3"), 2)).toBe(true);
+    expect(subsRoItemMatchesSeason(it_("Show - Sezoanele 1, 2 și 4"), 4)).toBe(true);
+    expect(subsRoItemMatchesSeason(it_("Show - Sezoanele 1, 2 și 4"), 3)).toBe(false);
+  });
+
+  it("la singular, virgula nu adaugă alt sezon", () => {
+    const item = { ...it_("The Rookie - Sezonul 8"), description: "Sezonul 8, 18 episoade" };
+    expect(subsRoItemMatchesSeason(item, 8)).toBe(true);
+    expect(subsRoItemMatchesSeason(item, 18)).toBe(false);
+  });
 });
