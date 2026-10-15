@@ -8,6 +8,7 @@ import { toast } from "sonner";
 
 import { Progress } from "@/components/ui/progress";
 import type { BulkDownloadItem, Quality } from "./types";
+import { DubbedBadge } from "./WizardControls";
 
 export function ConfirmBulkStep({
   items,
@@ -41,7 +42,8 @@ export function ConfirmBulkStep({
           {items.map((item) => (
             <div key={`${item.season}-${item.episode ?? "pack"}`} className="text-xs">
               <span className="font-medium text-foreground">{item.label}</span>{" "}
-              <span className="break-all text-muted-foreground">— {item.torrent.name}</span>
+              <span className="break-all text-muted-foreground">— {item.torrent.name}</span>{" "}
+              <DubbedBadge torrent={item.torrent} />
             </div>
           ))}
         </div>

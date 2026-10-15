@@ -27,7 +27,7 @@ interface DueTorrent {
   torrent_hash: string;
   torrent_name: string | null;
   imdb_id: string | null;
-  category: number | null;
+  is_movie: number;
   // 1 doar dacă TOATE rândurile torrentului au subtitrare.
   has_ro: number;
   // 1 dacă măcar un rând are o subtitrare aproximativă de înlocuit.
@@ -42,7 +42,7 @@ export function listTorrentsDueForSubtitleRetry(): DueTorrent[] {
   return getDb()
     .prepare(
       `SELECT torrent_hash, MIN(torrent_name) AS torrent_name, MIN(imdb_id) AS imdb_id,
-              MIN(category) AS category, MIN(has_romanian_subtitle) AS has_ro,
+              MAX(media_type = 'movie') AS is_movie, MIN(has_romanian_subtitle) AS has_ro,
               MAX(subtitle_approximate) AS approximate
          FROM media
         WHERE torrent_hash IS NOT NULL
@@ -77,7 +77,7 @@ export async function retryMissingSubtitles(): Promise<void> {
           torrentName: t.torrent_name,
           torrentHash: t.torrent_hash,
           imdbId: t.imdb_id,
-          category: t.category,
+          isMovie: t.is_movie === 1,
         },
         { logRun: "corrected", upgradeApproximate: t.approximate === 1, via: "retry" },
       );

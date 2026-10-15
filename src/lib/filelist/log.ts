@@ -1,7 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { qbitLogin, qbitTorrentRootPath } from "../qbit-client";
 import {
-  refreshPlexLibraryForCategoryAndEmptyTrash,
   refreshPlexLibraryAndEmptyTrash,
   refreshPlexLibrariesAndEmptyTrash,
 } from "../plex-refresh";
@@ -21,12 +20,11 @@ export const deleteMediaEntry = createServerFn({ method: "POST" })
 
       const row = db
         .prepare(
-          "SELECT torrent_hash, category, media_type, imdb_id, requested_by_user_id FROM media WHERE id = ?",
+          "SELECT torrent_hash, media_type, imdb_id, requested_by_user_id FROM media WHERE id = ?",
         )
         .get(data.mediaId) as
         | {
             torrent_hash: string | null;
-            category: number | null;
             media_type: string | null;
             imdb_id: string | null;
             requested_by_user_id: number | null;
@@ -112,17 +110,14 @@ export const deleteMediaEntry = createServerFn({ method: "POST" })
         ).run(row.imdb_id);
       }
 
-      // Refresh Plex necondiționat — categoria Filelist (numerică) poate
-      // lipsi (titluri fără flux standard de descărcare), dar tot știm
-      // sigur film vs. serial din media_type, care e mereu populat. Fără
-      // niciuna din ele, refresh la ambele biblioteci ca fallback sigur —
-      // la fel ca la ștergerea din pagina qBittorrent (qbittorrent.ts),
-      // în loc să renunțăm silențios (găsit la "Avatar: Foc și cenușă",
-      // 2026-09-02 — titlul șters din DB/disk, dar rămas fantomă în Plex).
+      // Refresh Plex necondiționat, după media_type — sursa film/serial,
+      // nu categoria Filelist (RO Dubbed amestecă filme și seriale). Fără
+      // el, refresh la ambele biblioteci ca fallback sigur — la fel ca la
+      // ștergerea din pagina qBittorrent (qbittorrent.ts), în loc să
+      // renunțăm silențios (găsit la "Avatar: Foc și cenușă", 2026-09-02 —
+      // titlul șters din DB/disk, dar rămas fantomă în Plex).
       try {
-        if (row.category !== null) {
-          await refreshPlexLibraryForCategoryAndEmptyTrash(row.category);
-        } else if (row.media_type) {
+        if (row.media_type) {
           const plexType = row.media_type === "movie" ? "movie" : "show";
           await refreshPlexLibraryAndEmptyTrash(plexType);
         } else {

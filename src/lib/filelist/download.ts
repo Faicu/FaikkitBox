@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import type { FilelistDownloadResult, QbitTorrentInfo } from "./types";
-import { CATEGORY_NAMES, parseCategoryId, isMovieCategory } from "./categories";
+import { CATEGORY_NAMES, parseCategoryId, isMovieCategory, isSeriesCategory } from "./categories";
 import { downloadTorrentFile } from "./filelist-client";
 import { parseSeasonEpisodeFromName } from "../media/torrent-name-parse";
 import { qbitGet, qbitLogin, qbitEnsureCookie, resetQbitCookie } from "../qbit-client";
@@ -271,14 +271,7 @@ async function resumeOrphanedPolls(): Promise<void> {
       `[filelist] Reiau polling pentru ${orphaned.length} descărcări întrerupte de restart`,
     );
     for (const entry of orphaned) {
-      const plexType =
-        entry.category !== null
-          ? isMovieCategory(entry.category)
-            ? "movie"
-            : "show"
-          : entry.isMovie
-            ? "movie"
-            : "show";
+      const plexType = entry.isMovie ? "movie" : "show";
       pollUntilComplete(
         url,
         entry.torrentHash,
@@ -395,6 +388,26 @@ async function autoResolveManualMedia(
   };
 }
 
+// Film sau serial — decide folderul, categoria din qBittorrent, rândul din
+// `media` și biblioteca Plex. Întâi ce a cerut omul (wizard/Lansări/urmărire
+// trimit `media.mediaType`), apoi categoria, dacă e strict de filme sau de
+// seriale. Categoriile mixte (RO Dubbed) din căutarea manuală n-au nici una,
+// nici alta: întrebăm TMDB după IMDb-ul torrentului, iar fără el ne uităm
+// după S01/S01E02 în nume.
+async function resolveIsMovie(params: DownloadFilelistParams, catId: number): Promise<boolean> {
+  if (params.media) return params.media.mediaType === "movie";
+  if (isMovieCategory(catId)) return true;
+  if (isSeriesCategory(catId)) return false;
+  if (catId === 0) return /film|movie/i.test(params.categoryName ?? "");
+  if (params.imdb) {
+    const { lookupTmdbInfoByImdbId } = await import("../tmdb/tmdb-title-lookup");
+    const info = await lookupTmdbInfoByImdbId(params.imdb).catch(() => null);
+    if (info) return info.mediaType === "movie";
+  }
+  const { parseSeasonEpisodeFromName } = await import("../media/torrent-name-parse");
+  return parseSeasonEpisodeFromName(params.torrentName) === null;
+}
+
 // Implementare comună pentru descărcare + upload la qBittorrent, folosită de
 // server function-ul public (downloadFilelist).
 export async function downloadFilelistCore(
@@ -417,8 +430,7 @@ export async function downloadFilelistCore(
 
   const catId =
     params.categoryId || (params.categoryName ? parseCategoryId(params.categoryName) : 0);
-  const isMovie =
-    isMovieCategory(catId) || (catId === 0 && /film|movie/i.test(params.categoryName ?? ""));
+  const isMovie = await resolveIsMovie(params, catId);
   const savePath = isMovie ? moviesPath : seriesPath;
 
   // 1. Descarcă fișierul .torrent de la Filelist
@@ -659,7 +671,7 @@ interface MediaActionRow {
   torrent_name: string | null;
   torrent_hash: string | null;
   imdb_id: string | null;
-  category: number | null;
+  media_type: string;
   requested_by_user_id: number | null;
 }
 
@@ -672,7 +684,7 @@ export async function correctSubtitleForMediaCore(
     const { getDb } = await import("../db");
     const row = getDb()
       .prepare(
-        "SELECT torrent_name, torrent_hash, imdb_id, category, requested_by_user_id FROM media WHERE id = ?",
+        "SELECT torrent_name, torrent_hash, imdb_id, media_type, requested_by_user_id FROM media WHERE id = ?",
       )
       .get(data.mediaId) as MediaActionRow | undefined;
 
@@ -697,7 +709,7 @@ export async function correctSubtitleForMediaCore(
         torrentName: row.torrent_name,
         torrentHash: row.torrent_hash,
         imdbId: row.imdb_id,
-        category: row.category,
+        isMovie: row.media_type === "movie",
       },
       { logRun: "always" },
     );
@@ -715,7 +727,7 @@ export async function checkSubtitleForTorrent(
     torrentName: string | null;
     torrentHash: string;
     imdbId: string | null;
-    category: number | null;
+    isMovie: boolean;
   },
   opts: { logRun: "always" | "corrected"; upgradeApproximate?: boolean; via?: "retry" },
 ): Promise<CorrectSubtitleResult> {
@@ -728,7 +740,7 @@ export async function checkSubtitleForTorrent(
   const url = qbitBase.replace(/\/$/, "");
 
   const { ensureRomanianSubtitle, logSubtitleRun } = await import("./subtitles");
-  const plexType = row.category !== null && isMovieCategory(row.category) ? "movie" : "show";
+  const plexType = row.isMovie ? "movie" : "show";
 
   const result = await ensureRomanianSubtitle({
     qbitUrl: url,
@@ -762,7 +774,7 @@ export async function deleteSubtitleForMediaCore(
     const { getDb } = await import("../db");
     const row = getDb()
       .prepare(
-        "SELECT torrent_name, torrent_hash, imdb_id, category, requested_by_user_id FROM media WHERE id = ?",
+        "SELECT torrent_name, torrent_hash, imdb_id, media_type, requested_by_user_id FROM media WHERE id = ?",
       )
       .get(data.mediaId) as MediaActionRow | undefined;
 
@@ -807,10 +819,8 @@ export async function deleteSubtitleForMediaCore(
     if (result.status === "ok") {
       const { clearMediaSubtitleStatus } = await import("../media/media");
       clearMediaSubtitleStatus(row.torrent_hash);
-      if (row.category !== null) {
-        const { refreshPlexLibraryForCategory } = await import("../plex-refresh");
-        await refreshPlexLibraryForCategory(row.category).catch(() => {});
-      }
+      const { refreshPlexLibrary } = await import("../plex-refresh");
+      await refreshPlexLibrary(row.media_type === "movie" ? "movie" : "show").catch(() => {});
     }
 
     return result;

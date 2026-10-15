@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Loader2, HardDrive, Users, Zap, Film, Tv } from "lucide-react";
+import { Loader2, HardDrive, Users, Zap, Film, Tv, Languages } from "lucide-react";
 
 import { formatBytes } from "@/lib/format";
 import type { FilelistTorrent } from "@/lib/filelist.functions";
+import { RO_DUBBED_CATEGORY } from "@/lib/filelist/categories";
 
 export type WatchQuality = "720p" | "1080p" | "1080p HDR" | "4K" | "4K HDR";
 
@@ -144,6 +145,17 @@ export function ActionButton({
 // Alegere manuală între torrente când sunt mai multe la aceeași calitate
 // (grupuri de release diferite etc) — nu se arată dacă e un singur candidat,
 // ca să nu aglomerăm pasul final degeaba în cazul comun.
+// Numele lansării nu spune că e dublată (ex. „Ferdinand.2017.1080p.WEBRip"),
+// deci categoria se arată explicit oriunde alegi un torrent.
+export function DubbedBadge({ torrent }: { torrent: FilelistTorrent }) {
+  if (torrent.category !== RO_DUBBED_CATEGORY) return null;
+  return (
+    <span className="inline-flex items-center gap-0.5 text-emerald-400">
+      <Languages className="h-3 w-3" /> RO Dubbed
+    </span>
+  );
+}
+
 export function TorrentPicker({
   matches,
   selectedId,
@@ -184,6 +196,7 @@ export function TorrentPicker({
                   <Zap className="h-3 w-3" /> Freeleech
                 </span>
               )}
+              <DubbedBadge torrent={t} />
             </div>
           </button>
         ))}

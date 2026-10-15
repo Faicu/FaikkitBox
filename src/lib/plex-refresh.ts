@@ -3,12 +3,10 @@
 // bibliotecă Plex. Orice funcție care adaugă sau șterge conținut media de pe
 // disk — descărcări noi, ștergeri din jurnal, ștergere directă de torrente
 // din pagina qBittorrent, corectare sau ștergere de subtitrări — trebuie să
-// apeleze refreshPlexLibrary / refreshPlexLibraryForCategory de aici, ca
+// apeleze refreshPlexLibrary / refreshPlexLibraryAndEmptyTrash de aici, ca
 // Plex să reflecte imediat schimbarea, nu doar la următoarea scanare
 // automată (poate dura ore).
 // ---------------------------------------------------------------------------
-
-import { isMovieCategory } from "./filelist/categories";
 
 export type PlexLibraryType = "movie" | "show";
 
@@ -127,17 +125,6 @@ export async function refreshPlexLibraryAndEmptyTrash(plexType: PlexLibraryType)
   if (!sectionKey) return;
   await plexRefreshLibraryBySection(sectionKey);
   await plexEmptyTrashBySection(sectionKey);
-}
-
-// Variantă comodă când avem doar id-ul numeric de categorie Filelist, nu
-// tipul de bibliotecă Plex rezolvat deja.
-export async function refreshPlexLibraryForCategory(category: number): Promise<void> {
-  return refreshPlexLibrary(isMovieCategory(category) ? "movie" : "show");
-}
-
-// Variantele de mai sus, dar cu emptyTrash — vezi refreshPlexLibraryAndEmptyTrash.
-export async function refreshPlexLibraryForCategoryAndEmptyTrash(category: number): Promise<void> {
-  return refreshPlexLibraryAndEmptyTrash(isMovieCategory(category) ? "movie" : "show");
 }
 
 export async function refreshPlexLibrariesAndEmptyTrash(): Promise<void> {

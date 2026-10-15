@@ -16,7 +16,9 @@ import type {
 import {
   MOVIE_CATEGORIES,
   SERIES_CATEGORIES,
+  MIXED_CATEGORIES,
   ALL_CATEGORIES,
+  RO_DUBBED_CATEGORY,
   CATEGORY_NAMES,
   parseCategoryId,
 } from "./categories";
@@ -24,11 +26,13 @@ import {
 // Categoriile Filelist.io pentru fiecare filtru expus în UI — folosit atât de
 // căutarea internă (searchFilelistRaw) cât și de server function-ul public
 // (searchFilelist).
+// Categoriile mixte (RO Dubbed) intră la ambele filtre: căutările pe
+// filme/seriale sunt după IMDb, deci un ID nu poate aduce celălalt tip.
 function resolveCategoryIds(category: FilelistCategory): readonly number[] {
   return category === "movies"
-    ? MOVIE_CATEGORIES
+    ? [...MOVIE_CATEGORIES, ...MIXED_CATEGORIES]
     : category === "series"
-      ? SERIES_CATEGORIES
+      ? [...SERIES_CATEGORIES, ...MIXED_CATEGORIES]
       : ALL_CATEGORIES;
 }
 
@@ -249,6 +253,11 @@ export async function checkFilelistForItemInternal(data: {
   // unei căutări vechi. Scrierea în cache se face oricum, ca wizard-ul să
   // profite de rezultatul proaspăt.
   useCache?: boolean;
+  // Include torrentele RO Dubbed. Doar wizard-ul le cere — acolo alege un om.
+  // Urmărirea le ignoră: ar putea descărca singură o variantă doar dublată.
+  // Cererea către Filelist și cache-ul le conțin mereu (o singură intrare
+  // per titlu, comună wizard-ului și urmăririi); filtrarea se face la ieșire.
+  includeDubbed?: boolean;
 }): Promise<FilelistSearchResult> {
   const username = process.env.FILELIST_USERNAME;
   const passkey = process.env.FILELIST_PASSKEY;
@@ -263,9 +272,13 @@ export async function checkFilelistForItemInternal(data: {
   const category: FilelistCategory = data.mediaType === "movie" ? "movies" : "series";
 
   const cacheKey = `${category}|${data.imdbId ?? ""}`;
+  const withoutDubbed = (r: FilelistSearchResult): FilelistSearchResult =>
+    data.includeDubbed
+      ? r
+      : { ...r, torrents: r.torrents.filter((t) => t.category !== RO_DUBBED_CATEGORY) };
   if (data.useCache) {
     const cached = filelistCheckCache.get(cacheKey);
-    if (cached && cached.expiresAt > Date.now()) return cached.result;
+    if (cached && cached.expiresAt > Date.now()) return withoutDubbed(cached.result);
   }
 
   if (!data.imdbId) return { status: "ok", torrents: [] };
@@ -285,7 +298,7 @@ export async function checkFilelistForItemInternal(data: {
 
     const result: FilelistSearchResult = { status: "ok", torrents: found };
     filelistCheckCache.set(cacheKey, { expiresAt: Date.now() + FILELIST_CHECK_CACHE_TTL, result });
-    return result;
+    return withoutDubbed(result);
   } catch (e) {
     return { status: "error", error: e instanceof Error ? e.message : String(e), torrents: [] };
   }

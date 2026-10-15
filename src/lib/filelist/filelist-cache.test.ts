@@ -64,3 +64,41 @@ describe("checkFilelistForItemInternal — cache", () => {
     expect(calls).toBe(1);
   });
 });
+
+describe("checkFilelistForItemInternal — RO Dubbed", () => {
+  const torrent = (id: number, category: number) => ({
+    id,
+    name: `T${id}`,
+    size: 1,
+    seeders: 1,
+    leechers: 0,
+    times_completed: 0,
+    category,
+    freeleech: 0,
+    internal: 0,
+    upload_date: "2026-10-01 10:00:00",
+    imdb: "tt1000004",
+  });
+
+  beforeEach(() => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        calls++;
+        return new Response(JSON.stringify([torrent(1, 21), torrent(2, 28)]), { status: 200 });
+      }),
+    );
+  });
+
+  it("urmărirea nu primește torrentele dublate, wizard-ul da — dintr-o singură cerere", async () => {
+    const auto = await client.checkFilelistForItemInternal(query("tt1000004"));
+    const wizard = await client.checkFilelistForItemInternal({
+      ...query("tt1000004", true),
+      includeDubbed: true,
+    });
+
+    expect(auto.torrents.map((t) => t.id)).toEqual([1]);
+    expect(wizard.torrents.map((t) => t.id).sort()).toEqual([1, 2]);
+    expect(calls).toBe(1);
+  });
+});

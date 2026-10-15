@@ -11,16 +11,25 @@
 // SERIES_CATEGORIES fără riscul de a contamina rezultatele: Cartoons=15
 // (desene animate — filme ȘI seriale), Mobile=22 (aplicații/jocuri +
 // filme/seriale în format mobil — de asta NU mai e inclus la seriale, deși
-// a fost istoric), Anime=24 (filme ȘI seriale anime), RO Dubbed=28 (filme ȘI
-// seriale dublate). Rămân neclasificate — căutarea Filelist pur și simplu nu
-// le va găsi (fallback: căutarea manuală din secțiunea Filelist).
+// a fost istoric), Anime=24 (filme ȘI seriale anime). Rămân neclasificate —
+// căutarea Filelist pur și simplu nu le va găsi.
+//
+// Excepție: RO Dubbed=28 (filme ȘI seriale dublate) e căutată, ca
+// MIXED_CATEGORIES. Căutarea wizard-ului e strict după IMDb, deci un ID de
+// film nu poate aduce un serial; iar tipul descărcării (folder, bibliotecă
+// Plex) vine din ce s-a cerut / din `media.media_type`, nu din categorie —
+// de asta 28 nu e în niciuna dintre listele de mai jos. Urmărirea automată
+// o exclude (vezi checkFilelistForItemInternal): o variantă doar dublată nu
+// se alege fără om.
 // ---------------------------------------------------------------------------
 
 // Filme: SD=1, DVD=2, DVD-RO=3, HD=4, HD-RO=19, 4K=6, 4K Blu-Ray=26, Blu-Ray=20, 3D=25
 // Seriale: SD=23, HD=21, 4K=27, K-Drama=31
 export const MOVIE_CATEGORIES = [1, 2, 3, 4, 6, 19, 20, 25, 26];
 export const SERIES_CATEGORIES = [21, 23, 27, 31];
-export const ALL_CATEGORIES = [...MOVIE_CATEGORIES, ...SERIES_CATEGORIES];
+export const MIXED_CATEGORIES = [28];
+export const RO_DUBBED_CATEGORY = 28;
+export const ALL_CATEGORIES = [...MOVIE_CATEGORIES, ...SERIES_CATEGORIES, ...MIXED_CATEGORIES];
 
 // Filelist API poate returna categoria ca string (ex: "Movies HD") — mapăm la ID numeric
 const CATEGORY_STRING_MAP: Record<string, number> = {
@@ -48,6 +57,7 @@ const CATEGORY_STRING_MAP: Record<string, number> = {
   "Filme 4K Blu-Ray": 26,
   "TV-Series 4K": 27,
   "Seriale 4K": 27,
+  "RO Dubbed": 28,
   "K-Drama": 31,
 };
 
@@ -75,9 +85,18 @@ export const CATEGORY_NAMES: Record<number, string> = {
   25: "Filme 3D",
   26: "Filme 4K Blu-Ray",
   27: "Seriale 4K",
+  28: "RO Dubbed",
   31: "K-Drama",
 };
 
 export function isMovieCategory(catId: number): boolean {
   return MOVIE_CATEGORIES.includes(catId);
+}
+
+export function isSeriesCategory(catId: number): boolean {
+  return SERIES_CATEGORIES.includes(catId);
+}
+
+export function isMixedCategory(catId: number): boolean {
+  return MIXED_CATEGORIES.includes(catId);
 }

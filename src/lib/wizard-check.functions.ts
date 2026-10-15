@@ -80,6 +80,7 @@ export const checkTitleForWizard = createServerFn({ method: "GET" })
       }),
       checkFilelistForItemInternal({
         useCache: true,
+        includeDubbed: true,
         title: data.title,
         originalTitle,
         imdbId: details.imdbId,

@@ -10,15 +10,23 @@ import {
   ShieldCheck,
   Film,
   Tv,
+  Languages,
 } from "lucide-react";
 
 import { searchFilelist } from "@/lib/filelist.functions";
 import type { FilelistCategory, FilelistTorrent } from "@/lib/filelist.functions";
-import { isMovieCategory } from "@/lib/filelist/categories";
+import { isMixedCategory, isMovieCategory } from "@/lib/filelist/categories";
 import { formatBytes } from "@/lib/format";
 import { useDownload } from "./use-download";
 import { detectQuality } from "./quality-utils";
 import { DownloadConfirmDialog } from "./DownloadConfirmDialog";
+
+// RO Dubbed amestecă filme și seriale: tipul îl stabilește serverul la
+// descărcare (TMDB după IMDb, apoi S01/S01E02 în nume), nu categoria.
+function kindLabel(category: number): string {
+  if (isMixedCategory(category)) return "Film / Serial";
+  return isMovieCategory(category) ? "Film" : "Serial";
+}
 
 type SortBy = "relevance" | "seeders" | "size";
 
@@ -211,7 +219,9 @@ export function FilelistSection() {
                   >
                     {/* Tip */}
                     <div className="mt-0.5 shrink-0">
-                      {isMovieCategory(t.category) ? (
+                      {isMixedCategory(t.category) ? (
+                        <Languages className="h-4 w-4 text-emerald-400" />
+                      ) : isMovieCategory(t.category) ? (
                         <Film className="h-4 w-4 text-amber-400" />
                       ) : (
                         <Tv className="h-4 w-4 text-blue-400" />
@@ -255,14 +265,18 @@ export function FilelistSection() {
                       onClick={() => setConfirmTorrent(t)}
                       disabled={downloading === t.id}
                       className="shrink-0 flex items-center gap-1 rounded-lg bg-blue-500/15 px-2.5 py-1.5 text-[11px] font-medium text-blue-400 hover:bg-blue-500/25 disabled:opacity-50 transition-colors"
-                      title={`Descarcă în ${isMovieCategory(t.category) ? "Filme" : "Seriale"}`}
+                      title={
+                        isMixedCategory(t.category)
+                          ? "Descarcă — film sau serial, stabilit automat"
+                          : `Descarcă în ${isMovieCategory(t.category) ? "Filme" : "Seriale"}`
+                      }
                     >
                       {downloading === t.id ? (
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
                       ) : (
                         <Download className="h-3.5 w-3.5" />
                       )}
-                      {isMovieCategory(t.category) ? "Film" : "Serial"}
+                      {kindLabel(t.category)}
                     </button>
                   </div>
                 ))}
@@ -281,7 +295,7 @@ export function FilelistSection() {
       {confirmTorrent && (
         <DownloadConfirmDialog
           torrent={confirmTorrent}
-          label={isMovieCategory(confirmTorrent.category) ? "Film" : "Serial"}
+          label={kindLabel(confirmTorrent.category)}
           onConfirm={(mediaContext) => {
             handleDownload(confirmTorrent, mediaContext);
             setConfirmTorrent(null);
