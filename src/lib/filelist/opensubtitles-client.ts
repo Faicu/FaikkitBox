@@ -121,15 +121,27 @@ async function getAuthToken(): Promise<string | null> {
   }
 }
 
+// Căutările trec printr-un cache Cloudflare comun tuturor utilizatorilor
+// API-ului (`max-age=86400`), cu URL-ul drept cheie — cheia API, token-ul sau
+// `Cache-Control: no-cache` nu contează. MobLand S02E05 (16 oct. 2026):
+// altcineva a pus căutarea în cache la 11:12 UTC, o variantă nouă a apărut la
+// 11:34, iar reîncercarea noastră de la 14:09 n-a văzut-o. Parametrul `_`,
+// ignorat de API, schimbă cheia din oră în oră: rezultate vechi de cel mult o
+// oră, dar tot cache-uibile.
+function cacheBucket(): string {
+  return new Date().toISOString().slice(0, 13).replace(/\D/g, "");
+}
+
 // Parametrii în ordine alfabetică: altfel API-ul răspunde cu 301 către
 // varianta canonică (sortată) și fiecare căutare costă două cereri.
 async function osSearch(params: Record<string, string>): Promise<OpenSubtitlesResult[]> {
   const key = apiKey();
   if (!key) return [];
   const results: OpenSubtitlesResult[] = [];
+  const bucketed = { ...params, _: cacheBucket() };
   for (let page = 1; page <= MAX_PAGES; page++) {
     const query = new URLSearchParams(
-      Object.entries(page > 1 ? { ...params, page: String(page) } : params).sort(([a], [b]) =>
+      Object.entries(page > 1 ? { ...bucketed, page: String(page) } : bucketed).sort(([a], [b]) =>
         a.localeCompare(b),
       ),
     );
