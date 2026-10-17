@@ -14,13 +14,13 @@ export const adminLogin = createServerFn({ method: "POST" })
     const { getDb } = await import("../db");
     const { verifyPassword } = await import("./password");
     const { hitRateLimit, resetRateLimit, formatRetryAfter } = await import("./rate-limit");
-    const { getRequestIP } = await import("@tanstack/react-start/server");
+    const { getClientIp } = await import("../client-ip.server");
 
     // Două limite complementare: una per IP (oprește o rafală de pe o singură
     // sursă, indiferent ce conturi încearcă) și una per utilizator (oprește un
     // atac distribuit concentrat pe un singur cont). Fără ele, ghicirea parolei
     // era complet nelimitată.
-    const ip = getRequestIP() ?? "unknown";
+    const ip = await getClientIp();
     const username = data.user.trim().toLowerCase();
     const perIp = hitRateLimit(`login:ip:${ip}`, LOGIN_MAX_PER_IP, LOGIN_WINDOW_MS);
     const perUser = hitRateLimit(`login:user:${username}`, LOGIN_MAX_PER_USER, LOGIN_WINDOW_MS);

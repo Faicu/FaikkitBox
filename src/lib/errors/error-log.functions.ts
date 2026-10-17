@@ -36,7 +36,7 @@ export const clearErrorLogs = createServerFn({ method: "POST" }).handler(async (
 export const logClientError = createServerFn({ method: "POST" })
   .validator((data: { message: string; stack?: string; level?: ErrorLevel }) => data)
   .handler(async ({ data }) => {
-    const { getRequestIP } = await import("@tanstack/react-start/server");
+    const { getClientIp } = await import("../client-ip.server");
     const { recordClientError } = await import("./error-log");
-    recordClientError(getRequestIP() ?? "unknown", data.message, data.stack, data.level ?? "error");
+    recordClientError(await getClientIp(), data.message, data.stack, data.level ?? "error");
   });

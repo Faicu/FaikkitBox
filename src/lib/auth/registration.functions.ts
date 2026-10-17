@@ -13,8 +13,8 @@ export const registerUser = createServerFn({ method: "POST" })
     // se putea afla, cerere cu cerere, ce username/email are acces la
     // bibliotecă, fără niciun cont.
     const { hitRateLimit, formatRetryAfter } = await import("./rate-limit");
-    const { getRequestIP } = await import("@tanstack/react-start/server");
-    const ip = getRequestIP() ?? "unknown";
+    const { getClientIp } = await import("../client-ip.server");
+    const ip = await getClientIp();
     const limit = hitRateLimit(`register:ip:${ip}`, REGISTER_MAX_PER_IP, REGISTER_WINDOW_MS);
     if (!limit.allowed) {
       return {
