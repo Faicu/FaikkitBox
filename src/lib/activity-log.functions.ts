@@ -15,11 +15,15 @@ import { createServerFn } from "@tanstack/react-start";
 export type { ActivityEntry, ActivityType, ActivityMetaValue } from "./activity-log";
 import type { ActivityEntry } from "./activity-log";
 
-export const getActivityLog = createServerFn({ method: "GET" }).handler(
-  async (): Promise<ActivityEntry[]> => {
+// `after` = cursorul primit la citirea anterioară: doar intrările scrise de
+// atunci (vezi readActivityLog). Fără el, tot jurnalul.
+export const getActivityLog = createServerFn({ method: "GET" })
+  .validator((data: { after?: number } | undefined) => ({
+    after: Math.max(0, Math.floor(Number(data?.after ?? 0)) || 0),
+  }))
+  .handler(async ({ data }): Promise<{ entries: ActivityEntry[]; cursor: number }> => {
     const { requireAdmin } = await import("./auth/admin.server");
     await requireAdmin();
     const { readActivityLog } = await import("./activity-log");
-    return readActivityLog();
-  },
-);
+    return readActivityLog(data.after);
+  });

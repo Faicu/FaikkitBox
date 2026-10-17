@@ -115,14 +115,24 @@ export async function logActivity(
 // de acolo: modulul ăsta are importuri server statice (node:crypto) și e
 // rădăcina care târa db.ts în bundle-ul de client.
 
-export async function readActivityLog(): Promise<ActivityEntry[]> {
+// `cursor` = cel mai mare rowid din tabel: clientul cere apoi doar intrările
+// scrise după el (`afterRowid`). După rowid, nu după `timestamp` — unele
+// intrări se scriu cu ora din trecut (oprirea unei vizionări e datată la
+// ultimul heartbeat), deci ar fi sărite de o citire după oră. Intrările nu se
+// modifică după scriere; se șterg doar cele mai vechi de 30 de zile.
+export async function readActivityLog(
+  afterRowid = 0,
+): Promise<{ entries: ActivityEntry[]; cursor: number }> {
   try {
     const { getDb } = await import("./db");
+    const cursor =
+      (getDb().prepare("SELECT MAX(rowid) AS m FROM activity").get() as { m: number | null }).m ??
+      0;
     const rows = getDb()
       .prepare(
-        "SELECT id, timestamp, type, message, meta FROM activity ORDER BY timestamp DESC, rowid DESC",
+        "SELECT id, timestamp, type, message, meta FROM activity WHERE rowid > ? AND rowid <= ? ORDER BY timestamp DESC, rowid DESC",
       )
-      .all() as Array<{
+      .all(afterRowid, cursor) as Array<{
       id: string;
       timestamp: string;
       type: string;
@@ -151,7 +161,7 @@ export async function readActivityLog(): Promise<ActivityEntry[]> {
       return row?.id;
     }
 
-    return rows.map((r) => {
+    const entries = rows.map((r) => {
       const meta = r.meta ? (JSON.parse(r.meta) as Record<string, ActivityMetaValue>) : undefined;
       const mediaId =
         meta && (r.type === "torrent_added" || r.type === "torrent_complete")
@@ -166,9 +176,10 @@ export async function readActivityLog(): Promise<ActivityEntry[]> {
         ...(mediaId != null ? { mediaId } : {}),
       };
     });
+    return { entries, cursor };
   } catch (e) {
     console.warn("[activity-log] Eroare la citire:", e);
-    return [];
+    return { entries: [], cursor: afterRowid };
   }
 }
 

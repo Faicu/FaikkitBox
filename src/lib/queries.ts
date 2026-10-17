@@ -8,7 +8,7 @@ import {
   getSpeedtestHistory,
   getSpeedtestState,
 } from "./system/speedtest.functions";
-import { getActivityLog } from "./activity-log.functions";
+import { getActivityLog, type ActivityEntry } from "./activity-log.functions";
 import { getImmichTracker } from "./services/immich-uploads.functions";
 import { listWantedMovies } from "./media/media.functions";
 import { getErrorLogs } from "./errors/error-log.functions";
@@ -112,9 +112,36 @@ export const hostQuery = queryOptions({
   ...keepPrev,
 });
 
+// Jurnalul ține 30 de zile (~2.000 de intrări, ~0,5 MB). La puls se cer doar
+// intrările scrise de la ultima citire (cursorul serverului) și se adaugă la
+// cele deja primite. Lista întreagă se cere la prima citire și apoi din 5 în
+// 5 minute: așa dispar și intrările șterse după 30 de zile, iar intrările de
+// torrent scrise înaintea titlului din Bibliotecă își primesc legătura spre el
+// (mediaId, calculat la citire).
+interface ActivityLogData {
+  entries: ActivityEntry[];
+  cursor: number;
+  fullAt: number;
+}
+const ACTIVITY_FULL_MS = 5 * 60_000;
+
 export const activityLogQuery = queryOptions({
   queryKey: ["activityLog"],
-  queryFn: () => getActivityLog(),
+  queryFn: async ({ client }): Promise<ActivityLogData> => {
+    const prev = client.getQueryData<ActivityLogData>(["activityLog"]);
+    if (prev && Date.now() - prev.fullAt < ACTIVITY_FULL_MS) {
+      const res = await getActivityLog({ data: { after: prev.cursor } });
+      if (res.entries.length === 0) return { ...prev, cursor: res.cursor };
+      // Sortare după oră: o intrare nouă poate avea ora din trecut.
+      const entries = [...res.entries, ...prev.entries].sort((a, b) =>
+        a.timestamp < b.timestamp ? 1 : a.timestamp > b.timestamp ? -1 : 0,
+      );
+      return { entries, cursor: res.cursor, fullAt: prev.fullAt };
+    }
+    const res = await getActivityLog({ data: {} });
+    return { entries: res.entries, cursor: res.cursor, fullAt: Date.now() };
+  },
+  select: (data) => data.entries,
   refetchInterval: slower(2),
   staleTime: 2_000,
   ...keepPrev,
