@@ -8,8 +8,13 @@
 // dacă sunt mai vechi decât staleTime-ul ei, se reîmprospătează în fundal.
 // Pulsurile periodice (refetchInterval) rulează în continuare doar cât timp
 // pagina e deschisă. La ieșirea din cont, AppHeader golește memoria.
+//
+// Tot aici se descarcă și codul paginilor (fiecare are fișierul ei, încărcat
+// la cerere): fără asta, prima atingere a unui buton din bara de jos aștepta
+// încă un drum prin Cloudflare doar pentru cod, deși datele erau gata.
 
 import type { QueryClient } from "@tanstack/react-query";
+import type { AnyRouter } from "@tanstack/react-router";
 
 import {
   activityLogQuery,
@@ -76,7 +81,21 @@ const ADMIN_QUERIES = [
   immichTrackerQuery,
 ];
 
-export function prefetchAppData(queryClient: QueryClient, isAdmin: boolean): void {
+const USER_ROUTES = ["/", "/biblioteca", "/descopera"] as const;
+const ADMIN_ROUTES = ["/tehnic", "/qbit", "/sistem", "/immich", "/users"] as const;
+
+export function prefetchAppData(
+  queryClient: QueryClient,
+  router: AnyRouter,
+  isAdmin: boolean,
+): void {
+  const routes = isAdmin ? [...USER_ROUTES, ...ADMIN_ROUTES] : USER_ROUTES;
+  for (const to of routes) {
+    // Doar o optimizare: o pagină care nu se preîncarcă se încarcă normal la
+    // deschidere.
+    void router.preloadRoute({ to }).catch(() => {});
+  }
+
   const queries = isAdmin ? [...USER_QUERIES, ...ADMIN_QUERIES] : USER_QUERIES;
   for (const q of queries) {
     // `as never`: lista amestecă tipuri de date diferite; opțiunile sunt

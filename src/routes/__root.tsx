@@ -187,16 +187,17 @@ function RootComponent() {
   );
 }
 
-// Datele tuturor paginilor se cer în fundal imediat ce se știe cine e logat
+// Datele și codul tuturor paginilor se cer în fundal imediat ce se știe cine e logat
 // (vezi lib/prefetch.ts), ca fiecare pagină să se deschidă direct cu ele.
 function AppPrefetch() {
   const queryClient = useQueryClient();
+  const router = useRouter();
   const { data } = useQuery(adminStatusQuery);
   const loggedIn = !!data?.isAuthenticated;
   const isAdmin = !!data?.isAdmin;
   useEffect(() => {
-    if (loggedIn) prefetchAppData(queryClient, isAdmin);
-  }, [loggedIn, isAdmin, queryClient]);
+    if (loggedIn) prefetchAppData(queryClient, router, isAdmin);
+  }, [loggedIn, isAdmin, queryClient, router]);
   return null;
 }
 
