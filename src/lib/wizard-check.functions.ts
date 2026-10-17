@@ -133,12 +133,19 @@ export const checkTitleForWizard = createServerFn({ method: "GET" })
       tvmazeAirstamps = airstamps;
     }
 
+    const torrents = filelistRes.status === "ok" ? filelistRes.torrents : [];
+    // Pentru verificarea calității la descărcare (download-quality.ts).
+    if (session.data.userId) {
+      const { rememberWizardTorrents } = await import("./filelist/download-quality");
+      rememberWizardTorrents(session.data.userId, torrents);
+    }
+
     return {
       details,
       originalTitle,
       plexFound: !!plexRes?.found,
       plexQualities: plexRes?.qualities ?? [],
-      torrents: filelistRes.status === "ok" ? filelistRes.torrents : [],
+      torrents,
       seasons,
       seasonSchema,
       tvmazeAirstamps,

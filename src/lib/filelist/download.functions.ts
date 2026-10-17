@@ -42,8 +42,13 @@ export const downloadFilelist = createServerFn({ method: "POST" })
     }),
   )
   .handler(async ({ data }): Promise<FilelistDownloadResult> => {
-    const { requireAuth } = await import("../auth/admin.server");
+    const { requireAuth, isLiveAdmin } = await import("../auth/admin.server");
     const session = await requireAuth();
+    if (!(await isLiveAdmin(session))) {
+      const { checkNonAdminDownload } = await import("./download-quality");
+      const check = checkNonAdminDownload(session.data.userId!, data.torrentId);
+      if (!check.ok) return { status: "error", error: check.error };
+    }
     const { downloadFilelistCore } = await import("./download");
     return downloadFilelistCore({
       ...data,

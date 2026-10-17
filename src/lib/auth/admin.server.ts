@@ -140,3 +140,13 @@ export function isAdminOrOwner(
 ): boolean {
   return !!session.data.admin || (ownerUserId != null && session.data.userId === ownerUserId);
 }
+
+// Adminul verificat ca la requireAdmin (sesiunea ȘI rolul curent din DB),
+// dar fără să arunce — pentru acțiuni deschise tuturor, cu reguli în plus
+// pentru cei care nu sunt admini (ex. calitatea la descărcare).
+export async function isLiveAdmin(session: { data: AdminSession }): Promise<boolean> {
+  const userId = session.data.userId;
+  if (!userId || !session.data.admin) return false;
+  const account = await liveAccount(userId, session.data.sessionVersion);
+  return account?.role === "admin";
+}
