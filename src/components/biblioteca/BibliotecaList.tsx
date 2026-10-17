@@ -21,8 +21,6 @@ import {
   type SortMode,
 } from "./utils";
 
-const PAGE_SIZE = 20;
-
 export function BibliotecaList({
   openMediaId = null,
   onOpenHandled,
@@ -34,7 +32,6 @@ export function BibliotecaList({
   const browse = useQuery(plexLibraryBrowseQuery);
   const [query, setQuery] = useState("");
   const [sortMode, setSortMode] = useState<SortMode>("recent");
-  const [visible, setVisible] = useState(PAGE_SIZE);
   const [selectedMediaId, setSelectedMediaId] = useState<number | null>(null);
   const [confirmDeleteTitle, setConfirmDeleteTitle] = useState<{
     mediaId: number;
@@ -193,8 +190,6 @@ export function BibliotecaList({
     );
   }
 
-  const visibleRows = filtered.slice(0, visible);
-
   return (
     <div className="space-y-3">
       <div className="flex gap-2">
@@ -202,20 +197,14 @@ export function BibliotecaList({
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input
             value={query}
-            onChange={(e) => {
-              setQuery(e.target.value);
-              setVisible(PAGE_SIZE);
-            }}
+            onChange={(e) => setQuery(e.target.value)}
             placeholder="Caută film sau serial…"
             className="w-full rounded-xl glass-card py-2.5 pl-9 pr-3 text-sm outline-none focus:ring-1 focus:ring-primary"
           />
         </div>
         <select
           value={sortMode}
-          onChange={(e) => {
-            setSortMode(e.target.value as SortMode);
-            setVisible(PAGE_SIZE);
-          }}
+          onChange={(e) => setSortMode(e.target.value as SortMode)}
           className="shrink-0 rounded-xl glass-card px-2 text-xs outline-none focus:ring-1 focus:ring-primary"
         >
           <option value="recent">Recent adăugate</option>
@@ -238,17 +227,8 @@ export function BibliotecaList({
               tastă ar remonta containerul și ar reporni stagger-ul de la
               opacity: 0 — lista pâlpâia la fiecare caracter tastat. */}
           <div key={sortMode} className="space-y-1 stagger-in">
-            {visibleRows.map((item) => renderRow(item))}
+            {filtered.map((item) => renderRow(item))}
           </div>
-          {filtered.length > visible && (
-            <button
-              type="button"
-              onClick={() => setVisible((v) => v + PAGE_SIZE)}
-              className="mt-1.5 w-full rounded-lg bg-muted/50 py-1.5 text-xs font-medium text-muted-foreground transition-all hover:bg-muted/80 hover:text-foreground active:scale-[0.98]"
-            >
-              Afișează mai mult
-            </button>
-          )}
         </div>
       )}
 
