@@ -80,6 +80,23 @@ export function looksRomanian(text: string): boolean {
   return stopwords.filter((w) => lower.includes(w)).length >= 3;
 }
 
+// Engleză? Pentru un .srt din torrent care nu e română: în engleză primește
+// eticheta „.en"; în altă limbă e pus deoparte. Fără diacritice românești și
+// cu cuvinte uzuale englezești.
+export function looksEnglish(text: string): boolean {
+  if (looksRomanian(text)) return false;
+  const lower = ` ${text.toLowerCase().replace(/[^a-z']+/g, " ")} `;
+  const stopwords = [" the ", " you ", " and ", " what ", " that ", " this ", " is ", " it "];
+  return stopwords.filter((w) => lower.includes(w)).length >= 5;
+}
+
+export type SrtLanguage = "ro" | "en" | "other";
+
+export function srtContentLanguage(text: string): SrtLanguage {
+  if (looksRomanian(text)) return "ro";
+  return looksEnglish(text) ? "en" : "other";
+}
+
 export async function fileExists(absPath: string): Promise<boolean> {
   try {
     await access(absPath);

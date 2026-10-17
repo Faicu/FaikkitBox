@@ -185,52 +185,32 @@ export async function handleSidecarSrt(
   };
 }
 
-// Un .srt bundle-uit care nu pare română (vezi looksRomanian, subtitle-checks.ts)
-// e redenumit .en, ca să nu fie preluat greșit de Plex ca subtitrare implicită
-// — nu-l ștergem, doar îl scoatem din calea unde am scrie noi unul nou.
-export async function renameToNonRomanian(
-  srtFile: QbitFileInfo,
-  mediaBaseName: string,
-  mediaDir: string,
-  ctx: { qbitUrl: string; torrentHash: string; qbitUser: string; qbitPass: string },
-): Promise<void> {
-  const nonRoTarget =
-    mediaDir === "." ? `${mediaBaseName}.en.srt` : `${mediaDir}/${mediaBaseName}.en.srt`;
-  if (srtFile.name === nonRoTarget) return;
-  await qbitRenameFile(
-    ctx.qbitUrl,
-    ctx.torrentHash,
-    srtFile.name,
-    nonRoTarget,
-    ctx.qbitUser,
-    ctx.qbitPass,
-  ).catch((e) => console.warn(`[subtitles] redenumire .srt non-RO eșuată:`, e));
-}
-
-// Un .srt urmărit de qBittorrent pus deoparte (`.respins`, ignorat de Plex)
-// tot prin API, cu așteptare până dispare de la vechea cale: qBittorrent
-// mută fișierul asincron, uneori după câteva secunde (vezi readFileWithRetry,
-// subtitle-encoding.ts). Fără așteptare, pasul următor îl găsea încă acolo și
-// fie îl redenumea direct pe disc (qBittorrent îi pierdea urma), fie scria
-// peste el subtitrarea nouă, mutată apoi deoparte de redenumirea întârziată.
+// Redenumește un .srt urmărit de qBittorrent tot prin API, cu așteptare până
+// dispare de la vechea cale: qBittorrent mută fișierul asincron, uneori după
+// câteva secunde (vezi readFileWithRetry, subtitle-encoding.ts). Fără
+// așteptare, pasul următor îl găsea încă acolo și fie îl redenumea direct pe
+// disc (qBittorrent îi pierdea urma), fie scria peste el subtitrarea nouă,
+// mutată apoi de redenumirea întârziată.
 // false dacă redenumirea a eșuat sau fișierul n-a plecat în timp util.
-export async function moveAsideTrackedSrt(
+export async function moveTrackedSrt(
   relPath: string,
+  newRelPath: string,
   ctx: TrackedSrtContext,
   attempts = 8,
   delayMs = 750,
 ): Promise<boolean> {
+  if (relPath === newRelPath) return true;
   try {
     await qbitRenameFile(
       ctx.qbitUrl,
       ctx.torrentHash,
       relPath,
-      `${relPath}.respins`,
+      newRelPath,
       ctx.qbitUser,
       ctx.qbitPass,
     );
   } catch (e) {
-    console.warn(`[subtitles] punerea deoparte a ${relPath} eșuată:`, e);
+    console.warn(`[subtitles] redenumirea ${relPath} → ${newRelPath} eșuată:`, e);
     return false;
   }
   const absPath = join(ctx.savePath, relPath);
@@ -240,4 +220,28 @@ export async function moveAsideTrackedSrt(
   }
   console.warn(`[subtitles] ${relPath} încă pe disc după redenumirea prin qBittorrent`);
   return false;
+}
+
+// Un .srt din torrent care nu e nici română, nici engleză: pus deoparte
+// (`.respins`, ignorat de Plex). Se șterge odată cu titlul (disk-cleanup.ts).
+export function moveAsideTrackedSrt(
+  relPath: string,
+  ctx: TrackedSrtContext,
+  attempts?: number,
+  delayMs?: number,
+): Promise<boolean> {
+  return moveTrackedSrt(relPath, `${relPath}.respins`, ctx, attempts, delayMs);
+}
+
+// Un .srt din torrent în engleză primește eticheta „.en", ca Plex să-l arate
+// ca „English" și să nu-l ia drept subtitrarea implicită.
+export function tagTrackedSrtEnglish(
+  relPath: string,
+  mediaBaseName: string,
+  mediaDir: string,
+  ctx: TrackedSrtContext,
+): Promise<boolean> {
+  const target =
+    mediaDir === "." ? `${mediaBaseName}.en.srt` : `${mediaDir}/${mediaBaseName}.en.srt`;
+  return moveTrackedSrt(relPath, target, ctx);
 }

@@ -5,6 +5,7 @@ import {
   extractEpisodeKey,
   osResultMatchesEpisode,
   pickRomanianSrt,
+  srtContentLanguage,
   srtLanguageTag,
 } from "./subtitle-checks";
 import { subsRoEntryEpisodeKey, subsRoItemMatchesSeason } from "./subsro-client";
@@ -165,5 +166,21 @@ describe("pickRomanianSrt", () => {
   });
   it("null când niciunul nu e român", () => {
     expect(pickRomanianSrt([{ file: f("Film.srt"), romanian: false }])).toBeNull();
+  });
+});
+
+describe("srtContentLanguage", () => {
+  it("română, engleză sau altceva", () => {
+    expect(
+      srtContentLanguage(
+        "Nu știu ce să fac. Și tu ești aici pentru că este târziu și sunt obosit.",
+      ),
+    ).toBe("ro");
+    expect(
+      srtContentLanguage("What is this? I told you that it is the end, and you know it."),
+    ).toBe("en");
+    expect(srtContentLanguage("¿Qué es esto? Te dije que es el final y lo sabes muy bien.")).toBe(
+      "other",
+    );
   });
 });

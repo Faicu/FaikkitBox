@@ -12,21 +12,25 @@
 import { readdir, rm, stat } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 
-const SUBTITLE_EXT_RE = /\.(srt|sub|idx|ass|ssa)$/i;
+// Cu `.respins` opțional: subtitrările puse deoparte de aplicație
+// („Film.ro.srt.respins"), ignorate de Plex, dar tot ale titlului.
+const SUBTITLE_EXT_RE = /\.(srt|sub|idx|ass|ssa)(\.respins)?$/i;
 
 // Subtitrările „sidecar" ale unui fișier video: în același folder, cu numele
-// video-ului + sufix de limbă opțional + extensie de subtitrare
-// ("Film.2026-GRUP.mkv" → "Film.2026-GRUP.ro.srt", "Film.2026-GRUP.srt").
+// video-ului + sufixe de limbă opționale + extensie de subtitrare
+// ("Film.2026-GRUP.mkv" → "Film.2026-GRUP.ro.srt", "Film.2026-GRUP.srt",
+// "Film.2026-GRUP.ro.forced.srt", "Film.2026-GRUP.ro.srt.respins").
 export function sidecarSubtitleNames(videoFileName: string, dirEntries: string[]): string[] {
   const dot = videoFileName.lastIndexOf(".");
   if (dot <= 0) return [];
   const base = videoFileName.slice(0, dot);
   return dirEntries.filter((entry) => {
     if (!entry.startsWith(`${base}.`) || !SUBTITLE_EXT_RE.test(entry)) return false;
-    // Între nume și extensie: nimic sau un singur sufix de limbă/etichetă
-    // ("ro", "en", "forced") — nu alt fișier care doar începe la fel.
-    const middle = entry.slice(base.length + 1).replace(SUBTITLE_EXT_RE, "");
-    return middle === "" || /^[A-Za-z-]{2,10}$/.test(middle);
+    // Între nume și extensie: nimic sau un sufix de limbă/etichetă ("ro",
+    // "en", "forced"), urmat cel mult de forced/sdh/cc/hi ("ro.forced") — nu
+    // alt fișier care doar începe la fel („Film.Extended.ro.srt").
+    const middle = entry.slice(base.length).replace(SUBTITLE_EXT_RE, "").replace(/^\./, "");
+    return middle === "" || /^[A-Za-z-]{2,10}(\.(forced|sdh|cc|hi))?$/i.test(middle);
   });
 }
 

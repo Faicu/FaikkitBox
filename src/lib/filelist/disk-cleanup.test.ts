@@ -16,6 +16,18 @@ describe("sidecarSubtitleNames", () => {
       ]),
     ).toEqual(["Film-GRP {imdb-tt1}.ro.srt", "Film-GRP {imdb-tt1}.srt"]);
   });
+
+  it("include subtitrările puse deoparte și pe cele forced, nu și alt video", () => {
+    expect(
+      sidecarSubtitleNames("Film.mkv", [
+        "Film.ro.srt.respins",
+        "Film.srt.respins",
+        "Film.ro.forced.srt",
+        "Film.Extended.ro.srt",
+        "Film.mkv.respins",
+      ]),
+    ).toEqual(["Film.ro.srt.respins", "Film.srt.respins", "Film.ro.forced.srt"]);
+  });
 });
 
 describe("isInsideMediaRoot", () => {
