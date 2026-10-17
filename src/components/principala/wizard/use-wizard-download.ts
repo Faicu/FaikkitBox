@@ -138,7 +138,9 @@ export function useWizardDownload({
           description: `${torrent.name} → ${res.savePath}`,
           duration: 6000,
         });
-        queryClient.invalidateQueries({ queryKey: ["filelistLog"] });
+        // Biblioteca e preîncărcată și ținută în memorie (lib/prefetch.ts):
+        // descărcarea nouă trebuie să apară în ea imediat, nu la următorul puls.
+        queryClient.invalidateQueries({ queryKey: ["plexLibraryBrowse"] });
         return true;
       }
       toast.error("Eroare la descărcare", { id: toastId, description: res.error, duration: 8000 });

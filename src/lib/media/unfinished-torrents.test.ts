@@ -118,13 +118,12 @@ describe("listUnfinishedTorrents", () => {
   });
 
   it("marchează ca film pachetul în care măcar un rând e film", () => {
-    // isMovie e fallback-ul pentru cazul în care categoria Filelist lipsește;
-    // media_type e mereu populat, deci el decide biblioteca Plex de rescanat.
+    // media_type e mereu populat, deci el decide biblioteca Plex de rescanat,
+    // chiar și fără categoria Filelist.
     insertMedia({ title: "Film fără categorie", hash: "eee", category: null });
 
     const row = media.listUnfinishedTorrents().find((r) => r.torrentHash === "eee");
     expect(row?.isMovie).toBe(true);
-    expect(row?.category).toBeNull();
   });
 });
 

@@ -83,7 +83,9 @@ export function useDownload() {
           description: `${torrent.name} → ${res.savePath}`,
           duration: 6000,
         });
-        qc.invalidateQueries({ queryKey: ["filelistLog"] });
+        // Biblioteca e preîncărcată și ținută în memorie (lib/prefetch.ts):
+        // descărcarea nouă trebuie să apară în ea imediat, nu la următorul puls.
+        qc.invalidateQueries({ queryKey: ["plexLibraryBrowse"] });
       } else {
         toast.error("Eroare la descărcare", {
           id: toastId,

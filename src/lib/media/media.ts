@@ -571,9 +571,7 @@ export function markMediaCompleted(torrentHash: string): boolean {
 export interface UnfinishedTorrent {
   torrentHash: string;
   torrentName: string;
-  category: number | null;
-  // Fallback pentru cazul în care categoria Filelist lipsește (titluri
-  // adăugate altfel decât prin fluxul standard): media_type e mereu populat.
+  // Din media_type, mereu populat: decide biblioteca Plex de rescanat.
   isMovie: boolean;
   imdbId: string | null;
 }
@@ -596,7 +594,7 @@ export function listUnfinishedTorrents(): UnfinishedTorrent[] {
   const rows = getDb()
     .prepare(
       `SELECT torrent_hash, MIN(torrent_name) AS torrent_name,
-              MIN(category) AS category, MIN(imdb_id) AS imdb_id,
+              MIN(imdb_id) AS imdb_id,
               MAX(media_type = 'movie') AS is_movie
          FROM media
         WHERE completed_at IS NULL
@@ -608,7 +606,6 @@ export function listUnfinishedTorrents(): UnfinishedTorrent[] {
     .all() as unknown as Array<{
     torrent_hash: string;
     torrent_name: string | null;
-    category: number | null;
     imdb_id: string | null;
     is_movie: number;
   }>;
@@ -616,7 +613,6 @@ export function listUnfinishedTorrents(): UnfinishedTorrent[] {
   return rows.map((r) => ({
     torrentHash: r.torrent_hash,
     torrentName: r.torrent_name ?? r.torrent_hash,
-    category: r.category,
     isMovie: !!r.is_movie,
     imdbId: r.imdb_id,
   }));
