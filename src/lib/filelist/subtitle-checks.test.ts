@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { agreedEpisodeKey, extractEpisodeKey, osResultMatchesEpisode } from "./subtitle-checks";
+import {
+  agreedEpisodeKey,
+  extractEpisodeKey,
+  osResultMatchesEpisode,
+  pickRomanianSrt,
+  srtLanguageTag,
+} from "./subtitle-checks";
 import { subsRoEntryEpisodeKey, subsRoItemMatchesSeason } from "./subsro-client";
 
 describe("osResultMatchesEpisode", () => {
@@ -112,5 +118,52 @@ describe("subsRoItemMatchesSeason", () => {
     const item = { ...it_("The Rookie - Sezonul 8"), description: "Sezonul 8, 18 episoade" };
     expect(subsRoItemMatchesSeason(item, 8)).toBe(true);
     expect(subsRoItemMatchesSeason(item, 18)).toBe(false);
+  });
+});
+
+describe("srtLanguageTag", () => {
+  it("recunoaște limba din sufix", () => {
+    expect(srtLanguageTag("Film.2014.1080p.ENG.srt")).toBe("other");
+    expect(srtLanguageTag("Film.2014.1080p.ro.srt")).toBe("ro");
+    expect(srtLanguageTag("Subs/2_English.srt")).toBe("other");
+    expect(srtLanguageTag("Film.eng.forced.srt")).toBe("other");
+  });
+  it("nu ia grupul release-ului drept limbă", () => {
+    expect(srtLanguageTag("Film.2014.1080p.BluRay.x264-GRP.srt")).toBeNull();
+    expect(srtLanguageTag("Film.2014.1080p.srt")).toBeNull();
+  });
+});
+
+describe("pickRomanianSrt", () => {
+  const f = (name: string, size = 100) => ({ name, size });
+  it("alege .srt-ul român nemarcat, nu pe cel ENG", () => {
+    const eng = f("Film.ENG.srt");
+    const plain = f("Film.srt");
+    expect(
+      pickRomanianSrt([
+        { file: eng, romanian: false },
+        { file: plain, romanian: true },
+      ]),
+    ).toBe(plain);
+  });
+  it("între mai multe românești preferă marcarea ro, apoi pe cel mai mare", () => {
+    const forced = f("Film.srt", 5);
+    const full = f("Film.full.srt", 90);
+    const ro = f("Film.ro.srt", 50);
+    expect(
+      pickRomanianSrt([
+        { file: forced, romanian: true },
+        { file: full, romanian: true },
+      ]),
+    ).toBe(full);
+    expect(
+      pickRomanianSrt([
+        { file: full, romanian: true },
+        { file: ro, romanian: true },
+      ]),
+    ).toBe(ro);
+  });
+  it("null când niciunul nu e român", () => {
+    expect(pickRomanianSrt([{ file: f("Film.srt"), romanian: false }])).toBeNull();
   });
 });

@@ -205,11 +205,16 @@ function Overview() {
                                   }`}
                                 >
                                   {s.playbackMode === "transcode"
-                                    ? `Transcodare${s.hwTranscode ? " HW" : ""}`
+                                    ? `Transcodare video${s.hwTranscode ? " HW" : ""}`
                                     : s.playbackMode === "direct-stream"
                                       ? "Direct Stream"
                                       : "Direct Play"}
                                 </span>
+                                {s.audioTranscode && (
+                                  <span className="rounded bg-orange-500/15 px-1.5 py-0.5 text-[10px] font-medium text-orange-400">
+                                    {audioTranscodeLabel(s.audioTranscode)}
+                                  </span>
+                                )}
                                 {qualityLabel(s) && (
                                   <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
                                     {qualityLabel(s)}
@@ -552,6 +557,12 @@ function qualityLabel(s: PlexSession): string | null {
   if (!stream) return s.sourceQuality ?? null;
   if (s.sourceQuality && s.sourceQuality !== stream) return `${s.sourceQuality} → ${stream}`;
   return stream;
+}
+
+// „Audio TrueHD → E-AC3"; doar „Audio convertit" dacă Plex nu dă codecurile.
+function audioTranscodeLabel(a: NonNullable<PlexSession["audioTranscode"]>): string {
+  if (a.from && a.to) return `Audio ${prettyCodec(a.from)} → ${prettyCodec(a.to)}`;
+  return "Audio convertit";
 }
 
 function codecLabel(s: PlexSession): string | null {

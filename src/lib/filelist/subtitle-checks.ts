@@ -165,3 +165,90 @@ export async function detectAlreadyRomanianContent(
   }
   return null;
 }
+
+// Limba marcată în numele unui .srt („Film.ENG.srt", „Film.ro.srt",
+// „Subs/2_English.srt"): "ro", "other" sau null (nemarcată). Doar coduri
+// cunoscute — un sufix ca „-GRP" din numele release-ului nu e o limbă.
+const RO_TAGS = ["ro", "rum", "ron", "romanian", "romana", "română"];
+const OTHER_TAGS = [
+  "en",
+  "eng",
+  "english",
+  "fr",
+  "fre",
+  "fra",
+  "french",
+  "es",
+  "spa",
+  "spanish",
+  "de",
+  "ger",
+  "deu",
+  "german",
+  "it",
+  "ita",
+  "italian",
+  "hu",
+  "hun",
+  "hungarian",
+  "pt",
+  "por",
+  "portuguese",
+  "ru",
+  "rus",
+  "russian",
+  "nl",
+  "dut",
+  "nld",
+  "pl",
+  "pol",
+  "tr",
+  "tur",
+  "el",
+  "gre",
+  "ell",
+  "bg",
+  "bul",
+  "sr",
+  "srp",
+  "hr",
+  "hrv",
+  "ar",
+  "ara",
+];
+export function srtLanguageTag(name: string): "ro" | "other" | null {
+  const stem = basenameNoExt(name).toLowerCase();
+  const words = stem.split(/[._\- ]+/).filter(Boolean);
+  const last = words.slice(-2);
+  // „Film.ro.forced.srt" / „Film.eng.sdh.srt" — sufixele forced/sdh nu sunt limba.
+  const tag = ["forced", "sdh", "cc", "hi"].includes(last[last.length - 1] ?? "")
+    ? last[0]
+    : last[last.length - 1];
+  if (!tag) return null;
+  if (RO_TAGS.includes(tag)) return "ro";
+  if (OTHER_TAGS.includes(tag)) return "other";
+  return null;
+}
+
+function basenameNoExt(path: string): string {
+  const file = path.split("/").pop() ?? path;
+  return file.replace(/\.[^.]+$/, "");
+}
+
+// Dintre mai multe .srt-uri ale aceluiași fișier, cel care e subtitrarea
+// română: conținutul decide (looksRomanian), nu numele. Între mai multe
+// românești: cel deja marcat „ro", apoi cel nemarcat, apoi cel mai mare
+// (cel „forced" are doar câteva replici). null dacă niciunul nu e român.
+export function pickRomanianSrt<T extends { name: string; size: number }>(
+  files: Array<{ file: T; romanian: boolean }>,
+): T | null {
+  const rank = (f: T) => {
+    const tag = srtLanguageTag(f.name);
+    return tag === "ro" ? 0 : tag === null ? 1 : 2;
+  };
+  const ro = files
+    .filter((f) => f.romanian)
+    .map((f) => f.file)
+    .sort((a, b) => rank(a) - rank(b) || b.size - a.size);
+  return ro[0] ?? null;
+}

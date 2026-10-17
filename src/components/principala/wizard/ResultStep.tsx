@@ -20,6 +20,7 @@ import {
   qualityDirection,
   bestOf,
   matchesForQuality,
+  availableQualities,
 } from "./selection";
 import { normalizeStoredPoster } from "@/lib/tmdb/poster";
 import type { CheckResult, TorrentChoiceContext } from "./types";
@@ -85,6 +86,10 @@ export function ResultStep({
   const movieAlreadyDownloading = !isTv && downloadingEntries.length > 0;
   const movieMatches = !isTv && checkResult ? matchesForQuality(checkResult.torrents, quality) : [];
   const movieMatch = movieMatches.find((t) => t.id === pickedTorrentId) ?? bestOf(movieMatches);
+  // Când nu e la calitatea aleasă, dar e la alta: utilizatorii fără
+  // selectorul de calitate (doar adminul îl are) vedeau doar „nu există".
+  const otherQualities =
+    !isTv && checkResult && !movieMatch ? availableQualities(checkResult.torrents, quality) : [];
 
   // Pentru filme, "există în Plex" e suficient (verificare atomică).
   const alreadyInPlex = !isTv && !!checkResult?.plexFound;
@@ -390,6 +395,24 @@ export function ResultStep({
                 <div className="text-sm text-muted-foreground">
                   Nu există încă la calitatea {quality} pe Filelist.
                 </div>
+                {otherQualities.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="text-sm">Dar e disponibil la:</div>
+                    <div className="flex flex-wrap gap-2">
+                      {otherQualities.map((q) => (
+                        <button
+                          key={q}
+                          type="button"
+                          disabled={busy}
+                          onClick={() => dispatch({ type: "SET_QUALITY", quality: q })}
+                          className="rounded-lg border border-primary/40 bg-primary/10 px-3 py-1.5 text-sm font-medium text-primary transition-colors hover:bg-primary/20 disabled:opacity-40"
+                        >
+                          {q}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {/* Fundacul de dinainte: mesajul spunea „încă", dar
                   nu-ți oferea nimic de făcut cu informația asta. */}
                 {/* Deschis oricui e logat, nu doar adminilor: un film

@@ -116,3 +116,18 @@ export function matchesForQuality(
     }),
   );
 }
+
+const ALL_QUALITIES: Quality[] = ["720p", "1080p", "1080p HDR", "4K", "4K HDR"];
+
+// Calitățile la care există măcar un torrent, cele mai apropiate de
+// `preferred` întâi (deci după 1080p vin 1080p HDR și 720p, apoi 4K) — pentru
+// ecranul „nu există la calitatea aleasă", ca utilizatorul să afle că
+// filmul există totuși, la altă calitate.
+export function availableQualities(torrents: FilelistTorrent[], preferred: Quality): Quality[] {
+  const pref = ALL_QUALITIES.indexOf(preferred);
+  return ALL_QUALITIES.filter(
+    (q) => q !== preferred && matchesForQuality(torrents, q).length > 0,
+  ).sort(
+    (a, b) => Math.abs(ALL_QUALITIES.indexOf(a) - pref) - Math.abs(ALL_QUALITIES.indexOf(b) - pref),
+  );
+}

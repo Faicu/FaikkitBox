@@ -37,6 +37,8 @@ export interface PlexSession {
   audioCodec?: string;
   audioChannels?: number;
   hwTranscode?: boolean;
+  // Sunetul convertit (codecul sursei → cel livrat), independent de video.
+  audioTranscode?: { from?: string; to?: string };
   burnedSubtitle?: boolean;
 }
 
@@ -416,12 +418,18 @@ function mapPlexSessions(sessionsMd: PlexMetadataItem[]): PlexSession[] {
     const ts = s.TranscodeSession;
     const videoDecision = ts?.videoDecision ?? video?.decision ?? part?.decision;
     const audioDecision = ts?.audioDecision ?? audio?.decision ?? part?.decision;
-    // "transcode" = re-encodare reală a unui flux; "copy" = doar remux
-    // (direct stream); nimic din toate astea = direct play.
+    // Eticheta principală descrie video-ul, ca în panoul Plex: "transcode" =
+    // video re-encodat; "copy" = video neatins, doar reîmpachetat (direct
+    // stream); nimic = direct play. Un video copiat cu sunetul convertit
+    // (TrueHD/DTS → E-AC3 pe un televizor care nu le suportă) NU e
+    // transcodare video — înainte apărea „Transcodare HW" deși Plex arăta
+    // video direct; conversia sunetului apare separat (`audioTranscode`).
+    const videoTranscoded = videoDecision === "transcode";
+    const audioTranscoded = audioDecision === "transcode";
     const decisions = [videoDecision, audioDecision, part?.decision];
-    const playbackMode: "direct" | "direct-stream" | "transcode" = decisions.includes("transcode")
+    const playbackMode: "direct" | "direct-stream" | "transcode" = videoTranscoded
       ? "transcode"
-      : decisions.includes("copy")
+      : audioTranscoded || decisions.includes("copy") || decisions.includes("transcode")
         ? "direct-stream"
         : "direct";
     // La direct play/stream fluxul livrat *e* sursa, deci eticheta e aceeași —
@@ -451,7 +459,10 @@ function mapPlexSessions(sessionsMd: PlexMetadataItem[]): PlexSession[] {
       videoCodec: ts?.videoCodec ?? media?.videoCodec ?? video?.codec,
       audioCodec: ts?.audioCodec ?? media?.audioCodec ?? audio?.codec,
       audioChannels: ts?.audioChannels ?? media?.audioChannels ?? audio?.channels,
-      hwTranscode: !!(ts?.transcodeHwFullPipeline || ts?.transcodeHwRequested),
+      hwTranscode: videoTranscoded && !!(ts?.transcodeHwFullPipeline || ts?.transcodeHwRequested),
+      audioTranscode: audioTranscoded
+        ? { from: ts?.sourceAudioCodec ?? audio?.codec, to: ts?.audioCodec }
+        : undefined,
       burnedSubtitle: ts?.subtitleDecision === "burn",
     };
   });

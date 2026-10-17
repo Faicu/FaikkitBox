@@ -28,6 +28,7 @@ import {
   detectAlreadyRomanianContent,
   extractEpisodeKey,
   looksRomanian,
+  pickRomanianSrt,
 } from "./subtitle-checks";
 import { createSubtitleVerifier, isWellSynced, type SyncMeasure } from "./subtitle-verify";
 import { SUBTITLE_SOURCE_LABELS } from "./subtitle-outcomes";
@@ -154,43 +155,54 @@ export async function processMediaFile(
     return { outcome: "audio_already_romanian", detail: alreadyRomanianDetail };
   }
 
-  // Pas 1b — exact un .srt deja urmărit de qBittorrent pentru acest fișier?
-  // Verificăm ÎNTÂI conținutul, nu presupunem că fiindcă e singurul, e
-  // automat română (lansările pot avea subtitrare engleză bundle-uită).
-  if (ownSrtFiles.length === 1) {
-    const existingAbsPath = join(savePath, ownSrtFiles[0].name);
-    const existingBuf = await readFile(existingAbsPath).catch(() => null);
-    const existingText = existingBuf ? decodeToUtf8Text(existingBuf).text : "";
-
-    if (existingBuf && looksRomanian(existingText)) {
+  // Pas 1b — .srt-uri deja urmărite de qBittorrent pentru acest fișier.
+  // Verificăm ÎNTÂI conținutul, nu presupunem după nume sau după faptul că e
+  // singurul (lansările pot avea subtitrare engleză bundle-uită). La mai
+  // multe (de obicei „Film.ENG.srt" + „Film.srt" cu româna, nemarcată),
+  // cel român după conținut devine „.ro.srt", ca Plex să-l recunoască.
+  if (ownSrtFiles.length > 0) {
+    const read = await Promise.all(
+      ownSrtFiles.map(async (file) => {
+        const buf = await readFile(join(savePath, file.name)).catch(() => null);
+        return { file, buf, romanian: buf ? looksRomanian(decodeToUtf8Text(buf).text) : false };
+      }),
+    );
+    const romanian = pickRomanianSrt(read);
+    if (romanian) {
       const { outcome, detail } = await handleTrackedSrt(
-        ownSrtFiles[0],
+        romanian,
         targetSrtRelPath,
         mediaFile.piece_range,
         { qbitUrl, torrentHash, qbitUser, qbitPass, savePath },
       );
-      return { outcome, detail, path: targetSrtRelPath };
+      const others = ownSrtFiles.length - 1;
+      return {
+        outcome,
+        detail:
+          others > 0
+            ? `${detail} (ales după conținut dintre ${ownSrtFiles.length} fișiere .srt; celelalte rămân neatinse)`
+            : detail,
+        path: targetSrtRelPath,
+      };
     }
 
-    // Nu pare română — redenumim ca .en și continuăm mai jos să căutăm o
-    // subtitrare română reală, fără să atingem targetSrtRelPath.
-    if (existingBuf) {
-      await renameToNonRomanian(ownSrtFiles[0], mediaBaseName, mediaDir, {
-        qbitUrl,
-        torrentHash,
-        qbitUser,
-        qbitPass,
-      });
+    // Niciunul nu pare română. Cel nemarcat și pus chiar lângă video
+    // („Film.srt") ar fi luat de Plex drept subtitrarea implicită — îl
+    // redenumim .en; cele marcate deja cu altă limbă rămân cum sunt. Apoi
+    // căutăm mai jos o subtitrare română reală.
+    const plainRelPath =
+      mediaDir === "." ? `${mediaBaseName}.srt` : `${mediaDir}/${mediaBaseName}.srt`;
+    for (const { file, buf } of read) {
+      if (!buf) continue;
+      if (ownSrtFiles.length === 1 || file.name === plainRelPath) {
+        await renameToNonRomanian(file, mediaBaseName, mediaDir, {
+          qbitUrl,
+          torrentHash,
+          qbitUser,
+          qbitPass,
+        });
+      }
     }
-  }
-
-  // Mai multe .srt-uri — probabil deja există unul cu limba corectă marcată;
-  // nu ne amestecăm.
-  if (ownSrtFiles.length > 1) {
-    return {
-      outcome: "multiple_srt_skipped",
-      detail: `${ownSrtFiles.length} fișiere .srt găsite — sar peste, posibil deja etichetate corect pe limbi`,
-    };
   }
 
   // Pas 1c — .srt sidecar descărcat anterior de sistem, netrackuit de
