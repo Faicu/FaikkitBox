@@ -1,4 +1,4 @@
-import { queryOptions } from "@tanstack/react-query";
+import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import { getPlex, getPlexSessions, getImmich, getQbit, getHost } from "./services.functions";
 import { getAdminStatus } from "./auth/admin.functions";
 import { getVersions } from "./system/versions.functions";
@@ -25,6 +25,13 @@ import { getNetworkLink } from "./system/network-link.functions";
 import { getDbBackupStatus } from "./system/db-backup.functions";
 import { getShowWatchStatus } from "./media/media.functions";
 import { getSubtitleRetryStatus } from "./filelist/download.functions";
+import { listUsers } from "./auth/users.functions";
+import { listPushSubscriptions } from "./notifications/push.functions";
+import {
+  getDiscoverTitles,
+  type DiscoverMediaType,
+  type DiscoverSort,
+} from "./tmdb/tmdb.discover.functions";
 
 // Ritmul statisticilor live e reglabil din pagina Sistem — vezi
 // lib/refresh-rate.ts. `refetchInterval` primește o funcție, evaluată la
@@ -236,10 +243,6 @@ export const plexLibraryBrowseQuery = queryOptions({
   // Revenind din altă aplicație / alt tab, reîmprospătează imediat, fără să
   // aștepți următorul puls.
   refetchOnWindowFocus: true,
-  // Preîncărcată la deschiderea aplicației (LibraryPrefetch, __root.tsx) și
-  // păstrată în memorie: intrând pe Bibliotecă, lista apare pe loc, iar dacă
-  // e mai veche decât staleTime se reîmprospătează în fundal.
-  gcTime: Infinity,
 });
 
 export const recentWatchesQuery = queryOptions({
@@ -299,3 +302,25 @@ export const wantedMoviesQuery = queryOptions({
   staleTime: 60_000,
   refetchOnWindowFocus: true,
 });
+
+// Conturile, pentru pagina Utilizatori (admin).
+export const usersQuery = queryOptions({
+  queryKey: ["users"],
+  queryFn: () => listUsers(),
+});
+
+// Abonamentele push, pentru Tehnic (admin).
+export const pushSubscriptionsQuery = queryOptions({
+  queryKey: ["pushSubscriptions"],
+  queryFn: () => listPushSubscriptions(),
+});
+
+// Grila din Descoperă, câte o listă pe tip, cu pagini încărcate la derulare.
+export const discoverQuery = (mediaType: DiscoverMediaType, sort: DiscoverSort) =>
+  infiniteQueryOptions({
+    queryKey: ["discover", mediaType, sort],
+    queryFn: ({ pageParam }) => getDiscoverTitles({ data: { mediaType, sort, page: pageParam } }),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) =>
+      lastPage.items.length > 0 ? allPages.length + 1 : undefined,
+  });

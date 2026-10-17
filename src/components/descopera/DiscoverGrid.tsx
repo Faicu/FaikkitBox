@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
 
-import { getDiscoverTitles } from "@/lib/tmdb/tmdb.discover.functions";
+import { discoverQuery } from "@/lib/queries";
 import type {
   DiscoverMediaType,
   DiscoverSort,
@@ -20,22 +19,12 @@ export function DiscoverGrid({
 }) {
   const [selected, setSelected] = useState<DiscoverTitle | null>(null);
 
-  const discoverFn = useServerFn(getDiscoverTitles);
-
   const movieQuery = useInfiniteQuery({
-    queryKey: ["discover", "movie", sort],
-    queryFn: ({ pageParam }) => discoverFn({ data: { mediaType: "movie", sort, page: pageParam } }),
-    initialPageParam: 1,
-    getNextPageParam: (lastPage, allPages) =>
-      lastPage.items.length > 0 ? allPages.length + 1 : undefined,
+    ...discoverQuery("movie", sort),
     enabled: media === "all" || media === "movie",
   });
   const tvQuery = useInfiniteQuery({
-    queryKey: ["discover", "tv", sort],
-    queryFn: ({ pageParam }) => discoverFn({ data: { mediaType: "tv", sort, page: pageParam } }),
-    initialPageParam: 1,
-    getNextPageParam: (lastPage, allPages) =>
-      lastPage.items.length > 0 ? allPages.length + 1 : undefined,
+    ...discoverQuery("tv", sort),
     enabled: media === "all" || media === "tv",
   });
 

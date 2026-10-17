@@ -29,7 +29,8 @@ import {
   withoutClientCapture,
 } from "../lib/errors/client-error-capture";
 import { toast } from "sonner";
-import { adminStatusQuery, plexLibraryBrowseQuery } from "../lib/queries";
+import { adminStatusQuery } from "../lib/queries";
+import { prefetchAppData } from "../lib/prefetch";
 
 function NotFoundComponent() {
   return (
@@ -177,7 +178,7 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <HydrationBoundary state={dehydratedState}>
         <AutoReloadWatcher />
-        <LibraryPrefetch />
+        <AppPrefetch />
         <Outlet />
         <BottomNav />
         <Toaster richColors closeButton position="top-center" />
@@ -186,15 +187,16 @@ function RootComponent() {
   );
 }
 
-// Biblioteca se cere în fundal imediat ce se știe că ești logat, ca pagina ei
-// să se deschidă direct cu lista (vezi gcTime la plexLibraryBrowseQuery).
-function LibraryPrefetch() {
+// Datele tuturor paginilor se cer în fundal imediat ce se știe cine e logat
+// (vezi lib/prefetch.ts), ca fiecare pagină să se deschidă direct cu ele.
+function AppPrefetch() {
   const queryClient = useQueryClient();
   const { data } = useQuery(adminStatusQuery);
   const loggedIn = !!data?.isAuthenticated;
+  const isAdmin = !!data?.isAdmin;
   useEffect(() => {
-    if (loggedIn) void queryClient.prefetchQuery(plexLibraryBrowseQuery);
-  }, [loggedIn, queryClient]);
+    if (loggedIn) prefetchAppData(queryClient, isAdmin);
+  }, [loggedIn, isAdmin, queryClient]);
   return null;
 }
 

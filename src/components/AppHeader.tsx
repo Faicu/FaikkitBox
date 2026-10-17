@@ -33,8 +33,8 @@ export function AppHeader({ title, subtitle, right }: Props) {
     mutationFn: () => logoutFn(),
     onSuccess: async () => {
       toast.success("Deconectat");
-      // Datele contului (inclusiv Biblioteca, preîncărcată și păstrată în
-      // memorie) nu trebuie să rămână pentru următorul cont de pe telefon.
+      // Datele contului (preîncărcate și păstrate în memorie, vezi
+      // lib/prefetch.ts) nu trebuie să rămână pentru următorul cont.
       qc.removeQueries({ predicate: (q) => q.queryKey[0] !== "adminStatus" });
       await qc.invalidateQueries({ queryKey: ["adminStatus"] });
     },

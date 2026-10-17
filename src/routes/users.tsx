@@ -10,7 +10,8 @@ import { TehnicSubNav } from "@/components/tehnic/TehnicSubNav";
 import { UserDetailDrawer } from "@/components/tehnic/UserDetailDrawer";
 import { requireAdminBeforeLoad } from "@/lib/auth/admin-route-guard";
 import { addAdminUser, deleteAdminUser } from "@/lib/auth/admin.functions";
-import { listUsers, approveUser, deleteUser, type UserAccount } from "@/lib/auth/users.functions";
+import { approveUser, deleteUser, type UserAccount } from "@/lib/auth/users.functions";
+import { usersQuery } from "@/lib/queries";
 
 export const Route = createFileRoute("/users")({
   beforeLoad: requireAdminBeforeLoad,
@@ -19,14 +20,10 @@ export const Route = createFileRoute("/users")({
 });
 
 function UsersPage() {
-  const listFn = useServerFn(listUsers);
   const qc = useQueryClient();
   const [selectedId, setSelectedId] = useState<number | null>(null);
 
-  const { data, isLoading } = useQuery({
-    queryKey: ["users"],
-    queryFn: () => listFn(),
-  });
+  const { data, isLoading } = useQuery(usersQuery);
   const users = Array.isArray(data) ? data : [];
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["users"] });

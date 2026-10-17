@@ -5,10 +5,10 @@ import { BellRing, Laptop, Smartphone, Trash2, Globe, AppWindow } from "lucide-r
 import { toast } from "sonner";
 
 import {
-  listPushSubscriptions,
   deletePushSubscription,
   type PushSubscriptionRow,
 } from "@/lib/notifications/push.functions";
+import { pushSubscriptionsQuery } from "@/lib/queries";
 import { formatDateTime, relativeTime } from "../utils";
 
 /**
@@ -43,15 +43,11 @@ function isMobile(ua: string | null): boolean {
 
 export function PushSubscriptionsSection() {
   const qc = useQueryClient();
-  const list = useServerFn(listPushSubscriptions);
   const del = useServerFn(deletePushSubscription);
   const [myTail, setMyTail] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
 
-  const { data, isLoading } = useQuery({
-    queryKey: ["pushSubscriptions"],
-    queryFn: () => list(),
-  });
+  const { data, isLoading } = useQuery(pushSubscriptionsQuery);
 
   // Coada endpoint-ului propriu, ca să putem marca rândul acestui dispozitiv.
   useEffect(() => {
