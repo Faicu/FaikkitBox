@@ -226,7 +226,7 @@ export function BibliotecaList({
               deci merită reanimată. Dacă `query` ar face parte din key, fiecare
               tastă ar remonta containerul și ar reporni stagger-ul de la
               opacity: 0 — lista pâlpâia la fiecare caracter tastat. */}
-          <div key={sortMode} className="space-y-1 stagger-in">
+          <div key={sortMode} className="space-y-1 stagger-in-fast">
             {filtered.map((item) => renderRow(item))}
           </div>
         </div>

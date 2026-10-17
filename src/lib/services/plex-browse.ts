@@ -108,8 +108,6 @@ async function fetchQbitProgress(hashes: string[]): Promise<Map<string, QbitProg
   return result;
 }
 
-const BROWSE_LIMIT = 300;
-
 // Fallback pentru "Marchează ca vizionat" din Plex (setează viewCount pe
 // item, dar NU scrie o intrare de istoric/scrobble — invizibil pentru
 // PlexWatchedIndex, oricât de bine ar potrivi ratingKey-ul). Sigur doar
@@ -263,7 +261,6 @@ export const getPlexLibraryBrowse = createServerFn({ method: "GET" }).handler(
         });
       }
       items.sort((a, b) => b.addedAt - a.addedAt);
-      items.splice(BROWSE_LIMIT);
 
       // Progres live: un singur request către qBit cu toate hash-urile
       // titlurilor încă în descărcare, nu unul per titlu. Pentru un serial,

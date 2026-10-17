@@ -236,6 +236,10 @@ export const plexLibraryBrowseQuery = queryOptions({
   // Revenind din altă aplicație / alt tab, reîmprospătează imediat, fără să
   // aștepți următorul puls.
   refetchOnWindowFocus: true,
+  // Preîncărcată la deschiderea aplicației (LibraryPrefetch, __root.tsx) și
+  // păstrată în memorie: intrând pe Bibliotecă, lista apare pe loc, iar dacă
+  // e mai veche decât staleTime se reîmprospătează în fundal.
+  gcTime: Infinity,
 });
 
 export const recentWatchesQuery = queryOptions({

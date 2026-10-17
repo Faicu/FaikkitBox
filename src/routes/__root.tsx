@@ -3,6 +3,8 @@ import {
   QueryClientProvider,
   dehydrate,
   HydrationBoundary,
+  useQuery,
+  useQueryClient,
 } from "@tanstack/react-query";
 import type { DehydratedState } from "@tanstack/react-query";
 import {
@@ -27,7 +29,7 @@ import {
   withoutClientCapture,
 } from "../lib/errors/client-error-capture";
 import { toast } from "sonner";
-import { adminStatusQuery } from "../lib/queries";
+import { adminStatusQuery, plexLibraryBrowseQuery } from "../lib/queries";
 
 function NotFoundComponent() {
   return (
@@ -175,12 +177,25 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <HydrationBoundary state={dehydratedState}>
         <AutoReloadWatcher />
+        <LibraryPrefetch />
         <Outlet />
         <BottomNav />
         <Toaster richColors closeButton position="top-center" />
       </HydrationBoundary>
     </QueryClientProvider>
   );
+}
+
+// Biblioteca se cere în fundal imediat ce se știe că ești logat, ca pagina ei
+// să se deschidă direct cu lista (vezi gcTime la plexLibraryBrowseQuery).
+function LibraryPrefetch() {
+  const queryClient = useQueryClient();
+  const { data } = useQuery(adminStatusQuery);
+  const loggedIn = !!data?.isAuthenticated;
+  useEffect(() => {
+    if (loggedIn) void queryClient.prefetchQuery(plexLibraryBrowseQuery);
+  }, [loggedIn, queryClient]);
+  return null;
 }
 
 function AutoReloadWatcher() {
