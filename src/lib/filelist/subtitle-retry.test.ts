@@ -73,10 +73,10 @@ describe("listTorrentsDueForSubtitleRetry", () => {
     expect(due()).toEqual([]);
   });
 
-  it("subtitrare aproximativă: reîncearcă, ca s-o înlocuiască (cu has_ro=1)", () => {
+  it("subtitrare aproximativă: reîncearcă, ca s-o înlocuiască (deși are subtitrare)", () => {
     add("a", { ro: 1, approximate: 1 });
     expect(retry.listTorrentsDueForSubtitleRetry()).toMatchObject([
-      { torrent_hash: "a", has_ro: 1 },
+      { torrent_hash: "a", approximate: 1 },
     ]);
   });
 

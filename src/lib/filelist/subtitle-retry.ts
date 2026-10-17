@@ -28,8 +28,6 @@ interface DueTorrent {
   torrent_name: string | null;
   imdb_id: string | null;
   is_movie: number;
-  // 1 doar dacă TOATE rândurile torrentului au subtitrare.
-  has_ro: number;
   // 1 dacă măcar un rând are o subtitrare aproximativă de înlocuit.
   approximate: number;
 }
@@ -42,7 +40,7 @@ export function listTorrentsDueForSubtitleRetry(): DueTorrent[] {
   return getDb()
     .prepare(
       `SELECT torrent_hash, MIN(torrent_name) AS torrent_name, MIN(imdb_id) AS imdb_id,
-              MAX(media_type = 'movie') AS is_movie, MIN(has_romanian_subtitle) AS has_ro,
+              MAX(media_type = 'movie') AS is_movie,
               MAX(subtitle_approximate) AS approximate
          FROM media
         WHERE torrent_hash IS NOT NULL
