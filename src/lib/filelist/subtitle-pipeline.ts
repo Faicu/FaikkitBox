@@ -227,6 +227,15 @@ export async function processMediaFile(
   // alt episod înăuntru, nu mai e acceptat doar fiindcă are numele bun —
   // se pune deoparte (`.ro.srt.respins`, ignorat de Plex) și căutăm din nou.
   const sidecarAbsPath = join(savePath, targetSrtRelPath);
+  // Un „.ro.srt" al torrentului care nu e român și n-a plecat de pe cale nici
+  // după moveAsideTrackedSrt (redenumire eșuată sau prea lentă): nu-l mutăm
+  // și nu scriem peste el pe disc, pe la spatele lui qBittorrent.
+  if (ownSrtFiles.some((f) => f.name === targetSrtRelPath) && (await fileExists(sidecarAbsPath))) {
+    return {
+      outcome: "no_subtitle_found",
+      detail: `„${basename(targetSrtRelPath)}" din torrent nu e în română și n-a putut fi pus deoparte prin qBittorrent — nu scriu peste el`,
+    };
+  }
   let rejectedSidecar: string | null = null;
   let movedAside: string | undefined;
   // Setat când păstrăm .srt-ul existent doar până găsim unul mai bun.
