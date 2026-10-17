@@ -92,6 +92,10 @@ interface EnsureRomanianSubtitleParams {
   // Caută o variantă mai bună pentru o subtitrare „aproximativă" deja pusă
   // (vezi processMediaFile, subtitle-retry.ts).
   upgradeApproximate?: boolean;
+  // La un pachet: episoadele cu subtitrare aproximativă (ex. "S01E02"), doar
+  // ele se reverifică pentru o variantă mai bună — cele exacte rămân, fără
+  // să consume din limita OpenSubtitles. Lipsă = toate episoadele.
+  approximateEpisodes?: ReadonlySet<string>;
 }
 
 // Rezultatul unei singure verificări/corectări — nu mai loghează nimic
@@ -212,6 +216,7 @@ export async function ensureRomanianSubtitle(
       displayTitle,
       imdbId,
       upgradeApproximate: params.upgradeApproximate,
+      approximateEpisodes: params.approximateEpisodes,
     });
   }
   const mediaFile = mediaFiles[0];
@@ -376,6 +381,7 @@ interface ProcessSeasonPackParams {
   displayTitle: string;
   imdbId: string | null;
   upgradeApproximate?: boolean;
+  approximateEpisodes?: ReadonlySet<string>;
 }
 
 async function processSeasonPack(params: ProcessSeasonPackParams): Promise<SubtitleRunItem> {
@@ -391,6 +397,7 @@ async function processSeasonPack(params: ProcessSeasonPackParams): Promise<Subti
     displayTitle,
     imdbId,
     upgradeApproximate,
+    approximateEpisodes,
   } = params;
 
   const seasonNumber =
@@ -474,6 +481,8 @@ async function processSeasonPack(params: ProcessSeasonPackParams): Promise<Subti
       qbitPass,
       searchTargetName: mediaFile.name,
       expectedEpisodeKey: episodeKey,
+      upgradeApproximate:
+        !!upgradeApproximate && (!approximateEpisodes || approximateEpisodes.has(episodeKey)),
       // Filtrul pe episod e în resolveBestSubtitle.
       getOsCandidates: getOsSeasonResults,
       getSubsRoCandidates: getSubsRoEntries,

@@ -57,6 +57,20 @@ export function listTorrentsDueForSubtitleRetry(): DueTorrent[] {
     .all(`-${RETRY_DAYS} days`, `-${RETRY_MIN_AGE_HOURS} hours`) as unknown as DueTorrent[];
 }
 
+// Episoadele unui pachet cu subtitrare aproximativă ("S01E02"). Goală când
+// singurul rând marcat e cel al pachetului, încă fără episod (Plex nu l-a
+// indexat): atunci nu știm care episod e — se reverifică toate.
+export function approximateEpisodeKeys(torrentHash: string): ReadonlySet<string> | undefined {
+  const rows = getDb()
+    .prepare(
+      `SELECT printf('S%02dE%02d', season, episode) AS k FROM media
+        WHERE torrent_hash = ? AND subtitle_approximate = 1
+          AND season IS NOT NULL AND episode IS NOT NULL`,
+    )
+    .all(torrentHash) as unknown as { k: string }[];
+  return rows.length ? new Set(rows.map((r) => r.k)) : undefined;
+}
+
 export async function retryMissingSubtitles(): Promise<void> {
   const db = getDb();
   // Tic-ul se notează mereu — e dovada că plugin-ul rulează, chiar și în
@@ -79,7 +93,15 @@ export async function retryMissingSubtitles(): Promise<void> {
           imdbId: t.imdb_id,
           isMovie: t.is_movie === 1,
         },
-        { logRun: "corrected", upgradeApproximate: t.approximate === 1, via: "retry" },
+        {
+          logRun: "corrected",
+          upgradeApproximate: t.approximate === 1,
+          approximateEpisodes:
+            t.approximate === 1 && t.is_movie !== 1
+              ? approximateEpisodeKeys(t.torrent_hash)
+              : undefined,
+          via: "retry",
+        },
       );
       if (result.status === "ok" && CORRECTED_OUTCOMES.includes(result.outcome)) found++;
       console.log(

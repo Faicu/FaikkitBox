@@ -727,7 +727,12 @@ export async function checkSubtitleForTorrent(
     imdbId: string | null;
     isMovie: boolean;
   },
-  opts: { logRun: "always" | "corrected"; upgradeApproximate?: boolean; via?: "retry" },
+  opts: {
+    logRun: "always" | "corrected";
+    upgradeApproximate?: boolean;
+    approximateEpisodes?: ReadonlySet<string>;
+    via?: "retry";
+  },
 ): Promise<CorrectSubtitleResult> {
   const qbitBase = process.env.QBIT_URL ?? "http://192.168.1.192:25556";
   const qbitUser = process.env.QBIT_USERNAME;
@@ -749,6 +754,7 @@ export async function checkSubtitleForTorrent(
     imdbId: row.imdbId ?? undefined,
     mediaType: plexType === "movie" ? "movie" : "tv",
     upgradeApproximate: opts.upgradeApproximate,
+    approximateEpisodes: opts.approximateEpisodes,
   });
 
   const corrected = CORRECTED_OUTCOMES.includes(result.outcome);

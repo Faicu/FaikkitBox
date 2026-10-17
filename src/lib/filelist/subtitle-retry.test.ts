@@ -98,6 +98,16 @@ describe("listTorrentsDueForSubtitleRetry", () => {
   });
 });
 
+describe("approximateEpisodeKeys", () => {
+  it("la un pachet, doar episoadele aproximative se reverifică", () => {
+    add("p", { episode: 1, ro: 1, approximate: 1 });
+    add("p", { episode: 2, ro: 1 });
+    add("p", { episode: 3, ro: 1, approximate: 1 });
+    expect([...(retry.approximateEpisodeKeys("p") ?? [])].sort()).toEqual(["S01E01", "S01E03"]);
+    expect(retry.approximateEpisodeKeys("altul")).toBeUndefined();
+  });
+});
+
 describe("updateMediaSubtitleStatus — reverificare fără schimbări", () => {
   const source = () =>
     (
