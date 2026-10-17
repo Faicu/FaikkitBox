@@ -195,26 +195,21 @@ export async function processMediaFile(
       };
     }
 
-    // Niciunul nu pare română. Cel nemarcat de lângă video („Film.srt") ar
-    // fi luat de Plex drept subtitrarea implicită, iar un „Film.ro.srt" care
-    // nu e român ar fi afișat greșit ca română și ar ocupa locul celui pe
-    // care îl căutăm — amândouă devin .en, prin qBittorrent (ca la un singur
-    // .srt). Cele marcate deja cu altă limbă rămân cum sunt. Apoi căutăm mai
-    // jos o subtitrare română reală.
+    // Niciunul nu pare română. Cel nemarcat și pus chiar lângă video
+    // („Film.srt") ar fi luat de Plex drept subtitrarea implicită — îl
+    // redenumim .en; cele marcate deja cu altă limbă rămân cum sunt. Apoi
+    // căutăm mai jos o subtitrare română reală.
     const plainRelPath =
       mediaDir === "." ? `${mediaBaseName}.srt` : `${mediaDir}/${mediaBaseName}.srt`;
-    // „.ro.srt" primul: dacă și „Film.srt" vrea numele .en, cel care
-    // rămâne pe loc să nu fie tocmai cel de pe calea noastră.
-    const ordered = [...read].sort(
-      (a, b) => Number(b.file.name === targetSrtRelPath) - Number(a.file.name === targetSrtRelPath),
-    );
-    for (const { file, buf } of ordered) {
+    for (const { file, buf } of read) {
       if (!buf) continue;
-      if (
-        ownSrtFiles.length === 1 ||
-        file.name === plainRelPath ||
-        file.name === targetSrtRelPath
-      ) {
+      // Un „Film.ro.srt" din torrent care nu e român: pus deoparte tot prin
+      // qBittorrent (nu cu rename pe disc la pasul 1c), ca să nu-i piardă urma.
+      if (file.name === targetSrtRelPath) {
+        await moveAsideTrackedSrt(file.name, trackedCtx);
+        continue;
+      }
+      if (ownSrtFiles.length === 1 || file.name === plainRelPath) {
         await renameToNonRomanian(file, mediaBaseName, mediaDir, {
           qbitUrl,
           torrentHash,
@@ -232,15 +227,6 @@ export async function processMediaFile(
   // alt episod înăuntru, nu mai e acceptat doar fiindcă are numele bun —
   // se pune deoparte (`.ro.srt.respins`, ignorat de Plex) și căutăm din nou.
   const sidecarAbsPath = join(savePath, targetSrtRelPath);
-  // Un „.ro.srt" al torrentului, nerecunoscut ca română, care n-a putut fi
-  // redenumit prin qBittorrent: nu-l mutăm și nu-l suprascriem pe disc pe
-  // la spatele lui qBittorrent (i-ar pierde urma).
-  if (ownSrtFiles.some((f) => f.name === targetSrtRelPath) && (await fileExists(sidecarAbsPath))) {
-    return {
-      outcome: "no_subtitle_found",
-      detail: `„${basename(targetSrtRelPath)}" din torrent nu e în română și n-a putut fi redenumit prin qBittorrent — nu scriu peste el`,
-    };
-  }
   let rejectedSidecar: string | null = null;
   let movedAside: string | undefined;
   // Setat când păstrăm .srt-ul existent doar până găsim unul mai bun.
