@@ -109,7 +109,11 @@ describe("updateMediaSubtitleStatus — reverificare fără schimbări", () => {
   it("păstrează sursa de la descărcare (S.W.A.T. Exiles S01E01)", async () => {
     const { updateMediaSubtitleStatus } = await import("../media/media");
     add("a");
-    updateMediaSubtitleStatus("a", { outcome: "downloaded", detail: "de pe subs.ro", source: "subsro" });
+    updateMediaSubtitleStatus("a", {
+      outcome: "downloaded",
+      detail: "de pe subs.ro",
+      source: "subsro",
+    });
     updateMediaSubtitleStatus("a", { outcome: "srt_already_ok", detail: "are deja .srt" });
     expect(source()).toBe("subsro");
     expect(
@@ -170,7 +174,13 @@ describe("updateMediaSubtitleStatus — pachet de sezon", () => {
       detail: "3 episoade — agregat",
       files: [file("S01E01", "downloaded", "subsro"), file("S01E02", "no_subtitle_found", null)],
       rejected: [
-        { torrent: "Serial.S01", episode: "S01E02", source: "opensubtitles", release: "x", reason: "nu e în română" },
+        {
+          torrent: "Serial.S01",
+          episode: "S01E02",
+          source: "opensubtitles",
+          release: "x",
+          reason: "nu e în română",
+        },
       ],
       episodeDetails: { S01E01: "descărcată de pe subs.ro", S01E02: "nicio variantă" },
     });
@@ -193,7 +203,13 @@ describe("updateMediaSubtitleStatus — pachet de sezon", () => {
       detail: "agregat",
       files: [file("S01E07", "downloaded", "subsro"), file("S01E08", "no_subtitle_found", null)],
       rejected: [
-        { torrent: "Serial.S01", episode: "S01E08", source: "opensubtitles", release: "x", reason: "nu e în română" },
+        {
+          torrent: "Serial.S01",
+          episode: "S01E08",
+          source: "opensubtitles",
+          release: "x",
+          reason: "nu e în română",
+        },
       ],
       episodeDetails: { S01E07: "de pe subs.ro", S01E08: "nicio variantă" },
     });
@@ -243,7 +259,11 @@ describe("updateMediaSubtitleStatus — subtitle_approximate", () => {
   it("se setează la o descărcare aproximativă, rămâne la reverificare, se șterge la înlocuire", async () => {
     const { updateMediaSubtitleStatus } = await import("../media/media");
     add("a");
-    updateMediaSubtitleStatus("a", { outcome: "downloaded_approximate", detail: "aproximativă", source: "subsro" });
+    updateMediaSubtitleStatus("a", {
+      outcome: "downloaded_approximate",
+      detail: "aproximativă",
+      source: "subsro",
+    });
     expect(approx()).toBe(1);
     updateMediaSubtitleStatus("a", { outcome: "srt_already_ok", detail: "rămâne" });
     expect(approx()).toBe(1);

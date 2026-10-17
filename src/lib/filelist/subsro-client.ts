@@ -103,9 +103,7 @@ export async function searchSubsRo(imdbId: string): Promise<SubsRoItem[]> {
 // plural — la „Sezonul 8, 18 episoade" virgula nu leagă alt sezon.
 export function subsRoItemMatchesSeason(item: SubsRoItem, seasonNumber: number): boolean {
   const text = `${item.title} ${item.description}`;
-  const plural = text.match(
-    /sezoanele\s+(\d{1,3}(?:(?:\s*[-–,&]\s*|\s+(?:și|si)\s+)\d{1,3})*)\b/i,
-  );
+  const plural = text.match(/sezoanele\s+(\d{1,3}(?:(?:\s*[-–,&]\s*|\s+(?:și|si)\s+)\d{1,3})*)\b/i);
   if (plural) return seasonInList(plural[1], seasonNumber);
   const range = text.match(/sezon(?:ul)?\s+0*(\d{1,3})\s*[-–]\s*0*(\d{1,3})\b/i);
   if (range) return Number(range[1]) <= seasonNumber && seasonNumber <= Number(range[2]);

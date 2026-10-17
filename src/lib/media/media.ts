@@ -465,11 +465,7 @@ export function updateMediaSubtitleStatus(
     result.outcome,
     result.detail,
     result.source ?? null,
-    packReport
-      ? JSON.stringify(packReport)
-      : files.length === 1
-        ? reportOf(files[0])
-        : null,
+    packReport ? JSON.stringify(packReport) : files.length === 1 ? reportOf(files[0]) : null,
   );
   if (!isPack) return;
   for (const file of files) {
@@ -497,7 +493,9 @@ function writeSubtitleStatus(
   // Sursa transmisă contează doar la o descărcare reușită — la
   // `download_failed` apelantul o trimite oricum (știe de unde a încercat),
   // dar pe disc n-a ajuns nimic, deci rândul rămâne fără sursă.
-  const source = isDownloadOutcome(outcome) ? downloadedSource : (SUBTITLE_SOURCE_BY_OUTCOME[outcome] ?? null);
+  const source = isDownloadOutcome(outcome)
+    ? downloadedSource
+    : (SUBTITLE_SOURCE_BY_OUTCOME[outcome] ?? null);
   // O reverificare care n-a schimbat nimic pe disc (`srt_already_ok`, sau
   // `season_already_ok` la un pachet) nu rescrie sursa, detaliul și nici
   // raportul: subtitrarea e tot cea de dinainte, iar detaliul spune de unde a

@@ -97,12 +97,15 @@ export function AddMediaWizard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialItem?.id, initialItem?.mediaType]);
 
-  // Utilizatorii obișnuiți descarcă mereu la 1080p — dacă cineva ajunge cu
-  // altă calitate selectată (ex. sesiune de admin expirată între timp),
-  // cădem înapoi automat.
+  // Utilizatorii obișnuiți descarcă la 1080p — dacă cineva ajunge cu altă
+  // calitate selectată (ex. sesiune de admin expirată între timp), cădem
+  // înapoi automat. Și la fiecare titlu nou: altă calitate e permisă doar
+  // pentru titlul care n-are 1080p (butoanele „Dar e disponibil la"), iar
+  // fără selector vizibil ar fi rămas, nevăzută, și pentru următorul titlu —
+  // unde serverul ar refuza-o (download-quality.ts).
   useEffect(() => {
     if (!isAdmin) dispatch({ type: "SET_QUALITY", quality: "1080p" });
-  }, [isAdmin]);
+  }, [isAdmin, selected?.id, selected?.mediaType]);
 
   // Navigare "înapoi" reală — revine la căutare, păstrând rezultatele deja
   // încărcate acolo unde are sens. Destinația nu mai e ghicită aici: reducer-ul

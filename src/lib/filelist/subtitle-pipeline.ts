@@ -13,7 +13,7 @@
 
 import { basename, dirname, extname, join } from "node:path";
 import { readFile, rename } from "node:fs/promises";
-import { qbitRenameFile, type QbitFileInfo } from "../qbit-client";
+import type { QbitFileInfo } from "../qbit-client";
 import type { OpenSubtitlesResult } from "./opensubtitles-client";
 import type { SubsRoSrtEntry } from "./subsro-client";
 import type {
@@ -39,6 +39,7 @@ import {
   handleSidecarSrt,
   fetchCandidateText,
   writeChosenSubtitle,
+  moveAsideTrackedSrt,
   renameToNonRomanian,
 } from "./subtitle-apply";
 
@@ -168,12 +169,20 @@ export async function processMediaFile(
       }),
     );
     const romanian = pickRomanianSrt(read);
+    const trackedCtx = { qbitUrl, torrentHash, qbitUser, qbitPass, savePath };
     if (romanian) {
+      // Ținta „.ro.srt" ocupată de un .srt din torrent care nu e român (altfel
+      // ar fi fost el cel ales): pus întâi deoparte, altfel qBittorrent
+      // refuză redenumirea celui român peste un fișier al torrentului.
+      if (romanian.name !== targetSrtRelPath) {
+        const occupant = ownSrtFiles.find((f) => f.name === targetSrtRelPath);
+        if (occupant) await moveAsideTrackedSrt(occupant.name, trackedCtx);
+      }
       const { outcome, detail } = await handleTrackedSrt(
         romanian,
         targetSrtRelPath,
         mediaFile.piece_range,
-        { qbitUrl, torrentHash, qbitUser, qbitPass, savePath },
+        trackedCtx,
       );
       const others = ownSrtFiles.length - 1;
       return {
@@ -197,14 +206,7 @@ export async function processMediaFile(
       // Un „Film.ro.srt" din torrent care nu e român: pus deoparte tot prin
       // qBittorrent (nu cu rename pe disc la pasul 1c), ca să nu-i piardă urma.
       if (file.name === targetSrtRelPath) {
-        await qbitRenameFile(
-          qbitUrl,
-          torrentHash,
-          file.name,
-          `${targetSrtRelPath}.respins`,
-          qbitUser,
-          qbitPass,
-        ).catch((e) => console.warn(`[subtitles] redenumire .ro.srt non-RO eșuată:`, e));
+        await moveAsideTrackedSrt(file.name, trackedCtx);
         continue;
       }
       if (ownSrtFiles.length === 1 || file.name === plainRelPath) {

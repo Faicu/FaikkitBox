@@ -19,6 +19,7 @@ import {
   type SubtitleOutcome,
   type SubtitleSource,
 } from "./subtitle-outcomes";
+import { fileExists } from "./subtitle-checks";
 import type { SubtitleCandidate } from "./subtitle-sources";
 import { describeSync, isWellSynced, type SyncMeasure } from "./subtitle-verify";
 
@@ -88,9 +89,7 @@ export async function writeChosenSubtitle(
       source: chosen.source,
     };
   }
-  console.log(
-    `[subtitles] subtitrare aproximativă salvată (verifică sincronizarea) → ${destPath}`,
-  );
+  console.log(`[subtitles] subtitrare aproximativă salvată (verifică sincronizarea) → ${destPath}`);
   const why = sync ? describeSync(sync) : "fără potrivire clară de sursă/rezoluție";
   return {
     outcome: "downloaded_approximate",
@@ -206,4 +205,39 @@ export async function renameToNonRomanian(
     ctx.qbitUser,
     ctx.qbitPass,
   ).catch((e) => console.warn(`[subtitles] redenumire .srt non-RO eșuată:`, e));
+}
+
+// Un .srt urmărit de qBittorrent pus deoparte (`.respins`, ignorat de Plex)
+// tot prin API, cu așteptare până dispare de la vechea cale: qBittorrent
+// mută fișierul asincron, uneori după câteva secunde (vezi readFileWithRetry,
+// subtitle-encoding.ts). Fără așteptare, pasul următor îl găsea încă acolo și
+// fie îl redenumea direct pe disc (qBittorrent îi pierdea urma), fie scria
+// peste el subtitrarea nouă, mutată apoi deoparte de redenumirea întârziată.
+// false dacă redenumirea a eșuat sau fișierul n-a plecat în timp util.
+export async function moveAsideTrackedSrt(
+  relPath: string,
+  ctx: TrackedSrtContext,
+  attempts = 8,
+  delayMs = 750,
+): Promise<boolean> {
+  try {
+    await qbitRenameFile(
+      ctx.qbitUrl,
+      ctx.torrentHash,
+      relPath,
+      `${relPath}.respins`,
+      ctx.qbitUser,
+      ctx.qbitPass,
+    );
+  } catch (e) {
+    console.warn(`[subtitles] punerea deoparte a ${relPath} eșuată:`, e);
+    return false;
+  }
+  const absPath = join(ctx.savePath, relPath);
+  for (let i = 0; i < attempts; i++) {
+    if (!(await fileExists(absPath))) return true;
+    await new Promise((r) => setTimeout(r, delayMs));
+  }
+  console.warn(`[subtitles] ${relPath} încă pe disc după redenumirea prin qBittorrent`);
+  return false;
 }

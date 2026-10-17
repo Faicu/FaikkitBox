@@ -366,7 +366,6 @@ async function autoResolveManualMedia(
 
   const { getTmdbDetailsInternal } = await import("../tmdb/tmdb.functions");
   const details = await getTmdbDetailsInternal(info.id, info.mediaType).catch(() => null);
-  const { parseSeasonEpisodeFromName } = await import("../media/torrent-name-parse");
   const parsed = !isMovie ? parseSeasonEpisodeFromName(torrentName) : null;
 
   return {
@@ -404,7 +403,6 @@ async function resolveIsMovie(params: DownloadFilelistParams, catId: number): Pr
     const info = await lookupTmdbInfoByImdbId(params.imdb).catch(() => null);
     if (info) return info.mediaType === "movie";
   }
-  const { parseSeasonEpisodeFromName } = await import("../media/torrent-name-parse");
   return parseSeasonEpisodeFromName(params.torrentName) === null;
 }
 

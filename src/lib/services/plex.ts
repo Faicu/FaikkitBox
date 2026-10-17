@@ -429,7 +429,7 @@ function mapPlexSessions(sessionsMd: PlexMetadataItem[]): PlexSession[] {
     const decisions = [videoDecision, audioDecision, part?.decision];
     const playbackMode: "direct" | "direct-stream" | "transcode" = videoTranscoded
       ? "transcode"
-      : audioTranscoded || decisions.includes("copy") || decisions.includes("transcode")
+      : decisions.includes("copy") || decisions.includes("transcode")
         ? "direct-stream"
         : "direct";
     // La direct play/stream fluxul livrat *e* sursa, deci eticheta e aceeași —
