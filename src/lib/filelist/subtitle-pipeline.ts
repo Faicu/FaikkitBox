@@ -13,7 +13,7 @@
 
 import { basename, dirname, extname, join } from "node:path";
 import { readFile, rename } from "node:fs/promises";
-import type { QbitFileInfo } from "../qbit-client";
+import { qbitRenameFile, type QbitFileInfo } from "../qbit-client";
 import type { OpenSubtitlesResult } from "./opensubtitles-client";
 import type { SubsRoSrtEntry } from "./subsro-client";
 import type {
@@ -194,6 +194,19 @@ export async function processMediaFile(
       mediaDir === "." ? `${mediaBaseName}.srt` : `${mediaDir}/${mediaBaseName}.srt`;
     for (const { file, buf } of read) {
       if (!buf) continue;
+      // Un „Film.ro.srt" din torrent care nu e român: pus deoparte tot prin
+      // qBittorrent (nu cu rename pe disc la pasul 1c), ca să nu-i piardă urma.
+      if (file.name === targetSrtRelPath) {
+        await qbitRenameFile(
+          qbitUrl,
+          torrentHash,
+          file.name,
+          `${targetSrtRelPath}.respins`,
+          qbitUser,
+          qbitPass,
+        ).catch((e) => console.warn(`[subtitles] redenumire .ro.srt non-RO eșuată:`, e));
+        continue;
+      }
       if (ownSrtFiles.length === 1 || file.name === plainRelPath) {
         await renameToNonRomanian(file, mediaBaseName, mediaDir, {
           qbitUrl,
