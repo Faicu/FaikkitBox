@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 
 import { PageShell } from "@/components/PageShell";
@@ -8,6 +9,7 @@ import { FilterTabs, type DiscoverMode, type DiscoverTab } from "@/components/de
 import { TopTorrentsGrid } from "@/components/descopera/TopTorrentsGrid";
 import { requireAuthBeforeLoad } from "@/lib/auth/admin-route-guard";
 import { DEFAULT_TOP_PERIOD, type TopPeriodHours } from "@/lib/filelist/top-torrents";
+import { adminStatusQuery } from "@/lib/queries";
 import type { DiscoverMediaType } from "@/lib/tmdb/tmdb.discover.functions";
 
 export const Route = createFileRoute("/descopera")({
@@ -20,9 +22,14 @@ export const Route = createFileRoute("/descopera")({
 
 function DescoperaPage() {
   const [mode, setMode] = useState<DiscoverMode>("grid");
-  const [sort, setSort] = useState<DiscoverTab>("trending");
+  const [selectedSort, setSort] = useState<DiscoverTab>("trending");
   const [media, setMedia] = useState<DiscoverMediaType | "all">("all");
   const [period, setPeriod] = useState<TopPeriodHours>(DEFAULT_TOP_PERIOD);
+  const { data: adminData } = useQuery(adminStatusQuery);
+  const isAdmin = !!adminData?.isAdmin;
+  // Top Filelist e doar pentru admin; dacă statutul se schimbă cu tabul deschis,
+  // se revine la Trending în loc de o grilă cu eroare.
+  const sort = selectedSort === "filelist_top" && !isAdmin ? "trending" : selectedSort;
 
   return (
     <PageShell title="Descoperă" subtitle="Filme · Seriale · Trailere">
@@ -35,6 +42,7 @@ function DescoperaPage() {
         onMediaChange={setMedia}
         onModeChange={setMode}
         onPeriodChange={setPeriod}
+        isAdmin={isAdmin}
       />
 
       {sort === "filelist_top" ? (

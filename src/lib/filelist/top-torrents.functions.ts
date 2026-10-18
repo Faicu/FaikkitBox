@@ -99,8 +99,8 @@ async function buildTopList(torrents: FilelistTorrent[], hours: TopPeriodHours) 
 export const getFilelistTopTitles = createServerFn({ method: "GET" })
   .validator((data: { hours: TopPeriodHours }) => data)
   .handler(async ({ data }): Promise<TopTorrentsResult> => {
-    const { requireAuth } = await import("../auth/admin.server");
-    await requireAuth();
+    const { requireAdmin } = await import("../auth/admin.server");
+    await requireAdmin();
     const { TOP_PERIODS, DEFAULT_TOP_PERIOD } = await import("./top-torrents");
     const hours = TOP_PERIODS.some((p) => p.hours === data.hours) ? data.hours : DEFAULT_TOP_PERIOD;
 

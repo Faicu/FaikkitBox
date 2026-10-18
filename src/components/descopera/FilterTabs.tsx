@@ -4,7 +4,8 @@ import { Clock, Flame, LayoutGrid, Magnet, Sparkles, Trophy, Zap } from "lucide-
 import type { DiscoverMediaType, DiscoverSort } from "@/lib/tmdb/tmdb.discover.functions";
 import { TOP_PERIODS, type TopPeriodHours } from "@/lib/filelist/top-torrents";
 
-// Taburile de sursă: sortările TMDB + „Top Filelist" (torrentele populare).
+// Taburile de sursă: sortările TMDB + „Top Filelist" (torrentele populare,
+// doar pentru admin — serverul refuză oricum cererea altor conturi).
 export type DiscoverTab = DiscoverSort | "filelist_top";
 export type DiscoverMode = "grid" | "feed";
 
@@ -82,6 +83,7 @@ export function FilterTabs({
   onMediaChange,
   onModeChange,
   onPeriodChange,
+  isAdmin,
 }: {
   sort: DiscoverTab;
   media: DiscoverMediaType | "all";
@@ -91,12 +93,14 @@ export function FilterTabs({
   onMediaChange: (v: DiscoverMediaType | "all") => void;
   onModeChange: (v: DiscoverMode) => void;
   onPeriodChange: (v: TopPeriodHours) => void;
+  isAdmin: boolean;
 }) {
   const isFilelist = sort === "filelist_top";
+  const tabs = isAdmin ? sourceTabs : sourceTabs.filter((t) => t.value !== "filelist_top");
   return (
     <div className="space-y-2.5">
-      <div className="grid grid-cols-4 gap-2">
-        {sourceTabs.map((tab) => {
+      <div className={`grid gap-2 ${tabs.length === 4 ? "grid-cols-4" : "grid-cols-3"}`}>
+        {tabs.map((tab) => {
           const active = sort === tab.value;
           return (
             <button
