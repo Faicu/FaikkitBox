@@ -467,6 +467,10 @@ export interface PlexTitleDetail {
   // true doar pentru cel care a adăugat titlul sau pentru un admin — UI-ul
   // ascunde butoanele de subtitrare/ștergere pentru oricine altcineva.
   canManage: boolean;
+  // Formatul SQLite, UTC — până când un utilizator obișnuit nu poate șterge
+  // sau anula titlul (hit and run pe Filelist, vezi deleteLockedUntil). null
+  // pentru admin sau după expirare.
+  deleteLockedUntil: string | null;
   tmdbId: number | null;
   originalTitle: string | null;
   // Vizibil pentru toți (nu doar admin, spre deosebire de tech.imdbId) —
@@ -704,6 +708,11 @@ async function buildDetailFromMediaRow(
 
   const canManage = isAdminOrOwner(session, row.requested_by_user_id);
   const isAdmin = !!session.data.admin;
+  let lockedUntil: string | null = null;
+  if (canManage && !isAdmin && row.torrent_hash) {
+    const { deleteLockedUntil } = await import("../media/media");
+    lockedUntil = deleteLockedUntil(row.torrent_hash);
+  }
 
   // Episoadele serialului — pentru lista pe sezoane din drawer. "Văzut" se
   // potrivește per episod, ca peste tot (Plex ține evidența la nivel de
@@ -819,6 +828,7 @@ async function buildDetailFromMediaRow(
     subtitleRetry: subtitleRetryOf(row),
     isSeasonPack: !!row.is_season_pack,
     canManage,
+    deleteLockedUntil: lockedUntil,
     tmdbId: row.tmdb_id,
     originalTitle: row.original_title,
     imdbId: row.imdb_id,

@@ -758,21 +758,25 @@ export function TitleDetailDrawer({
                   {d.torrentHash ? (
                     d.canManage ? (
                       d.status === "downloading" ? (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            onRequestDelete({
-                              mediaId: d.mediaId,
-                              title: d.type === "movie" ? d.title : (d.show ?? d.title),
-                              isSeasonPack: d.isSeasonPack,
-                              isCancel: true,
-                            })
-                          }
-                          className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-border bg-muted/40 py-2 text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors"
-                        >
-                          <XCircle className="h-3.5 w-3.5" />
-                          Anulare
-                        </button>
+                        d.deleteLockedUntil ? (
+                          <DeleteLockNote until={d.deleteLockedUntil} isCancel />
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              onRequestDelete({
+                                mediaId: d.mediaId,
+                                title: d.type === "movie" ? d.title : (d.show ?? d.title),
+                                isSeasonPack: d.isSeasonPack,
+                                isCancel: true,
+                              })
+                            }
+                            className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-border bg-muted/40 py-2 text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors"
+                          >
+                            <XCircle className="h-3.5 w-3.5" />
+                            Anulare
+                          </button>
+                        )
                       ) : (
                         <>
                           <div className="flex gap-2 pt-2">
@@ -803,21 +807,25 @@ export function TitleDetailDrawer({
                               Șterge subtitrare
                             </button>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              onRequestDelete({
-                                mediaId: d.mediaId,
-                                title: d.type === "movie" ? d.title : (d.show ?? d.title),
-                                isSeasonPack: d.isSeasonPack,
-                                isCancel: false,
-                              })
-                            }
-                            className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-border bg-muted/40 py-2 text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                            Șterge titlul complet
-                          </button>
+                          {d.deleteLockedUntil ? (
+                            <DeleteLockNote until={d.deleteLockedUntil} isCancel={false} />
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                onRequestDelete({
+                                  mediaId: d.mediaId,
+                                  title: d.type === "movie" ? d.title : (d.show ?? d.title),
+                                  isSeasonPack: d.isSeasonPack,
+                                  isCancel: false,
+                                })
+                              }
+                              className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-border bg-muted/40 py-2 text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              Șterge titlul complet
+                            </button>
+                          )}
                         </>
                       )
                     ) : (
@@ -1031,6 +1039,26 @@ function NextEpisodeLine({ detail, trailing }: { detail: PlexTitleDetail; traili
     <div className="flex items-center justify-between gap-2 text-xs">
       {content}
       {trailing}
+    </div>
+  );
+}
+
+// Ștergerea/anularea blocată pentru utilizatorii obișnuiți în primele 24 h
+// (hit and run pe Filelist — vezi deleteLockedUntil, verificat și pe server).
+function DeleteLockNote({ until, isCancel }: { until: string; isCancel: boolean }) {
+  const when = new Date(`${until.replace(" ", "T")}Z`).toLocaleString("ro-RO", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  return (
+    <div className="flex items-start gap-1.5 pt-2 text-[11px] leading-snug text-muted-foreground">
+      <Clock3 className="mt-px h-3 w-3 shrink-0" />
+      <span>
+        {isCancel ? "Descărcarea poate fi anulată" : "Titlul poate fi șters"} după {when} — Filelist
+        consideră hit and run un torrent șters în primele 24 de ore.
+      </span>
     </div>
   );
 }

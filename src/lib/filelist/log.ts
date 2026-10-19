@@ -4,7 +4,7 @@ import {
   refreshPlexLibraryAndEmptyTrash,
   refreshPlexLibrariesAndEmptyTrash,
 } from "../plex-refresh";
-import { deleteMediaByTorrentHash } from "../media/media";
+import { DELETE_LOCK_HOURS, deleteLockedUntil, deleteMediaByTorrentHash } from "../media/media";
 
 // Ștergerea unui titlu: qBittorrent (torrent + fișiere), reziduul de pe disk
 // și rândurile din `media`. Orice rând `media` cu torrent_hash cunoscut e
@@ -39,6 +39,22 @@ export const deleteMediaEntry = createServerFn({ method: "POST" })
       }
       if (!row.torrent_hash) {
         return { ok: false, error: "Hash-ul torrentului e necunoscut — nu poate fi șters automat" };
+      }
+      // Hit and run pe Filelist — vezi deleteLockedUntil. Verificat pe server,
+      // nu doar ascuns în UI; adminul e scutit.
+      if (!session.data.admin) {
+        const lockedUntil = deleteLockedUntil(row.torrent_hash);
+        if (lockedUntil) {
+          const when = new Date(`${lockedUntil.replace(" ", "T")}Z`).toLocaleString("ro-RO", {
+            timeZone: "Europe/Bucharest",
+            dateStyle: "short",
+            timeStyle: "short",
+          });
+          return {
+            ok: false,
+            error: `Titlul poate fi șters după ${when} (regula Filelist: minim ${DELETE_LOCK_HOURS} h de la descărcare)`,
+          };
+        }
       }
 
       let qbitDeleted = false;
