@@ -34,6 +34,8 @@ export interface PlexSession {
   sourceQuality?: string;
   streamQuality?: string;
   videoCodec?: string;
+  // Codecul video al fișierului, doar la transcodare (altfel = `videoCodec`).
+  sourceVideoCodec?: string;
   audioCodec?: string;
   audioChannels?: number;
   hwTranscode?: boolean;
@@ -530,6 +532,7 @@ function mapPlexSessions(sessionsMd: PlexMetadataItem[]): PlexSession[] {
       sourceQuality: sourceQuality ?? undefined,
       streamQuality: streamQuality ?? undefined,
       videoCodec: ts?.videoCodec ?? media?.videoCodec ?? video?.codec,
+      sourceVideoCodec: videoTranscoded ? ts?.sourceVideoCodec : undefined,
       audioCodec: ts?.audioCodec ?? media?.audioCodec ?? audio?.codec,
       audioChannels: ts?.audioChannels ?? media?.audioChannels ?? audio?.channels,
       hwTranscode: videoTranscoded && !!(ts?.transcodeHwFullPipeline || ts?.transcodeHwRequested),

@@ -206,20 +206,16 @@ function Overview() {
                                         : "bg-emerald-500/15 text-emerald-400"
                                   }`}
                                 >
-                                  {s.playbackMode === "transcode"
-                                    ? `Transcodare video${s.hwTranscode ? " HW" : ""}`
-                                    : s.playbackMode === "direct-stream"
-                                      ? "Direct Stream"
-                                      : "Direct Play"}
+                                  {playbackLabel(s)}
                                 </span>
+                                {transcodeReason(s) && (
+                                  <span className="rounded bg-orange-500/15 px-1.5 py-0.5 text-[10px] font-medium text-orange-400">
+                                    {transcodeReason(s)}
+                                  </span>
+                                )}
                                 {s.audioTranscode && (
                                   <span className="rounded bg-orange-500/15 px-1.5 py-0.5 text-[10px] font-medium text-orange-400">
                                     {audioTranscodeLabel(s.audioTranscode)}
-                                  </span>
-                                )}
-                                {qualityLabel(s) && (
-                                  <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                                    {qualityLabel(s)}
                                   </span>
                                 )}
                                 {codecLabel(s) && (
@@ -227,7 +223,7 @@ function Overview() {
                                     {codecLabel(s)}
                                   </span>
                                 )}
-                                {s.burnedSubtitle && (
+                                {s.burnedSubtitle && !burnIsReason(s) && (
                                   <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
                                     Subtitrare arsă
                                   </span>
@@ -559,6 +555,42 @@ function qualityLabel(s: PlexSession): string | null {
   if (!stream) return s.sourceQuality ?? null;
   if (s.sourceQuality && s.sourceQuality !== stream) return `${s.sourceQuality} → ${stream}`;
   return stream;
+}
+
+// Eticheta principală: rezoluția livrată + modul de redare, ca să se vadă
+// dintr-o privire că un „1080p" e totuși transcodat („1080p · Transcodare HW").
+function playbackLabel(s: PlexSession): string {
+  const mode =
+    s.playbackMode === "transcode"
+      ? `Transcodare${s.hwTranscode ? " HW" : ""}`
+      : s.playbackMode === "direct-stream"
+        ? "Direct Stream"
+        : "Direct Play";
+  const quality = qualityLabel(s);
+  return quality ? `${quality} · ${mode}` : mode;
+}
+
+function videoCodecChanged(s: PlexSession): boolean {
+  return (
+    !!s.sourceVideoCodec &&
+    !!s.videoCodec &&
+    prettyCodec(s.sourceVideoCodec) !== prettyCodec(s.videoCodec)
+  );
+}
+
+// Subtitrarea arsă e singura cauză evidentă când video-ul se re-encodează fără
+// să-și schimbe nici rezoluția, nici codecul — Plex n-o poate desena altfel.
+function burnIsReason(s: PlexSession): boolean {
+  if (s.playbackMode !== "transcode" || !s.burnedSubtitle || videoCodecChanged(s)) return false;
+  return !s.sourceQuality || !s.streamQuality || s.sourceQuality === s.streamQuality;
+}
+
+// Motivul transcodării video, doar când se poate deduce sigur.
+function transcodeReason(s: PlexSession): string | null {
+  if (s.playbackMode !== "transcode") return null;
+  if (videoCodecChanged(s)) return `${prettyCodec(s.sourceVideoCodec!)} → ${prettyCodec(s.videoCodec!)}`;
+  if (burnIsReason(s)) return "din cauza subtitrării arse";
+  return null;
 }
 
 // „Audio TrueHD → E-AC3"; doar „Audio convertit" dacă Plex nu dă codecurile.
