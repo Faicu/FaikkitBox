@@ -125,6 +125,28 @@ async function getOwnerViewedAtByRatingKey(
   return getPlexViewedRatingKeys(candidateRatingKeys);
 }
 
+// Contul Plex al utilizatorului logat: `historyName` e cheia din istoricul
+// Plex (numele afișat, aflat după plex_account_id — vezi getPlexHistoryName),
+// `plexUsername` e username-ul plex.tv, comparat cu owner-ul serverului.
+async function myPlexIdentity(
+  db: import("node:sqlite").DatabaseSync,
+  userId: number | undefined,
+): Promise<{ historyName: string | null; plexUsername: string | null }> {
+  if (!userId) return { historyName: null, plexUsername: null };
+  const me = db
+    .prepare("SELECT plex_account_id, plex_username FROM users WHERE id = ?")
+    .get(userId) as { plex_account_id: number | null; plex_username: string | null } | undefined;
+  const plexUsername = me?.plex_username ?? null;
+  if (!me || (me.plex_account_id == null && !plexUsername)) {
+    return { historyName: null, plexUsername };
+  }
+  const { getPlexHistoryName } = await import("./plex");
+  return {
+    historyName: await getPlexHistoryName(me.plex_account_id, plexUsername),
+    plexUsername,
+  };
+}
+
 interface MediaBrowseRow {
   id: number;
   parent_id: number | null;
@@ -302,11 +324,11 @@ export const getPlexLibraryBrowse = createServerFn({ method: "GET" }).handler(
       // "Am văzut" + "văzut de N" — badge-uri afișate direct în listă, fără
       // cost suplimentar (nicio cerere nouă către Plex): potrivim doar cu
       // istoricul deja cachuit, pentru toți utilizatorii deodată.
-      const me = db
-        .prepare("SELECT plex_username FROM users WHERE id = ?")
-        .get(session.data.userId!) as { plex_username: string | null } | undefined;
-      const myPlexUsername = me?.plex_username ?? null;
-      if (!myPlexUsername) return { status: "ok", items };
+      const { historyName: myHistoryName, plexUsername: myPlexUsername } = await myPlexIdentity(
+        db,
+        session.data.userId,
+      );
+      if (!myHistoryName) return { status: "ok", items };
 
       const { getAllPlexWatchedIndexes, isItemWatched } = await import("./plex");
       const allWatchedIndexes = await getAllPlexWatchedIndexes();
@@ -338,7 +360,7 @@ export const getPlexLibraryBrowse = createServerFn({ method: "GET" }).handler(
           const seen = matches.filter((m) => isItemWatched(index, m));
           if (seen.length === 0) continue;
           watchedCount += 1;
-          if (username === myPlexUsername) {
+          if (username === myHistoryName) {
             watchedByMe = true;
             watchedEpisodes = seen.length;
           }
@@ -621,11 +643,10 @@ async function buildDetailFromMediaRow(
   const isEpisode = row.media_type === "episode";
   const isShow = row.media_type === "tv_show";
 
-  const me = session.data.userId
-    ? (db.prepare("SELECT plex_username FROM users WHERE id = ?").get(session.data.userId) as
-        { plex_username: string | null } | undefined)
-    : undefined;
-  const myPlexUsername = me?.plex_username ?? null;
+  const { historyName: myHistoryName, plexUsername: myPlexUsername } = await myPlexIdentity(
+    db,
+    session.data.userId,
+  );
 
   // Pentru un serial, episoadele sunt necesare din două motive: lista pe
   // sezoane din drawer, și "cine a văzut" — Plex ține evidența per episod,
@@ -689,21 +710,21 @@ async function buildDetailFromMediaRow(
     watchedByAll.push({ username, viewedAt: Math.max(...viewedAts) });
   }
 
-  if (!isShow && row.plex_rating_key && !watchedByAll.some((w) => w.username === myPlexUsername)) {
+  if (!isShow && row.plex_rating_key && !watchedByAll.some((w) => w.username === myHistoryName)) {
     const ownerViewedAt = await getOwnerViewedAtByRatingKey(myPlexUsername, [row.plex_rating_key]);
     const lastViewedAt = ownerViewedAt.get(row.plex_rating_key);
-    if (lastViewedAt != null && myPlexUsername) {
-      watchedByAll.push({ username: myPlexUsername, viewedAt: lastViewedAt });
+    if (lastViewedAt != null && myHistoryName) {
+      watchedByAll.push({ username: myHistoryName, viewedAt: lastViewedAt });
     }
   }
-  const myWatched = myPlexUsername
-    ? watchedByAll.find((w) => w.username === myPlexUsername)
+  const myWatched = myHistoryName
+    ? watchedByAll.find((w) => w.username === myHistoryName)
     : undefined;
   const watchedByMe = !!myWatched;
   const watchedByMeAt = myWatched && myWatched.viewedAt > 0 ? myWatched.viewedAt : null;
   // Ordonat cronologic invers — vizionarea cea mai recentă sus.
   const watchedByOthers = watchedByAll
-    .filter((w) => w.username !== myPlexUsername)
+    .filter((w) => w.username !== myHistoryName)
     .sort((a, b) => b.viewedAt - a.viewedAt);
 
   const canManage = isAdminOrOwner(session, row.requested_by_user_id);
@@ -720,7 +741,7 @@ async function buildDetailFromMediaRow(
   let episodes: ShowEpisodeEntry[] = [];
   if (isShow) {
     const { isItemWatched } = await import("./plex");
-    const myIndex = myPlexUsername ? allWatchedIndexes[myPlexUsername] : undefined;
+    const myIndex = myHistoryName ? allWatchedIndexes[myHistoryName] : undefined;
     // O singură cerere la qBittorrent pentru toate episoadele încă nesosite
     // în Plex, nu una per rând.
     const epProgress = await fetchQbitProgress(

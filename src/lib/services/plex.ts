@@ -264,6 +264,26 @@ export async function getPlexUserHistory(
   }
 }
 
+// Cheia sub care apare un cont în istoricul Plex (userHistory,
+// watchedIndexByUser): numele afișat din /accounts, aflat după ID-ul contului.
+// Username-ul de la înregistrare rămâne rezervă (ex. Plex indisponibil) —
+// la mulți diferă („dragomirandreea" vs „Dragomir Andreea").
+export async function getPlexHistoryName(
+  plexAccountId: number | null,
+  username: string | null,
+): Promise<string | null> {
+  const token = process.env.PLEX_TOKEN;
+  if (!token || plexAccountId == null) return username;
+  try {
+    const { url } = await discoverPlexUrl(token, process.env.PLEX_URL);
+    const headers = { Accept: "application/json", "X-Plex-Token": token };
+    const history = await fetchPlexHistory(url, headers);
+    return history.accountNames[String(plexAccountId)] ?? username;
+  } catch {
+    return username;
+  }
+}
+
 // Indexul "văzut" pentru toți userii deodată — folosit de drawer pentru
 // "alți utilizatori care au văzut".
 export async function getAllPlexWatchedIndexes(): Promise<Record<string, PlexWatchedIndex>> {
