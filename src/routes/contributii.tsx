@@ -431,7 +431,7 @@ function ActivitySettingsSection({ data }: { data: ContributionsOverview }) {
       <p className="text-[11px] leading-relaxed text-muted-foreground">
         Cine a văzut cel puțin {s.minMovies} filme sau {s.minEpisodes} episoade (ori o combinație
         echivalentă) în ultimele {s.windowDays} de zile și n-a plătit luna vede cardul de
-        contribuție primul pe Acasă, evidențiat. Acum: {activeCount} activi.
+        contribuție evidențiat pe Acasă. Acum: {activeCount} activi.
       </p>
       {editing && (
         <form

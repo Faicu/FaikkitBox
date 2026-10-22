@@ -27,14 +27,7 @@ import {
 import { AddMediaWizard } from "@/components/principala/AddMediaWizard";
 import { FilelistSection } from "@/components/filelist/FilelistSection";
 import { SupportWidget } from "@/components/principala/SupportWidget";
-import { isContributionUrgent } from "@/lib/contributions/contributions.functions";
-import {
-  myContributionQuery,
-  plexQuery,
-  plexSessionsQuery,
-  adminStatusQuery,
-  recentWatchesQuery,
-} from "@/lib/queries";
+import { plexQuery, plexSessionsQuery, adminStatusQuery, recentWatchesQuery } from "@/lib/queries";
 import { formatDateTime } from "@/components/tehnic/utils";
 import { useLiveViewOffsets } from "@/components/principala/useLiveViewOffsets";
 import { useFlashOnChange } from "@/hooks/use-flash-on-change";
@@ -68,9 +61,6 @@ function Overview() {
     ...recentWatchesQuery,
     enabled: isAuthenticated,
   });
-  // Cine se uită des și n-a plătit luna vede cardul de contribuție primul.
-  const contribution = useQuery({ ...myContributionQuery, enabled: isAuthenticated });
-  const contributionFirst = isContributionUrgent(contribution.data);
   const recentWatchItems = recentWatches.data?.status === "ok" ? recentWatches.data.items : [];
   const sessions =
     plexSessions.data?.status === "ok" ? plexSessions.data.sessions : plex.data?.sessions;
@@ -95,7 +85,9 @@ function Overview() {
 
   return (
     <PageShell title="FaikkitBox" subtitle="Panou de Administrare Plex">
-      {isAuthenticated && contributionFirst && (
+      {/* Contribuția lunară stă prima pentru toți cei logați, deasupra lui
+          „Adaugă film/serial". */}
+      {isAuthenticated && (
         <div className="mb-4">
           <SupportWidget />
         </div>
@@ -138,12 +130,6 @@ function Overview() {
       {isAdmin && (
         <div className="mb-4">
           <FilelistSection />
-        </div>
-      )}
-
-      {isAuthenticated && !contributionFirst && (
-        <div className="mb-4">
-          <SupportWidget />
         </div>
       )}
 

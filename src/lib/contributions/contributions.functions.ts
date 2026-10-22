@@ -56,7 +56,7 @@ export type MyContribution =
     };
 
 // Utilizator activ (peste pragul de vizionări) care n-a plătit și nici n-a
-// declarat luna curentă: cardul urcă primul pe Acasă și e evidențiat. După
+// declarat luna curentă: cardul de pe Acasă e evidențiat. După
 // „Am plătit" (în așteptare) revine la normal.
 export function isContributionUrgent(data: MyContribution | undefined): boolean {
   return data?.kind === "user" && data.status === "unpaid" && !!data.activity?.active;
@@ -219,19 +219,19 @@ function activitySettings(database: DatabaseSync): ActivitySettings {
   return { minMovies: row.min_movies, minEpisodes: row.min_episodes, windowDays: row.window_days };
 }
 
-// Vizionările din fereastră pentru fiecare cont Plex cerut (după nume, fără
-// diferență de majuscule). null dacă Plex nu răspunde.
-async function viewCountsByPlexUser(
+// Vizionările din fereastră pentru fiecare cont Plex, după
+// users.plex_account_id (vezi getPlexViewsByAccount). null dacă Plex nu
+// răspunde.
+async function viewCountsByPlexAccount(
   windowDays: number,
-): Promise<((plexUsername: string | null) => ViewCounts | null) | null> {
-  const { getPlexViewsByUser } = await import("../services/plex");
-  const byUser = await getPlexViewsByUser();
-  if (!byUser) return null;
+): Promise<((plexAccountId: number | null) => ViewCounts | null) | null> {
+  const { getPlexViewsByAccount } = await import("../services/plex");
+  const byAccount = await getPlexViewsByAccount();
+  if (!byAccount) return null;
   const since = Math.floor(Date.now() / 1000) - windowDays * 24 * 60 * 60;
-  const lower = new Map(Object.entries(byUser).map(([k, v]) => [k.toLowerCase(), v]));
-  return (plexUsername) => {
-    if (!plexUsername) return null;
-    return countViews(lower.get(plexUsername.toLowerCase()) ?? [], since);
+  return (plexAccountId) => {
+    if (plexAccountId == null) return null;
+    return countViews(byAccount[String(plexAccountId)] ?? [], since);
   };
 }
 
@@ -258,9 +258,9 @@ export const getMyContribution = createServerFn({ method: "GET" }).handler(
     const progress = progressFor(database, month);
 
     const account = database
-      .prepare("SELECT role, contribution_exempt, plex_username FROM users WHERE id = ?")
+      .prepare("SELECT role, contribution_exempt, plex_account_id FROM users WHERE id = ?")
       .get(session.data.userId!) as
-      { role: string; contribution_exempt: number; plex_username: string | null } | undefined;
+      { role: string; contribution_exempt: number; plex_account_id: number | null } | undefined;
     if (account?.role === "admin") {
       return { kind: "admin", progress, pendingCount: countPending(database) };
     }
@@ -302,8 +302,10 @@ export const getMyContribution = createServerFn({ method: "GET" }).handler(
     }>;
 
     const settings = activitySettings(database);
-    const lookup = account?.plex_username ? await viewCountsByPlexUser(settings.windowDays) : null;
-    const counts = lookup?.(account?.plex_username ?? null) ?? null;
+    const plexAccountId = account?.plex_account_id ?? null;
+    const lookup =
+      plexAccountId != null ? await viewCountsByPlexAccount(settings.windowDays) : null;
+    const counts = lookup?.(plexAccountId) ?? null;
 
     return {
       kind: "user",
@@ -403,7 +405,7 @@ export const getContributionsOverview = createServerFn({ method: "GET" })
 
     const users = database
       .prepare(
-        `SELECT id, username, contribution_exempt, plex_username FROM users
+        `SELECT id, username, contribution_exempt, plex_account_id FROM users
           WHERE role = 'user' AND status = 'approved'
           ORDER BY username COLLATE NOCASE`,
       )
@@ -411,10 +413,10 @@ export const getContributionsOverview = createServerFn({ method: "GET" })
       id: number;
       username: string;
       contribution_exempt: number;
-      plex_username: string | null;
+      plex_account_id: number | null;
     }>;
     const settings = activitySettings(database);
-    const lookup = await viewCountsByPlexUser(settings.windowDays);
+    const lookup = await viewCountsByPlexAccount(settings.windowDays);
     const monthRows = database
       .prepare(
         `SELECT m.user_id AS user_id, m.amount AS amount, p.status AS status
@@ -434,7 +436,7 @@ export const getContributionsOverview = createServerFn({ method: "GET" })
             : u.contribution_exempt
               ? "exempt"
               : "unpaid";
-      const views = lookup?.(u.plex_username) ?? null;
+      const views = lookup?.(u.plex_account_id) ?? null;
       return {
         userId: u.id,
         username: u.username,
