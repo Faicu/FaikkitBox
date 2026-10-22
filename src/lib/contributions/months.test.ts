@@ -6,6 +6,8 @@ import {
   effectiveTarget,
   validateDeclaration,
   monthsRangeLabel,
+  isActiveViewer,
+  countViews,
 } from "./months";
 
 describe("currentMonth", () => {
@@ -69,5 +71,32 @@ describe("monthsRangeLabel", () => {
   it("o lună sau interval", () => {
     expect(monthsRangeLabel(["2026-10"])).toBe("octombrie 2026");
     expect(monthsRangeLabel(["2027-01", "2026-11"])).toBe("noiembrie 2026 – ianuarie 2027");
+  });
+});
+
+describe("isActiveViewer", () => {
+  const s = { minMovies: 3, minEpisodes: 5, windowDays: 30 };
+  it("prag combinat", () => {
+    expect(isActiveViewer({ movies: 3, episodes: 0 }, s)).toBe(true);
+    expect(isActiveViewer({ movies: 0, episodes: 5 }, s)).toBe(true);
+    expect(isActiveViewer({ movies: 2, episodes: 2 }, s)).toBe(true);
+    expect(isActiveViewer({ movies: 2, episodes: 1 }, s)).toBe(false);
+    expect(isActiveViewer({ movies: 0, episodes: 4 }, s)).toBe(false);
+  });
+  it("prag 0 = tipul nu contează", () => {
+    expect(isActiveViewer({ movies: 10, episodes: 0 }, { ...s, minMovies: 0 })).toBe(false);
+  });
+});
+
+describe("countViews", () => {
+  it("distinct, doar în fereastră, fără clipuri", () => {
+    const views = [
+      { ratingKey: "1", type: "movie", viewedAt: 200 },
+      { ratingKey: "1", type: "movie", viewedAt: 300 },
+      { ratingKey: "2", type: "episode", viewedAt: 200 },
+      { ratingKey: "3", type: "episode", viewedAt: 50 },
+      { ratingKey: "4", type: "clip", viewedAt: 200 },
+    ];
+    expect(countViews(views, 100)).toEqual({ movies: 1, episodes: 1 });
   });
 });

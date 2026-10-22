@@ -9,7 +9,13 @@ import {
   isMonth,
   monthsRangeLabel,
   validateDeclaration,
+  validateActivitySettings,
+  countViews,
+  isActiveViewer,
+  DEFAULT_ACTIVITY,
   METHOD_LABELS,
+  type ActivitySettings,
+  type ViewCounts,
   type MonthStatus,
   type PaymentMethod,
 } from "./months";
@@ -45,7 +51,16 @@ export type MyContribution =
       coveredUntil: string | null;
       pendingPayments: MyPayment[];
       progress: ContributionProgress;
+      // null când nu se poate ști (fără cont Plex asociat sau Plex căzut).
+      activity: { counts: ViewCounts; active: boolean; windowDays: number } | null;
     };
+
+// Utilizator activ (peste pragul de vizionări) care n-a plătit și nici n-a
+// declarat luna curentă: cardul urcă primul pe Acasă și e evidențiat. După
+// „Am plătit" (în așteptare) revine la normal.
+export function isContributionUrgent(data: MyContribution | undefined): boolean {
+  return data?.kind === "user" && data.status === "unpaid" && !!data.activity?.active;
+}
 
 export interface AdminPayment {
   id: number;
@@ -72,6 +87,8 @@ export interface ContributorRow {
   exempt: boolean;
   status: MonthStatus;
   amount: number;
+  views: ViewCounts | null;
+  active: boolean;
 }
 
 export interface ContributionsOverview {
@@ -82,6 +99,7 @@ export interface ContributionsOverview {
   // curentă înainte), separată de ținta lunii afișate.
   currentTarget: number;
   contributors: ContributorRow[];
+  activitySettings: ActivitySettings;
   pending: AdminPayment[];
   history: AdminPayment[];
 }
@@ -193,6 +211,30 @@ function insertPayment(
   }
 }
 
+function activitySettings(database: DatabaseSync): ActivitySettings {
+  const row = database
+    .prepare("SELECT min_movies, min_episodes, window_days FROM contribution_settings WHERE id = 1")
+    .get() as { min_movies: number; min_episodes: number; window_days: number } | undefined;
+  if (!row) return DEFAULT_ACTIVITY;
+  return { minMovies: row.min_movies, minEpisodes: row.min_episodes, windowDays: row.window_days };
+}
+
+// Vizionările din fereastră pentru fiecare cont Plex cerut (după nume, fără
+// diferență de majuscule). null dacă Plex nu răspunde.
+async function viewCountsByPlexUser(
+  windowDays: number,
+): Promise<((plexUsername: string | null) => ViewCounts | null) | null> {
+  const { getPlexViewsByUser } = await import("../services/plex");
+  const byUser = await getPlexViewsByUser();
+  if (!byUser) return null;
+  const since = Math.floor(Date.now() / 1000) - windowDays * 24 * 60 * 60;
+  const lower = new Map(Object.entries(byUser).map(([k, v]) => [k.toLowerCase(), v]));
+  return (plexUsername) => {
+    if (!plexUsername) return null;
+    return countViews(lower.get(plexUsername.toLowerCase()) ?? [], since);
+  };
+}
+
 function parseMethod(value: unknown, allowCash: boolean): PaymentMethod {
   if (value === "revolut" || value === "iban" || (allowCash && value === "cash")) return value;
   throw new Error("Metodă de plată necunoscută.");
@@ -216,8 +258,9 @@ export const getMyContribution = createServerFn({ method: "GET" }).handler(
     const progress = progressFor(database, month);
 
     const account = database
-      .prepare("SELECT role, contribution_exempt FROM users WHERE id = ?")
-      .get(session.data.userId!) as { role: string; contribution_exempt: number } | undefined;
+      .prepare("SELECT role, contribution_exempt, plex_username FROM users WHERE id = ?")
+      .get(session.data.userId!) as
+      { role: string; contribution_exempt: number; plex_username: string | null } | undefined;
     if (account?.role === "admin") {
       return { kind: "admin", progress, pendingCount: countPending(database) };
     }
@@ -258,8 +301,15 @@ export const getMyContribution = createServerFn({ method: "GET" }).handler(
       declared_at: string;
     }>;
 
+    const settings = activitySettings(database);
+    const lookup = account?.plex_username ? await viewCountsByPlexUser(settings.windowDays) : null;
+    const counts = lookup?.(account?.plex_username ?? null) ?? null;
+
     return {
       kind: "user",
+      activity: counts
+        ? { counts, active: isActiveViewer(counts, settings), windowDays: settings.windowDays }
+        : null,
       exempt,
       status,
       coveredUntil,
@@ -353,11 +403,18 @@ export const getContributionsOverview = createServerFn({ method: "GET" })
 
     const users = database
       .prepare(
-        `SELECT id, username, contribution_exempt FROM users
+        `SELECT id, username, contribution_exempt, plex_username FROM users
           WHERE role = 'user' AND status = 'approved'
           ORDER BY username COLLATE NOCASE`,
       )
-      .all() as Array<{ id: number; username: string; contribution_exempt: number }>;
+      .all() as Array<{
+      id: number;
+      username: string;
+      contribution_exempt: number;
+      plex_username: string | null;
+    }>;
+    const settings = activitySettings(database);
+    const lookup = await viewCountsByPlexUser(settings.windowDays);
     const monthRows = database
       .prepare(
         `SELECT m.user_id AS user_id, m.amount AS amount, p.status AS status
@@ -377,12 +434,15 @@ export const getContributionsOverview = createServerFn({ method: "GET" })
             : u.contribution_exempt
               ? "exempt"
               : "unpaid";
+      const views = lookup?.(u.plex_username) ?? null;
       return {
         userId: u.id,
         username: u.username,
         exempt: !!u.contribution_exempt,
         status,
         amount: r?.amount ?? 0,
+        views,
+        active: !!views && isActiveViewer(views, settings),
       };
     });
 
@@ -431,6 +491,7 @@ export const getContributionsOverview = createServerFn({ method: "GET" })
       progress: progressFor(database, month),
       currentTarget: targetFor(database, now),
       contributors,
+      activitySettings: settings,
       pending: all.filter((p) => p.status === "pending").reverse(),
       history: all.filter((p) => p.status !== "pending"),
     };
@@ -598,6 +659,29 @@ export const setContributionExempt = createServerFn({ method: "POST" })
     await logContribution(
       `${user.username} ${data.exempt ? "scutit de" : "nu mai e scutit de"} contribuție (de ${by})`,
       { username: user.username, by },
+    );
+    return { ok: true };
+  });
+
+export const setActivitySettings = createServerFn({ method: "POST" })
+  .validator((d: ActivitySettings) => d)
+  .handler(async ({ data }): Promise<{ ok: true }> => {
+    const session = await requireAdminSession();
+    const err = validateActivitySettings(data);
+    if (err) throw new Error(err);
+    const database = await db();
+    database
+      .prepare(
+        `INSERT INTO contribution_settings (id, min_movies, min_episodes, window_days)
+         VALUES (1, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET min_movies = excluded.min_movies,
+           min_episodes = excluded.min_episodes, window_days = excluded.window_days`,
+      )
+      .run(data.minMovies, data.minEpisodes, data.windowDays);
+    const by = session.data.username ?? "admin";
+    await logContribution(
+      `Prag utilizator activ: ${data.minMovies} filme / ${data.minEpisodes} episoade în ${data.windowDays} zile (de ${by})`,
+      { ...data, by },
     );
     return { ok: true };
   });

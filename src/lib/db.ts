@@ -368,6 +368,15 @@ export function getDb(): DatabaseSync {
       month TEXT PRIMARY KEY,
       target INTEGER NOT NULL
     );
+
+    -- Pragul „utilizator activ" (DEFAULT_ACTIVITY din months.ts când lipsește
+    -- rândul): cine trece de el vede cardul de plată evidențiat pe Acasă.
+    CREATE TABLE IF NOT EXISTS contribution_settings (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      min_movies INTEGER NOT NULL,
+      min_episodes INTEGER NOT NULL,
+      window_days INTEGER NOT NULL
+    );
   `);
 
   // Curățări one-time, versionate cu PRAGMA user_version

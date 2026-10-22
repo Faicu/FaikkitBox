@@ -110,3 +110,61 @@ export const METHOD_LABELS: Record<PaymentMethod, string> = {
   iban: "Transfer bancar",
   cash: "Numerar",
 };
+
+// ---------------------------------------------------------------------------
+// Utilizator activ — cine se uită des vede cardul de plată mai insistent.
+// ---------------------------------------------------------------------------
+
+export interface ActivitySettings {
+  minMovies: number;
+  minEpisodes: number;
+  windowDays: number;
+}
+
+export const DEFAULT_ACTIVITY: ActivitySettings = { minMovies: 3, minEpisodes: 5, windowDays: 30 };
+
+export interface ViewCounts {
+  movies: number;
+  episodes: number;
+}
+
+// Pragul e combinat: fiecare film valorează 1/minMovies, fiecare episod
+// 1/minEpisodes, activ de la 1. La 3/5: 3 filme, 5 episoade sau 2 filme +
+// 2 episoade. Un prag 0 scoate tipul respectiv din calcul.
+export function isActiveViewer(counts: ViewCounts, s: ActivitySettings): boolean {
+  const score =
+    (s.minMovies > 0 ? counts.movies / s.minMovies : 0) +
+    (s.minEpisodes > 0 ? counts.episodes / s.minEpisodes : 0);
+  return score >= 1 - 1e-9;
+}
+
+// Titluri distincte din fereastră (revăzutul nu se numără de două ori);
+// trailerele/clipurile nu contează.
+export function countViews(
+  views: Array<{ ratingKey?: string; type: string; viewedAt: number }>,
+  sinceSec: number,
+): ViewCounts {
+  const movies = new Set<string>();
+  const episodes = new Set<string>();
+  views.forEach((v, i) => {
+    if (v.viewedAt < sinceSec) return;
+    const key = v.ratingKey ?? `#${i}`;
+    if (v.type === "movie") movies.add(key);
+    else if (v.type === "episode") episodes.add(key);
+  });
+  return { movies: movies.size, episodes: episodes.size };
+}
+
+export function validateActivitySettings(s: ActivitySettings): string | null {
+  const ok = (n: number, max: number) => Number.isInteger(n) && n >= 0 && n <= max;
+  if (!ok(s.minMovies, 1000) || !ok(s.minEpisodes, 1000)) {
+    return "Pragurile trebuie să fie numere întregi, de la 0 în sus.";
+  }
+  if (s.minMovies === 0 && s.minEpisodes === 0) {
+    return "Cel puțin unul dintre praguri trebuie să fie mai mare decât 0.";
+  }
+  if (!Number.isInteger(s.windowDays) || s.windowDays < 1 || s.windowDays > 365) {
+    return "Perioada trebuie să fie între 1 și 365 de zile.";
+  }
+  return null;
+}

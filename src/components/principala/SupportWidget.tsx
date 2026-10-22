@@ -18,9 +18,11 @@ import {
 import { toast } from "sonner";
 
 import { myContributionQuery } from "@/lib/queries";
+import { pluralRo } from "@/lib/format";
 import {
   cancelMyContribution,
   declareContribution,
+  isContributionUrgent,
   type ContributionProgress,
   type MyContribution,
 } from "@/lib/contributions/contributions.functions";
@@ -81,6 +83,14 @@ export function SupportWidget() {
   const { data } = useQuery(myContributionQuery);
   if (data?.kind === "admin") return <AdminSummary data={data} />;
   return <UserCard data={data?.kind === "user" ? data : null} />;
+}
+
+function viewsSentence(a: NonNullable<Extract<MyContribution, { kind: "user" }>["activity"]>) {
+  const parts = [
+    a.counts.movies > 0 ? pluralRo(a.counts.movies, "film", "filme") : null,
+    a.counts.episodes > 0 ? pluralRo(a.counts.episodes, "episod", "episoade") : null,
+  ].filter(Boolean);
+  return `Ai văzut ${parts.join(" și ")} în ultimele ${a.windowDays} de zile.`;
 }
 
 export function ContributionProgressBar({ progress }: { progress: ContributionProgress }) {
@@ -158,14 +168,37 @@ function UserCard({ data }: { data: Extract<MyContribution, { kind: "user" }> | 
 
   const exempt = data?.exempt ?? false;
   const covered = data?.status === "confirmed" || data?.status === "pending";
+  const urgent = isContributionUrgent(data ?? undefined);
 
   return (
-    <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4">
-      <div className="flex items-center gap-2">
-        <Heart className="h-4 w-4 text-primary" />
-        <h2 className="flex-1 text-sm font-semibold text-foreground">Contribuția lunară</h2>
-        {data && <StatusBadge data={data} />}
-      </div>
+    <div
+      className={`rounded-2xl border p-4 ${
+        urgent
+          ? "border-amber-500/60 bg-amber-500/10 shadow-[0_0_24px_-8px] shadow-amber-500/40"
+          : "border-primary/30 bg-primary/5"
+      }`}
+    >
+      {urgent && data ? (
+        <>
+          <div className="flex items-center gap-2">
+            <CircleAlert className="h-5 w-5 text-amber-400" />
+            <h2 className="flex-1 text-base font-semibold text-foreground">
+              Ai de plătit contribuția pe {monthLabel(data.progress.month, false)}
+            </h2>
+          </div>
+          {data.activity && (
+            <p className="mt-1.5 text-xs font-medium text-amber-300">
+              {viewsSentence(data.activity)}
+            </p>
+          )}
+        </>
+      ) : (
+        <div className="flex items-center gap-2">
+          <Heart className="h-4 w-4 text-primary" />
+          <h2 className="flex-1 text-sm font-semibold text-foreground">Contribuția lunară</h2>
+          {data && <StatusBadge data={data} />}
+        </div>
+      )}
 
       {exempt ? (
         <p className="mt-2 text-xs leading-relaxed text-muted-foreground">

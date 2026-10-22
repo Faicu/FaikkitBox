@@ -30,6 +30,7 @@ import {
   rejectContribution,
   setContributionExempt,
   setContributionTarget,
+  setActivitySettings,
   type AdminPayment,
   type ContributionsOverview,
   type ContributorRow,
@@ -76,6 +77,7 @@ function ContributiiPage() {
           <MonthSection data={data} onMonth={setMonth} />
           <PendingSection pending={data.pending} />
           <ContributorsSection data={data} />
+          <ActivitySettingsSection data={data} />
           <AddPaymentSection data={data} />
           <HistorySection history={data.history} />
         </>
@@ -328,7 +330,19 @@ function ContributorsSection({ data }: { data: ContributionsOverview }) {
             return (
               <div key={c.userId} className="flex items-center justify-between gap-2 px-3 py-2.5">
                 <div className="min-w-0">
-                  <div className="truncate text-sm font-medium">{c.username}</div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="truncate text-sm font-medium">{c.username}</span>
+                    {c.active && (
+                      <span className="shrink-0 rounded bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-medium text-sky-400">
+                        activ
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-muted-foreground">
+                    {c.views
+                      ? `${c.views.movies} filme · ${c.views.episodes} ep. în ${data.activitySettings.windowDays} zile`
+                      : "Vizionări necunoscute (fără cont Plex sau Plex indisponibil)"}
+                  </div>
                   <button
                     type="button"
                     onClick={() => {
@@ -362,6 +376,127 @@ function ContributorsSection({ data }: { data: ContributionsOverview }) {
           })
         )}
       </div>
+    </section>
+  );
+}
+
+function ActivitySettingsSection({ data }: { data: ContributionsOverview }) {
+  const invalidate = useInvalidate();
+  const saveFn = useServerFn(setActivitySettings);
+  const s = data.activitySettings;
+  const [editing, setEditing] = useState(false);
+  const [movies, setMovies] = useState(String(s.minMovies));
+  const [episodes, setEpisodes] = useState(String(s.minEpisodes));
+  const [days, setDays] = useState(String(s.windowDays));
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      saveFn({
+        data: {
+          minMovies: Number(movies),
+          minEpisodes: Number(episodes),
+          windowDays: Number(days),
+        },
+      }),
+    onSuccess: () => {
+      toast.success("Pragul a fost salvat");
+      setEditing(false);
+      invalidate();
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  const activeCount = data.contributors.filter((c) => c.active).length;
+  const field = "w-full rounded-lg border border-border/60 bg-background px-2 py-1.5 text-xs";
+
+  return (
+    <section className="glass-card rounded-2xl p-4 space-y-2">
+      <div className="flex items-center justify-between">
+        <div className="text-sm font-semibold">Utilizator activ</div>
+        {!editing && (
+          <button
+            type="button"
+            onClick={() => {
+              setMovies(String(s.minMovies));
+              setEpisodes(String(s.minEpisodes));
+              setDays(String(s.windowDays));
+              setEditing(true);
+            }}
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+          >
+            Modifică <Pencil className="h-3 w-3" />
+          </button>
+        )}
+      </div>
+      <p className="text-[11px] leading-relaxed text-muted-foreground">
+        Cine a văzut cel puțin {s.minMovies} filme sau {s.minEpisodes} episoade (ori o combinație
+        echivalentă) în ultimele {s.windowDays} de zile și n-a plătit luna vede cardul de
+        contribuție primul pe Acasă, evidențiat. Acum: {activeCount} activi.
+      </p>
+      {editing && (
+        <form
+          className="space-y-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            mutation.mutate();
+          }}
+        >
+          <div className="grid grid-cols-3 gap-2">
+            <label className="space-y-1 text-[11px] text-muted-foreground">
+              Filme
+              <input
+                type="number"
+                inputMode="numeric"
+                min={0}
+                value={movies}
+                onChange={(e) => setMovies(e.target.value)}
+                className={field}
+              />
+            </label>
+            <label className="space-y-1 text-[11px] text-muted-foreground">
+              Episoade
+              <input
+                type="number"
+                inputMode="numeric"
+                min={0}
+                value={episodes}
+                onChange={(e) => setEpisodes(e.target.value)}
+                className={field}
+              />
+            </label>
+            <label className="space-y-1 text-[11px] text-muted-foreground">
+              Zile
+              <input
+                type="number"
+                inputMode="numeric"
+                min={1}
+                value={days}
+                onChange={(e) => setDays(e.target.value)}
+                className={field}
+              />
+            </label>
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            0 la filme sau la episoade = tipul respectiv nu se mai numără.
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setEditing(false)}
+              className="flex-1 rounded-xl bg-muted/60 py-2 text-xs font-medium text-muted-foreground"
+            >
+              Renunță
+            </button>
+            <button
+              type="submit"
+              disabled={mutation.isPending}
+              className="flex-[2] rounded-xl bg-primary py-2 text-xs font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-40"
+            >
+              Salvează
+            </button>
+          </div>
+        </form>
+      )}
     </section>
   );
 }
