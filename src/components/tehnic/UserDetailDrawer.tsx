@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
@@ -17,6 +17,9 @@ import {
   CheckCircle2,
   Loader2,
   KeyRound,
+  Pencil,
+  Check,
+  X,
 } from "lucide-react";
 
 import {
@@ -26,7 +29,7 @@ import {
   DrawerTitle,
   DrawerDescription,
 } from "@/components/ui/drawer";
-import { getUserDetail, resetUserPassword } from "@/lib/auth/users.functions";
+import { getUserDetail, resetUserPassword, updateUserPhone } from "@/lib/auth/users.functions";
 import { formatDateTime as fmtDate } from "./utils";
 
 function episodeCode(season: number | null, episode: number | null): string | null {
@@ -78,10 +81,7 @@ export function UserDetailDrawer({ userId, onClose }: { userId: number; onClose:
                   <Mail className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                   <span className="break-all">{user.email ?? "—"}</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Phone className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                  <span>{user.phone ?? "—"}</span>
-                </div>
+                <PhoneRow userId={user.id} phone={user.phone} />
                 <div className="flex items-center gap-2">
                   <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                   <span className="text-xs text-muted-foreground">
@@ -349,5 +349,86 @@ function ResetPasswordSection({ userId, username }: { userId: number; username: 
         </form>
       )}
     </div>
+  );
+}
+
+// Telefonul, editabil pe loc (fără Dialog peste Drawer — vezi incidentele
+// cu overlay-uri imbricate).
+function PhoneRow({ userId, phone }: { userId: number; phone: string | null }) {
+  const qc = useQueryClient();
+  const updateFn = useServerFn(updateUserPhone);
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(phone ?? "");
+
+  const mutation = useMutation({
+    mutationFn: () => updateFn({ data: { id: userId, phone: value } }),
+    onSuccess: (res) => {
+      if (!res.ok) {
+        toast.error(res.error ?? "Nu am putut salva telefonul");
+        return;
+      }
+      toast.success("Telefon actualizat");
+      setEditing(false);
+      qc.invalidateQueries({ queryKey: ["userDetail", userId] });
+      qc.invalidateQueries({ queryKey: ["users"] });
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  if (!editing) {
+    return (
+      <div className="flex items-center gap-2">
+        <Phone className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+        <span className="flex-1">{phone ?? "—"}</span>
+        <button
+          type="button"
+          onClick={() => {
+            setValue(phone ?? "");
+            setEditing(true);
+          }}
+          className="rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground"
+          title="Modifică telefonul"
+        >
+          <Pencil className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <form
+      className="flex items-center gap-2"
+      onSubmit={(e) => {
+        e.preventDefault();
+        mutation.mutate();
+      }}
+    >
+      <Phone className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+      <input
+        type="tel"
+        inputMode="tel"
+        autoComplete="off"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        className="min-w-0 flex-1 rounded-md border border-border/60 bg-background px-2 py-1 text-sm"
+        autoFocus
+      />
+      <button
+        type="submit"
+        disabled={mutation.isPending || !value.trim()}
+        className="rounded-md bg-primary p-1.5 text-primary-foreground disabled:opacity-40"
+        title="Salvează"
+      >
+        <Check className="h-3.5 w-3.5" />
+      </button>
+      <button
+        type="button"
+        onClick={() => setEditing(false)}
+        className="rounded-md bg-muted/60 p-1.5"
+        title="Renunță"
+      >
+        <X className="h-3.5 w-3.5" />
+      </button>
+    </form>
   );
 }

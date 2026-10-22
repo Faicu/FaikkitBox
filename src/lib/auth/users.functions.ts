@@ -104,6 +104,38 @@ export const deleteUser = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+// Telefonul unui cont, corectat de admin (la înregistrare e obligatoriu, deci
+// gol nu se acceptă nici aici).
+export const updateUserPhone = createServerFn({ method: "POST" })
+  .validator((data: { id: number; phone: string }) => data)
+  .handler(async ({ data }): Promise<{ ok: boolean; error?: string }> => {
+    const { requireAdmin } = await import("./admin.server");
+    const session = await requireAdmin();
+    const phone = data.phone.trim();
+    if (!phone) return { ok: false, error: "Numărul de telefon nu poate fi gol." };
+    if (phone.length > 30 || !/^[+\d][\d\s().-]*$/.test(phone)) {
+      return { ok: false, error: "Număr de telefon invalid." };
+    }
+
+    const { getDb } = await import("../db");
+    const db = getDb();
+    const target = db.prepare("SELECT username, phone FROM users WHERE id = ?").get(data.id) as
+      { username: string; phone: string | null } | undefined;
+    if (!target) return { ok: false, error: "Contul nu mai există." };
+    if (target.phone === phone) return { ok: true };
+
+    db.prepare("UPDATE users SET phone = ? WHERE id = ?").run(phone, data.id);
+
+    const { logActivity } = await import("../activity-log");
+    await logActivity(
+      "account_request",
+      `Telefon modificat: ${target.username} (de ${session.data.username ?? "admin necunoscut"})`,
+      { username: target.username, by: session.data.username ?? null },
+      { skipPush: true },
+    );
+    return { ok: true };
+  });
+
 // Resetare parolă de către admin, pentru orice cont (inclusiv alt admin sau
 // propriul cont). Incrementarea session_version deloghează toate sesiunile
 // deja emise ale contului — vezi liveAccount în admin.server.ts.
