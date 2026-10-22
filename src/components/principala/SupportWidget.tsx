@@ -85,12 +85,36 @@ export function SupportWidget() {
   return <UserCard data={data?.kind === "user" ? data : null} />;
 }
 
-function viewsSentence(a: NonNullable<Extract<MyContribution, { kind: "user" }>["activity"]>) {
+type UserContribution = Extract<MyContribution, { kind: "user" }>;
+
+function viewsPhrase(counts: { movies: number; episodes: number }): string {
   const parts = [
-    a.counts.movies > 0 ? pluralRo(a.counts.movies, "film", "filme") : null,
-    a.counts.episodes > 0 ? pluralRo(a.counts.episodes, "episod", "episoade") : null,
+    counts.movies > 0 ? pluralRo(counts.movies, "film", "filme") : null,
+    counts.episodes > 0 ? pluralRo(counts.episodes, "episod", "episoade") : null,
   ].filter(Boolean);
-  return `Ai văzut ${parts.join(" și ")} în ultimele ${a.windowDays} de zile.`;
+  return parts.length > 0 ? parts.join(" și ") : "niciun film sau episod";
+}
+
+function viewsSentence(a: NonNullable<UserContribution["activity"]>) {
+  return `Ai văzut ${viewsPhrase(a.counts)} în ultimele ${pluralRo(a.windowDays, "zi", "zile")}.`;
+}
+
+// Pentru cei sub prag: de ce contribuția lor e opțională. Fără cont Plex
+// asociat (sau cu Plex căzut) nu știm ce au văzut — doar pragul.
+function optionalSentence(data: UserContribution): string {
+  const s = data.activitySettings;
+  const threshold = [
+    s.minMovies > 0 ? pluralRo(s.minMovies, "film", "filme") : null,
+    s.minEpisodes > 0 ? pluralRo(s.minEpisodes, "episod", "episoade") : null,
+  ]
+    .filter(Boolean)
+    .join(" sau ");
+  const seen = data.activity ? ` Tu ai văzut ${viewsPhrase(data.activity.counts)}.` : "";
+  return (
+    `Pragul de activitate e de ${threshold} în ultimele ${pluralRo(s.windowDays, "zi", "zile")}.${seen} ` +
+    `Nu l-ai atins, așa că pentru tine contribuția e strict opțională. Dacă vrei totuși să ` +
+    `susții serverul, orice sumă de la ${MIN_PER_MONTH} lei ajută.`
+  );
 }
 
 export function ContributionProgressBar({ progress }: { progress: ContributionProgress }) {
@@ -148,7 +172,7 @@ function AdminSummary({ data }: { data: Extract<MyContribution, { kind: "admin" 
   );
 }
 
-function UserCard({ data }: { data: Extract<MyContribution, { kind: "user" }> | null }) {
+function UserCard({ data }: { data: UserContribution | null }) {
   const [formOpen, setFormOpen] = useState(false);
   const qc = useQueryClient();
   const cancelFn = useServerFn(cancelMyContribution);
@@ -169,6 +193,8 @@ function UserCard({ data }: { data: Extract<MyContribution, { kind: "user" }> | 
   const exempt = data?.exempt ?? false;
   const covered = data?.status === "confirmed" || data?.status === "pending";
   const urgent = isContributionUrgent(data ?? undefined);
+  // Sub prag și cu luna încă neplătită: îi spunem că, pentru el, e opțional.
+  const belowThreshold = !!data && data.status === "unpaid" && !data.activity?.active;
 
   return (
     <div
@@ -205,6 +231,16 @@ function UserCard({ data }: { data: Extract<MyContribution, { kind: "user" }> | 
           Contul tău e scutit de contribuție. Dacă vrei totuși să susții serverul, datele de plată
           sunt mai jos.
         </p>
+      ) : belowThreshold && data ? (
+        <>
+          <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+            Serverul, curentul și abonamentele se plătesc lunar. Strângem împreună{" "}
+            {data.progress.target} lei pe lună.
+          </p>
+          <p className="mt-2 rounded-xl bg-sky-500/10 px-3 py-2 text-xs leading-relaxed text-sky-300">
+            {optionalSentence(data)}
+          </p>
+        </>
       ) : (
         <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
           Serverul, curentul și abonamentele se plătesc lunar. Strângem împreună{" "}
@@ -312,7 +348,7 @@ function UserCard({ data }: { data: Extract<MyContribution, { kind: "user" }> | 
   );
 }
 
-function StatusBadge({ data }: { data: Extract<MyContribution, { kind: "user" }> }) {
+function StatusBadge({ data }: { data: UserContribution }) {
   const month = monthLabel(data.progress.month, false);
   switch (data.status) {
     case "confirmed":
@@ -328,6 +364,14 @@ function StatusBadge({ data }: { data: Extract<MyContribution, { kind: "user" }>
         </span>
       );
     case "unpaid":
+      // Sub prag nu „datorează" nimic — fără roșu.
+      if (!data.activity?.active) {
+        return (
+          <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+            Opțional
+          </span>
+        );
+      }
       return (
         <span className="inline-flex items-center gap-1 rounded bg-red-500/15 px-1.5 py-0.5 text-[10px] font-medium text-red-400">
           <CircleAlert className="h-3 w-3" /> Neplătit pe {month}

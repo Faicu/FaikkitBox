@@ -53,6 +53,7 @@ export type MyContribution =
       progress: ContributionProgress;
       // null când nu se poate ști (fără cont Plex asociat sau Plex căzut).
       activity: { counts: ViewCounts; active: boolean; windowDays: number } | null;
+      activitySettings: ActivitySettings;
     };
 
 // Utilizator activ (peste pragul de vizionări) care n-a plătit și nici n-a
@@ -310,6 +311,7 @@ export const getMyContribution = createServerFn({ method: "GET" }).handler(
       activity: counts
         ? { counts, active: isActiveViewer(counts, settings), windowDays: settings.windowDays }
         : null,
+      activitySettings: settings,
       exempt,
       status,
       coveredUntil,
