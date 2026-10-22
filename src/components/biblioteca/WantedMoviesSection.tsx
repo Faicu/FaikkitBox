@@ -15,9 +15,10 @@ import { WantedMovieDrawer } from "./WantedMovieDrawer";
 // lista să promită fișiere care nu există. Aici e vizibil, dar clar despărțit.
 //
 // Dispare complet când e goală, ca să nu ocupe spațiu cu „Se așteaptă (0)".
+// Strânsă implicit: antetul cu numărul ajunge; lista se deschide la cerere.
 export function WantedMoviesSection() {
   const wanted = useQuery(wantedMoviesQuery);
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const [selectedMediaId, setSelectedMediaId] = useState<number | null>(null);
 
   const items = wanted.data ?? [];
