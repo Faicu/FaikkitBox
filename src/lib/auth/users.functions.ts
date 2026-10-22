@@ -256,9 +256,12 @@ export const getUserDetail = createServerFn({ method: "GET" })
       completed_at: string | null;
     }>;
 
-    const plexActivity = user.plex_username
-      ? await (await import("../services/plex")).getPlexUserHistory(user.plex_username)
-      : [];
+    const plexActivity =
+      user.plex_account_id != null || user.plex_username
+        ? await (
+            await import("../services/plex")
+          ).getPlexUserHistory(user.plex_account_id, user.plex_username)
+        : [];
 
     return {
       id: user.id,

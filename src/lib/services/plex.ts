@@ -208,6 +208,7 @@ let plexHistoryCache: {
   todayViews: PlexHistoryEntry[];
   activeUsersTodayList: Array<{ user: string; count: number }>;
   viewsByAccount: Record<string, PlexView[]>;
+  accountNames: Record<string, string>;
   expiresAt: number;
 } | null = null;
 
@@ -241,14 +242,23 @@ export async function getPlexViewsByAccount(): Promise<Record<string, PlexView[]
 // dar se auto-populează cu o cerere reală dacă e rece (ex. server proaspăt
 // repornit, nimeni nu s-a uitat încă pe Acasă) — altfel pagina de detalii ar
 // rămâne mereu goală fără motiv vizibil.
-export async function getPlexUserHistory(username: string): Promise<PlexHistoryEntry[]> {
+//
+// Istoricul e grupat pe numele afișat în Plex („Dragomir Andreea"), care nu e
+// username-ul salvat la înregistrare („dragomirandreea") — de aceea numele se
+// află după ID-ul contului; username-ul rămâne doar rezervă.
+export async function getPlexUserHistory(
+  plexAccountId: number | null,
+  username: string | null,
+): Promise<PlexHistoryEntry[]> {
   const token = process.env.PLEX_TOKEN;
   if (!token) return [];
   try {
     const { url } = await discoverPlexUrl(token, process.env.PLEX_URL);
     const headers = { Accept: "application/json", "X-Plex-Token": token };
     const history = await fetchPlexHistory(url, headers);
-    return history.userHistory[username] ?? [];
+    const name =
+      (plexAccountId != null ? history.accountNames[String(plexAccountId)] : undefined) ?? username;
+    return name ? (history.userHistory[name] ?? []) : [];
   } catch {
     return [];
   }
@@ -280,6 +290,7 @@ async function fetchPlexHistory(
   todayViews: PlexHistoryEntry[];
   activeUsersTodayList: Array<{ user: string; count: number }>;
   viewsByAccount: Record<string, PlexView[]>;
+  accountNames: Record<string, string>;
 }> {
   if (plexHistoryCache && plexHistoryCache.url === url && plexHistoryCache.expiresAt > Date.now()) {
     return {
@@ -290,6 +301,7 @@ async function fetchPlexHistory(
       todayViews: plexHistoryCache.todayViews,
       activeUsersTodayList: plexHistoryCache.activeUsersTodayList,
       viewsByAccount: plexHistoryCache.viewsByAccount,
+      accountNames: plexHistoryCache.accountNames,
     };
   }
   const historyJson = await fetchJson<PlexApiResponse>(
@@ -434,6 +446,9 @@ async function fetchPlexHistory(
       .map(([user, count]) => ({ user, count }))
       .sort((a, b) => b.count - a.count),
     viewsByAccount,
+    accountNames: Object.fromEntries(
+      Array.from(accountMap.entries(), ([id, name]) => [String(id), name]),
+    ),
   };
   plexHistoryCache = { url, ...result, expiresAt: Date.now() + 60_000 };
   return result;
