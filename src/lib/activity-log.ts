@@ -28,7 +28,8 @@ export type ActivityType =
   | "subtitle_fix"
   | "account_request"
   | "metadata_refresh"
-  | "update_available";
+  | "update_available"
+  | "contribution";
 
 export type JsonValue = string | number | boolean | null | undefined;
 

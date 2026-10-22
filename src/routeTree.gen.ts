@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as BibliotecaRouteImport } from './routes/biblioteca'
+import { Route as ContributiiRouteImport } from './routes/contributii'
 import { Route as DescoperaRouteImport } from './routes/descopera'
 import { Route as ImmichRouteImport } from './routes/immich'
 import { Route as LoginRouteImport } from './routes/login'
@@ -28,6 +29,11 @@ const IndexRoute = IndexRouteImport.update({
 const BibliotecaRoute = BibliotecaRouteImport.update({
   id: '/biblioteca',
   path: '/biblioteca',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ContributiiRoute = ContributiiRouteImport.update({
+  id: '/contributii',
+  path: '/contributii',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DescoperaRoute = DescoperaRouteImport.update({
@@ -74,6 +80,7 @@ const UsersRoute = UsersRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/biblioteca': typeof BibliotecaRoute
+  '/contributii': typeof ContributiiRoute
   '/descopera': typeof DescoperaRoute
   '/immich': typeof ImmichRoute
   '/login': typeof LoginRoute
@@ -86,6 +93,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/biblioteca': typeof BibliotecaRoute
+  '/contributii': typeof ContributiiRoute
   '/descopera': typeof DescoperaRoute
   '/immich': typeof ImmichRoute
   '/login': typeof LoginRoute
@@ -99,6 +107,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/biblioteca': typeof BibliotecaRoute
+  '/contributii': typeof ContributiiRoute
   '/descopera': typeof DescoperaRoute
   '/immich': typeof ImmichRoute
   '/login': typeof LoginRoute
@@ -113,6 +122,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/biblioteca'
+    | '/contributii'
     | '/descopera'
     | '/immich'
     | '/login'
@@ -125,6 +135,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/biblioteca'
+    | '/contributii'
     | '/descopera'
     | '/immich'
     | '/login'
@@ -137,6 +148,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/biblioteca'
+    | '/contributii'
     | '/descopera'
     | '/immich'
     | '/login'
@@ -150,6 +162,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   BibliotecaRoute: typeof BibliotecaRoute
+  ContributiiRoute: typeof ContributiiRoute
   DescoperaRoute: typeof DescoperaRoute
   ImmichRoute: typeof ImmichRoute
   LoginRoute: typeof LoginRoute
@@ -174,6 +187,13 @@ declare module '@tanstack/react-router' {
       path: '/biblioteca'
       fullPath: '/biblioteca'
       preLoaderRoute: typeof BibliotecaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/contributii': {
+      id: '/contributii'
+      path: '/contributii'
+      fullPath: '/contributii'
+      preLoaderRoute: typeof ContributiiRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/descopera': {
@@ -238,6 +258,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   BibliotecaRoute: BibliotecaRoute,
+  ContributiiRoute: ContributiiRoute,
   DescoperaRoute: DescoperaRoute,
   ImmichRoute: ImmichRoute,
   LoginRoute: LoginRoute,

@@ -19,6 +19,7 @@ import {
   ArrowUpCircle,
   Search,
   ChevronRight,
+  HandCoins,
 } from "lucide-react";
 
 import { activityLogQuery, recentCommitsQuery, commitsFromDbQuery } from "@/lib/queries";
@@ -53,6 +54,7 @@ const FILTER_GROUPS: { key: string; label: string }[] = [
   { key: "updates", label: "Updates" },
   { key: "commits", label: "Commits" },
   { key: "conturi", label: "Conturi" },
+  { key: "contributii", label: "Contribuții" },
   { key: "erori", label: "Erori" },
 ];
 
@@ -73,6 +75,7 @@ const TYPE_TO_GROUP: Record<string, string> = {
   account_request: "conturi",
   metadata_refresh: "metadate",
   update_available: "updates",
+  contribution: "contributii",
 };
 
 export function ActivityLogSection() {
@@ -102,6 +105,7 @@ export function ActivityLogSection() {
     account_request: <UserPlus className="h-3.5 w-3.5 text-amber-400" />,
     metadata_refresh: <DatabaseZap className="h-3.5 w-3.5 text-emerald-400" />,
     update_available: <ArrowUpCircle className="h-3.5 w-3.5 text-amber-400" />,
+    contribution: <HandCoins className="h-3.5 w-3.5 text-emerald-400" />,
   };
 
   const [query, setQuery] = useState("");

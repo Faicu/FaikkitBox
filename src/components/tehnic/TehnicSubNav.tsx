@@ -5,6 +5,7 @@ const items = [
   { to: "/immich", label: "Immich" },
   { to: "/qbit", label: "qBit" },
   { to: "/users", label: "Utilizatori" },
+  { to: "/contributii", label: "Contribuții" },
   { to: "/sistem", label: "Sistem" },
 ] as const;
 

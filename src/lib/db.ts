@@ -100,7 +100,8 @@ export function getDb(): DatabaseSync {
       plex_email TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       last_login_at TEXT,
-      session_version INTEGER NOT NULL DEFAULT 0
+      session_version INTEGER NOT NULL DEFAULT 0,
+      contribution_exempt INTEGER NOT NULL DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS user_logins (
@@ -327,6 +328,45 @@ export function getDb(): DatabaseSync {
       last_check_at TEXT,
       last_checked INTEGER NOT NULL DEFAULT 0,
       last_found INTEGER NOT NULL DEFAULT 0
+    );
+
+    -- Contribuțiile lunare (src/lib/contributions). O plată = o declarație
+    -- „Am plătit" a utilizatorului (pending → confirmată/respinsă de admin)
+    -- sau o plată adăugată direct de admin (confirmată). Sumele în lei întregi.
+    CREATE TABLE IF NOT EXISTS contribution_payments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      months_count INTEGER NOT NULL,
+      per_month INTEGER NOT NULL,
+      total INTEGER NOT NULL,
+      method TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      note TEXT,
+      declared_at TEXT NOT NULL DEFAULT (datetime('now')),
+      decided_at TEXT,
+      decided_by TEXT,
+      added_by_admin INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS idx_contribution_payments_user
+      ON contribution_payments(user_id, declared_at DESC);
+
+    -- Lunile acoperite de fiecare plată (una pe lună). Rândurile unei plăți
+    -- respinse/anulate se șterg, ca luna să redevină neplătită; plata rămâne
+    -- în istoric. UNIQUE: o lună nu poate fi acoperită de două ori.
+    CREATE TABLE IF NOT EXISTS contribution_months (
+      payment_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      month TEXT NOT NULL,
+      amount INTEGER NOT NULL,
+      UNIQUE (user_id, month)
+    );
+    CREATE INDEX IF NOT EXISTS idx_contribution_months_month ON contribution_months(month);
+
+    -- Ținta lunară: valabilă de la luna din rând înainte, până la următorul rând.
+    -- Fără niciun rând, ținta e DEFAULT_TARGET (250 lei).
+    CREATE TABLE IF NOT EXISTS contribution_targets (
+      month TEXT PRIMARY KEY,
+      target INTEGER NOT NULL
     );
   `);
 
@@ -1157,6 +1197,20 @@ function applyCleanups(database: DatabaseSync): void {
       }
       console.log(`[db] Migrare v39: detaliul subtitrării separat pe ${split} episoade`);
       database.exec("PRAGMA user_version = 39");
+    }
+
+    if (version < 40) {
+      // v40: utilizatorii scutiți de contribuția lunară (tabelele
+      // contribution_* se creează direct în schemă, cu IF NOT EXISTS).
+      try {
+        database.exec(
+          "ALTER TABLE users ADD COLUMN contribution_exempt INTEGER NOT NULL DEFAULT 0",
+        );
+        console.log("[db] Migrare v40: adăugat users.contribution_exempt");
+      } catch {
+        // coloana există deja (bază nouă, creată direct cu schema curentă)
+      }
+      database.exec("PRAGMA user_version = 40");
     }
   }
 }

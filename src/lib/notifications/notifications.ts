@@ -59,6 +59,10 @@ export const PUSH_TITLES: Record<ActivityType, string> = {
   metadata_refresh: "",
   // Verificarea zilnică (update-check.ts); pagina vine din options.url.
   update_available: "🆕 Actualizare disponibilă",
+  // Push doar la declarația „Am plătit" (de confirmat); confirmarea,
+  // respingerea și plățile adăugate de admin trec cu skipPush — vezi
+  // contributions.functions.ts.
+  contribution: "💰 Contribuție declarată",
 };
 
 // Pagina spre care duce apăsarea notificării — implicit per tip; se poate
@@ -80,6 +84,7 @@ export const PUSH_URLS: Record<ActivityType, string> = {
   account_request: "/users",
   metadata_refresh: "/tehnic",
   update_available: "/sistem",
+  contribution: "/contributii",
 };
 
 // --- Server (activity-log.ts — start/stop) ----------------------------------

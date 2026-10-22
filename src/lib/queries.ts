@@ -28,6 +28,10 @@ import { getSubtitleRetryStatus } from "./filelist/download.functions";
 import { listUsers } from "./auth/users.functions";
 import { listPushSubscriptions } from "./notifications/push.functions";
 import {
+  getMyContribution,
+  getContributionsOverview,
+} from "./contributions/contributions.functions";
+import {
   getDiscoverTitles,
   type DiscoverMediaType,
   type DiscoverSort,
@@ -335,6 +339,22 @@ export const usersQuery = queryOptions({
   queryKey: ["users"],
   queryFn: () => listUsers(),
 });
+
+// Contribuția lunară: cardul de pe Acasă (oricine e logat) și pagina de
+// administrare. Invalidate împreună după orice acțiune, cu prefixul
+// ["contributions"].
+export const myContributionQuery = queryOptions({
+  queryKey: ["contributions", "mine"],
+  queryFn: () => getMyContribution(),
+  staleTime: 30_000,
+});
+
+export const contributionsOverviewQuery = (month: string | null) =>
+  queryOptions({
+    queryKey: ["contributions", "overview", month],
+    queryFn: () => getContributionsOverview({ data: { month: month ?? undefined } }),
+    ...keepPrev,
+  });
 
 // Abonamentele push, pentru Tehnic (admin).
 export const pushSubscriptionsQuery = queryOptions({
