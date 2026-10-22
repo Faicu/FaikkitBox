@@ -99,24 +99,6 @@ function viewsSentence(a: NonNullable<UserContribution["activity"]>) {
   return `Ai văzut ${viewsPhrase(a.counts)} în ultimele ${pluralRo(a.windowDays, "zi", "zile")}.`;
 }
 
-// Pentru cei sub prag: de ce contribuția lor e opțională. Fără cont Plex
-// asociat (sau cu Plex căzut) nu știm ce au văzut — doar pragul.
-function optionalSentence(data: UserContribution): string {
-  const s = data.activitySettings;
-  const threshold = [
-    s.minMovies > 0 ? pluralRo(s.minMovies, "film", "filme") : null,
-    s.minEpisodes > 0 ? pluralRo(s.minEpisodes, "episod", "episoade") : null,
-  ]
-    .filter(Boolean)
-    .join(" sau ");
-  const seen = data.activity ? ` Tu ai văzut ${viewsPhrase(data.activity.counts)}.` : "";
-  return (
-    `Pragul de activitate e de ${threshold} în ultimele ${pluralRo(s.windowDays, "zi", "zile")}.${seen} ` +
-    `Nu l-ai atins, așa că pentru tine contribuția e strict opțională. Dacă vrei totuși să ` +
-    `susții serverul, orice sumă de la ${MIN_PER_MONTH} lei ajută.`
-  );
-}
-
 export function ContributionProgressBar({ progress }: { progress: ContributionProgress }) {
   const { target, confirmed, pending } = progress;
   const pct = (v: number) => (target > 0 ? Math.min(100, (v / target) * 100) : 0);
@@ -238,7 +220,11 @@ function UserCard({ data }: { data: UserContribution | null }) {
             {data.progress.target} lei pe lună.
           </p>
           <p className="mt-2 rounded-xl bg-sky-500/10 px-3 py-2 text-xs leading-relaxed text-sky-300">
-            {optionalSentence(data)}
+            Nu prea te-ai uitat pe Plex în ultima vreme.
+            <br />
+            Contribuția ta e strict opțională.
+            <br />
+            Dacă vrei totuși să susții serverul, orice sumă de la {MIN_PER_MONTH} lei ajută.
           </p>
         </>
       ) : (
