@@ -28,7 +28,10 @@ export interface PlexSession {
   videoDecision?: string;
   audioDecision?: string;
   bitrateKbps?: number;
+  // Posterul (la episoade, al serialului) și fundalul, ca căi Plex — trec prin
+  // proxy-ul /api/plex-thumb.
   thumbPath?: string;
+  artPath?: string;
   // Detalii de calitate/redare (vezi mapPlexSessions)
   playbackMode?: "direct" | "direct-stream" | "transcode";
   sourceQuality?: string;
@@ -527,7 +530,8 @@ function mapPlexSessions(sessionsMd: PlexMetadataItem[]): PlexSession[] {
       videoDecision,
       audioDecision,
       bitrateKbps: Number(media?.bitrate ?? 0) || undefined,
-      thumbPath: s.thumb,
+      thumbPath: s.grandparentThumb ?? s.thumb,
+      artPath: s.grandparentArt ?? s.art,
       playbackMode,
       sourceQuality: sourceQuality ?? undefined,
       streamQuality: streamQuality ?? undefined,

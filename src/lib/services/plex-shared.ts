@@ -81,6 +81,11 @@ export interface PlexMetadataItem {
   duration?: number;
   viewOffset?: number;
   thumb?: string;
+  // Posterul serialului la episoade (`thumb` e acolo cadrul episodului, lat) și
+  // imaginile de fundal — folosite doar de cardul „în redare” de pe Acasă.
+  grandparentThumb?: string;
+  art?: string;
+  grandparentArt?: string;
   accountID?: number;
   viewedAt?: number;
   summary?: string;

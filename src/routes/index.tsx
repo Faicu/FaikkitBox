@@ -1,22 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import {
-  PlayCircle,
-  Users,
-  Tv,
-  Film,
-  Plus,
-  LogIn,
-  UserPlus,
-  Music,
-  Image as ImageIcon,
-  Sparkles,
-  Eye,
-} from "lucide-react";
+import { Plus, LogIn, UserPlus, Sparkles } from "lucide-react";
 import { useState } from "react";
 
 import { PageShell } from "@/components/PageShell";
-import { ServicePill } from "@/components/ServicePill";
 import {
   Drawer,
   DrawerContent,
@@ -27,16 +14,9 @@ import {
 import { AddMediaWizard } from "@/components/principala/AddMediaWizard";
 import { FilelistSection } from "@/components/filelist/FilelistSection";
 import { SupportWidget } from "@/components/principala/SupportWidget";
+import { PlexWidget } from "@/components/principala/PlexWidget";
+import { RecentWatchesWidget } from "@/components/principala/RecentWatchesWidget";
 import { plexQuery, plexSessionsQuery, adminStatusQuery, recentWatchesQuery } from "@/lib/queries";
-import { formatDateTime } from "@/components/tehnic/utils";
-import { useLiveViewOffsets } from "@/components/principala/useLiveViewOffsets";
-import { useFlashOnChange } from "@/hooks/use-flash-on-change";
-import type { PlexSession } from "@/lib/services/plex";
-
-// Câte vizionări arată cardul de pe Acasă înainte de "Arată mai multe".
-// Serverul trimite tot ce e în fereastra de 30 de zile, deci tăierea e aici,
-// unde contează — pe lungimea paginii principale.
-const RECENT_WATCHES_COLLAPSED = 8;
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -64,24 +44,8 @@ function Overview() {
   const recentWatchItems = recentWatches.data?.status === "ok" ? recentWatches.data.items : [];
   const sessions =
     plexSessions.data?.status === "ok" ? plexSessions.data.sessions : plex.data?.sessions;
-  // Ceasul de redare avansează local în fiecare secundă — Plex raportează
-  // progresul în trepte de ~10s, deci fără asta cifra "sărea". Vezi hook-ul.
-  const liveOffsets = useLiveViewOffsets(sessions);
   const [plexDrawer, setPlexDrawer] = useState<"views" | "users" | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
-  // Cardul arată primele câteva vizionări; restul, la cerere. Serverul trimite
-  // tot ce e în fereastra de 30 de zile.
-  const [allWatchesShown, setAllWatchesShown] = useState(false);
-  // Miniaturile de trailer vin din Plex prin proxy; dacă item-ul a dispărut
-  // între timp, imaginea ar rămâne o casetă goală — ținem minte ce n-a mers și
-  // cădem pe iconiță.
-  const [brokenThumbs, setBrokenThumbs] = useState<Set<string>>(new Set());
-
-  const stop = (fn: () => void) => (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    fn();
-  };
 
   return (
     <PageShell title="FaikkitBox" subtitle="Panou de Administrare Plex">
@@ -134,277 +98,17 @@ function Overview() {
       )}
 
       {isAuthenticated && (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <ServiceRow
-            className="sm:col-span-2"
-            title="Plex"
-            icon={<PlayCircle className="h-5 w-5" />}
-            accent="text-amber-400"
-            status={plex.isLoading ? "loading" : (plex.data?.status ?? "error")}
-            error={plex.data?.error}
-          >
-            {plex.isLoading && <PlexSkeleton />}
-            {plex.data?.status === "ok" && (
-              <div className="space-y-2 text-sm">
-                {(sessions?.length ?? 0) > 0 ? (
-                  <div className="space-y-1.5 stagger-in">
-                    {sessions!.map((s, i) => {
-                      const offsetMs = liveOffsets[i] ?? s.viewOffsetMs;
-                      const pct =
-                        s.durationMs > 0 ? Math.round((offsetMs / s.durationMs) * 100) : 0;
-                      const fmt = (ms: number) => {
-                        const t = Math.floor(ms / 1000);
-                        const h = Math.floor(t / 3600);
-                        const m = Math.floor((t % 3600) / 60);
-                        const sec = t % 60;
-                        return h > 0
-                          ? `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`
-                          : `${m}:${String(sec).padStart(2, "0")}`;
-                      };
-                      const isEpisode = !!s.grandparentTitle;
-                      return (
-                        <div key={i} className="rounded-lg bg-muted/40 px-2.5 py-2 space-y-1.5">
-                          <div className="flex items-start gap-2">
-                            {s.thumbPath && (
-                              <img
-                                src={`/api/plex-thumb?path=${encodeURIComponent(s.thumbPath)}`}
-                                className="h-14 w-10 rounded object-cover shrink-0 bg-muted"
-                                loading="lazy"
-                                alt=""
-                              />
-                            )}
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-1.5">
-                                <div className="truncate text-sm font-semibold leading-tight">
-                                  {isEpisode ? s.grandparentTitle : s.title}
-                                </div>
-                                {s.playerState === "paused" ? (
-                                  <span className="shrink-0 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-400">
-                                    ⏸ Pauză
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex shrink-0 items-center gap-1 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400">
-                                    <span className="live-dot" aria-hidden /> Redare
-                                  </span>
-                                )}
-                              </div>
-                              {isEpisode && (
-                                <div className="truncate text-[11px] text-muted-foreground">
-                                  {s.title}
-                                </div>
-                              )}
-                              <div className="text-[11px] text-muted-foreground">
-                                {s.user} · {s.player}
-                              </div>
-                              <div className="mt-1 flex flex-wrap items-center gap-1">
-                                <span
-                                  className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                                    s.playbackMode === "transcode"
-                                      ? "bg-orange-500/15 text-orange-400"
-                                      : s.playbackMode === "direct-stream"
-                                        ? "bg-sky-500/15 text-sky-400"
-                                        : "bg-emerald-500/15 text-emerald-400"
-                                  }`}
-                                >
-                                  {playbackLabel(s)}
-                                </span>
-                                {transcodeReason(s) && (
-                                  <span className="rounded bg-orange-500/15 px-1.5 py-0.5 text-[10px] font-medium text-orange-400">
-                                    {transcodeReason(s)}
-                                  </span>
-                                )}
-                                {s.audioTranscode && (
-                                  <span className="rounded bg-orange-500/15 px-1.5 py-0.5 text-[10px] font-medium text-orange-400">
-                                    {audioTranscodeLabel(s.audioTranscode)}
-                                  </span>
-                                )}
-                                {codecLabel(s) && (
-                                  <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                                    {codecLabel(s)}
-                                  </span>
-                                )}
-                                {s.burnedSubtitle && !burnIsReason(s) && (
-                                  <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                                    Subtitrare arsă
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                          {s.durationMs > 0 && (
-                            <div className="space-y-0.5">
-                              <div className="h-1 w-full rounded-full bg-muted overflow-hidden">
-                                {/* Gradientul curge doar cât rulează — la pauză bara
-                                    rămâne plată, ca să se vadă dintr-o privire. */}
-                                <div
-                                  className={`h-full rounded-full transition-[width] duration-1000 ease-linear ${
-                                    s.playerState === "paused"
-                                      ? "bg-amber-400/70"
-                                      : "progress-flow progress-flow-amber"
-                                  }`}
-                                  style={{ width: `${pct}%` }}
-                                />
-                              </div>
-                              <div className="flex justify-between text-[10px] text-muted-foreground">
-                                <span>{fmt(offsetMs)}</span>
-                                <span>{pct}%</span>
-                                <span>{fmt(s.durationMs)}</span>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center gap-1 rounded-lg bg-muted/40 py-4 text-center">
-                    <Users className="h-5 w-5 text-muted-foreground/60" />
-                    <div className="text-sm font-semibold">Nimeni nu se uită acum</div>
-                  </div>
-                )}
-                <div className="grid grid-cols-2 gap-1.5">
-                  <button
-                    type="button"
-                    onClick={stop(() => setPlexDrawer("views"))}
-                    className="rounded-lg bg-muted/40 px-2.5 py-2.5 text-center transition-all duration-200 hover:bg-muted/60 active:scale-[0.97] active:bg-muted"
-                  >
-                    <div className="flex flex-col items-center">
-                      <FlashNumber className="text-2xl font-bold tabular-nums">
-                        {plex.data.episodesToday ?? 0}
-                      </FlashNumber>
-                      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                        Vizionate azi
-                      </div>
-                    </div>
-                    {(plex.data.todayViews?.length ?? 0) > 0 && (
-                      <div className="mt-1.5 space-y-0.5 border-t border-border/60 pt-1.5 text-left">
-                        {plex.data.todayViews!.slice(0, 5).map((v, i) => (
-                          <div key={i} className="truncate text-[10px] text-muted-foreground">
-                            {v.show ?? v.title}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={stop(() => setPlexDrawer("users"))}
-                    className="rounded-lg bg-muted/40 px-2.5 py-2.5 text-center transition-all duration-200 hover:bg-muted/60 active:scale-[0.97] active:bg-muted"
-                  >
-                    <div className="flex flex-col items-center">
-                      <FlashNumber className="text-2xl font-bold tabular-nums">
-                        {plex.data.activeUsersToday ?? 0}
-                      </FlashNumber>
-                      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                        Utilizatori activi azi
-                      </div>
-                    </div>
-                    {(plex.data.activeUsersTodayList?.length ?? 0) > 0 && (
-                      <div className="mt-1.5 space-y-0.5 border-t border-border/60 pt-1.5 text-left">
-                        {plex.data.activeUsersTodayList!.slice(0, 5).map((u, i) => (
-                          <div
-                            key={i}
-                            className="flex items-center justify-between gap-1 text-[10px] text-muted-foreground"
-                          >
-                            <span className="truncate">{u.user}</span>
-                            <span className="shrink-0 tabular-nums">{u.count}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </button>
-                </div>
-
-                {plex.data.libraries.length > 0 && (
-                  <div>
-                    <div className="mb-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-                      Biblioteci
-                    </div>
-                    <div className="flex flex-wrap justify-center gap-1.5 stagger-in">
-                      {plex.data.libraries.map((lib) => (
-                        <div
-                          key={lib.key}
-                          className="flex w-[110px] flex-col items-center gap-1 rounded-lg bg-muted/40 py-2.5 text-center"
-                        >
-                          {libIcon(lib.type)}
-                          <div className="text-lg font-bold tabular-nums">{lib.count ?? "—"}</div>
-                          <div className="truncate text-[10px] leading-tight text-muted-foreground">
-                            {lib.title}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </ServiceRow>
-        </div>
+        <PlexWidget
+          data={plex.data}
+          isLoading={plex.isLoading}
+          sessions={sessions}
+          onOpenViews={() => setPlexDrawer("views")}
+          onOpenUsers={() => setPlexDrawer("users")}
+        />
       )}
 
       {isAuthenticated && recentWatchItems.length > 0 && (
-        <div className="mt-4 rounded-2xl glass-card p-4">
-          <div className="flex items-center gap-2.5">
-            <span className="text-emerald-400">
-              <Eye className="h-5 w-5" />
-            </span>
-            <span className="font-semibold">Vizionări recente</span>
-          </div>
-          <div className="mt-3 space-y-1.5 stagger-in">
-            {(allWatchesShown
-              ? recentWatchItems
-              : recentWatchItems.slice(0, RECENT_WATCHES_COLLAPSED)
-            ).map((it, i) => (
-              <div
-                key={`${it.ratingKey}-${it.username}-${i}`}
-                className="flex items-center gap-2.5 rounded-lg bg-muted/40 px-2.5 py-2"
-              >
-                {it.thumbUrl && !brokenThumbs.has(it.thumbUrl) ? (
-                  <img
-                    src={it.thumbUrl}
-                    className="h-10 w-10 shrink-0 rounded object-cover bg-muted"
-                    loading="lazy"
-                    alt=""
-                    onError={() => setBrokenThumbs((prev) => new Set(prev).add(it.thumbUrl!))}
-                  />
-                ) : (
-                  <Film className="h-4 w-4 shrink-0 text-amber-400" />
-                )}
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-semibold leading-snug line-clamp-2">
-                    {it.show ?? it.title}
-                  </div>
-                  {it.season != null && it.episode != null && (
-                    <div className="text-[11px] text-muted-foreground">
-                      S{String(it.season).padStart(2, "0")}E{String(it.episode).padStart(2, "0")}
-                      {it.episodeEnd != null ? `-E${String(it.episodeEnd).padStart(2, "0")}` : ""}
-                    </div>
-                  )}
-                  <div className="truncate text-[11px] text-muted-foreground">
-                    {it.username} · {formatDateTime(new Date(it.viewedAt * 1000).toISOString())}
-                    {!it.completed && it.progressMinutes != null && it.durationMinutes != null && (
-                      <>
-                        {" "}
-                        · {it.progressMinutes}/{it.durationMinutes} min
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-          {recentWatchItems.length > RECENT_WATCHES_COLLAPSED && (
-            <button
-              type="button"
-              onClick={() => setAllWatchesShown((v) => !v)}
-              className="mt-2 w-full rounded-lg py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/40"
-            >
-              {allWatchesShown
-                ? "Arată mai puține"
-                : `Arată mai multe (${recentWatchItems.length - RECENT_WATCHES_COLLAPSED})`}
-            </button>
-          )}
-        </div>
+        <RecentWatchesWidget items={recentWatchItems} />
       )}
 
       <Drawer open={plexDrawer === "views"} onOpenChange={(o) => !o && setPlexDrawer(null)}>
@@ -482,158 +186,4 @@ function Overview() {
       {isAuthenticated && <AddMediaWizard open={wizardOpen} onClose={() => setWizardOpen(false)} />}
     </PageShell>
   );
-}
-
-// Cifră care face flash când se schimbă — aceeași convenție ca la StatCard.
-function FlashNumber({ children, className }: { children: number; className?: string }) {
-  const flash = useFlashOnChange(children);
-  return <div className={`${className ?? ""} ${flash ? "tick-flash" : ""}`}>{children}</div>;
-}
-
-// Forma cardului Plex cât vine primul răspuns: un rând de redare, cele două
-// casete de azi, bibliotecile — ca să nu sară layout-ul la sosirea datelor.
-function PlexSkeleton() {
-  return (
-    <div className="space-y-2">
-      <div className="h-[4.5rem] skeleton-sweep rounded-lg" />
-      <div className="grid grid-cols-2 gap-1.5">
-        <div className="h-16 skeleton-sweep rounded-lg" />
-        <div className="h-16 skeleton-sweep rounded-lg" />
-      </div>
-      <div className="flex justify-center gap-1.5">
-        {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="h-[4.5rem] w-[110px] skeleton-sweep rounded-lg" />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function ServiceRow({
-  title,
-  icon,
-  accent,
-  status,
-  error,
-  children,
-  className,
-}: {
-  title: string;
-  icon: React.ReactNode;
-  accent: string;
-  status: "ok" | "error" | "loading";
-  error?: string;
-  children?: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <div className={`rounded-2xl glass-card p-4 ${className ?? ""}`}>
-      <div className="flex items-center gap-2.5">
-        <span className={`${accent}`}>{icon}</span>
-        <span className="font-semibold">{title}</span>
-        <ServicePill status={status} />
-      </div>
-      {status === "error" && error && (
-        <p className="mt-2 text-xs text-red-400 break-words">{error}</p>
-      )}
-      {children && <div className="mt-3">{children}</div>}
-    </div>
-  );
-}
-
-function libIcon(type: string) {
-  if (type === "movie") return <Film className="h-4 w-4 shrink-0 text-amber-400" />;
-  if (type === "show") return <Tv className="h-4 w-4 shrink-0 text-blue-400" />;
-  if (type === "artist") return <Music className="h-4 w-4 shrink-0 text-purple-400" />;
-  if (type === "photo") return <ImageIcon className="h-4 w-4 shrink-0 text-emerald-400" />;
-  return <Film className="h-4 w-4 shrink-0 text-muted-foreground" />;
-}
-
-// „4K → 1080p" când Plex reîncodează, altfel doar calitatea redată.
-function qualityLabel(s: PlexSession): string | null {
-  const stream = s.streamQuality;
-  if (!stream) return s.sourceQuality ?? null;
-  if (s.sourceQuality && s.sourceQuality !== stream) return `${s.sourceQuality} → ${stream}`;
-  return stream;
-}
-
-// Eticheta principală: rezoluția livrată + modul de redare, ca să se vadă
-// dintr-o privire că un „1080p" e totuși transcodat („1080p · Transcodare HW").
-function playbackLabel(s: PlexSession): string {
-  const mode =
-    s.playbackMode === "transcode"
-      ? `Transcodare${s.hwTranscode ? " HW" : ""}`
-      : s.playbackMode === "direct-stream"
-        ? "Direct Stream"
-        : "Direct Play";
-  const quality = qualityLabel(s);
-  return quality ? `${quality} · ${mode}` : mode;
-}
-
-function videoCodecChanged(s: PlexSession): boolean {
-  return (
-    !!s.sourceVideoCodec &&
-    !!s.videoCodec &&
-    prettyCodec(s.sourceVideoCodec) !== prettyCodec(s.videoCodec)
-  );
-}
-
-// Subtitrarea arsă e singura cauză evidentă când video-ul se re-encodează fără
-// să-și schimbe nici rezoluția, nici codecul — Plex n-o poate desena altfel.
-function burnIsReason(s: PlexSession): boolean {
-  if (s.playbackMode !== "transcode" || !s.burnedSubtitle || videoCodecChanged(s)) return false;
-  return !s.sourceQuality || !s.streamQuality || s.sourceQuality === s.streamQuality;
-}
-
-// Motivul transcodării video, doar când se poate deduce sigur.
-function transcodeReason(s: PlexSession): string | null {
-  if (s.playbackMode !== "transcode") return null;
-  if (videoCodecChanged(s)) return `${prettyCodec(s.sourceVideoCodec!)} → ${prettyCodec(s.videoCodec!)}`;
-  if (burnIsReason(s)) return "din cauza subtitrării arse";
-  return null;
-}
-
-// „Audio TrueHD → E-AC3"; doar „Audio convertit" dacă Plex nu dă codecurile.
-function audioTranscodeLabel(a: NonNullable<PlexSession["audioTranscode"]>): string {
-  if (a.from && a.to) return `Audio ${prettyCodec(a.from)} → ${prettyCodec(a.to)}`;
-  return "Audio convertit";
-}
-
-function codecLabel(s: PlexSession): string | null {
-  const parts: string[] = [];
-  if (s.videoCodec) parts.push(prettyCodec(s.videoCodec));
-  if (s.audioCodec) {
-    const ch = channelsLabel(s.audioChannels);
-    parts.push(ch ? `${prettyCodec(s.audioCodec)} ${ch}` : prettyCodec(s.audioCodec));
-  }
-  if (s.bitrateKbps) parts.push(`${(s.bitrateKbps / 1000).toFixed(1)} Mbps`);
-  return parts.length > 0 ? parts.join(" · ") : null;
-}
-
-function prettyCodec(codec: string): string {
-  const c = codec.toLowerCase();
-  const known: Record<string, string> = {
-    h264: "H.264",
-    hevc: "HEVC",
-    h265: "HEVC",
-    av1: "AV1",
-    vp9: "VP9",
-    mpeg4: "MPEG-4",
-    aac: "AAC",
-    eac3: "E-AC3",
-    ac3: "AC3",
-    dca: "DTS",
-    truehd: "TrueHD",
-    flac: "FLAC",
-    opus: "Opus",
-    mp3: "MP3",
-  };
-  return known[c] ?? codec.toUpperCase();
-}
-
-function channelsLabel(channels: number | undefined): string | null {
-  if (!channels) return null;
-  if (channels === 1) return "Mono";
-  if (channels === 2) return "Stereo";
-  return `${channels - 1}.1`;
 }

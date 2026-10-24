@@ -145,32 +145,68 @@
  * — exact cauza overlay-urilor decupate documentate în BibliotecaList.tsx.
  * Cu `none` nu rămâne niciun containing block după ce animația s-a terminat. */
 @keyframes fade-slide-up {
-  from { opacity: 0; transform: translate3d(0, 12px, 0); }
-  to   { opacity: 1; transform: none; }
+  from {
+    opacity: 0;
+    transform: translate3d(0, 12px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 @keyframes pulse-glow {
-  0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--primary) 50%, transparent); }
-  50%      { box-shadow: 0 0 0 6px color-mix(in oklab, var(--primary) 0%, transparent); }
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--primary) 50%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 6px color-mix(in oklab, var(--primary) 0%, transparent);
+  }
 }
 @keyframes shimmer {
-  0%   { transform: translateX(-120%); }
-  100% { transform: translateX(220%); }
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(220%);
+  }
 }
 @keyframes data-tick {
-  0%   { color: color-mix(in oklab, var(--primary) 90%, white); text-shadow: 0 0 12px color-mix(in oklab, var(--primary) 70%, transparent); }
-  100% { color: inherit; text-shadow: none; }
+  0% {
+    color: color-mix(in oklab, var(--primary) 90%, white);
+    text-shadow: 0 0 12px color-mix(in oklab, var(--primary) 70%, transparent);
+  }
+  100% {
+    color: inherit;
+    text-shadow: none;
+  }
 }
 @keyframes orb-drift {
-  0%   { transform: translate3d(-10%, -6%, 0) scale(1); }
-  100% { transform: translate3d(10%, 6%, 0) scale(1.15); }
+  0% {
+    transform: translate3d(-10%, -6%, 0) scale(1);
+  }
+  100% {
+    transform: translate3d(10%, 6%, 0) scale(1.15);
+  }
 }
 @keyframes border-flow {
-  0%   { background-position: 0% 50%; }
-  100% { background-position: 200% 50%; }
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
 }
 @keyframes live-blink {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50%      { opacity: 0.55; transform: scale(1.35); }
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.55;
+    transform: scale(1.35);
+  }
 }
 
 /* Live dot — pulsing status indicator */
@@ -213,9 +249,10 @@
   box-shadow:
     inset 0 1px 0 color-mix(in oklab, white 6%, transparent),
     0 8px 32px -12px color-mix(in oklab, black 40%, transparent);
-  transition: transform 300ms cubic-bezier(0.22, 1, 0.36, 1),
-              border-color 300ms ease,
-              box-shadow 300ms ease;
+  transition:
+    transform 300ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 300ms ease,
+    box-shadow 300ms ease;
 }
 @utility glass-card-hover {
   &:hover {
@@ -255,9 +292,9 @@
     padding: 1px;
     background: linear-gradient(
       90deg,
-      color-mix(in oklab, var(--primary) 60%, transparent),
-      oklch(0.72 0.19 155 / 0.7),
-      color-mix(in oklab, var(--primary) 60%, transparent)
+      var(--border-flow-a, color-mix(in oklab, var(--primary) 60%, transparent)),
+      var(--border-flow-b, oklch(0.72 0.19 155 / 0.7)),
+      var(--border-flow-a, color-mix(in oklab, var(--primary) 60%, transparent))
     );
     background-size: 200% 100%;
     animation: border-flow 3s linear infinite;
@@ -265,9 +302,16 @@
       linear-gradient(#000 0 0) content-box,
       linear-gradient(#000 0 0);
     -webkit-mask-composite: xor;
-            mask-composite: exclude;
+    mask-composite: exclude;
     pointer-events: none;
   }
+}
+
+/* Varianta chihlimbar a bordurii, pentru cardul Plex cât rulează ceva.
+ * Doar culorile — variabilele ajung în ::before-ul lui `border-flow` prin moștenire. */
+@utility border-flow-amber {
+  --border-flow-a: oklch(0.8 0.16 75 / 0.75);
+  --border-flow-b: oklch(0.88 0.14 95 / 0.35);
 }
 
 /* Ambient blurred orbs behind content */
@@ -291,7 +335,11 @@
   &::before {
     top: -12rem;
     left: -10rem;
-    background: radial-gradient(circle, color-mix(in oklab, var(--primary) 55%, transparent), transparent 65%);
+    background: radial-gradient(
+      circle,
+      color-mix(in oklab, var(--primary) 55%, transparent),
+      transparent 65%
+    );
     animation: orb-drift 22s ease-in-out infinite alternate;
   }
   &::after {
@@ -315,15 +363,33 @@
     opacity: 0;
     animation: fade-slide-up 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
   }
-  & > *:nth-child(1)  { animation-delay: 40ms; }
-  & > *:nth-child(2)  { animation-delay: 90ms; }
-  & > *:nth-child(3)  { animation-delay: 140ms; }
-  & > *:nth-child(4)  { animation-delay: 190ms; }
-  & > *:nth-child(5)  { animation-delay: 240ms; }
-  & > *:nth-child(6)  { animation-delay: 290ms; }
-  & > *:nth-child(7)  { animation-delay: 340ms; }
-  & > *:nth-child(8)  { animation-delay: 390ms; }
-  & > *:nth-child(n+9){ animation-delay: 440ms; }
+  & > *:nth-child(1) {
+    animation-delay: 40ms;
+  }
+  & > *:nth-child(2) {
+    animation-delay: 90ms;
+  }
+  & > *:nth-child(3) {
+    animation-delay: 140ms;
+  }
+  & > *:nth-child(4) {
+    animation-delay: 190ms;
+  }
+  & > *:nth-child(5) {
+    animation-delay: 240ms;
+  }
+  & > *:nth-child(6) {
+    animation-delay: 290ms;
+  }
+  & > *:nth-child(7) {
+    animation-delay: 340ms;
+  }
+  & > *:nth-child(8) {
+    animation-delay: 390ms;
+  }
+  & > *:nth-child(n + 9) {
+    animation-delay: 440ms;
+  }
 }
 
 /* Varianta scurtă, pentru liste lungi (Biblioteca): aceeași cascadă, dar
@@ -334,14 +400,30 @@
     opacity: 0;
     animation: fade-slide-up 0.2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
   }
-  & > *:nth-child(2)  { animation-delay: 15ms; }
-  & > *:nth-child(3)  { animation-delay: 30ms; }
-  & > *:nth-child(4)  { animation-delay: 45ms; }
-  & > *:nth-child(5)  { animation-delay: 60ms; }
-  & > *:nth-child(6)  { animation-delay: 75ms; }
-  & > *:nth-child(7)  { animation-delay: 90ms; }
-  & > *:nth-child(8)  { animation-delay: 105ms; }
-  & > *:nth-child(n+9){ animation-delay: 120ms; }
+  & > *:nth-child(2) {
+    animation-delay: 15ms;
+  }
+  & > *:nth-child(3) {
+    animation-delay: 30ms;
+  }
+  & > *:nth-child(4) {
+    animation-delay: 45ms;
+  }
+  & > *:nth-child(5) {
+    animation-delay: 60ms;
+  }
+  & > *:nth-child(6) {
+    animation-delay: 75ms;
+  }
+  & > *:nth-child(7) {
+    animation-delay: 90ms;
+  }
+  & > *:nth-child(8) {
+    animation-delay: 105ms;
+  }
+  & > *:nth-child(n + 9) {
+    animation-delay: 120ms;
+  }
 }
 
 /* Micro flash used when values update */
@@ -359,7 +441,7 @@
   );
   background-size: 200% 100%;
   -webkit-background-clip: text;
-          background-clip: text;
+  background-clip: text;
   color: transparent;
   animation: border-flow 6s linear infinite;
 }
@@ -374,13 +456,19 @@
     transform 160ms cubic-bezier(0.22, 1, 0.36, 1),
     border-color 300ms ease,
     box-shadow 200ms ease;
-  &:active { transform: scale(0.97); }
+  &:active {
+    transform: scale(0.97);
+  }
 }
 
 /* ---- Postere: ridicare + glow la hover, zoom lent pe imagine ---- */
 @keyframes poster-sheen {
-  0%   { transform: translateX(-140%) skewX(-18deg); }
-  100% { transform: translateX(260%) skewX(-18deg); }
+  0% {
+    transform: translateX(-140%) skewX(-18deg);
+  }
+  100% {
+    transform: translateX(260%) skewX(-18deg);
+  }
 }
 
 @utility poster-tilt {
@@ -415,18 +503,26 @@
       0 18px 40px -14px color-mix(in oklab, var(--primary) 45%, transparent),
       0 0 0 1px color-mix(in oklab, var(--primary) 35%, transparent);
   }
-  &:hover img { transform: scale(1.07); }
+  &:hover img {
+    transform: scale(1.07);
+  }
   &:hover::after {
     opacity: 1;
     animation: poster-sheen 900ms ease-out;
   }
-  &:active { transform: translateY(-1px) scale(0.99); }
+  &:active {
+    transform: translateY(-1px) scale(0.99);
+  }
 }
 
 /* ---- Bare de progres cu gradient care curge ---- */
 @keyframes progress-flow {
-  0%   { background-position: 0% 50%; }
-  100% { background-position: 200% 50%; }
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
 }
 
 /* Culorile vin din variabile ca să poată fi retematizate de modificatorii
@@ -460,8 +556,13 @@
 
 /* Halo verde, pereche pentru pulse-glow, folosit pe cardurile în seeding */
 @keyframes pulse-glow-up {
-  0%, 100% { box-shadow: 0 0 0 0 oklch(0.72 0.19 155 / 0.45); }
-  50%      { box-shadow: 0 0 0 6px oklch(0.72 0.19 155 / 0); }
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 oklch(0.72 0.19 155 / 0.45);
+  }
+  50% {
+    box-shadow: 0 0 0 6px oklch(0.72 0.19 155 / 0);
+  }
 }
 /* Vezi nota de la `pulse-glow` — și aici haloul e pe ::after, din același motiv. */
 @utility pulse-glow-up {
@@ -474,6 +575,64 @@
     pointer-events: none;
     animation: pulse-glow-up 2.8s ease-in-out infinite;
   }
+}
+
+/* Halo chihlimbar — pulse-glow în culorile Plex, tot pe ::after. */
+@keyframes pulse-glow-amber {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 oklch(0.8 0.16 75 / 0.5);
+  }
+  50% {
+    box-shadow: 0 0 0 7px oklch(0.8 0.16 75 / 0);
+  }
+}
+@utility pulse-glow-amber {
+  position: relative;
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    animation: pulse-glow-amber 2.4s ease-in-out infinite;
+  }
+}
+
+/* Lumină difuză în colțul unui card (widget-urile de pe Acasă). Stă pe
+ * ::after cu z-index -1 în propriul context de stivuire (`isolation`), deci
+ * se desenează peste fundalul cardului dar sub conținut, fără overflow-hidden —
+ * care ar tăia bordura `border-flow` de pe ::before. Culoarea din --glow. */
+@utility corner-glow {
+  position: relative;
+  isolation: isolate;
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    pointer-events: none;
+    background:
+      radial-gradient(120% 90% at 100% 0%, var(--glow, oklch(0.8 0.16 75 / 0.16)), transparent 55%),
+      radial-gradient(
+        80% 60% at 0% 100%,
+        color-mix(in oklab, var(--glow, oklch(0.8 0.16 75 / 0.16)) 45%, transparent),
+        transparent 60%
+      );
+  }
+}
+@utility corner-glow-emerald {
+  --glow: oklch(0.75 0.17 160 / 0.14);
+}
+
+/* Intrare individuală, cu întârzierea dată inline — pentru rânduri care apar
+ * după montare (ex. „Arată mai multe”), unde cascada pe nth-child a lui
+ * `stagger-in` ar porni de la 440 ms. Același avertisment: elementul are
+ * `animation` pe el, deci nu-l pune ca copil direct al unui `stagger-in`. */
+@utility rise-in {
+  opacity: 0;
+  animation: fade-slide-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
 /* ---- Skeleton cu sweep, alternativă la animate-pulse ---- */
@@ -500,8 +659,14 @@
 /* `transform: none` la final — vezi nota de la fade-slide-up. Aici conta dublu:
  * animația e pe <main>, deci ar fi făcut întreaga pagină containing block. */
 @keyframes page-enter {
-  from { opacity: 0; transform: translate3d(0, 10px, 0) scale(0.995); }
-  to   { opacity: 1; transform: none; }
+  from {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0) scale(0.995);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 @utility page-enter {
@@ -509,7 +674,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
+  *,
+  *::before,
+  *::after {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
