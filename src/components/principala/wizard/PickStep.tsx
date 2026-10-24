@@ -5,25 +5,16 @@ import type { Dispatch } from "react";
 import { Download } from "lucide-react";
 
 import { ActionButton, TorrentPicker } from "./WizardControls";
-import { bestOf } from "./selection";
-import type { TorrentChoiceContext } from "./types";
-import type { WizardAction } from "./state";
+import type { PickFlow, WizardAction } from "./state";
 
-export function PickStep({
-  choice,
-  pickedTorrentId,
-  dispatch,
-}: {
-  choice: TorrentChoiceContext;
-  pickedTorrentId: number | null;
-  dispatch: Dispatch<WizardAction>;
-}) {
+export function PickStep({ flow, dispatch }: { flow: PickFlow; dispatch: Dispatch<WizardAction> }) {
+  const { choice, pickedTorrentId } = flow;
   return (
     <div className="animate-in fade-in slide-in-from-right-2 duration-200 space-y-4">
       <div className="text-sm font-semibold">Alege torrentul — {choice.label}</div>
       <TorrentPicker
         matches={choice.candidates}
-        selectedId={pickedTorrentId ?? choice.candidates[0].id}
+        selectedId={pickedTorrentId}
         onSelect={(id) => dispatch({ type: "PICK_TORRENT", torrentId: id })}
       />
       <ActionButton
@@ -31,8 +22,7 @@ export function PickStep({
         icon={<Download className="h-4 w-4" />}
         label="Continuă"
         onClick={() => {
-          const chosen =
-            choice.candidates.find((t) => t.id === pickedTorrentId) ?? bestOf(choice.candidates)!;
+          const chosen = choice.candidates.find((t) => t.id === pickedTorrentId)!;
           // `back` reține alegerea: săgeata de înapoi din confirmare readuce
           // exact lista de candidați, nu un ecran de rezultat care ar pierde
           // selecția.
@@ -45,7 +35,7 @@ export function PickStep({
               episode: choice.episode,
               isSeasonPack: choice.isSeasonPack,
             },
-            back: { step: "pick", choice },
+            back: flow,
           });
         }}
       />

@@ -13,12 +13,9 @@
 // de sus, pentru că NU e locală unui pas: subiectul verificării se încarcă o
 // dată, la "checking", și e citit de "result", "pick" și "confirm" deopotrivă.
 //
-// Atenție la două lucruri care par locale și nu sunt:
-//  - `pickedTorrentId` e folosit ȘI în "result" (selectorul de torrent pentru
-//    filme, admin), ȘI în "pick". Îngropat în varianta "pick", ar strica
-//    alegerea manuală la filme.
-//  - căutarea (query/results) supraviețuiește intenționat întoarcerii la
-//    pasul de căutare — de-asta nu stă în varianta "search".
+// Atenție: căutarea (query/results) pare locală pasului de căutare, dar
+// supraviețuiește intenționat întoarcerii la el — de-asta nu stă în varianta
+// "search".
 
 import type { TmdbSearchResult, TmdbDetails, TmdbSeasonSchema } from "@/lib/tmdb/tmdb.functions";
 import type { TvmazeAirstamp } from "@/lib/tvmaze/tvmaze.functions";
@@ -35,16 +32,19 @@ export interface ConfirmTarget {
   isSeasonPack: boolean;
 }
 
+// Alegerea manuală (admin): lista de candidați și torrentul bifat.
+export type PickFlow = { step: "pick"; choice: TorrentChoiceContext; pickedTorrentId: number };
+
 // Pasul la care se întoarce săgeata de "înapoi" din confirmare. Memorat
-// explicit, nu ghicit: varianta veche deducea destinația din faptul că
-// `torrentChoice` mai era sau nu setat.
-export type BackFlow = { step: "result" } | { step: "pick"; choice: TorrentChoiceContext };
+// explicit, nu ghicit, cu tot cu torrentul bifat — întoarcerea regăsește
+// lista exact cum ai lăsat-o.
+export type BackFlow = { step: "result" } | PickFlow;
 
 export type Flow =
   | { step: "search" }
   | { step: "checking" }
   | { step: "result" }
-  | { step: "pick"; choice: TorrentChoiceContext }
+  | PickFlow
   | { step: "confirm"; target: ConfirmTarget; back: BackFlow }
   | { step: "done"; message: string };
 
@@ -69,7 +69,6 @@ export interface WizardState {
 
   // Traversează pașii. Calitatea revine la 1080p la fiecare titlu nou.
   quality: Quality;
-  pickedTorrentId: number | null;
 
   // În timpul unei descărcări sau al pornirii/opririi urmăririi.
   busy: boolean;
@@ -90,7 +89,6 @@ export const initialWizardState: WizardState = {
   downloadingEntries: [],
   wantedEntry: null,
   quality: "1080p",
-  pickedTorrentId: null,
   busy: false,
 };
 
@@ -134,7 +132,6 @@ const EMPTY_SUBJECT = {
   plexBySeason: new Map<number, PlexSeasonEpisode[]>(),
   downloadingEntries: [],
   wantedEntry: null,
-  pickedTorrentId: null,
 } satisfies Partial<WizardState>;
 
 export function wizardReducer(state: WizardState, action: WizardAction): WizardState {
@@ -184,19 +181,16 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
       };
 
     case "SET_QUALITY":
-      // Alegerea manuală de torrent e legată de o listă de candidați la o
-      // anumită calitate; dacă se schimbă calitatea, lista se schimbă și
-      // alegerea veche nu mai are sens (cade înapoi pe "cel mai bun").
-      return { ...state, quality: action.quality, pickedTorrentId: null };
+      return { ...state, quality: action.quality };
 
     case "PICK_TORRENT":
-      return { ...state, pickedTorrentId: action.torrentId };
+      if (state.flow.step !== "pick") return state;
+      return { ...state, flow: { ...state.flow, pickedTorrentId: action.torrentId } };
 
     case "OPEN_PICK":
       return {
         ...state,
-        pickedTorrentId: action.pickedTorrentId,
-        flow: { step: "pick", choice: action.choice },
+        flow: { step: "pick", choice: action.choice, pickedTorrentId: action.pickedTorrentId },
       };
 
     case "OPEN_CONFIRM":

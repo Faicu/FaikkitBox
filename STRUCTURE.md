@@ -343,7 +343,7 @@ sunt funcții pure testate, iar fiecare pas e componenta lui. Cele 22 de
 | `wizard/SearchStep.tsx`         | Pasul de căutare (input + listă rezultate TMDB).                                                                                                                                                                                                                                                                                                                                                                                             |
 | `wizard/ResultStep.tsx`         | Ecranul de rezultat — cel mai mare pas, și singurul cu derivări proprii (ținute aici, fiindcă niciun alt pas nu le folosește).                                                                                                                                                                                                                                                                                                               |
 | `wizard/SeasonAccordion.tsx`    | Listă sezoane/episoade cu status (`EpisodeAvailability`) — în Plex / se descarcă / disponibil / indisponibil / nelansat.                                                                                                                                                                                                                                                                                                                     |
-| `wizard/PickStep.tsx`           | Alegerea manuală a torrentului — doar pentru admin, doar când există mai mulți candidați la aceeași calitate. Lista e în ordinea clasamentului (`torrent-rank.ts`), cu mărime, dată upload, seederi, leecheri și badge-urile Internal / Freeleech / RO Dubbed.                                                                                                                                                                               |
+| `wizard/PickStep.tsx`           | Alegerea manuală a torrentului (film, episod sau sezon întreg) — doar pentru admin, doar când există mai mulți candidați la aceeași calitate. Lista e în ordinea clasamentului (`torrent-rank.ts`), cu mărime, dată upload, seederi, leecheri și badge-urile Internal / Freeleech / RO Dubbed.                                                                                                                                               |
 | `wizard/ConfirmStep.tsx`        | Confirmarea descărcării unui singur torrent.                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `wizard/WizardControls.tsx`     | Piese mici — `ActionButton`, `TorrentPicker`, `QualitySelector` (1080p implicit pe rândul etichetei, restul sub „Vrei altă calitate?”; schimbarea nu cere nimic de la server), `PosterHero`.                                                                                                                                                                                                                                                 |
 | `wizard/DoneStep.tsx`           | Ecranul final de confirmare.                                                                                                                                                                                                                                                                                                                                                                                                                 |
@@ -460,7 +460,7 @@ funcții numite, fan-in rezolvat prin importurile `@/` și relative, inclusiv
 `import()` dinamic). Tabelul e integral generat — nu are rânduri actualizate
 manual, deci nu poate fi parțial vechi.
 
-**Total: 259 fișiere, ~44 907 linii, ~1 029 funcții**
+**Total: 259 fișiere, ~44 844 linii, ~1 029 funcții**
 
 (numărătoare aproximativă — funcții numite, `const x = (...) =>` și
 `createServerFn`, fără metode de clasă sau funcții anonime inline)
@@ -480,7 +480,7 @@ manual, deci nu poate fi parțial vechi.
 | `src/lib/filelist/`                 |      35 |  6 564 |
 | `src/lib/services/`                 |      17 |  4 603 |
 | `src/lib/tvmaze/`                   |       1 |     46 |
-| `src/components/` (toate)           |      77 | 12 009 |
+| `src/components/` (toate)           |      77 | 11 946 |
 | `src/hooks/`                        |       4 |    289 |
 | `server/plugins/`                   |       7 |    521 |
 | `server/routes/api/`                |       3 |    206 |
@@ -488,20 +488,20 @@ manual, deci nu poate fi parțial vechi.
 
 ### Fișiere-hub (fan-in mare)
 
-| Fișier                                      | Fan-in | Linii |
-| ------------------------------------------- | -----: | ----: |
-| `src/start.ts`                              |     56 |    26 |
-| `src/lib/db.ts`                             |     43 |  1238 |
-| `src/server.ts`                             |     37 |    72 |
-| `src/lib/auth/admin.server.ts`              |     29 |   153 |
-| `src/components/tehnic/utils.ts`            |     28 |    28 |
-| `src/lib/filelist/log.ts`                   |     28 |   152 |
-| `src/lib/utils.ts`                          |     28 |     7 |
-| `src/components/biblioteca/utils.ts`        |     27 |   189 |
-| `src/lib/queries.ts`                        |     27 |   374 |
-| `src/components/ui/sonner.tsx`              |     23 |    25 |
-| `src/components/filelist/types.ts`          |     22 |    17 |
-| `src/components/principala/wizard/types.ts` |     22 |    39 |
+| Fișier                               | Fan-in | Linii |
+| ------------------------------------ | -----: | ----: |
+| `src/start.ts`                       |     56 |    26 |
+| `src/lib/db.ts`                      |     43 |  1238 |
+| `src/server.ts`                      |     37 |    72 |
+| `src/lib/auth/admin.server.ts`       |     29 |   153 |
+| `src/components/tehnic/utils.ts`     |     28 |    28 |
+| `src/lib/filelist/log.ts`            |     28 |   152 |
+| `src/lib/utils.ts`                   |     28 |     7 |
+| `src/components/biblioteca/utils.ts` |     27 |   189 |
+| `src/lib/queries.ts`                 |     27 |   374 |
+| `src/components/ui/sonner.tsx`       |     23 |    25 |
+| `src/router.tsx`                     |     22 |    55 |
+| `src/components/filelist/types.ts`   |     21 |    17 |
 
 ### Tabel complet, toate cele 259 de fișiere
 
@@ -529,12 +529,12 @@ manual, deci nu poate fi parțial vechi.
 | `src/components/tehnic/UserDetailDrawer.tsx`                  |   435 |       4 |      1 |
 | `src/lib/media/show-watch.test.ts`                            |   411 |      11 |      0 |
 | `src/lib/filelist/subtitle-pipeline.ts`                       |   410 |       2 |      1 |
-| `src/components/principala/wizard/ResultStep.tsx`             |   401 |       5 |      1 |
 | `src/lib/services/plex-library.ts`                            |   397 |      15 |      6 |
 | `src/components/tehnic/SubtitleFixDrawer.tsx`                 |   396 |      10 |      2 |
 | `src/components/tehnic/sections/ActivityLogSection.tsx`       |   379 |       4 |      1 |
 | `src/lib/queries.ts`                                          |   374 |       3 |     27 |
 | `src/lib/services/plex-shared.ts`                             |   374 |      10 |      5 |
+| `src/components/principala/wizard/ResultStep.tsx`             |   369 |       5 |      1 |
 | `src/lib/system/service-jobs.ts`                              |   357 |      14 |      3 |
 | `src/routes/users.tsx`                                        |   348 |       7 |      8 |
 | `src/components/tehnic/plugins.tsx`                           |   342 |       0 |      4 |
@@ -569,12 +569,12 @@ manual, deci nu poate fi parțial vechi.
 | `src/lib/filelist/subtitle-apply.ts`                          |   248 |       7 |      2 |
 | `src/lib/errors/error-log.ts`                                 |   239 |      10 |      5 |
 | `src/lib/notifications/notifications.ts`                      |   238 |      10 |      5 |
-| `src/components/principala/wizard/state.ts`                   |   229 |       1 |      6 |
 | `src/components/tehnic/sections/ErrorLogSection.tsx`          |   229 |       2 |      1 |
-| `src/components/principala/AddMediaWizard.tsx`                |   221 |       3 |      3 |
+| `src/components/principala/wizard/state.ts`                   |   223 |       1 |      6 |
 | `src/lib/filelist/release-scoring.ts`                         |   218 |       6 |      3 |
 | `src/lib/qbit-client.ts`                                      |   218 |      12 |     13 |
 | `src/lib/media/episode-details.test.ts`                       |   212 |       4 |      0 |
+| `src/components/principala/AddMediaWizard.tsx`                |   211 |       3 |      3 |
 | `src/components/principala/wizard/derive-seasons.test.ts`     |   208 |       5 |      0 |
 | `src/lib/imdb/imdb-ratings.ts`                                |   207 |       9 |      2 |
 | `src/components/tehnic/sections/PushSubscriptionsSection.tsx` |   206 |       3 |      1 |
@@ -587,8 +587,8 @@ manual, deci nu poate fi parțial vechi.
 | `src/lib/filelist/subtitle-checks.test.ts`                    |   187 |       2 |      0 |
 | `src/lib/services/immich-uploads.ts`                          |   182 |       5 |      3 |
 | `src/routes/register.tsx`                                     |   181 |       1 |      3 |
-| `src/components/principala/wizard/state.test.ts`              |   177 |       2 |      0 |
 | `src/hooks/use-push-notifications.ts`                         |   174 |       5 |      1 |
+| `src/components/principala/wizard/state.test.ts`              |   172 |       2 |      0 |
 | `src/lib/tmdb/tmdb-details.test.ts`                           |   172 |       2 |      0 |
 | `src/lib/contributions/months.ts`                             |   171 |      12 |      4 |
 | `src/lib/filelist/plex-id-hint.ts`                            |   170 |       6 |      2 |
@@ -610,7 +610,7 @@ manual, deci nu poate fi parțial vechi.
 | `src/components/tehnic/CommitDrawer.tsx`                      |   145 |       4 |      2 |
 | `src/lib/media/metadata-report.ts`                            |   145 |       6 |      4 |
 | `src/components/principala/wizard/derive-seasons.ts`          |   143 |       1 |      2 |
-| `src/components/principala/wizard/selection.ts`               |   143 |       8 |      4 |
+| `src/components/principala/wizard/selection.ts`               |   143 |       8 |      3 |
 | `src/components/biblioteca/EpisodeList.tsx`                   |   142 |       3 |      1 |
 | `src/components/descopera/SceneViewer.tsx`                    |   142 |       1 |      2 |
 | `src/lib/services/recent-watch-merge.test.ts`                 |   142 |       3 |      0 |
@@ -689,8 +689,7 @@ manual, deci nu poate fi parțial vechi.
 | `src/routes/descopera.tsx`                                    |    58 |       1 |      3 |
 | `src/lib/system/speedtest.functions.ts`                       |    57 |       4 |      3 |
 | `src/components/sistem/RefreshRateCard.tsx`                   |    56 |       1 |      1 |
-| `src/lib/filelist/types.ts`                                   |    56 |       0 |     22 |
-| `src/components/principala/wizard/PickStep.tsx`               |    55 |       1 |      1 |
+| `src/lib/filelist/types.ts`                                   |    56 |       0 |     21 |
 | `src/router.tsx`                                              |    55 |       2 |     22 |
 | `src/components/Meter.tsx`                                    |    54 |       1 |      2 |
 | `src/lib/activity-log.test.ts`                                |    54 |       1 |      0 |
@@ -710,10 +709,11 @@ manual, deci nu poate fi parțial vechi.
 | `src/lib/system/service-jobs.functions.ts`                    |    46 |       3 |      2 |
 | `src/lib/tmdb/search-merge.test.ts`                           |    46 |       1 |      0 |
 | `src/lib/tvmaze/tvmaze.functions.ts`                          |    46 |       1 |      6 |
+| `src/components/principala/wizard/PickStep.tsx`               |    45 |       1 |      1 |
 | `src/lib/errors/error-log.functions.ts`                       |    43 |       3 |      4 |
 | `src/lib/system/network-link.functions.ts`                    |    43 |       2 |      2 |
 | `server/routes/api/deploy-sha.ts`                             |    43 |       2 |      1 |
-| `src/components/principala/wizard/types.ts`                   |    39 |       0 |     22 |
+| `src/components/principala/wizard/types.ts`                   |    39 |       0 |     21 |
 | `src/components/useServiceRecovery.ts`                        |    39 |       2 |      3 |
 | `src/lib/system/service-meta.ts`                              |    39 |       2 |      4 |
 | `src/components/ServicePill.tsx`                              |    37 |       1 |      3 |
@@ -756,7 +756,7 @@ manual, deci nu poate fi parțial vechi.
 | `src/components/tehnic/StatCell.tsx`                          |    18 |       1 |      1 |
 | `src/lib/filelist/download-quality.test.ts`                   |    18 |       1 |      0 |
 | `src/lib/tmdb/tmdb-client.ts`                                 |    18 |       2 |      5 |
-| `src/components/filelist/types.ts`                            |    17 |       0 |     22 |
+| `src/components/filelist/types.ts`                            |    17 |       0 |     21 |
 | `src/lib/media/torrent-name-parse.ts`                         |    17 |       1 |      7 |
 | `src/components/tehnic/meta-items.ts`                         |    15 |       1 |      3 |
 | `src/components/ErrorCard.tsx`                                |    14 |       1 |      3 |

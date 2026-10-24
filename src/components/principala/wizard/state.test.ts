@@ -107,12 +107,11 @@ describe("înapoi din confirmare merge unde a promis", () => {
     s = wizardReducer(s, {
       type: "OPEN_CONFIRM",
       target: { torrent: torrent(2), label: choice.label, isSeasonPack: false },
-      back: { step: "pick", choice },
+      back: { step: "pick", choice, pickedTorrentId: 2 },
     });
     s = wizardReducer(s, { type: "BACK" });
-    expect(s.flow).toEqual({ step: "pick", choice });
     // Selecția rămâne, altfel te-ai întoarce la o listă care și-a uitat alegerea.
-    expect(s.pickedTorrentId).toBe(2);
+    expect(s.flow).toEqual({ step: "pick", choice, pickedTorrentId: 2 });
   });
 
   it("se întoarce la rezultat când confirmarea a venit direct de acolo", () => {
@@ -137,20 +136,16 @@ describe("resetarea nu poate uita nimic", () => {
   });
 });
 
-describe("calitate și alegere manuală", () => {
-  it("schimbarea calității anulează torrentul ales", () => {
-    // Lista de candidați se schimbă odată cu calitatea, deci un id ales
-    // dintr-o listă veche ar indica un torrent care nu mai e pe ecran.
-    let s: WizardState = { ...atResult(), pickedTorrentId: 7 };
-    s = wizardReducer(s, { type: "SET_QUALITY", quality: "4K" });
-    expect(s.quality).toBe("4K");
-    expect(s.pickedTorrentId).toBeNull();
+describe("alegerea manuală", () => {
+  it("bifarea unui torrent rămâne în pasul de alegere", () => {
+    let s = wizardReducer(atResult(), { type: "OPEN_PICK", choice, pickedTorrentId: 1 });
+    s = wizardReducer(s, { type: "PICK_TORRENT", torrentId: 2 });
+    expect(s.flow).toEqual({ step: "pick", choice, pickedTorrentId: 2 });
   });
 
-  it("alegerea unui torrent nu schimbă pasul", () => {
-    const s = wizardReducer(atResult(), { type: "PICK_TORRENT", torrentId: 3 });
-    expect(s.flow.step).toBe("result");
-    expect(s.pickedTorrentId).toBe(3);
+  it("în afara pasului de alegere, bifarea nu face nimic", () => {
+    const before = atResult();
+    expect(wizardReducer(before, { type: "PICK_TORRENT", torrentId: 3 })).toBe(before);
   });
 });
 

@@ -10,7 +10,7 @@ import { CheckCircle2, Download, Info, Loader2, AlertTriangle, RefreshCw } from 
 import { groupTorrentsBySeasonEpisode } from "@/components/filelist/quality-utils";
 import type { FilelistTorrent } from "@/lib/filelist.functions";
 import { Orb } from "@/components/ui/orb";
-import { ActionButton, TorrentPicker, PosterHero, QualitySelector } from "./WizardControls";
+import { ActionButton, PosterHero, QualitySelector } from "./WizardControls";
 import { SeasonAccordion } from "./SeasonAccordion";
 import type { SeasonRowData } from "./SeasonAccordion";
 import { deriveSeasonRows } from "./derive-seasons";
@@ -56,7 +56,6 @@ export function ResultStep({
     downloadingEntries,
     wantedEntry,
     quality,
-    pickedTorrentId,
     busy,
   } = state;
 
@@ -81,7 +80,7 @@ export function ResultStep({
 
   const movieAlreadyDownloading = !isTv && downloadingEntries.length > 0;
   const movieMatches = isTv ? [] : matchesForQuality(checkResult.torrents, quality, "movie");
-  const movieMatch = movieMatches.find((t) => t.id === pickedTorrentId) ?? bestOf(movieMatches);
+  const movieMatch = bestOf(movieMatches);
   // Când nu e la calitatea aleasă, dar e la alta: altfel se vedea doar
   // „nu există", fără indiciu că merită deschis selectorul.
   const otherQualities =
@@ -97,26 +96,22 @@ export function ResultStep({
 
   // Deschide direct confirmarea când există un singur candidat (sau userul
   // nu e admin — doar adminul poate alege manual), altfel arată mai întâi
-  // alegerea de torrent.
+  // pasul de alegere — la fel pentru filme, episoade și sezoane întregi.
   function requestDownload(
     candidates: FilelistTorrent[],
     ctx: Omit<TorrentChoiceContext, "candidates">,
   ) {
-    if (!isAdmin || candidates.length <= 1) {
-      const torrent = bestOf(candidates);
-      if (!torrent) return;
+    const best = bestOf(candidates);
+    if (!best) return;
+    if (!isAdmin || candidates.length === 1) {
       dispatch({
         type: "OPEN_CONFIRM",
-        target: { torrent, ...ctx },
+        target: { torrent: best, ...ctx },
         back: { step: "result" },
       });
       return;
     }
-    dispatch({
-      type: "OPEN_PICK",
-      choice: { ...ctx, candidates },
-      pickedTorrentId: bestOf(candidates)!.id,
-    });
+    dispatch({ type: "OPEN_PICK", choice: { ...ctx, candidates }, pickedTorrentId: best.id });
   }
 
   function handleDownloadPack(season: SeasonRowData, torrents: FilelistTorrent[]) {
@@ -267,31 +262,19 @@ export function ResultStep({
                     ștergi tu, din Bibliotecă.
                   </span>
                 </div>
-                {isAdmin && (
-                  <TorrentPicker
-                    matches={movieMatches}
-                    selectedId={movieMatch.id}
-                    onSelect={(id) => dispatch({ type: "PICK_TORRENT", torrentId: id })}
-                  />
-                )}
                 <ActionButton
                   busy={busy}
                   icon={<Download className="h-4 w-4" />}
                   label={`Descarcă varianta ${quality}`}
-                  onClick={() => {
-                    dispatch({
-                      type: "OPEN_CONFIRM",
-                      target: {
-                        torrent: movieMatch,
-                        // Explicit, nu neutru: label-ul ajunge în jurnal, iar
-                        // peste o lună vrei să vezi de ce ai două fișiere
-                        // pentru același film și în ce sens s-a mișcat.
-                        label: `Film — ${direction} la ${quality}`,
-                        isSeasonPack: false,
-                      },
-                      back: { step: "result" },
-                    });
-                  }}
+                  onClick={() =>
+                    requestDownload(movieMatches, {
+                      // Explicit, nu neutru: label-ul ajunge în jurnal, iar
+                      // peste o lună vrei să vezi de ce ai două fișiere
+                      // pentru același film și în ce sens s-a mișcat.
+                      label: `Film — ${direction} la ${quality}`,
+                      isSeasonPack: false,
+                    })
+                  }
                 />
               </>
             ) : (
@@ -331,28 +314,13 @@ export function ResultStep({
 
           {movieMatch ? (
             <>
-              {isAdmin && (
-                <TorrentPicker
-                  matches={movieMatches}
-                  selectedId={movieMatch.id}
-                  onSelect={(id) => dispatch({ type: "PICK_TORRENT", torrentId: id })}
-                />
-              )}
               <ActionButton
                 busy={busy}
                 icon={<Download className="h-4 w-4" />}
                 label="Descarcă acum"
-                onClick={() => {
-                  dispatch({
-                    type: "OPEN_CONFIRM",
-                    target: {
-                      torrent: movieMatch,
-                      label: "Film",
-                      isSeasonPack: false,
-                    },
-                    back: { step: "result" },
-                  });
-                }}
+                onClick={() =>
+                  requestDownload(movieMatches, { label: "Film", isSeasonPack: false })
+                }
               />
             </>
           ) : (

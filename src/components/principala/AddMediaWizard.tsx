@@ -10,7 +10,7 @@ import { ResultStep } from "./wizard/ResultStep";
 import { PickStep } from "./wizard/PickStep";
 import { ConfirmStep } from "./wizard/ConfirmStep";
 import { DoneStep } from "./wizard/DoneStep";
-import type { Step, TorrentChoiceContext } from "./wizard/types";
+import type { Step } from "./wizard/types";
 import { useWizardData } from "./wizard/use-wizard-data";
 import { useWizardDownload } from "./wizard/use-wizard-download";
 import { wizardReducer, initialWizardState } from "./wizard/state";
@@ -33,17 +33,13 @@ export function AddMediaWizard({
 
   // Doar ce folosește chiar shell-ul: restul stării ajunge la pași prin
   // `state`, pe care fiecare îl citește cât îi trebuie.
-  const { flow, query, results, searching, selected, checkResult, pickedTorrentId, busy } = state;
+  const { flow, query, results, searching, selected, checkResult, busy } = state;
 
   const step = flow.step;
-  // Lista de candidați e vie și în timpul confirmării, dacă de acolo s-a
-  // ajuns — de-asta o citim și din `back`, nu doar din pasul "pick".
-  const torrentChoice: TorrentChoiceContext | null =
-    flow.step === "pick"
-      ? flow.choice
-      : flow.step === "confirm" && flow.back.step === "pick"
-        ? flow.back.choice
-        : null;
+  // Pasul de alegere rămâne în indicator și în timpul confirmării, dacă de
+  // acolo s-a ajuns — de-asta se citește și din `back`.
+  const hasPickStep =
+    flow.step === "pick" || (flow.step === "confirm" && flow.back.step === "pick");
   const confirmTorrent = flow.step === "confirm" ? flow.target : null;
   const doneMessage = flow.step === "done" ? flow.message : null;
 
@@ -93,7 +89,7 @@ export function AddMediaWizard({
     ...(initialItem ? [] : [{ key: "search" as Step, label: "Căutare" }]),
     { key: "checking", label: "Verificare" },
     { key: "result", label: "Rezultat" },
-    ...(torrentChoice || step === "pick" ? [{ key: "pick" as Step, label: "Alege torrent" }] : []),
+    ...(hasPickStep ? [{ key: "pick" as Step, label: "Alege torrent" }] : []),
     { key: "confirm", label: "Confirmare" },
   ];
   const effectiveStep = step === "search" && initialItem ? "checking" : step;
@@ -183,13 +179,7 @@ export function AddMediaWizard({
               />
             )}
 
-            {step === "pick" && torrentChoice && (
-              <PickStep
-                choice={torrentChoice}
-                pickedTorrentId={pickedTorrentId}
-                dispatch={dispatch}
-              />
-            )}
+            {flow.step === "pick" && <PickStep flow={flow} dispatch={dispatch} />}
 
             {confirmTorrent && (
               <ConfirmStep
