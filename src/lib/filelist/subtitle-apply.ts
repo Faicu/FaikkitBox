@@ -21,7 +21,7 @@ import {
 } from "./subtitle-outcomes";
 import { fileExists } from "./subtitle-checks";
 import type { SubtitleCandidate } from "./subtitle-sources";
-import { describeSync, isWellSynced, type SyncMeasure } from "./subtitle-verify";
+import { describeSync, isConfidentSync, type SyncMeasure } from "./subtitle-verify";
 
 // Conținutul unei variante din rankSubtitleCandidates, ca text UTF-8 — null
 // dacă descărcarea a eșuat. Nu scrie nimic: pipeline-ul compară întâi mai
@@ -57,7 +57,7 @@ export async function writeChosenSubtitle(
   const sourceLabel = SUBTITLE_SOURCE_LABELS[chosen.source];
   const { matchedCriteria, maxCriteria } = chosen;
   const isPerfect = maxCriteria > 0 && matchedCriteria === maxCriteria;
-  const confident = sync ? isWellSynced(sync) : chosen.confident;
+  const confident = sync ? isConfidentSync(sync, chosen) : chosen.confident;
   const syncNote = sync ? `; ${describeSync(sync)}` : "";
   const encodingNote = fetched.wasConverted ? " (encoding convertit la UTF-8)" : "";
 

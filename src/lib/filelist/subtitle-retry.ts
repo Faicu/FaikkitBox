@@ -128,6 +128,9 @@ export interface SubtitleRetryTitle {
   // missing = fără subtitrare română; approximate = are una aproximativă,
   // care se înlocuiește dacă apare una sigur mai bună.
   kind: "missing" | "approximate";
+  // La un torrent cu mai multe episoade: cele cu subtitrare aproximativă
+  // ("E02", "E03"…), ca titlul să nu numească un episod anume.
+  approximateEpisodes: string[];
   // Datele în formatul SQLite, UTC.
   completedAt: string;
   until: string;
@@ -167,7 +170,9 @@ export function getSubtitleRetryStatus(): SubtitleRetryStatus {
 
   // Un rând per torrent (un pachet are câte un rând per episod; „missing"
   // cât timp măcar unul e fără subtitrare). Titlul afișat: serialul
-  // (rândul-părinte, în română) + episodul.
+  // (rândul-părinte, în română) + episodul. Un pachet rezolvat în episoade
+  // nu mai are is_season_pack pe niciun rând — îl recunoaștem după numărul
+  // de episoade (Euphoria S01 apărea „S01E01", după MIN(episode)).
   const rows = db
     .prepare(
       `SELECT MIN(m.id) AS mediaId, MIN(m.torrent_name) AS torrentName,
@@ -177,7 +182,10 @@ export function getSubtitleRetryStatus(): SubtitleRetryStatus {
               datetime(MIN(m.completed_at), ?) AS until,
               MAX(m.subtitle_checked_at) AS lastCheckedAt,
               MIN(m.has_romanian_subtitle) AS hasRo, MAX(m.has_romanian_audio) AS hasAudio,
-              MAX(m.subtitle_approximate) AS approximate
+              MAX(m.subtitle_approximate) AS approximate,
+              COUNT(DISTINCT m.episode) AS episodeCount,
+              GROUP_CONCAT(CASE WHEN m.subtitle_approximate = 1 AND m.episode IS NOT NULL
+                                THEN printf('E%02d', m.episode) END) AS approxEpisodes
          FROM media m LEFT JOIN media p ON p.id = m.parent_id
         WHERE m.torrent_hash IS NOT NULL AND m.completed_at IS NOT NULL
           AND m.completed_at >= datetime('now', ?)
@@ -197,6 +205,8 @@ export function getSubtitleRetryStatus(): SubtitleRetryStatus {
     lastCheckedAt: string | null;
     hasRo: number;
     approximate: number;
+    episodeCount: number;
+    approxEpisodes: string | null;
   }>;
 
   const now = (db.prepare("SELECT datetime('now') AS n").get() as { n: string }).n;
@@ -204,7 +214,7 @@ export function getSubtitleRetryStatus(): SubtitleRetryStatus {
   const toTitle = (r: (typeof rows)[number]) =>
     r.season == null
       ? r.baseTitle
-      : r.episode == null || r.isPack
+      : r.episode == null || r.isPack || r.episodeCount > 1
         ? `${r.baseTitle} S${pad(r.season)} (pachet)`
         : `${r.baseTitle} S${pad(r.season)}E${pad(r.episode)}`;
   const toItem = (r: (typeof rows)[number]): SubtitleRetryTitle => ({
@@ -212,6 +222,8 @@ export function getSubtitleRetryStatus(): SubtitleRetryStatus {
     title: toTitle(r),
     torrentName: r.torrentName,
     kind: r.hasRo ? "approximate" : "missing",
+    approximateEpisodes:
+      r.episodeCount > 1 && r.approxEpisodes ? r.approxEpisodes.split(",").sort() : [],
     completedAt: r.completedAt,
     until: r.until,
     lastCheckedAt: r.lastCheckedAt,

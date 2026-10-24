@@ -33,6 +33,7 @@ import {
 import {
   createSubtitleVerifier,
   isBetterSync,
+  isConfidentSync,
   isWellSynced,
   type SyncMeasure,
 } from "./subtitle-verify";
@@ -365,12 +366,12 @@ export async function processMediaFile(
   }
 
   if (upgrading) {
-    // Mai bună înseamnă: bine sincronizată (când se poate măsura), sau, fără
+    // Mai bună înseamnă: sigură după sincronizare (isConfidentSync), sau, fără
     // măsurătoare, cu numele release-ului identic cu fișierul.
     const better =
       best &&
       (best.sync
-        ? isWellSynced(best.sync)
+        ? isConfidentSync(best.sync, best.candidate)
         : best.candidate.maxCriteria > 0 &&
           best.candidate.matchedCriteria === best.candidate.maxCriteria);
     if (!best || !better) return keepExisting("nicio variantă mai bună");
@@ -399,7 +400,7 @@ export async function processMediaFile(
     matchedCriteria: result.matchedCriteria,
     maxCriteria: result.maxCriteria,
     source: result.source,
-    sync: best.sync ? { ...best.sync, good: isWellSynced(best.sync) } : undefined,
+    sync: best.sync ? { ...best.sync, good: isConfidentSync(best.sync, best.candidate) } : undefined,
     rejected,
     movedAside,
     compared,

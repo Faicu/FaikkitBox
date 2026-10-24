@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { isBetterSync, parseSrtTiming, speechCorrelation } from "./subtitle-verify";
+import {
+  isBetterSync,
+  isConfidentSync,
+  parseSrtTiming,
+  speechCorrelation,
+} from "./subtitle-verify";
 
 const srt = (starts: number[]) =>
   starts
@@ -83,5 +88,25 @@ describe("isBetterSync", () => {
 
   it("prima variantă măsurată e mereu mai bună decât nimic", () => {
     expect(isBetterSync({ score: 0.46, offset: 20 }, null)).toBe(true);
+  });
+});
+
+describe("isConfidentSync", () => {
+  const exact = { matchedCriteria: 5, maxCriteria: 5 };
+  const other = { matchedCriteria: 3, maxCriteria: 5 };
+
+  it("bine sincronizată e sigură oricare ar fi numele", () => {
+    expect(isConfidentSync({ score: 0.91, offset: 0 }, other)).toBe(true);
+  });
+
+  it("release identic, fără decalaj: sigură și sub pragul de corelație (Euphoria S01)", () => {
+    expect(isConfidentSync({ score: 0.47, offset: 0 }, exact)).toBe(true);
+    expect(isConfidentSync({ score: 0.54, offset: -0.5 }, exact)).toBe(true);
+  });
+
+  it("sub prag rămâne aproximativă cu alt release sau cu decalaj", () => {
+    expect(isConfidentSync({ score: 0.47, offset: 0 }, other)).toBe(false);
+    expect(isConfidentSync({ score: 0.47, offset: 8 }, exact)).toBe(false);
+    expect(isConfidentSync({ score: 0.9, offset: 2 }, exact)).toBe(false);
   });
 });

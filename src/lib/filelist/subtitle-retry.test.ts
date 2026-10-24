@@ -306,4 +306,13 @@ describe("getSubtitleRetryStatus", () => {
       "Serial S01 (pachet)",
     ]);
   });
+
+  it("un pachet rezolvat în episoade rămâne sezon, cu episoadele aproximative (Euphoria S01)", () => {
+    add("k", { ro: 1, episode: 1 });
+    add("k", { ro: 1, approximate: 1, episode: 3 });
+    add("k", { ro: 1, approximate: 1, episode: 2 });
+    const [t] = retry.getSubtitleRetryStatus().searching;
+    expect(t.title).toBe("Serial S01 (pachet)");
+    expect(t.approximateEpisodes).toEqual(["E02", "E03"]);
+  });
 });

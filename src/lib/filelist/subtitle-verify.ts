@@ -201,6 +201,22 @@ export function isWellSynced(sync: SyncMeasure): boolean {
   return sync.score >= GOOD_SYNC_SCORE && Math.abs(sync.offset) <= GOOD_SYNC_MAX_OFFSET_S;
 }
 
+// Potrivire sigură pentru o variantă care a trecut verificarea (corelație
+// ≥ MIN_SPEECH_CORRELATION): bine sincronizată, sau cu numele release-ului
+// identic cu fișierul și fără decalaj. Euphoria S01 (24 oct. 2026): varianta
+// KiNGS, sincronizată (verificat replică cu replică și pe sunet), dădea doar
+// 0,47–0,54 fiindcă traducătorul unește replicile engleze; alt montaj pică
+// oricum la decalaj sau la corelație (HONE/playWEB: 0,09–0,35).
+export function isConfidentSync(
+  sync: SyncMeasure,
+  match: { matchedCriteria: number; maxCriteria: number },
+): boolean {
+  const exactRelease = match.maxCriteria > 0 && match.matchedCriteria === match.maxCriteria;
+  return (
+    isWellSynced(sync) || (exactRelease && Math.abs(sync.offset) <= GOOD_SYNC_MAX_OFFSET_S)
+  );
+}
+
 // Sub diferența asta, două corelații sunt „la egalitate" — aceeași traducere
 // copiată pentru mai multe release-uri dă corelații identice până la a doua
 // zecimală, doar decalajul diferă.

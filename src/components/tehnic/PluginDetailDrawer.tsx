@@ -528,6 +528,11 @@ function SubtitleRetryCards() {
                       {t.kind === "approximate" ? "aproximativă" : "fără subtitrare"}
                     </span>
                   </div>
+                  {t.approximateEpisodes.length > 0 && (
+                    <div className="mt-0.5 text-[10px] text-amber-400/80">
+                      aproximative: {t.approximateEpisodes.join(", ")}
+                    </div>
+                  )}
                   <div className="mt-0.5 text-[10px] leading-relaxed text-muted-foreground">
                     până pe {shortDay(t.until)} · {left <= 1 ? "ultima zi" : `mai are ${left} zile`}
                     {" · "}
