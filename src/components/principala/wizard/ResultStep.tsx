@@ -86,8 +86,8 @@ export function ResultStep({
   const movieAlreadyDownloading = !isTv && downloadingEntries.length > 0;
   const movieMatches = !isTv && checkResult ? matchesForQuality(checkResult.torrents, quality) : [];
   const movieMatch = movieMatches.find((t) => t.id === pickedTorrentId) ?? bestOf(movieMatches);
-  // Când nu e la calitatea aleasă, dar e la alta: utilizatorii fără
-  // selectorul de calitate (doar adminul îl are) vedeau doar „nu există".
+  // Când nu e la calitatea aleasă, dar e la alta: altfel se vedea doar
+  // „nu există", fără indiciu că merită deschis selectorul.
   const otherQualities =
     !isTv && checkResult && !movieMatch ? availableQualities(checkResult.torrents, quality) : [];
 
@@ -221,7 +221,6 @@ export function ResultStep({
           <QualitySelector
             quality={quality}
             onChange={(q) => dispatch({ type: "SET_QUALITY", quality: q })}
-            isAdmin={isAdmin}
           />
 
           {bulkPlan.length > 0 && (
@@ -271,7 +270,6 @@ export function ResultStep({
           <QualitySelector
             quality={quality}
             onChange={(q) => dispatch({ type: "SET_QUALITY", quality: q })}
-            isAdmin={isAdmin}
           />
 
           {/* Fără asta, alegerea unei calități deja deținute nu producea
@@ -360,7 +358,6 @@ export function ResultStep({
             <QualitySelector
               quality={quality}
               onChange={(q) => dispatch({ type: "SET_QUALITY", quality: q })}
-              isAdmin={isAdmin}
             />
 
             {movieMatch ? (

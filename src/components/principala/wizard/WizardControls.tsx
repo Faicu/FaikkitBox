@@ -64,20 +64,16 @@ function QualityButton({
   );
 }
 
-// Selectorul de calitate — utilizatorii obișnuiți descarcă mereu la 1080p
-// (nici nu văd selectorul); doar admin poate alege altă calitate, ascunsă
+// Selectorul de calitate — 1080p implicit; altă calitate stă ascunsă
 // inițial sub un toggle mic, ca ecranul să rămână curat în cazul comun.
 export function QualitySelector({
   quality,
   onChange,
-  isAdmin,
 }: {
   quality: WatchQuality;
   onChange: (q: WatchQuality) => void;
-  isAdmin: boolean;
 }) {
   const [expanded, setExpanded] = useState(quality !== "1080p");
-  if (!isAdmin) return null;
 
   return (
     <div>
