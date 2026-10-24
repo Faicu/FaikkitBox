@@ -1,0 +1,11 @@
+#!/bin/bash
+# Claude Remote Control pentru un proiect, repornit automat dacă iese.
+# Folosire: claude-rc <director> <nume>   (pornit de claude.service într-o sesiune tmux)
+dir="$1"
+name="$2"
+cd "$dir" || exit 1
+while true; do
+  claude remote-control --name "$name" --permission-mode auto
+  echo "[$(date)] claude remote-control ($name) a ieșit (cod $?), repornesc în 10s..."
+  sleep 10
+done

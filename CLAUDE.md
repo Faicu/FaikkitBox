@@ -23,3 +23,13 @@ Nu raporta sarcina ca finalizată până când toți cei 4 pași nu au fost exec
 din pagina Tehnic (buton dedicat) — vezi `pushToGitHub` în
 `src/lib/github.functions.ts`. Commit-urile locale rămân nepublicate până când
 utilizatorul apasă butonul; asta e intenționat, nu o eroare de urmărit sau reparat.
+
+## Remote Control (sesiunile Claude de pe server)
+
+`deploy/claude.service` + `deploy/claude-rc` definesc sesiunile tmux Remote Control
+pentru toate proiectele (faikkitbox, faikkitcar, faikkithome, faikkittiktok,
+faikkitvideo, bogdan); sursa lor e aici, nu în faikkitcar. O sesiune nouă se
+adaugă fără restart (restart-ul închide toate sesiunile): editezi unitatea,
+`cp deploy/claude.service /etc/systemd/system/ && systemctl daemon-reload`, apoi
+rulezi manual linia `tmux new-session -d -s …`. La un folder nou, confirmarea
+„Trust folder?” din tmux o dă userul. Nu e parte din build.
