@@ -1,5 +1,5 @@
 // Transformarea datelor brute (TMDB + Plex + Filelist + TVMaze) în rândurile
-// afișate de acordeonul de sezoane, plus planul de descărcare în lot.
+// afișate de acordeonul de sezoane.
 //
 // Pure, fără React: intră date, ies date. Stăteau în corpul componentei, unde
 // nu puteau fi verificate decât randând tot wizard-ul — deși aici se decide
@@ -11,8 +11,8 @@ import type { TmdbSeasonSchema } from "@/lib/tmdb/tmdb.functions";
 import type { TvmazeAirstamp } from "@/lib/tvmaze/tvmaze.functions";
 import type { DownloadingMediaEntry } from "@/lib/media/media.functions";
 import type { EpisodeAvailability, SeasonRowData } from "./SeasonAccordion";
-import { bestOf, matchesForQuality, pickFromSet } from "./selection";
-import type { BulkDownloadItem, PlexSeasonEpisode, Quality } from "./types";
+import { matchesForQuality, otherQualitiesWhere, pickFromSet } from "./selection";
+import type { PlexSeasonEpisode, Quality } from "./types";
 
 export interface DeriveSeasonsInput {
   seasons: Array<{ seasonNumber: number; episodeCount: number }>;
@@ -117,55 +117,26 @@ export function deriveSeasonRows(input: DeriveSeasonsInput): SeasonRowData[] {
       return { episodeNum: epNum, title, availability };
     });
 
+    // Episoade lipsă fără niciun torrent la calitatea aleasă: dacă sezonul
+    // există la alta, o spunem — altfel „Indisponibil" ar părea definitiv.
+    const otherQualities =
+      group && episodes.some((e) => e.availability.kind === "unavailable")
+        ? otherQualitiesWhere(
+            quality,
+            (q) =>
+              matchesForQuality(pickFromSet(group.byQuality, q), q, "tv").length > 0 ||
+              [...group.episodes.values()].some(
+                (set) => matchesForQuality(pickFromSet(set, q), q, "tv").length > 0,
+              ),
+          )
+        : [];
+
     return {
       seasonNumber: s.seasonNumber,
       packTorrents: packDownloadingEntry ? [] : packCandidates,
       packDownloading: !!packDownloadingEntry,
       episodes,
+      otherQualities,
     };
-  });
-}
-
-// "Descarcă tot ce lipsește" — sare peste sezoanele deja complete în Plex sau
-// deja în curs de descărcare; pentru restul, ia pachetul dacă există (cel mai
-// bun candidat automat, fără alegere manuală în masă), altfel fiecare episod
-// individual găsit.
-export function deriveBulkPlan(seasonRows: SeasonRowData[]): BulkDownloadItem[] {
-  return seasonRows.flatMap((season): BulkDownloadItem[] => {
-    if (season.packDownloading) return [];
-    if (
-      season.episodes.length > 0 &&
-      season.episodes.every(
-        (e) => e.availability.kind === "in_plex" || e.availability.kind === "downloading",
-      )
-    ) {
-      return [];
-    }
-    const bestPack = bestOf(season.packTorrents);
-    if (bestPack) {
-      return [
-        {
-          torrent: bestPack,
-          season: season.seasonNumber,
-          isSeasonPack: true,
-          label: `Sezonul ${season.seasonNumber} (pachet)`,
-        },
-      ];
-    }
-    return season.episodes
-      .filter(
-        (
-          e,
-        ): e is typeof e & {
-          availability: Extract<EpisodeAvailability, { kind: "episode_torrent" }>;
-        } => e.availability.kind === "episode_torrent",
-      )
-      .map((e) => ({
-        torrent: bestOf(e.availability.torrents)!,
-        season: season.seasonNumber,
-        episode: e.episodeNum,
-        isSeasonPack: false,
-        label: `S${String(season.seasonNumber).padStart(2, "0")}E${String(e.episodeNum).padStart(2, "0")}`,
-      }));
   });
 }

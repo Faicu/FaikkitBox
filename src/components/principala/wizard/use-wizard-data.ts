@@ -8,12 +8,6 @@
 // Scos din componentă la pasul 3 al refactorizării. Nu ține stare proprie:
 // primește `dispatch` și scrie în reducer, ca sursa de adevăr să rămână una
 // singură.
-//
-// Capcană cunoscută: `useServerFn` NU e memoizat — identitatea lui se schimbă
-// la fiecare randare. Nu-l pune în deps de `useEffect`, altfel efectul rulează
-// la nesfârșit. Aici funcțiile sunt chemate din handlere, nu din efecte, deci
-// problema nu apare; efectul care cheamă `selectItem` la deschiderea prefill
-// a rămas în componentă, cu deps pe id-ul titlului, nu pe funcție.
 
 import { useRef } from "react";
 import type { Dispatch } from "react";

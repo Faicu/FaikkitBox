@@ -39,7 +39,6 @@ export function PickStep({
           dispatch({
             type: "OPEN_CONFIRM",
             target: {
-              kind: "single",
               torrent: chosen,
               label: choice.label,
               season: choice.season,

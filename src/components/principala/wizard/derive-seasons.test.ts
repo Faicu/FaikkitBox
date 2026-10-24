@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 
-import { deriveSeasonRows, deriveBulkPlan, type DeriveSeasonsInput } from "./derive-seasons";
+import { deriveSeasonRows, type DeriveSeasonsInput } from "./derive-seasons";
 import type { FilelistTorrent } from "@/lib/filelist.functions";
 import type { DownloadingMediaEntry } from "@/lib/media/media.functions";
 
@@ -163,78 +163,45 @@ describe("deriveSeasonRows — starea fiecărui episod", () => {
   });
 });
 
-describe("deriveBulkPlan", () => {
+describe("deriveSeasonRows — alte calități", () => {
   const aired = (n: number) => ({
     episodeNum: n,
     title: `E${n}`,
     aired: true,
     airDate: "2026-01-01",
   });
+  const uhd = {
+    id: 7,
+    name: "Show.S01.2160p.WEB-DL.DV.HDR.H.265",
+    seeders: 9,
+  } as unknown as FilelistTorrent;
 
-  it("preferă pachetul de sezon când există", () => {
+  it("arată calitățile la care există sezonul, când lipsește la cea aleasă", () => {
     const rows = deriveSeasonRows(
       input({
-        seasons: [{ seasonNumber: 2, episodeCount: 2 }],
-        seasonSchema: [{ seasonNumber: 2, episodes: [aired(1), aired(2)] }],
-        seasonGroups: [
-          {
-            seasonNum: 2,
-            byQuality: qualitySet([torrent("S02.PACK")]),
-            episodes: new Map([[1, qualitySet([torrent("S02E01")])]]),
-          },
-        ],
-      } as unknown as Partial<DeriveSeasonsInput>),
-    );
-    const plan = deriveBulkPlan(rows);
-    expect(plan).toHaveLength(1);
-    expect(plan[0]).toMatchObject({ isSeasonPack: true, season: 2 });
-  });
-
-  it("cade pe episoade individuale când nu există pachet", () => {
-    const rows = deriveSeasonRows(
-      input({
-        seasons: [{ seasonNumber: 1, episodeCount: 2 }],
         seasonSchema: [{ seasonNumber: 1, episodes: [aired(1), aired(2)] }],
         seasonGroups: [
           {
             seasonNum: 1,
-            byQuality: qualitySet(),
-            episodes: new Map([
-              [1, qualitySet([torrent("S01E01")])],
-              [2, qualitySet([torrent("S01E02")])],
-            ]),
+            byQuality: { t720: [], t1080: [], t1080Hdr: [], t4k: [], t4kHdr: [uhd] },
+            episodes: new Map(),
           },
         ],
       } as unknown as Partial<DeriveSeasonsInput>),
     );
-    const plan = deriveBulkPlan(rows);
-    expect(plan.map((p) => p.label)).toEqual(["S01E01", "S01E02"]);
+    expect(rows[0].episodes[0].availability.kind).toBe("unavailable");
+    expect(rows[0].otherQualities).toEqual(["4K HDR"]);
   });
 
-  it("sare peste un sezon complet în Plex", () => {
+  it("nimic, când tot ce lipsește e disponibil la calitatea aleasă", () => {
     const rows = deriveSeasonRows(
       input({
-        seasons: [{ seasonNumber: 1, episodeCount: 2 }],
-        seasonSchema: [{ seasonNumber: 1, episodes: [aired(1), aired(2)] }],
-        plexBySeason: new Map([
-          [
-            1,
-            [
-              { num: 1, quality: "1080p", watched: true },
-              { num: 2, quality: "1080p", watched: false },
-            ],
-          ],
-        ]),
+        seasonSchema: [{ seasonNumber: 1, episodes: [aired(1)] }],
         seasonGroups: [
           { seasonNum: 1, byQuality: qualitySet([torrent("S01.PACK")]), episodes: new Map() },
         ],
       } as unknown as Partial<DeriveSeasonsInput>),
     );
-    expect(deriveBulkPlan(rows)).toEqual([]);
-  });
-
-  it("nu propune nimic pentru episoade nelansate", () => {
-    const rows = deriveSeasonRows(input({ seasons: [{ seasonNumber: 9, episodeCount: 3 }] }));
-    expect(deriveBulkPlan(rows)).toEqual([]);
+    expect(rows[0].otherQualities).toEqual([]);
   });
 });

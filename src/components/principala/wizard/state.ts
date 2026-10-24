@@ -5,9 +5,8 @@
 //  - `reset()` enumera manual 19 setteri, iar `goBack()` repeta un subset cu
 //    altă listă. O stare nouă uitată în una din liste = un bug tăcut (vezi
 //    1e1b3fe, wizard-ul deblocat în mijlocul unui lot).
-//  - stări care logic nu pot coexista puteau coexista în tip: `confirmTorrent`
-//    și `confirmBulk` deodată, sau pasul "confirm" fără nicio țintă — ecranul
-//    gol reparat în 3249390.
+//  - stări care logic nu pot coexista puteau coexista în tip, de exemplu pasul
+//    "confirm" fără nicio țintă — ecranul gol reparat în 3249390.
 //
 // Aici, ce ține strict de un pas trăiește în varianta pasului (`Flow`), deci
 // combinațiile alea nu mai sunt reprezentabile. Restul stării stă la nivelul
@@ -25,26 +24,16 @@ import type { TmdbSearchResult, TmdbDetails, TmdbSeasonSchema } from "@/lib/tmdb
 import type { TvmazeAirstamp } from "@/lib/tvmaze/tvmaze.functions";
 import type { DownloadingMediaEntry, WantedMovie } from "@/lib/media/media.functions";
 import type { FilelistTorrent } from "@/lib/filelist.functions";
-import type {
-  BulkDownloadItem,
-  CheckResult,
-  PlexSeasonEpisode,
-  Quality,
-  TorrentChoiceContext,
-} from "./types";
+import type { CheckResult, PlexSeasonEpisode, Quality, TorrentChoiceContext } from "./types";
 
-// Ținta unei confirmări: ori un singur torrent, ori un lot. Nu pot fi ambele
-// — de-asta e o uniune, nu două câmpuri.
-export type ConfirmTarget =
-  | {
-      kind: "single";
-      torrent: FilelistTorrent;
-      label: string;
-      season?: number;
-      episode?: number;
-      isSeasonPack: boolean;
-    }
-  | { kind: "bulk"; items: BulkDownloadItem[] };
+// Ținta unei confirmări: un singur torrent — film, episod sau sezon întreg.
+export interface ConfirmTarget {
+  torrent: FilelistTorrent;
+  label: string;
+  season?: number;
+  episode?: number;
+  isSeasonPack: boolean;
+}
 
 // Pasul la care se întoarce săgeata de "înapoi" din confirmare. Memorat
 // explicit, nu ghicit: varianta veche deducea destinația din faptul că
@@ -78,14 +67,12 @@ export interface WizardState {
   downloadingEntries: DownloadingMediaEntry[];
   wantedEntry: WantedMovie | null;
 
-  // Traversează pașii.
+  // Traversează pașii. Calitatea revine la 1080p la fiecare titlu nou.
   quality: Quality;
   pickedTorrentId: number | null;
 
-  // Tranzitorii (în timpul unei descărcări).
+  // În timpul unei descărcări sau al pornirii/opririi urmăririi.
   busy: boolean;
-  downloadingTorrentId: number | null;
-  bulkProgress: { done: number; total: number } | null;
 }
 
 export const initialWizardState: WizardState = {
@@ -105,8 +92,6 @@ export const initialWizardState: WizardState = {
   quality: "1080p",
   pickedTorrentId: null,
   busy: false,
-  downloadingTorrentId: null,
-  bulkProgress: null,
 };
 
 // Tot ce află `selectItem` într-o verificare reușită.
@@ -134,8 +119,6 @@ export type WizardAction =
   | { type: "OPEN_CONFIRM"; target: ConfirmTarget; back: BackFlow }
   | { type: "BACK" }
   | { type: "SET_BUSY"; busy: boolean }
-  | { type: "SET_DOWNLOADING_TORRENT"; torrentId: number | null }
-  | { type: "SET_BULK_PROGRESS"; progress: { done: number; total: number } | null }
   | { type: "SET_WANTED"; wanted: WantedMovie | null }
   | { type: "DONE"; message: string };
 
@@ -177,6 +160,13 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
     case "SELECT_ITEM":
       return {
         ...state,
+        // Reîncercarea aceluiași titlu își păstrează calitatea; un titlu nou
+        // pornește de la 1080p.
+        quality:
+          state.selected?.id === action.item.id &&
+          state.selected.mediaType === action.item.mediaType
+            ? state.quality
+            : initialWizardState.quality,
         selected: action.item,
         checkError: null,
         flow: { step: "checking" },
@@ -228,12 +218,6 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
 
     case "SET_BUSY":
       return { ...state, busy: action.busy };
-
-    case "SET_DOWNLOADING_TORRENT":
-      return { ...state, downloadingTorrentId: action.torrentId };
-
-    case "SET_BULK_PROGRESS":
-      return { ...state, bulkProgress: action.progress };
 
     case "SET_WANTED":
       return { ...state, wantedEntry: action.wanted };

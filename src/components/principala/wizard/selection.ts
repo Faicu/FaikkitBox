@@ -129,10 +129,14 @@ export function availableQualities(
   preferred: Quality,
   kind: TorrentKind,
 ): Quality[] {
+  return otherQualitiesWhere(preferred, (q) => matchesForQuality(torrents, q, kind).length > 0);
+}
+
+// Calitățile diferite de `preferred` care îndeplinesc condiția, cele mai
+// apropiate de `preferred` întâi.
+export function otherQualitiesWhere(preferred: Quality, has: (q: Quality) => boolean): Quality[] {
   const pref = ALL_QUALITIES.indexOf(preferred);
-  return ALL_QUALITIES.filter(
-    (q) => q !== preferred && matchesForQuality(torrents, q, kind).length > 0,
-  ).sort(
+  return ALL_QUALITIES.filter((q) => q !== preferred && has(q)).sort(
     (a, b) => Math.abs(ALL_QUALITIES.indexOf(a) - pref) - Math.abs(ALL_QUALITIES.indexOf(b) - pref),
   );
 }

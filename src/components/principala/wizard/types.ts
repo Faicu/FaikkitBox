@@ -27,14 +27,6 @@ export interface PlexSeasonEpisode {
   watched: boolean;
 }
 
-export interface BulkDownloadItem {
-  torrent: FilelistTorrent;
-  season: number;
-  episode?: number;
-  isSeasonPack: boolean;
-  label: string;
-}
-
 // Torrentul/pachetul în așteptare de alegere manuală (admin, mai mulți
 // candidați la aceeași calitate) — un pas intermediar înainte de confirmare.
 export interface TorrentChoiceContext {

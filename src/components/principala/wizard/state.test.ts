@@ -58,6 +58,14 @@ describe("navigarea între pași", () => {
     expect(s.checkError).toBeNull();
   });
 
+  it("un titlu nou pornește de la 1080p, reîncercarea aceluiași titlu nu", () => {
+    let s = wizardReducer(atResult(), { type: "SET_QUALITY", quality: "4K HDR" });
+    s = wizardReducer(s, { type: "SELECT_ITEM", item });
+    expect(s.quality).toBe("4K HDR");
+    s = wizardReducer(s, { type: "SELECT_ITEM", item: { ...item, id: 43 } });
+    expect(s.quality).toBe("1080p");
+  });
+
   it("verificarea eșuată ajunge tot la rezultat, dar cu eroarea păstrată", () => {
     let s = wizardReducer(initialWizardState, { type: "SELECT_ITEM", item });
     s = wizardReducer(s, { type: "CHECK_FAILED", error: "TMDB pică", fallback: emptyCheck });
@@ -85,22 +93,10 @@ describe("confirmarea nu poate exista fără țintă", () => {
   it("deschiderea confirmării poartă mereu ținta", () => {
     const s = wizardReducer(atResult(), {
       type: "OPEN_CONFIRM",
-      target: { kind: "single", torrent: torrent(1), label: "Film", isSeasonPack: false },
+      target: { torrent: torrent(1), label: "Film", isSeasonPack: false },
       back: { step: "result" },
     });
-    expect(s.flow).toMatchObject({ step: "confirm", target: { kind: "single" } });
-  });
-
-  it("ținta e ori un torrent, ori un lot — niciodată amândouă", () => {
-    const s = wizardReducer(atResult(), {
-      type: "OPEN_CONFIRM",
-      target: { kind: "bulk", items: [] },
-      back: { step: "result" },
-    });
-    if (s.flow.step !== "confirm") throw new Error("ar fi trebuit să fie la confirmare");
-    expect(s.flow.target.kind).toBe("bulk");
-    // Uniunea garantează că un `target` de tip bulk n-are câmp `torrent`.
-    expect("torrent" in s.flow.target).toBe(false);
+    expect(s.flow).toMatchObject({ step: "confirm", target: { torrent: torrent(1) } });
   });
 });
 
@@ -110,7 +106,7 @@ describe("înapoi din confirmare merge unde a promis", () => {
     let s = wizardReducer(atResult(), { type: "OPEN_PICK", choice, pickedTorrentId: 2 });
     s = wizardReducer(s, {
       type: "OPEN_CONFIRM",
-      target: { kind: "single", torrent: torrent(2), label: choice.label, isSeasonPack: false },
+      target: { torrent: torrent(2), label: choice.label, isSeasonPack: false },
       back: { step: "pick", choice },
     });
     s = wizardReducer(s, { type: "BACK" });
@@ -122,7 +118,7 @@ describe("înapoi din confirmare merge unde a promis", () => {
   it("se întoarce la rezultat când confirmarea a venit direct de acolo", () => {
     let s = wizardReducer(atResult(), {
       type: "OPEN_CONFIRM",
-      target: { kind: "bulk", items: [] },
+      target: { torrent: torrent(1), label: "Film", isSeasonPack: false },
       back: { step: "result" },
     });
     s = wizardReducer(s, { type: "BACK" });
@@ -136,7 +132,6 @@ describe("resetarea nu poate uita nimic", () => {
   it("întoarce exact starea inițială, din orice pas", () => {
     let s = atResult();
     s = wizardReducer(s, { type: "SET_BUSY", busy: true });
-    s = wizardReducer(s, { type: "SET_BULK_PROGRESS", progress: { done: 3, total: 9 } });
     s = wizardReducer(s, { type: "DONE", message: "gata" });
     expect(wizardReducer(s, { type: "RESET" })).toEqual(initialWizardState);
   });

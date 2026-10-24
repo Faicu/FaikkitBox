@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useRef } from "react";
+import { useEffect, useReducer } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2, ArrowLeft, Check } from "lucide-react";
 
@@ -8,7 +8,6 @@ import type { TmdbSearchResult } from "@/lib/tmdb/tmdb.functions";
 import { SearchStep } from "./wizard/SearchStep";
 import { ResultStep } from "./wizard/ResultStep";
 import { PickStep } from "./wizard/PickStep";
-import { ConfirmBulkStep } from "./wizard/ConfirmBulkStep";
 import { ConfirmStep } from "./wizard/ConfirmStep";
 import { DoneStep } from "./wizard/DoneStep";
 import type { Step, TorrentChoiceContext } from "./wizard/types";
@@ -34,18 +33,7 @@ export function AddMediaWizard({
 
   // Doar ce folosește chiar shell-ul: restul stării ajunge la pași prin
   // `state`, pe care fiecare îl citește cât îi trebuie.
-  const {
-    flow,
-    query,
-    results,
-    searching,
-    selected,
-    checkResult,
-    quality,
-    pickedTorrentId,
-    busy,
-    bulkProgress,
-  } = state;
+  const { flow, query, results, searching, selected, checkResult, pickedTorrentId, busy } = state;
 
   const step = flow.step;
   // Lista de candidați e vie și în timpul confirmării, dacă de acolo s-a
@@ -56,13 +44,8 @@ export function AddMediaWizard({
       : flow.step === "confirm" && flow.back.step === "pick"
         ? flow.back.choice
         : null;
-  const confirmTorrent =
-    flow.step === "confirm" && flow.target.kind === "single" ? flow.target : null;
-  const confirmBulk =
-    flow.step === "confirm" && flow.target.kind === "bulk" ? flow.target.items : null;
+  const confirmTorrent = flow.step === "confirm" ? flow.target : null;
   const doneMessage = flow.step === "done" ? flow.message : null;
-
-  const cancelBulkRef = useRef(false);
 
   const isTv = selected?.mediaType === "tv";
 
@@ -71,20 +54,10 @@ export function AddMediaWizard({
   // fi bazat pe faptul că efectul rulează oricum mai târziu — adevărat, dar
   // fragil de citit.
   const { onQueryChange, selectItem } = useWizardData(dispatch);
-  const { downloadOne, downloadBulk, toggleMovieWatch } = useWizardDownload({
-    state,
-    dispatch,
-    isTv,
-    cancelBulkRef,
-  });
-
-  function reset() {
-    dispatch({ type: "RESET" });
-    cancelBulkRef.current = false;
-  }
+  const { downloadOne, toggleMovieWatch } = useWizardDownload({ state, dispatch, isTv });
 
   function handleClose() {
-    reset();
+    dispatch({ type: "RESET" });
     onClose();
   }
 
@@ -218,18 +191,7 @@ export function AddMediaWizard({
               />
             )}
 
-            {step === "confirm" && confirmBulk && (
-              <ConfirmBulkStep
-                items={confirmBulk}
-                quality={quality}
-                bulkProgress={bulkProgress}
-                cancelBulkRef={cancelBulkRef}
-                onCancel={() => dispatch({ type: "BACK" })}
-                onConfirm={() => downloadBulk(confirmBulk)}
-              />
-            )}
-
-            {step === "confirm" && !confirmBulk && confirmTorrent && (
+            {confirmTorrent && (
               <ConfirmStep
                 torrent={confirmTorrent.torrent}
                 label={confirmTorrent.label}

@@ -1,18 +1,28 @@
 import { useState } from "react";
-import { Loader2, HardDrive, Users, Zap, Film, Tv, Languages } from "lucide-react";
+import {
+  Loader2,
+  HardDrive,
+  Users,
+  ArrowDownToLine,
+  CalendarDays,
+  Zap,
+  BadgeCheck,
+  Film,
+  Tv,
+  Languages,
+} from "lucide-react";
 
 import { formatBytes } from "@/lib/format";
 import type { FilelistTorrent } from "@/lib/filelist.functions";
 import { RO_DUBBED_CATEGORY } from "@/lib/filelist/categories";
-
-export type WatchQuality = "720p" | "1080p" | "1080p HDR" | "4K" | "4K HDR";
+import type { Quality } from "./types";
 
 // ---------------------------------------------------------------------------
 // Piese mici, fără stare proprie (cu excepția QualitySelector) — reutilizate
-// în pașii wizard-ului (AddMediaWizard.tsx).
+// în pașii wizard-ului.
 // ---------------------------------------------------------------------------
 
-const QUALITY_STYLES: Record<WatchQuality, { active: string; inactive: string }> = {
+const QUALITY_STYLES: Record<Quality, { active: string; inactive: string }> = {
   "720p": {
     active:
       "border-neutral-400/70 bg-neutral-500/30 text-neutral-200 shadow-sm shadow-neutral-500/30",
@@ -47,67 +57,72 @@ function QualityButton({
   q,
   active,
   onClick,
+  className = "",
 }: {
-  q: WatchQuality;
+  q: Quality;
   active: boolean;
   onClick: () => void;
+  className?: string;
 }) {
   const style = active ? QUALITY_STYLES[q].active : QUALITY_STYLES[q].inactive;
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`flex-1 rounded-xl border px-3 py-1.5 text-sm font-medium transition-colors active:scale-95 ${style}`}
+      className={`rounded-xl border px-3 py-1.5 text-sm font-medium transition-colors active:scale-95 ${style} ${className}`}
     >
       {q}
     </button>
   );
 }
 
-// Selectorul de calitate — 1080p implicit; altă calitate stă ascunsă
-// inițial sub un toggle mic, ca ecranul să rămână curat în cazul comun.
+const OTHER_QUALITIES: Quality[] = ["720p", "1080p HDR", "4K", "4K HDR"];
+
+// Selectorul de calitate — 1080p implicit, pe același rând cu eticheta;
+// celelalte calități stau sub „Vrei altă calitate?", ca ecranul să rămână
+// curat în cazul comun. Schimbarea calității nu cere nimic de la server:
+// torrentele titlului sunt deja aduse, doar se filtrează altfel.
+//
+// Deschiderea rămâne și când calitatea vine din altă parte (butoanele
+// „Disponibil la"), altfel calitatea activă n-ar fi vizibilă nicăieri.
 export function QualitySelector({
   quality,
   onChange,
 }: {
-  quality: WatchQuality;
-  onChange: (q: WatchQuality) => void;
+  quality: Quality;
+  onChange: (q: Quality) => void;
 }) {
-  const [expanded, setExpanded] = useState(quality !== "1080p");
+  const [opened, setOpened] = useState(false);
+  const expanded = opened || quality !== "1080p";
 
   return (
     <div>
-      <div className="mb-1.5 flex items-center justify-between">
+      <div className="flex items-center gap-2">
         <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Calitate
         </span>
+        <QualityButton q="1080p" active={quality === "1080p"} onClick={() => onChange("1080p")} />
         {!expanded && (
           <button
             type="button"
-            onClick={() => setExpanded(true)}
-            className="text-[11px] text-muted-foreground underline decoration-dotted hover:text-foreground"
+            onClick={() => setOpened(true)}
+            className="ml-auto text-[11px] text-muted-foreground underline decoration-dotted hover:text-foreground"
           >
             Vrei altă calitate?
           </button>
         )}
       </div>
-      <div className="flex gap-2">
-        <QualityButton q="1080p" active={quality === "1080p"} onClick={() => onChange("1080p")} />
-      </div>
       {expanded && (
         <div className="mt-2 flex flex-wrap gap-2">
-          <QualityButton q="720p" active={quality === "720p"} onClick={() => onChange("720p")} />
-          <QualityButton
-            q="1080p HDR"
-            active={quality === "1080p HDR"}
-            onClick={() => onChange("1080p HDR")}
-          />
-          <QualityButton q="4K" active={quality === "4K"} onClick={() => onChange("4K")} />
-          <QualityButton
-            q="4K HDR"
-            active={quality === "4K HDR"}
-            onClick={() => onChange("4K HDR")}
-          />
+          {OTHER_QUALITIES.map((q) => (
+            <QualityButton
+              key={q}
+              q={q}
+              active={quality === q}
+              onClick={() => onChange(q)}
+              className="flex-1"
+            />
+          ))}
         </div>
       )}
     </div>
@@ -138,12 +153,9 @@ export function ActionButton({
   );
 }
 
-// Alegere manuală între torrente când sunt mai multe la aceeași calitate
-// (grupuri de release diferite etc) — nu se arată dacă e un singur candidat,
-// ca să nu aglomerăm pasul final degeaba în cazul comun.
 // Numele lansării nu spune că e dublată (ex. „Ferdinand.2017.1080p.WEBRip"),
 // deci categoria se arată explicit oriunde alegi un torrent.
-export function DubbedBadge({ torrent }: { torrent: FilelistTorrent }) {
+function DubbedBadge({ torrent }: { torrent: FilelistTorrent }) {
   if (torrent.category !== RO_DUBBED_CATEGORY) return null;
   return (
     <span className="inline-flex items-center gap-0.5 text-emerald-400">
@@ -152,6 +164,16 @@ export function DubbedBadge({ torrent }: { torrent: FilelistTorrent }) {
   );
 }
 
+function uploadDate(t: FilelistTorrent): string | null {
+  const d = t.upload_date ? new Date(t.upload_date) : null;
+  if (!d || Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString("ro-RO", { day: "numeric", month: "short", year: "numeric" });
+}
+
+// Alegere manuală între torrente când sunt mai multe la aceeași calitate
+// (admin) — nu se arată pentru un singur candidat, ca să nu aglomerăm pasul
+// în cazul comun. Ordinea e cea din clasament (torrent-rank.ts); badge-urile
+// arată criteriile lui.
 export function TorrentPicker({
   matches,
   selectedId,
@@ -168,34 +190,50 @@ export function TorrentPicker({
         Alege torrentul ({matches.length} disponibile)
       </div>
       <div className="max-h-56 space-y-1.5 overflow-y-auto pr-0.5">
-        {matches.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => onSelect(t.id)}
-            className={`w-full rounded-lg border p-2 text-left transition-colors active:scale-[0.98] ${
-              t.id === selectedId
-                ? "border-primary bg-primary/10"
-                : "border-border bg-muted/40 hover:bg-muted/60"
-            }`}
-          >
-            <div className="break-all text-xs font-medium">{t.name}</div>
-            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground">
-              <span className="flex items-center gap-0.5">
-                <HardDrive className="h-3 w-3" /> {formatBytes(t.size)}
-              </span>
-              <span className="flex items-center gap-0.5 text-emerald-400">
-                <Users className="h-3 w-3" /> {t.seeders}S
-              </span>
-              {t.freeleech && (
-                <span className="flex items-center gap-0.5 text-yellow-400">
-                  <Zap className="h-3 w-3" /> Freeleech
+        {matches.map((t) => {
+          const date = uploadDate(t);
+          return (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => onSelect(t.id)}
+              className={`w-full rounded-lg border p-2 text-left transition-colors active:scale-[0.98] ${
+                t.id === selectedId
+                  ? "border-primary bg-primary/10"
+                  : "border-border bg-muted/40 hover:bg-muted/60"
+              }`}
+            >
+              <div className="break-all text-xs font-medium">{t.name}</div>
+              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground">
+                <span className="flex items-center gap-0.5">
+                  <HardDrive className="h-3 w-3" /> {formatBytes(t.size)}
                 </span>
-              )}
-              <DubbedBadge torrent={t} />
-            </div>
-          </button>
-        ))}
+                {date && (
+                  <span className="flex items-center gap-0.5">
+                    <CalendarDays className="h-3 w-3" /> {date}
+                  </span>
+                )}
+                <span className="flex items-center gap-0.5 text-emerald-400">
+                  <Users className="h-3 w-3" /> {t.seeders}S
+                </span>
+                <span className="flex items-center gap-0.5 text-orange-400">
+                  <ArrowDownToLine className="h-3 w-3" /> {t.leechers}L
+                </span>
+                {t.internal && (
+                  <span className="flex items-center gap-0.5 text-sky-400">
+                    <BadgeCheck className="h-3 w-3" /> Internal
+                  </span>
+                )}
+                {t.freeleech && (
+                  <span className="flex items-center gap-0.5 text-yellow-400">
+                    <Zap className="h-3 w-3" /> Freeleech
+                  </span>
+                )}
+                <DubbedBadge torrent={t} />
+              </div>
+            </button>
+          );
+        })}
       </div>
     </div>
   );

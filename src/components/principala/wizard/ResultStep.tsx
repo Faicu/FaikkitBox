@@ -13,7 +13,7 @@ import { Orb } from "@/components/ui/orb";
 import { ActionButton, TorrentPicker, PosterHero, QualitySelector } from "./WizardControls";
 import { SeasonAccordion } from "./SeasonAccordion";
 import type { SeasonRowData } from "./SeasonAccordion";
-import { deriveSeasonRows, deriveBulkPlan } from "./derive-seasons";
+import { deriveSeasonRows } from "./derive-seasons";
 import {
   ONGOING_TV_STATUSES,
   tvStatusLabel,
@@ -23,7 +23,7 @@ import {
   availableQualities,
 } from "./selection";
 import { normalizeStoredPoster } from "@/lib/tmdb/poster";
-import type { CheckResult, TorrentChoiceContext } from "./types";
+import type { CheckResult, Quality, TorrentChoiceContext } from "./types";
 import type { WizardAction, WizardState } from "./state";
 
 export function ResultStep({
@@ -58,50 +58,42 @@ export function ResultStep({
     quality,
     pickedTorrentId,
     busy,
-    downloadingTorrentId,
   } = state;
 
-  const seasonGroups = checkResult ? groupTorrentsBySeasonEpisode(checkResult.torrents) : [];
+  const setQuality = (q: Quality) => dispatch({ type: "SET_QUALITY", quality: q });
 
   // Schema per-sezon afișată în accordion: pentru fiecare episod, exact una
   // din stările posibile — deja în Plex, deja în curs de descărcare, lipsă+
   // descărcabil, lipsă+indisponibil, sau nelansat încă (cu dată, dacă TMDB o
   // are stabilită; fără dată cunoscută, tratăm episodul ca "indisponibil",
   // nu ca "nelansat" — nu inventăm o dată care nu există).
-  const seasonRows: SeasonRowData[] =
-    isTv && checkResult
-      ? deriveSeasonRows({
-          seasons: checkResult.seasons,
-          seasonSchema,
-          seasonGroups,
-          plexBySeason,
-          downloadingEntries,
-          tvmazeAirstamps,
-          quality,
-        })
-      : [];
-
-  const bulkPlan = deriveBulkPlan(seasonRows);
+  const seasonRows: SeasonRowData[] = isTv
+    ? deriveSeasonRows({
+        seasons: checkResult.seasons,
+        seasonSchema,
+        seasonGroups: groupTorrentsBySeasonEpisode(checkResult.torrents),
+        plexBySeason,
+        downloadingEntries,
+        tvmazeAirstamps,
+        quality,
+      })
+    : [];
 
   const movieAlreadyDownloading = !isTv && downloadingEntries.length > 0;
-  const movieMatches =
-    !isTv && checkResult ? matchesForQuality(checkResult.torrents, quality, "movie") : [];
+  const movieMatches = isTv ? [] : matchesForQuality(checkResult.torrents, quality, "movie");
   const movieMatch = movieMatches.find((t) => t.id === pickedTorrentId) ?? bestOf(movieMatches);
   // Când nu e la calitatea aleasă, dar e la alta: altfel se vedea doar
   // „nu există", fără indiciu că merită deschis selectorul.
   const otherQualities =
-    !isTv && checkResult && !movieMatch
-      ? availableQualities(checkResult.torrents, quality, "movie")
-      : [];
+    !isTv && !movieMatch ? availableQualities(checkResult.torrents, quality, "movie") : [];
 
   // Pentru filme, "există în Plex" e suficient (verificare atomică).
-  const alreadyInPlex = !isTv && !!checkResult?.plexFound;
-  const plexQualities = checkResult?.plexQualities ?? [];
+  const alreadyInPlex = !isTv && checkResult.plexFound;
+  const plexQualities = checkResult.plexQualities;
   // Un film deja în Plex nu mai e fundătură: dacă alegi o calitate pe care
   // n-o ai, îți oferim explicit descărcarea — în ambele sensuri, nu doar în
   // sus (vezi qualityDirection pentru când e `null`).
   const direction = alreadyInPlex ? qualityDirection(plexQualities, quality) : null;
-  const showQualityAndAction = !isTv && !!checkResult && !alreadyInPlex && !movieAlreadyDownloading;
 
   // Deschide direct confirmarea când există un singur candidat (sau userul
   // nu e admin — doar adminul poate alege manual), altfel arată mai întâi
@@ -115,7 +107,7 @@ export function ResultStep({
       if (!torrent) return;
       dispatch({
         type: "OPEN_CONFIRM",
-        target: { kind: "single", torrent, ...ctx },
+        target: { torrent, ...ctx },
         back: { step: "result" },
       });
       return;
@@ -129,7 +121,7 @@ export function ResultStep({
 
   function handleDownloadPack(season: SeasonRowData, torrents: FilelistTorrent[]) {
     requestDownload(torrents, {
-      label: `Sezonul ${season.seasonNumber} (pachet)`,
+      label: `Sezonul ${season.seasonNumber} (întreg)`,
       season: season.seasonNumber,
       isSeasonPack: true,
     });
@@ -221,25 +213,7 @@ export function ResultStep({
             </div>
           )}
 
-          <QualitySelector
-            quality={quality}
-            onChange={(q) => dispatch({ type: "SET_QUALITY", quality: q })}
-          />
-
-          {bulkPlan.length > 0 && (
-            <ActionButton
-              busy={busy}
-              icon={<Download className="h-4 w-4" />}
-              label={`Descarcă tot ce lipsește (${bulkPlan.length})`}
-              onClick={() => {
-                dispatch({
-                  type: "OPEN_CONFIRM",
-                  target: { kind: "bulk", items: bulkPlan },
-                  back: { step: "result" },
-                });
-              }}
-            />
-          )}
+          <QualitySelector quality={quality} onChange={setQuality} />
 
           <div>
             <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -248,9 +222,9 @@ export function ResultStep({
             <SeasonAccordion
               seasons={seasonRows}
               busy={busy}
-              downloadingTorrentId={downloadingTorrentId}
               onDownloadPack={handleDownloadPack}
               onDownloadEpisode={handleDownloadEpisode}
+              onPickQuality={setQuality}
             />
           </div>
         </>
@@ -270,10 +244,7 @@ export function ResultStep({
           {/* Selectorul rămâne disponibil: singurul motiv să mai
             stai pe ecranul ăsta e să iei altă variantă decât cea
             din Plex — mai bună sau, deliberat, mai mică. */}
-          <QualitySelector
-            quality={quality}
-            onChange={(q) => dispatch({ type: "SET_QUALITY", quality: q })}
-          />
+          <QualitySelector quality={quality} onChange={setQuality} />
 
           {/* Fără asta, alegerea unei calități deja deținute nu producea
             nimic sub selector — un ecran mut, imposibil de distins de o
@@ -311,7 +282,6 @@ export function ResultStep({
                     dispatch({
                       type: "OPEN_CONFIRM",
                       target: {
-                        kind: "single",
                         torrent: movieMatch,
                         // Explicit, nu neutru: label-ul ajunge în jurnal, iar
                         // peste o lună vrei să vezi de ce ai două fișiere
@@ -331,105 +301,99 @@ export function ResultStep({
             ))}
         </>
       ) : (
-        showQualityAndAction && (
-          <>
-            {/* Bannerul stă deasupra selectorului, nu în ramura
+        <>
+          {/* Bannerul stă deasupra selectorului, nu în ramura
               „nu există", fiindcă un film urmărit rămâne urmărit
               și în clipa în care apare un torrent — atunci vrei
               să vezi și că e așteptat, și butonul de descărcare. */}
-            {wantedEntry && (
-              <div className="space-y-2 rounded-xl bg-violet-500/10 p-3">
-                <div className="flex items-center gap-2 text-sm text-violet-300">
-                  <Orb state="searching" px={16} />
-                  Se așteaptă la {wantedEntry.quality} — se verifică din 12 în 12 ore.
-                </div>
-                {/* Oprirea ar putea anula așteptarea altcuiva, deci
-                  doar proprietarul sau un admin. */}
-                {wantedEntry.canManage && (
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => onToggleWatch(false)}
-                    className="rounded-lg border border-border px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted/60 disabled:opacity-40"
-                  >
-                    Oprește urmărirea
-                  </button>
-                )}
+          {wantedEntry && (
+            <div className="space-y-2 rounded-xl bg-violet-500/10 p-3">
+              <div className="flex items-center gap-2 text-sm text-violet-300">
+                <Orb state="searching" px={16} />
+                Se așteaptă la {wantedEntry.quality} — se verifică din 12 în 12 ore.
               </div>
-            )}
+              {/* Oprirea ar putea anula așteptarea altcuiva, deci
+                  doar proprietarul sau un admin. */}
+              {wantedEntry.canManage && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => onToggleWatch(false)}
+                  className="rounded-lg border border-border px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted/60 disabled:opacity-40"
+                >
+                  Oprește urmărirea
+                </button>
+              )}
+            </div>
+          )}
 
-            <QualitySelector
-              quality={quality}
-              onChange={(q) => dispatch({ type: "SET_QUALITY", quality: q })}
-            />
+          <QualitySelector quality={quality} onChange={setQuality} />
 
-            {movieMatch ? (
-              <>
-                {isAdmin && (
-                  <TorrentPicker
-                    matches={movieMatches}
-                    selectedId={movieMatch.id}
-                    onSelect={(id) => dispatch({ type: "PICK_TORRENT", torrentId: id })}
-                  />
-                )}
-                <ActionButton
-                  busy={busy}
-                  icon={<Download className="h-4 w-4" />}
-                  label="Descarcă acum"
-                  onClick={() => {
-                    dispatch({
-                      type: "OPEN_CONFIRM",
-                      target: {
-                        kind: "single",
-                        torrent: movieMatch,
-                        label: "Film",
-                        isSeasonPack: false,
-                      },
-                      back: { step: "result" },
-                    });
-                  }}
+          {movieMatch ? (
+            <>
+              {isAdmin && (
+                <TorrentPicker
+                  matches={movieMatches}
+                  selectedId={movieMatch.id}
+                  onSelect={(id) => dispatch({ type: "PICK_TORRENT", torrentId: id })}
                 />
-              </>
-            ) : (
-              <div className="space-y-3 rounded-xl glass-card p-3">
-                <div className="text-sm text-muted-foreground">
-                  Nu există încă la calitatea {quality} pe Filelist.
-                </div>
-                {otherQualities.length > 0 && (
-                  <div className="space-y-2">
-                    <div className="text-sm">Dar e disponibil la:</div>
-                    <div className="flex flex-wrap gap-2">
-                      {otherQualities.map((q) => (
-                        <button
-                          key={q}
-                          type="button"
-                          disabled={busy}
-                          onClick={() => dispatch({ type: "SET_QUALITY", quality: q })}
-                          className="rounded-lg border border-primary/40 bg-primary/10 px-3 py-1.5 text-sm font-medium text-primary transition-colors hover:bg-primary/20 disabled:opacity-40"
-                        >
-                          {q}
-                        </button>
-                      ))}
-                    </div>
+              )}
+              <ActionButton
+                busy={busy}
+                icon={<Download className="h-4 w-4" />}
+                label="Descarcă acum"
+                onClick={() => {
+                  dispatch({
+                    type: "OPEN_CONFIRM",
+                    target: {
+                      torrent: movieMatch,
+                      label: "Film",
+                      isSeasonPack: false,
+                    },
+                    back: { step: "result" },
+                  });
+                }}
+              />
+            </>
+          ) : (
+            <div className="space-y-3 rounded-xl glass-card p-3">
+              <div className="text-sm text-muted-foreground">
+                Nu există încă la calitatea {quality} pe Filelist.
+              </div>
+              {otherQualities.length > 0 && (
+                <div className="space-y-2">
+                  <div className="text-sm">Dar e disponibil la:</div>
+                  <div className="flex flex-wrap gap-2">
+                    {otherQualities.map((q) => (
+                      <button
+                        key={q}
+                        type="button"
+                        disabled={busy}
+                        onClick={() => setQuality(q)}
+                        className="rounded-lg border border-primary/40 bg-primary/10 px-3 py-1.5 text-sm font-medium text-primary transition-colors hover:bg-primary/20 disabled:opacity-40"
+                      >
+                        {q}
+                      </button>
+                    ))}
                   </div>
-                )}
-                {/* Fundacul de dinainte: mesajul spunea „încă", dar
+                </div>
+              )}
+              {/* Fundacul de dinainte: mesajul spunea „încă", dar
                   nu-ți oferea nimic de făcut cu informația asta. */}
-                {/* Deschis oricui e logat, nu doar adminilor: un film
+              {/* Deschis oricui e logat, nu doar adminilor: un film
                   așteptat nu ocupă nimic până apare, iar descărcarea
                   de atunci e exact ce a cerut utilizatorul. */}
-                {!wantedEntry && (
-                  <ActionButton
-                    busy={busy}
-                    icon={<Orb state="searching" px={16} />}
-                    label="Urmărește — descarcă automat când apare"
-                    onClick={() => onToggleWatch(true)}
-                  />
-                )}
-              </div>
-            )}
-          </>
-        )
+              {!wantedEntry && (
+                <ActionButton
+                  busy={busy}
+                  icon={<Orb state="searching" px={16} />}
+                  label="Urmărește — descarcă automat când apare"
+                  onClick={() => onToggleWatch(true)}
+                />
+              )}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
