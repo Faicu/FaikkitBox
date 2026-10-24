@@ -30,7 +30,12 @@ import {
   srtContentLanguage,
   pickRomanianSrt,
 } from "./subtitle-checks";
-import { createSubtitleVerifier, isWellSynced, type SyncMeasure } from "./subtitle-verify";
+import {
+  createSubtitleVerifier,
+  isBetterSync,
+  isWellSynced,
+  type SyncMeasure,
+} from "./subtitle-verify";
 import { SUBTITLE_SOURCE_LABELS } from "./subtitle-outcomes";
 import { decodeToUtf8Text } from "./subtitle-encoding";
 import { rankSubtitleCandidates } from "./subtitle-sources";
@@ -354,7 +359,7 @@ export async function processMediaFile(
       break;
     }
     compared++;
-    if (!best?.sync || check.sync.score > best.sync.score)
+    if (isBetterSync(check.sync, best?.sync ?? null))
       best = { candidate, fetched, sync: check.sync };
     if (isWellSynced(check.sync)) break;
   }

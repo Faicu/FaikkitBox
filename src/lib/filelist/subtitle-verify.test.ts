@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parseSrtTiming, speechCorrelation } from "./subtitle-verify";
+import { isBetterSync, parseSrtTiming, speechCorrelation } from "./subtitle-verify";
 
 const srt = (starts: number[]) =>
   starts
@@ -61,5 +61,27 @@ describe("speechCorrelation", () => {
 
   it("alt episod: sub prag (MobLand S02E02 cu subtitrarea lui E01)", () => {
     expect(speechCorrelation(e2, e1).score).toBeLessThan(0.45);
+  });
+});
+
+describe("isBetterSync", () => {
+  it("la scor practic egal câștigă decalajul mai mic (Euphoria S01E02)", () => {
+    const kings = { score: 0.467, offset: 0 };
+    const afg = { score: 0.468, offset: 8 };
+    expect(isBetterSync(afg, kings)).toBe(false);
+    expect(isBetterSync(kings, afg)).toBe(true);
+  });
+
+  it("la scor și decalaj egale rămâne cea deja aleasă", () => {
+    expect(isBetterSync({ score: 0.5, offset: 0 }, { score: 0.5, offset: 0 })).toBe(false);
+  });
+
+  it("altfel decide scorul, oricare ar fi decalajul", () => {
+    expect(isBetterSync({ score: 0.9, offset: 3 }, { score: 0.6, offset: 0 })).toBe(true);
+    expect(isBetterSync({ score: 0.6, offset: 0 }, { score: 0.9, offset: 3 })).toBe(false);
+  });
+
+  it("prima variantă măsurată e mereu mai bună decât nimic", () => {
+    expect(isBetterSync({ score: 0.46, offset: 20 }, null)).toBe(true);
   });
 });

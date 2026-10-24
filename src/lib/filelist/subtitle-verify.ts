@@ -201,6 +201,23 @@ export function isWellSynced(sync: SyncMeasure): boolean {
   return sync.score >= GOOD_SYNC_SCORE && Math.abs(sync.offset) <= GOOD_SYNC_MAX_OFFSET_S;
 }
 
+// Sub diferența asta, două corelații sunt „la egalitate" — aceeași traducere
+// copiată pentru mai multe release-uri dă corelații identice până la a doua
+// zecimală, doar decalajul diferă.
+const SAME_SCORE_EPSILON = 0.02;
+
+// Dacă `candidate` e mai bine sincronizată decât `best`. La scor practic egal
+// decide decalajul mai mic, apoi rămâne cea deja aleasă (ordinea după nume).
+// Euphoria S01E02 (23 oct. 2026): varianta KiNGS, identică cu fișierul, dădea
+// 0,4670 fără decalaj; aceeași traducere sub numele XviD-AFG, 0,4680 cu 8 s
+// decalaj — și câștiga, la diferență de o miime.
+export function isBetterSync(candidate: SyncMeasure, best: SyncMeasure | null): boolean {
+  if (!best) return true;
+  if (Math.abs(candidate.score - best.score) < SAME_SCORE_EPSILON)
+    return Math.abs(candidate.offset) < Math.abs(best.offset);
+  return candidate.score > best.score;
+}
+
 export interface SubtitleCheck {
   // null = pare în regulă (sau nu avem cum ști); altfel motivul respingerii.
   reason: string | null;
