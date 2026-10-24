@@ -40,7 +40,7 @@ export function deriveSeasonRows(input: DeriveSeasonsInput): SeasonRowData[] {
     const group = seasonGroups.find((g) => g.seasonNum === s.seasonNumber);
     const plexMap = new Map((plexBySeason.get(s.seasonNumber) ?? []).map((e) => [e.num, e]));
     const packCandidates = group
-      ? matchesForQuality(pickFromSet(group.byQuality, quality), quality)
+      ? matchesForQuality(pickFromSet(group.byQuality, quality), quality, "tv")
       : [];
     const packDownloadingEntry = downloadingEntries.find(
       (e) => e.season === s.seasonNumber && e.isSeasonPack,
@@ -83,6 +83,7 @@ export function deriveSeasonRows(input: DeriveSeasonsInput): SeasonRowData[] {
       const epCandidates = matchesForQuality(
         pickFromSet(group?.episodes.get(epNum) ?? emptyQualitySet(), quality),
         quality,
+        "tv",
       );
 
       // Ordinea contează: prima stare adevărată câștigă. "În Plex" bate

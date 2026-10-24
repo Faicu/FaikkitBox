@@ -28,6 +28,7 @@ import {
   type FallbackSeen,
 } from "./fallback-quality";
 import { getDb } from "../db";
+import { rankTorrents, type RankableTorrent } from "./torrent-rank";
 
 // 12h, nu 3h ca la seriale. Un episod are oră de difuzare anunțată și apare pe
 // Filelist în câteva ore, deci acolo o cadență scurtă chiar prinde ceva. Un
@@ -75,20 +76,22 @@ function hasReleased(releaseDate: string | null, now: Date = new Date()): boolea
 }
 
 // Candidații pentru un film urmărit: potriviți pe IMDb de Filelist, exact la
-// calitatea cerută, cel mai bine sămânțat primul.
+// calitatea cerută, fără cei excluși, cel mai bun primul (torrent-rank.ts).
 //
 // Calitate exactă, nu „cel puțin": aceeași semantică cu urmărirea serialelor
 // (show-watch.ts), unde e tot `detectTorrentQuality(...) === calitatea cerută`.
 // Dacă ai cerut 1080p, un 4K de 60GB n-ar fi o surpriză plăcută.
-function pickCandidates<T extends { name: string; seeders: number; matchedByImdb?: boolean }>(
+function pickCandidates<T extends RankableTorrent & { matchedByImdb?: boolean }>(
   torrents: T[],
   wantedQuality: string,
   detect: (name: string) => string,
 ): T[] {
-  return torrents
-    .filter((t) => t.matchedByImdb !== false)
-    .filter((t) => detect(t.name) === wantedQuality)
-    .sort((a, b) => b.seeders - a.seeders);
+  return rankTorrents(
+    torrents
+      .filter((t) => t.matchedByImdb !== false)
+      .filter((t) => detect(t.name) === wantedQuality),
+    "movie",
+  );
 }
 
 // Gardă per film, ca la checkShow: „Verifică acum" din UI și bucla plugin-ului

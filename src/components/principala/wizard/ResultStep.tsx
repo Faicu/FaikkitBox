@@ -84,12 +84,15 @@ export function ResultStep({
   const bulkPlan = deriveBulkPlan(seasonRows);
 
   const movieAlreadyDownloading = !isTv && downloadingEntries.length > 0;
-  const movieMatches = !isTv && checkResult ? matchesForQuality(checkResult.torrents, quality) : [];
+  const movieMatches =
+    !isTv && checkResult ? matchesForQuality(checkResult.torrents, quality, "movie") : [];
   const movieMatch = movieMatches.find((t) => t.id === pickedTorrentId) ?? bestOf(movieMatches);
   // Când nu e la calitatea aleasă, dar e la alta: altfel se vedea doar
   // „nu există", fără indiciu că merită deschis selectorul.
   const otherQualities =
-    !isTv && checkResult && !movieMatch ? availableQualities(checkResult.torrents, quality) : [];
+    !isTv && checkResult && !movieMatch
+      ? availableQualities(checkResult.torrents, quality, "movie")
+      : [];
 
   // Pentru filme, "există în Plex" e suficient (verificare atomică).
   const alreadyInPlex = !isTv && !!checkResult?.plexFound;

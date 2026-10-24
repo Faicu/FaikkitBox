@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 
 import {
   bestOf,
-  sortBySeeders,
   matchesForQuality,
   qualityRank,
   qualityDirection,
@@ -18,22 +17,13 @@ function t(name: string, seeders: number, id = seeders): FilelistTorrent {
   return { id, name, seeders } as unknown as FilelistTorrent;
 }
 
-describe("bestOf / sortBySeeders", () => {
-  it("alege torrentul cu cei mai mulți seederi", () => {
-    expect(bestOf([t("a", 3), t("b", 10), t("c", 7)])?.name).toBe("b");
+describe("bestOf", () => {
+  it("ia primul din lista deja ordonată", () => {
+    expect(bestOf([t("b", 10), t("a", 3)])?.name).toBe("b");
   });
 
   it("întoarce null pentru o listă goală", () => {
     expect(bestOf([])).toBeNull();
-  });
-
-  it("nu modifică lista primită", () => {
-    // Sortarea se face pe o copie: lista vine din `checkResult.torrents`, iar
-    // o sortare pe loc ar rearanja starea componentei pe sub picioarele
-    // randării care tocmai o citește.
-    const list = [t("a", 1), t("b", 9)];
-    sortBySeeders(list);
-    expect(list.map((x) => x.name)).toEqual(["a", "b"]);
   });
 });
 
@@ -102,23 +92,25 @@ describe("qualityDirection", () => {
 
 describe("matchesForQuality", () => {
   const torrents = [
-    t("Film.2024.1080p.BluRay.x264", 5),
+    t("Film.2024.1080p.BluRay.x264", 3),
     t("Film.2024.2160p.HDR.WEB-DL", 20),
     t("Film.2024.720p.WEB", 8),
     t("Film.2024.1080p.WEB-DL", 50),
   ];
 
   it("întoarce doar potrivirile de calitatea cerută, cele mai bune primele", () => {
-    const res = matchesForQuality(torrents, "1080p");
-    expect(res.map((x) => x.seeders)).toEqual([50, 5]);
+    const res = matchesForQuality(torrents, "1080p", "movie");
+    expect(res.map((x) => x.seeders)).toEqual([50, 3]);
   });
 
   it("nu amestecă 4K cu 1080p", () => {
-    expect(matchesForQuality(torrents, "1080p").some((x) => x.name.includes("2160p"))).toBe(false);
+    expect(
+      matchesForQuality(torrents, "1080p", "movie").some((x) => x.name.includes("2160p")),
+    ).toBe(false);
   });
 
   it("întoarce listă goală când nu există nimic la calitatea cerută", () => {
-    expect(matchesForQuality([t("Film.2024.720p.WEB", 3)], "4K HDR")).toEqual([]);
+    expect(matchesForQuality([t("Film.2024.720p.WEB", 3)], "4K HDR", "movie")).toEqual([]);
   });
 });
 

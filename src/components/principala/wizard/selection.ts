@@ -5,6 +5,7 @@
 import { detectQuality } from "@/components/filelist/quality-utils";
 import type { QualitySet } from "@/components/filelist/types";
 import type { FilelistTorrent } from "@/lib/filelist.functions";
+import { rankTorrents, type TorrentKind } from "@/lib/media/torrent-rank";
 import type { Quality } from "./types";
 
 export function pickFromSet(set: QualitySet, quality: Quality): FilelistTorrent[] {
@@ -90,22 +91,21 @@ export function qualityDirection(
   return to > from ? "upgrade" : "downgrade";
 }
 
+// Primul dintr-o listă venită din `matchesForQuality` — deja ordonată după
+// clasament (torrent-rank.ts).
 export function bestOf(list: FilelistTorrent[]): FilelistTorrent | null {
-  return list.length ? [...list].sort((a, b) => b.seeders - a.seeders)[0] : null;
+  return list[0] ?? null;
 }
 
-export function sortBySeeders(list: FilelistTorrent[]): FilelistTorrent[] {
-  return [...list].sort((a, b) => b.seeders - a.seeders);
-}
-
-// Toate torrentele care se potrivesc la o calitate, sortate după seederi —
-// folosit pentru alegerea manuală (admin), la filme și la sezoane/episoade
-// individuale.
+// Toate torrentele care se potrivesc la o calitate, fără cele excluse, cel
+// mai bun primul (torrent-rank.ts) — folosit pentru alegerea automată și
+// pentru lista de alegere manuală (admin), la filme și la sezoane/episoade.
 export function matchesForQuality(
   torrents: FilelistTorrent[],
   quality: Quality,
+  kind: TorrentKind,
 ): FilelistTorrent[] {
-  return sortBySeeders(
+  return rankTorrents(
     torrents.filter((t) => {
       const q = detectQuality(t.name);
       if (quality === "720p") return q.is720p;
@@ -114,6 +114,7 @@ export function matchesForQuality(
       if (quality === "4K") return q.is4k;
       return q.is4kHdr;
     }),
+    kind,
   );
 }
 
@@ -123,10 +124,14 @@ const ALL_QUALITIES: Quality[] = ["720p", "1080p", "1080p HDR", "4K", "4K HDR"];
 // `preferred` întâi (deci după 1080p vin 1080p HDR și 720p, apoi 4K) — pentru
 // ecranul „nu există la calitatea aleasă", ca utilizatorul să afle că
 // filmul există totuși, la altă calitate.
-export function availableQualities(torrents: FilelistTorrent[], preferred: Quality): Quality[] {
+export function availableQualities(
+  torrents: FilelistTorrent[],
+  preferred: Quality,
+  kind: TorrentKind,
+): Quality[] {
   const pref = ALL_QUALITIES.indexOf(preferred);
   return ALL_QUALITIES.filter(
-    (q) => q !== preferred && matchesForQuality(torrents, q).length > 0,
+    (q) => q !== preferred && matchesForQuality(torrents, q, kind).length > 0,
   ).sort(
     (a, b) => Math.abs(ALL_QUALITIES.indexOf(a) - pref) - Math.abs(ALL_QUALITIES.indexOf(b) - pref),
   );

@@ -35,6 +35,7 @@ import {
   parseFallbackSeen,
   type FallbackSeen,
 } from "./fallback-quality";
+import { compareTorrents, isExcludedTorrent } from "./torrent-rank";
 import { advancedWatchFrom, type EpisodeKey } from "./watch-position";
 import { getDb } from "../db";
 import {
@@ -412,6 +413,7 @@ async function checkShowInner(showId: number): Promise<ShowWatchOutcome> {
   const relevant = search.torrents
     .filter((t) => t.matchedByImdb)
     .filter((t) => !alreadyFetched.has(t.name))
+    .filter((t) => !isExcludedTorrent(t))
     .map((t) => ({
       torrent: t,
       parsed: parseSeasonEpisodeFromName(t.name),
@@ -469,15 +471,17 @@ async function checkShowInner(showId: number): Promise<ShowWatchOutcome> {
   }
   saveFallbackSeen(nextSeen);
 
+  const byRank = compareTorrents("tv");
   const candidates = [...primary, ...readyFallback]
     // Episoadele individuale au prioritate față de pachete (mai puțin trafic
-    // pentru același rezultat), apoi principala față de rezervă, apoi seederi.
+    // pentru același rezultat), apoi principala față de rezervă, apoi
+    // clasamentul comun (torrent-rank.ts).
     .sort((a, b) => {
       const aPack = a.parsed!.episode == null ? 1 : 0;
       const bPack = b.parsed!.episode == null ? 1 : 0;
       const aFallback = a.quality === wantedQuality ? 0 : 1;
       const bFallback = b.quality === wantedQuality ? 0 : 1;
-      return aPack - bPack || aFallback - bFallback || b.torrent.seeders - a.torrent.seeders;
+      return aPack - bPack || aFallback - bFallback || byRank(a.torrent, b.torrent);
     });
 
   if (candidates.length === 0) {
