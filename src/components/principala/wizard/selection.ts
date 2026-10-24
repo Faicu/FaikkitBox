@@ -155,3 +155,30 @@ export function otherQualitiesWhere(preferred: Quality, has: (q: Quality) => boo
     (a, b) => Math.abs(ALL_QUALITIES.indexOf(a) - pref) - Math.abs(ALL_QUALITIES.indexOf(b) - pref),
   );
 }
+
+// Numele afișat utilizatorilor obișnuiți la confirmare, în locul numelui
+// lansării: titlul original fără punctuație, anul, sezonul/episodul și
+// calitatea — ex. „Transformers The Last Knight 2017 1080p HDR".
+export function friendlyReleaseName(input: {
+  originalTitle: string;
+  year: string | null;
+  quality: string;
+  season?: number;
+  episode?: number;
+  isSeasonPack: boolean;
+}): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const title = input.originalTitle
+    .replace(/[:\u2013\u2014]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const part =
+    input.season === undefined
+      ? null
+      : input.isSeasonPack || input.episode === undefined
+        ? `Sezonul ${input.season}`
+        : `S${pad(input.season)}E${pad(input.episode)}`;
+  return [title, input.year, part, input.quality === "SD" ? null : input.quality]
+    .filter(Boolean)
+    .join(" ");
+}

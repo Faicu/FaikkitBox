@@ -92,7 +92,24 @@ export function DownloadConfirmFields({
   return (
     <>
       <div className="space-y-2 text-xs text-muted-foreground">
-        <div className="font-medium text-foreground break-words">{torrent.name}</div>
+        <div className="flex items-start gap-2">
+          <div className="min-w-0 flex-1 break-words font-medium text-foreground">
+            {torrent.name}
+          </div>
+          {/* Cu `actions`, rândul de butoane (unde stă de obicei linkul)
+            e înlocuit — linkul trebuie să rămână undeva. */}
+          {actions && (
+            <a
+              href={`https://filelist.io/details.php?id=${torrent.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="shrink-0 rounded-lg border border-border p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              title="Vezi pe filelist.io"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+            </a>
+          )}
+        </div>
         <div className="flex flex-wrap gap-x-4 gap-y-1 pt-1">
           <span className="flex items-center gap-1">
             <HardDrive className="h-3 w-3" /> {formatBytes(torrent.size)}

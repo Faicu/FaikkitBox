@@ -185,6 +185,13 @@ export function AddMediaWizard({
               <ConfirmStep
                 torrent={confirmTorrent.torrent}
                 label={confirmTorrent.label}
+                isAdmin={isAdmin}
+                title={selected?.title ?? ""}
+                originalTitle={checkResult?.originalTitle || selected?.title || ""}
+                year={selected?.year ?? null}
+                season={confirmTorrent.season}
+                episode={confirmTorrent.episode}
+                isSeasonPack={confirmTorrent.isSeasonPack}
                 busy={busy}
                 onCancel={goBack}
                 onDeclineHdr={(quality) => dispatch({ type: "DECLINE_HDR", quality })}

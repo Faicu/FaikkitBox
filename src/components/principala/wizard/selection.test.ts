@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 
 import {
   bestOf,
+  friendlyReleaseName,
   hdrVariantOf,
   sdrVariantOf,
   matchesForQuality,
@@ -158,5 +159,28 @@ describe("perechile HDR / fără HDR", () => {
     expect(sdrVariantOf("1080p HDR")).toBe("1080p");
     expect(sdrVariantOf("4K HDR")).toBe("4K");
     expect(sdrVariantOf("1080p")).toBeNull();
+  });
+});
+
+describe("numele afișat la confirmare", () => {
+  it("film: titlu original fără punctuație, an, calitate", () => {
+    expect(
+      friendlyReleaseName({
+        originalTitle: "Transformers: The Last Knight",
+        year: "2017",
+        quality: "1080p HDR",
+        isSeasonPack: false,
+      }),
+    ).toBe("Transformers The Last Knight 2017 1080p HDR");
+  });
+
+  it("episod și sezon întreg", () => {
+    const base = { originalTitle: "Severance", year: "2022", quality: "1080p" };
+    expect(friendlyReleaseName({ ...base, season: 2, episode: 3, isSeasonPack: false })).toBe(
+      "Severance 2022 S02E03 1080p",
+    );
+    expect(friendlyReleaseName({ ...base, season: 2, isSeasonPack: true })).toBe(
+      "Severance 2022 Sezonul 2 1080p",
+    );
   });
 });
