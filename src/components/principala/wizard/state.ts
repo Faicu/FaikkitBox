@@ -112,6 +112,7 @@ export type WizardAction =
   | { type: "CHECK_LOADED"; payload: CheckLoadedPayload }
   | { type: "CHECK_FAILED"; error: string; fallback: CheckResult }
   | { type: "SET_QUALITY"; quality: Quality }
+  | { type: "DECLINE_HDR"; quality: Quality }
   | { type: "PICK_TORRENT"; torrentId: number }
   | { type: "OPEN_PICK"; choice: TorrentChoiceContext; pickedTorrentId: number }
   | { type: "OPEN_CONFIRM"; target: ConfirmTarget; back: BackFlow }
@@ -182,6 +183,11 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
 
     case "SET_QUALITY":
       return { ...state, quality: action.quality };
+
+    // „Nu" la întrebarea HDR din confirmare: înapoi la selector, direct pe
+    // varianta fără HDR — nu la lista de candidați, care e tot HDR.
+    case "DECLINE_HDR":
+      return { ...state, quality: action.quality, flow: { step: "result" } };
 
     case "PICK_TORRENT":
       if (state.flow.step !== "pick") return state;

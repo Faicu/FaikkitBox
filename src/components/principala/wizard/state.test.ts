@@ -149,6 +149,21 @@ describe("alegerea manuală", () => {
   });
 });
 
+describe("„Nu” la întrebarea HDR", () => {
+  it("duce la rezultat, pe varianta fără HDR, chiar dacă a venit din alegere", () => {
+    let s = wizardReducer(atResult(), { type: "SET_QUALITY", quality: "1080p HDR" });
+    s = wizardReducer(s, { type: "OPEN_PICK", choice, pickedTorrentId: 2 });
+    s = wizardReducer(s, {
+      type: "OPEN_CONFIRM",
+      target: { torrent: torrent(2), label: choice.label, isSeasonPack: false },
+      back: { step: "pick", choice, pickedTorrentId: 2 },
+    });
+    s = wizardReducer(s, { type: "DECLINE_HDR", quality: "1080p" });
+    expect(s.flow.step).toBe("result");
+    expect(s.quality).toBe("1080p");
+  });
+});
+
 describe("căutarea", () => {
   it("sub două caractere golește rezultatele vechi", () => {
     const s = wizardReducer(

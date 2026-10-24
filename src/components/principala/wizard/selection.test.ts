@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 
 import {
   bestOf,
+  hdrVariantOf,
+  sdrVariantOf,
   matchesForQuality,
   qualityRank,
   qualityDirection,
@@ -144,5 +146,17 @@ describe("statusuri de serial", () => {
   it("traduce statusurile cunoscute și lasă neatinse pe cele necunoscute", () => {
     expect(tvStatusLabel("Returning Series")).toBe("va reveni cu sezoane noi");
     expect(tvStatusLabel("Ceva Nou La TMDB")).toBe("Ceva Nou La TMDB");
+  });
+});
+
+describe("perechile HDR / fără HDR", () => {
+  it("merg în ambele sensuri doar la 1080p și 4K", () => {
+    expect(hdrVariantOf("1080p")).toBe("1080p HDR");
+    expect(hdrVariantOf("4K")).toBe("4K HDR");
+    expect(hdrVariantOf("720p")).toBeNull();
+    expect(hdrVariantOf("4K HDR")).toBeNull();
+    expect(sdrVariantOf("1080p HDR")).toBe("1080p");
+    expect(sdrVariantOf("4K HDR")).toBe("4K");
+    expect(sdrVariantOf("1080p")).toBeNull();
   });
 });

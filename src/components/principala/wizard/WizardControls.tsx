@@ -10,6 +10,9 @@ import {
   Film,
   Tv,
   Languages,
+  Info,
+  ChevronRight,
+  Sun,
 } from "lucide-react";
 
 import { formatBytes } from "@/lib/format";
@@ -125,6 +128,96 @@ export function QualitySelector({
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// Indiciul „Există și în HDR" — „1080p" și „4K" înseamnă fără HDR, deci
+// varianta HDR (adesea cea mai bună de pe Filelist) nu apare în lista lor;
+// fără rândul ăsta afli de ea doar dacă deschizi singur selectorul.
+export function HdrHint({
+  quality,
+  detail,
+  busy,
+  onClick,
+}: {
+  quality: Quality;
+  detail: string;
+  busy: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={busy}
+      onClick={onClick}
+      className="flex w-full items-center gap-2 rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-3 text-left text-xs text-cyan-300 transition-colors hover:bg-cyan-500/20 disabled:opacity-40"
+    >
+      <Info className="h-3.5 w-3.5 shrink-0" />
+      <span className="flex-1">
+        Există și în {quality} ({detail}) — merită dacă te uiți pe un ecran cu HDR.
+      </span>
+      <ChevronRight className="h-4 w-4 shrink-0" />
+    </button>
+  );
+}
+
+// Întrebarea explicită de dinaintea unei descărcări (sau urmăriri) HDR: pe
+// un ecran fără HDR, fișierul iese spălăcit sau e convertit de Plex, deci
+// alegerea trebuie făcută știind asta, nu din reflexul „HDR sună mai bine".
+export function HdrQuestion({
+  quality,
+  sdrQuality,
+  yesLabel,
+  busy,
+  onYes,
+  onNo,
+}: {
+  quality: Quality;
+  sdrQuality: Quality;
+  yesLabel: string;
+  busy: boolean;
+  onYes: () => void;
+  onNo: () => void;
+}) {
+  return (
+    <div className="space-y-3 rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-3">
+      <div className="flex items-center gap-2 text-sm font-semibold text-cyan-200">
+        <Sun className="h-4 w-4 shrink-0" />
+        Vei putea viziona în HDR?
+      </div>
+      <div className="space-y-1.5 text-xs text-muted-foreground">
+        <p>
+          Ai ales {quality}. Ecranul pe care te vei uita trebuie să suporte HDR — altfel imaginea
+          iese spălăcită sau mai slabă decât varianta fără HDR.
+        </p>
+        <ul className="list-disc space-y-0.5 pl-4">
+          <li>TV 4K fabricat după 2017 — majoritatea au</li>
+          <li>TV doar Full HD — nu</li>
+          <li>Telefon mai nou — da</li>
+          <li>Tabletă mai nouă — majoritatea au</li>
+          <li>Laptop — majoritatea nu</li>
+        </ul>
+      </div>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={onNo}
+          className="flex-1 rounded-xl border border-border py-2 text-sm text-muted-foreground transition-colors hover:bg-muted disabled:opacity-40"
+        >
+          Nu, vreau {sdrQuality}
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={onYes}
+          className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-cyan-500/40 bg-cyan-500/20 py-2 text-sm font-medium text-cyan-200 transition-colors hover:bg-cyan-500/30 disabled:opacity-40"
+        >
+          {busy && <Loader2 className="h-4 w-4 animate-spin" />}
+          {yesLabel}
+        </button>
+      </div>
     </div>
   );
 }

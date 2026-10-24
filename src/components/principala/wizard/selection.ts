@@ -55,6 +55,21 @@ const QUALITY_RANK: Record<string, number> = {
   "4K HDR": 5,
 };
 
+// Perechile HDR/fără HDR la aceeași rezoluție. „1080p" și „4K" înseamnă fără
+// HDR, deci varianta HDR nu apare în lista lor — de-aici indiciul „Există și
+// în HDR" și întoarcerea la varianta fără HDR când dispozitivul nu-l suportă.
+export function hdrVariantOf(q: Quality): Quality | null {
+  if (q === "1080p") return "1080p HDR";
+  if (q === "4K") return "4K HDR";
+  return null;
+}
+
+export function sdrVariantOf(q: Quality): Quality | null {
+  if (q === "1080p HDR") return "1080p";
+  if (q === "4K HDR") return "4K";
+  return null;
+}
+
 export function qualityRank(q: string | null): number {
   return q ? (QUALITY_RANK[q] ?? 0) : 0;
 }

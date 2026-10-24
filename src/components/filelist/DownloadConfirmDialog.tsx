@@ -45,6 +45,7 @@ export function DownloadConfirmFields({
   onConfirm,
   onCancel,
   allowLinking = true,
+  actions,
 }: {
   torrent: FilelistTorrent;
   label: string;
@@ -57,6 +58,9 @@ export function DownloadConfirmFields({
   // apărea, accepta o selecție, arăta confirmarea verde — și n-avea niciun
   // efect. Ascuns acolo, în loc de un control care minte.
   allowLinking?: boolean;
+  // Înlocuiește rândul de butoane (Filelist / Anulează / Descarcă) — folosit
+  // de wizard pentru întrebarea HDR, care decide ea descărcarea.
+  actions?: React.ReactNode;
 }) {
   const searchFn = useServerFn(searchLibraryTitles);
   const [linkQuery, setLinkQuery] = useState("");
@@ -182,30 +186,32 @@ export function DownloadConfirmFields({
         </div>
       )}
 
-      <div className="flex gap-2 pt-1">
-        <a
-          href={`https://filelist.io/details.php?id=${torrent.id}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={(e) => e.stopPropagation()}
-          className="flex items-center justify-center rounded-xl border border-border px-3 py-2 text-sm text-muted-foreground hover:bg-muted transition-colors"
-          title="Vezi pe filelist.io"
-        >
-          <ExternalLink className="h-4 w-4" />
-        </a>
-        <button
-          onClick={onCancel}
-          className="flex-1 rounded-xl border border-border py-2 text-sm text-muted-foreground hover:bg-muted transition-colors"
-        >
-          Anulează
-        </button>
-        <button
-          onClick={() => onConfirm(linkedTitle ? matchToContext(linkedTitle) : undefined)}
-          className="flex-1 rounded-xl bg-blue-500/20 border border-blue-500/30 py-2 text-sm font-medium text-blue-400 hover:bg-blue-500/30 transition-colors flex items-center justify-center gap-1.5"
-        >
-          <Download className="h-4 w-4" /> Descarcă
-        </button>
-      </div>
+      {actions ?? (
+        <div className="flex gap-2 pt-1">
+          <a
+            href={`https://filelist.io/details.php?id=${torrent.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="flex items-center justify-center rounded-xl border border-border px-3 py-2 text-sm text-muted-foreground hover:bg-muted transition-colors"
+            title="Vezi pe filelist.io"
+          >
+            <ExternalLink className="h-4 w-4" />
+          </a>
+          <button
+            onClick={onCancel}
+            className="flex-1 rounded-xl border border-border py-2 text-sm text-muted-foreground hover:bg-muted transition-colors"
+          >
+            Anulează
+          </button>
+          <button
+            onClick={() => onConfirm(linkedTitle ? matchToContext(linkedTitle) : undefined)}
+            className="flex-1 rounded-xl bg-blue-500/20 border border-blue-500/30 py-2 text-sm font-medium text-blue-400 hover:bg-blue-500/30 transition-colors flex items-center justify-center gap-1.5"
+          >
+            <Download className="h-4 w-4" /> Descarcă
+          </button>
+        </div>
+      )}
     </>
   );
 }

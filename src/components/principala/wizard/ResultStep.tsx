@@ -4,21 +4,13 @@
 // proprie — de-aia derivările stau aici, nu în shell: nimic din ele nu e
 // folosit de ceilalți pași.
 
-import type { Dispatch } from "react";
-import {
-  CheckCircle2,
-  ChevronRight,
-  Download,
-  Info,
-  Loader2,
-  AlertTriangle,
-  RefreshCw,
-} from "lucide-react";
+import { useState, type Dispatch } from "react";
+import { CheckCircle2, Download, Info, Loader2, AlertTriangle, RefreshCw } from "lucide-react";
 
 import { groupTorrentsBySeasonEpisode } from "@/components/filelist/quality-utils";
 import type { FilelistTorrent } from "@/lib/filelist.functions";
 import { Orb } from "@/components/ui/orb";
-import { ActionButton, PosterHero, QualitySelector } from "./WizardControls";
+import { ActionButton, HdrHint, HdrQuestion, PosterHero, QualitySelector } from "./WizardControls";
 import { SeasonAccordion } from "./SeasonAccordion";
 import type { SeasonRowData } from "./SeasonAccordion";
 import { deriveSeasonRows } from "./derive-seasons";
@@ -29,6 +21,9 @@ import {
   bestOf,
   matchesForQuality,
   availableQualities,
+  hdrVariantOf,
+  pickFromSet,
+  sdrVariantOf,
 } from "./selection";
 import { normalizeStoredPoster } from "@/lib/tmdb/poster";
 import type { CheckResult, Quality, TorrentChoiceContext } from "./types";
@@ -67,7 +62,17 @@ export function ResultStep({
     busy,
   } = state;
 
-  const setQuality = (q: Quality) => dispatch({ type: "SET_QUALITY", quality: q });
+  // „Urmărește" la o calitate HDR trece întâi prin aceeași întrebare ca
+  // descărcarea — altfel ar fi drumul pe care un fișier HDR ajunge în
+  // bibliotecă fără ca cineva să fi fost întrebat.
+  const [askHdrWatch, setAskHdrWatch] = useState(false);
+  const setQuality = (q: Quality) => {
+    setAskHdrWatch(false);
+    dispatch({ type: "SET_QUALITY", quality: q });
+  };
+  const sdrOfQuality = sdrVariantOf(quality);
+
+  const seasonGroups = isTv ? groupTorrentsBySeasonEpisode(checkResult.torrents) : [];
 
   // Schema per-sezon afișată în accordion: pentru fiecare episod, exact una
   // din stările posibile — deja în Plex, deja în curs de descărcare, lipsă+
@@ -78,7 +83,7 @@ export function ResultStep({
     ? deriveSeasonRows({
         seasons: checkResult.seasons,
         seasonSchema,
-        seasonGroups: groupTorrentsBySeasonEpisode(checkResult.torrents),
+        seasonGroups,
         plexBySeason,
         downloadingEntries,
         tvmazeAirstamps,
@@ -93,15 +98,23 @@ export function ResultStep({
   // „nu există", fără indiciu că merită deschis selectorul.
   const otherQualities =
     !isTv && !movieMatch ? availableQualities(checkResult.torrents, quality, "movie") : [];
-  // „1080p" și „4K" înseamnă fără HDR, deci o lansare HDR la aceeași
-  // rezoluție (adesea cea mai bună de pe Filelist) nu apare deloc în lista
-  // lor — fără indiciul ăsta, afli de ea doar dacă deschizi singur selectorul.
-  const hdrSibling: Quality | null =
-    quality === "1080p" ? "1080p HDR" : quality === "4K" ? "4K HDR" : null;
-  const hdrSiblingCount =
-    !isTv && movieMatch && hdrSibling
-      ? matchesForQuality(checkResult.torrents, hdrSibling, "movie").length
-      : 0;
+  // Varianta HDR a rezoluției alese — „1080p" și „4K" înseamnă fără HDR,
+  // deci lansările HDR nu apar în lista lor (vezi HdrHint).
+  const hdrSibling = hdrVariantOf(quality);
+  const hdrMovieCount =
+    !isTv && hdrSibling ? matchesForQuality(checkResult.torrents, hdrSibling, "movie").length : 0;
+  // La seriale: sezoanele care au varianta HDR, ca pachet sau măcar un episod.
+  const hdrSeasons = hdrSibling
+    ? seasonGroups
+        .filter(
+          (g) =>
+            matchesForQuality(pickFromSet(g.byQuality, hdrSibling), hdrSibling, "tv").length > 0 ||
+            [...g.episodes.values()].some(
+              (set) => matchesForQuality(pickFromSet(set, hdrSibling), hdrSibling, "tv").length > 0,
+            ),
+        )
+        .map((g) => g.seasonNum)
+    : [];
 
   // Pentru filme, "există în Plex" e suficient (verificare atomică).
   const alreadyInPlex = !isTv && checkResult.plexFound;
@@ -227,6 +240,19 @@ export function ResultStep({
 
           <QualitySelector quality={quality} onChange={setQuality} />
 
+          {hdrSibling && hdrSeasons.length > 0 && (
+            <HdrHint
+              quality={hdrSibling}
+              detail={
+                hdrSeasons.length === 1
+                  ? `sezonul ${hdrSeasons[0]}`
+                  : `sezoanele ${hdrSeasons.join(", ")}`
+              }
+              busy={busy}
+              onClick={() => setQuality(hdrSibling)}
+            />
+          )}
+
           <div>
             <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Sezoane
@@ -257,6 +283,17 @@ export function ResultStep({
             stai pe ecranul ăsta e să iei altă variantă decât cea
             din Plex — mai bună sau, deliberat, mai mică. */}
           <QualitySelector quality={quality} onChange={setQuality} />
+
+          {/* Nu și când varianta HDR e deja în bibliotecă: n-ar avea
+            ce oferi. */}
+          {hdrSibling && hdrMovieCount > 0 && !plexQualities.includes(hdrSibling) && (
+            <HdrHint
+              quality={hdrSibling}
+              detail={`${hdrMovieCount}`}
+              busy={busy}
+              onClick={() => setQuality(hdrSibling)}
+            />
+          )}
 
           {/* Fără asta, alegerea unei calități deja deținute nu producea
             nimic sub selector — un ecran mut, imposibil de distins de o
@@ -331,19 +368,13 @@ export function ResultStep({
 
           {movieMatch ? (
             <>
-              {hdrSibling && hdrSiblingCount > 0 && (
-                <button
-                  type="button"
-                  disabled={busy}
+              {hdrSibling && hdrMovieCount > 0 && (
+                <HdrHint
+                  quality={hdrSibling}
+                  detail={`${hdrMovieCount}`}
+                  busy={busy}
                   onClick={() => setQuality(hdrSibling)}
-                  className="flex w-full items-center gap-2 rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-3 text-left text-xs text-cyan-300 transition-colors hover:bg-cyan-500/20 disabled:opacity-40"
-                >
-                  <Info className="h-3.5 w-3.5 shrink-0" />
-                  <span className="flex-1">
-                    Există și în {hdrSibling} ({hdrSiblingCount}) — merită dacă TV-ul are HDR.
-                  </span>
-                  <ChevronRight className="h-4 w-4 shrink-0" />
-                </button>
+                />
               )}
               <ActionButton
                 busy={busy}
@@ -382,14 +413,27 @@ export function ResultStep({
               {/* Deschis oricui e logat, nu doar adminilor: un film
                   așteptat nu ocupă nimic până apare, iar descărcarea
                   de atunci e exact ce a cerut utilizatorul. */}
-              {!wantedEntry && (
-                <ActionButton
-                  busy={busy}
-                  icon={<Orb state="searching" px={16} />}
-                  label="Urmărește — descarcă automat când apare"
-                  onClick={() => onToggleWatch(true)}
-                />
-              )}
+              {!wantedEntry &&
+                (askHdrWatch && sdrOfQuality ? (
+                  <HdrQuestion
+                    quality={quality}
+                    sdrQuality={sdrOfQuality}
+                    yesLabel="Da, urmărește"
+                    busy={busy}
+                    onYes={() => {
+                      setAskHdrWatch(false);
+                      onToggleWatch(true);
+                    }}
+                    onNo={() => setQuality(sdrOfQuality)}
+                  />
+                ) : (
+                  <ActionButton
+                    busy={busy}
+                    icon={<Orb state="searching" px={16} />}
+                    label="Urmărește — descarcă automat când apare"
+                    onClick={() => (sdrOfQuality ? setAskHdrWatch(true) : onToggleWatch(true))}
+                  />
+                ))}
             </div>
           )}
         </>

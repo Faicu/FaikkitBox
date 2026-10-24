@@ -185,7 +185,9 @@ export function AddMediaWizard({
               <ConfirmStep
                 torrent={confirmTorrent.torrent}
                 label={confirmTorrent.label}
+                busy={busy}
                 onCancel={goBack}
+                onDeclineHdr={(quality) => dispatch({ type: "DECLINE_HDR", quality })}
                 onConfirm={() =>
                   // Fără curățare aici: `downloadOne` schimbă pasul pe "done"
                   // DOAR la succes, iar dacă goleam ținta înainte de a ști
