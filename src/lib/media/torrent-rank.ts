@@ -5,8 +5,9 @@
 // Pur, fără I/O: rulează și în browser, și pe server.
 //
 // Excluse complet: fără seederi, CAM/TS/TELESYNC, discurile Blu-ray complete
-// (BDMV/ISO — Plex nu le redă ca fișier) și lansările WEB doar Dolby Vision
-// (profil 5, fără strat HDR10 — pe un TV fără DV ies culori greșite sau
+// (BDMV/ISO — Plex nu le redă ca fișier), lansările 3D (SBS/OU — pe un TV
+// obișnuit se văd două imagini una lângă alta) și lansările WEB doar Dolby
+// Vision (profil 5, fără strat HDR10 — pe un TV fără DV ies culori greșite sau
 // transcodare). Restul, în ordine, fiecare criteriu decide doar la egalitate
 // pe cele de deasupra:
 //   0. REMUX mereu ultimul, chiar și intern (40–90 GB, bitrate prea mare
@@ -34,6 +35,7 @@ const ENOUGH_SEEDERS = 5;
 const LOW_QUALITY_SOURCE = /\b(cam|camrip|hdcam|ts|hdts|telesync|pdvd)\b/;
 const DOLBY_VISION = /\b(dv|dovi)\b|dolby.?vision/;
 const BLURAY = /\b(blu-?ray|bdrip)\b/;
+const STEREO_3D = /\b(3d|h-?sbs|h-?ou|half-?(sbs|ou)|sbs)\b/;
 const isRemux = (n: string) => /\bremux\b/.test(n);
 
 // Disc complet: „Blu-ray.AVC/HEVC/VC-1" fără encode (x264/x265) și fără Remux.
@@ -50,6 +52,7 @@ export function isExcludedTorrent(t: RankableTorrent): boolean {
   const n = t.name.toLowerCase();
   if (LOW_QUALITY_SOURCE.test(n)) return true;
   if (isFullDisc(n)) return true;
+  if (STEREO_3D.test(n)) return true;
   // „DV.HDR" / „DV HDR10" are strat HDR10 de rezervă; doar „DV" nu — dar
   // numai la WEB: Dolby Vision de pe Blu-ray/Remux (profil 7) are mereu bază HDR10,
   // chiar dacă numele scrie doar „DoVi".

@@ -5,7 +5,15 @@
 // folosit de ceilalți pași.
 
 import type { Dispatch } from "react";
-import { CheckCircle2, Download, Info, Loader2, AlertTriangle, RefreshCw } from "lucide-react";
+import {
+  CheckCircle2,
+  ChevronRight,
+  Download,
+  Info,
+  Loader2,
+  AlertTriangle,
+  RefreshCw,
+} from "lucide-react";
 
 import { groupTorrentsBySeasonEpisode } from "@/components/filelist/quality-utils";
 import type { FilelistTorrent } from "@/lib/filelist.functions";
@@ -85,6 +93,15 @@ export function ResultStep({
   // „nu există", fără indiciu că merită deschis selectorul.
   const otherQualities =
     !isTv && !movieMatch ? availableQualities(checkResult.torrents, quality, "movie") : [];
+  // „1080p" și „4K" înseamnă fără HDR, deci o lansare HDR la aceeași
+  // rezoluție (adesea cea mai bună de pe Filelist) nu apare deloc în lista
+  // lor — fără indiciul ăsta, afli de ea doar dacă deschizi singur selectorul.
+  const hdrSibling: Quality | null =
+    quality === "1080p" ? "1080p HDR" : quality === "4K" ? "4K HDR" : null;
+  const hdrSiblingCount =
+    !isTv && movieMatch && hdrSibling
+      ? matchesForQuality(checkResult.torrents, hdrSibling, "movie").length
+      : 0;
 
   // Pentru filme, "există în Plex" e suficient (verificare atomică).
   const alreadyInPlex = !isTv && checkResult.plexFound;
@@ -314,6 +331,20 @@ export function ResultStep({
 
           {movieMatch ? (
             <>
+              {hdrSibling && hdrSiblingCount > 0 && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setQuality(hdrSibling)}
+                  className="flex w-full items-center gap-2 rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-3 text-left text-xs text-cyan-300 transition-colors hover:bg-cyan-500/20 disabled:opacity-40"
+                >
+                  <Info className="h-3.5 w-3.5 shrink-0" />
+                  <span className="flex-1">
+                    Există și în {hdrSibling} ({hdrSiblingCount}) — merită dacă TV-ul are HDR.
+                  </span>
+                  <ChevronRight className="h-4 w-4 shrink-0" />
+                </button>
+              )}
               <ActionButton
                 busy={busy}
                 icon={<Download className="h-4 w-4" />}

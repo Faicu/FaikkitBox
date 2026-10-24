@@ -56,6 +56,20 @@ describe("excluse", () => {
     expect(isExcludedTorrent(t("Film.2024.1080p.BluRay.x264-GRP"))).toBe(false);
   });
 
+  it("lansările 3D", () => {
+    for (const n of [
+      "Transformers.The.Last.Knight.2017.REPACK.3D.H-SBS.1080p.BluRay.x264-PSYCHD",
+      "Film.2024.1080p.3D.HOU.BluRay.x264-GRP",
+      "Film.2024.1080p.Half-SBS.BluRay.x264-GRP",
+      "Film 2024 1080p 3D BluRay Half-OU x264-GRP",
+    ]) {
+      expect(isExcludedTorrent(t(n))).toBe(true);
+    }
+    expect(
+      isExcludedTorrent(t("Transformers.The.Last.Knight.2017.1080p.BluRay.DD5.1.x264-Geek")),
+    ).toBe(false);
+  });
+
   it("rankTorrents le scoate din listă", () => {
     expect(
       names(rankTorrents([t("Film.2024.CAM-GRP"), t("Film.2024.1080p.WEB-DL-GRP")], "movie")),
