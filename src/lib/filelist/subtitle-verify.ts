@@ -212,9 +212,7 @@ export function isConfidentSync(
   match: { matchedCriteria: number; maxCriteria: number },
 ): boolean {
   const exactRelease = match.maxCriteria > 0 && match.matchedCriteria === match.maxCriteria;
-  return (
-    isWellSynced(sync) || (exactRelease && Math.abs(sync.offset) <= GOOD_SYNC_MAX_OFFSET_S)
-  );
+  return isWellSynced(sync) || (exactRelease && Math.abs(sync.offset) <= GOOD_SYNC_MAX_OFFSET_S);
 }
 
 // Sub diferența asta, două corelații sunt „la egalitate" — aceeași traducere

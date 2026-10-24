@@ -400,7 +400,9 @@ export async function processMediaFile(
     matchedCriteria: result.matchedCriteria,
     maxCriteria: result.maxCriteria,
     source: result.source,
-    sync: best.sync ? { ...best.sync, good: isConfidentSync(best.sync, best.candidate) } : undefined,
+    sync: best.sync
+      ? { ...best.sync, good: isConfidentSync(best.sync, best.candidate) }
+      : undefined,
     rejected,
     movedAside,
     compared,

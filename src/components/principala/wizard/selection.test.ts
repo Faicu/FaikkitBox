@@ -183,4 +183,10 @@ describe("numele afișat la confirmare", () => {
       "Severance 2022 Sezonul 2 1080p",
     );
   });
+
+  it("titlul original în alt alfabet cade pe cel în română", () => {
+    const base = { year: "2019", quality: "1080p", isSeasonPack: false, fallbackTitle: "Parazit" };
+    expect(friendlyReleaseName({ ...base, originalTitle: "기생충" })).toBe("Parazit 2019 1080p");
+    expect(friendlyReleaseName({ ...base, originalTitle: "Amélie" })).toBe("Amélie 2019 1080p");
+  });
 });

@@ -36,14 +36,18 @@ const LOW_QUALITY_SOURCE = /\b(cam|camrip|hdcam|ts|hdts|telesync|pdvd)\b/;
 const DOLBY_VISION = /\b(dv|dovi)\b|dolby.?vision/;
 const BLURAY = /\b(blu-?ray|bdrip)\b/;
 const STEREO_3D = /\b(3d|h-?sbs|h-?ou|half-?(sbs|ou)|sbs)\b/;
-const isRemux = (n: string) => /\bremux\b/.test(n);
+const isRemux = (n: string) => /\b(bd)?remux\b/.test(n);
 
-// Disc complet: „Blu-ray.AVC/HEVC/VC-1" fără encode (x264/x265) și fără Remux.
+// Disc complet: „COMPLETE.BLURAY", sau „Blu-ray" (cu cratimă — convenția
+// pentru discuri; encode-urile scriu „BluRay") + codecul discului, fără
+// encode (x264/x265/H.264/H.265) și fără Remux. „BluRay.HEVC" fără cratimă e
+// un encode obișnuit, nu disc.
 function isFullDisc(n: string): boolean {
+  if (/\bcomplete[.\s-]?blu-?ray\b/.test(n)) return true;
   return (
-    /\bblu-?ray\b/.test(n) &&
+    /\bblu-ray\b/.test(n) &&
     /\b(avc|hevc|vc-?1|mpeg-?2)\b/.test(n) &&
-    !/\b(x26[45]|remux)\b/.test(n)
+    !/\b(x26[45]|h\.?26[45]|(bd)?remux)\b/.test(n)
   );
 }
 

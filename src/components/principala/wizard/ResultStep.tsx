@@ -103,9 +103,19 @@ export function ResultStep({
   const hdrSibling = hdrVariantOf(quality);
   const hdrMovieCount =
     !isTv && hdrSibling ? matchesForQuality(checkResult.torrents, hdrSibling, "movie").length : 0;
-  // La seriale: sezoanele care au varianta HDR, ca pachet sau măcar un episod.
+  // La seriale: sezoanele care au varianta HDR, ca pachet sau măcar un episod
+  // — fără cele deja întregi în Plex la varianta HDR (ca la filme: n-ar avea
+  // ce oferi).
+  const hasHdrInPlex = (seasonNum: number) => {
+    const eps = seasonRows.find((r) => r.seasonNumber === seasonNum)?.episodes ?? [];
+    return (
+      eps.length > 0 &&
+      eps.every((e) => e.availability.kind === "in_plex" && e.availability.quality === hdrSibling)
+    );
+  };
   const hdrSeasons = hdrSibling
     ? seasonGroups
+        .filter((g) => !hasHdrInPlex(g.seasonNum))
         .filter(
           (g) =>
             matchesForQuality(pickFromSet(g.byQuality, hdrSibling), hdrSibling, "tv").length > 0 ||

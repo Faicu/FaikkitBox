@@ -10,7 +10,7 @@ import { DownloadConfirmFields } from "@/components/filelist/DownloadConfirmDial
 import type { FilelistTorrent } from "@/lib/filelist.functions";
 import { detectTorrentQuality } from "@/lib/media/torrent-quality";
 import { HdrQuestion } from "./WizardControls";
-import { friendlyReleaseName, sdrVariantOf } from "./selection";
+import { friendlyReleaseName, isLatinTitle, sdrVariantOf } from "./selection";
 import type { Quality } from "./types";
 
 export function ConfirmStep({
@@ -63,15 +63,19 @@ export function ConfirmStep({
     ) : null;
 
   if (!isAdmin) {
+    const latin = isLatinTitle(originalTitle);
     const name = friendlyReleaseName({
       originalTitle,
+      fallbackTitle: title,
       year,
       quality: detected,
       season,
       episode,
       isSeasonPack,
     });
-    const showRoTitle = title.trim().toLowerCase() !== originalTitle.trim().toLowerCase();
+    // Cu titlul original în alt alfabet, numele e deja construit din cel în
+    // română — nu-l repetăm dedesubt.
+    const showRoTitle = latin && title.trim().toLowerCase() !== originalTitle.trim().toLowerCase();
     return (
       <div className="animate-in fade-in slide-in-from-right-2 duration-200 space-y-4">
         <div className="text-sm font-semibold">Confirmare descărcare</div>

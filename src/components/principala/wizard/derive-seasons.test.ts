@@ -204,4 +204,30 @@ describe("deriveSeasonRows — alte calități", () => {
     );
     expect(rows[0].otherQualities).toEqual([]);
   });
+
+  it("nu numără episoadele care nu lipsesc", () => {
+    const sd = (n: number) =>
+      ({
+        id: 100 + n,
+        name: `Show.S01E0${n}.720p.WEB-DL.x264`,
+        seeders: 9,
+      }) as unknown as FilelistTorrent;
+    const rows = deriveSeasonRows(
+      input({
+        seasonSchema: [{ seasonNumber: 1, episodes: [aired(1), aired(2)] }],
+        plexBySeason: new Map([[1, [{ num: 1, quality: "1080p", watched: false }]]]),
+        seasonGroups: [
+          {
+            seasonNum: 1,
+            byQuality: qualitySet(),
+            episodes: new Map([
+              [1, { t720: [sd(1)], t1080: [], t1080Hdr: [], t4k: [], t4kHdr: [] }],
+            ]),
+          },
+        ],
+      } as unknown as Partial<DeriveSeasonsInput>),
+    );
+    expect(rows[0].episodes[1].availability.kind).toBe("unavailable");
+    expect(rows[0].otherQualities).toEqual([]);
+  });
 });

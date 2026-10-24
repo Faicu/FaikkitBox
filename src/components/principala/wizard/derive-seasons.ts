@@ -117,17 +117,23 @@ export function deriveSeasonRows(input: DeriveSeasonsInput): SeasonRowData[] {
       return { episodeNum: epNum, title, availability };
     });
 
-    // Episoade lipsă fără niciun torrent la calitatea aleasă: dacă sezonul
-    // există la alta, o spunem — altfel „Indisponibil" ar părea definitiv.
+    // Episoade lipsă fără niciun torrent la calitatea aleasă: dacă exact
+    // ele (sau pachetul sezonului) există la alta, o spunem — altfel
+    // „Indisponibil" ar părea definitiv. Doar episoadele lipsă contează: un
+    // E01 la 720p nu ajută când lipsesc E09–E10.
+    const missingNums = episodes
+      .filter((e) => e.availability.kind === "unavailable")
+      .map((e) => e.episodeNum);
     const otherQualities =
-      group && episodes.some((e) => e.availability.kind === "unavailable")
+      group && missingNums.length > 0
         ? otherQualitiesWhere(
             quality,
             (q) =>
               matchesForQuality(pickFromSet(group.byQuality, q), q, "tv").length > 0 ||
-              [...group.episodes.values()].some(
-                (set) => matchesForQuality(pickFromSet(set, q), q, "tv").length > 0,
-              ),
+              missingNums.some((n) => {
+                const set = group.episodes.get(n);
+                return !!set && matchesForQuality(pickFromSet(set, q), q, "tv").length > 0;
+              }),
           )
         : [];
 

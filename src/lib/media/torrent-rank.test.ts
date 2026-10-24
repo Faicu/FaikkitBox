@@ -54,6 +54,16 @@ describe("excluse", () => {
       false,
     );
     expect(isExcludedTorrent(t("Film.2024.1080p.BluRay.x264-GRP"))).toBe(false);
+    expect(isExcludedTorrent(t("Film.2024.COMPLETE.BLURAY-GRP"))).toBe(true);
+    // Encode-uri care scriu codecul, nu encoderul.
+    expect(isExcludedTorrent(t("Film.2023.2160p.BluRay.HEVC.10bit.HDR.DDP5.1-GRP"))).toBe(false);
+    expect(isExcludedTorrent(t("Film.2023.1080p.Blu-ray.AVC.H.264.DD5.1-GRP"))).toBe(false);
+    expect(isExcludedTorrent(t("Film.2023.1080p.Blu-ray.AVC.BDRemux.DTS-HD-GRP"))).toBe(false);
+  });
+
+  it("BDRemux e tot REMUX — ultimul", () => {
+    const list = [t("Film.2023.1080p.BDRemux.AVC.DTS-HD-A"), t("Film.2023.1080p.BluRay.x264-B")];
+    expect(names(rankTorrents(list, "movie"))[0]).toBe("Film.2023.1080p.BluRay.x264-B");
   });
 
   it("lansările 3D", () => {

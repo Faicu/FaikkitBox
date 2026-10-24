@@ -159,8 +159,12 @@ export function otherQualitiesWhere(preferred: Quality, has: (q: Quality) => boo
 // Numele afișat utilizatorilor obișnuiți la confirmare, în locul numelui
 // lansării: titlul original fără punctuație, anul, sezonul/episodul și
 // calitatea — ex. „Transformers The Last Knight 2017 1080p HDR".
+//
+// Un titlu original în alt alfabet (coreeană, japoneză, chirilică…) nu e
+// lizibil — atunci se folosește `fallbackTitle` (cel în română).
 export function friendlyReleaseName(input: {
   originalTitle: string;
+  fallbackTitle?: string;
   year: string | null;
   quality: string;
   season?: number;
@@ -168,7 +172,11 @@ export function friendlyReleaseName(input: {
   isSeasonPack: boolean;
 }): string {
   const pad = (n: number) => String(n).padStart(2, "0");
-  const title = input.originalTitle
+  const base =
+    input.fallbackTitle && !isLatinTitle(input.originalTitle)
+      ? input.fallbackTitle
+      : input.originalTitle;
+  const title = base
     .replace(/[:\u2013\u2014]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -181,4 +189,9 @@ export function friendlyReleaseName(input: {
   return [title, input.year, part, input.quality === "SD" ? null : input.quality]
     .filter(Boolean)
     .join(" ");
+}
+
+// Doar litere latine (cu diacritice), cifre, punctuație și spații.
+export function isLatinTitle(title: string): boolean {
+  return !/[^\p{Script=Latin}\p{N}\p{P}\p{S}\p{Z}]/u.test(title);
 }
