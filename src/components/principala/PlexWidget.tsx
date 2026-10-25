@@ -227,21 +227,26 @@ function SessionRow({ session: s, offsetMs }: { session: PlexSession; offsetMs: 
 
         {s.durationMs > 0 && (
           <div className="space-y-1">
-            {/* Fără overflow-hidden pe pistă: punctul luminos din capătul barei
-                iese jumătate în afara ei. */}
+            {/* Punctul luminos e frate al barei, nu copil: `progress-flow` are
+                overflow-hidden (taie strălucirea), iar punctul iese jumătate în
+                afara barei. Fără tranziție pe lățime: ceasul avansează în
+                fiecare secundă, deci tranziția n-ar mai fi stat niciodată —
+                recalculare de layout la fiecare cadru, pentru ~0,01%/s. */}
             <div className="relative h-1.5 w-full rounded-full bg-white/10">
-              {/* Gradientul curge doar cât rulează — la pauză bara rămâne
+              {/* Strălucirea alunecă doar cât rulează — la pauză bara rămâne
                   plată, ca să se vadă dintr-o privire. */}
               <div
-                className={`relative h-full rounded-full transition-[width] duration-1000 ease-linear ${
+                className={`h-full rounded-full ${
                   paused ? "bg-amber-400/70" : "progress-flow progress-flow-amber"
                 }`}
                 style={{ width: `${pct}%` }}
-              >
-                {!paused && pct > 0 && (
-                  <span className="absolute top-1/2 right-0 h-2.5 w-2.5 translate-x-1/2 -translate-y-1/2 rounded-full bg-amber-100 shadow-[0_0_10px_2px] shadow-amber-400/70" />
-                )}
-              </div>
+              />
+              {!paused && pct > 0 && (
+                <span
+                  className="absolute top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-amber-100 shadow-[0_0_10px_2px] shadow-amber-400/70"
+                  style={{ left: `${pct}%` }}
+                />
+              )}
             </div>
             <div className="flex justify-between text-[10px] text-muted-foreground tabular-nums">
               <span>{fmtClock(offsetMs)}</span>

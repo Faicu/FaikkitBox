@@ -161,13 +161,18 @@
     transform: none;
   }
 }
-@keyframes pulse-glow {
+/* Halourile (pulse-glow*) animă doar `opacity` pe un ::after cu inelul
+ * desenat o singură dată — opacitatea o face placa video, fără redesenare.
+ * Înainte animau `box-shadow` (inelul creștea 0→6px), adică redesenare la
+ * fiecare cadru, cât timp ceva rula (25 oct 2026). Inelul nu mai crește: pe
+ * cardurile mari (qBittorrent, speedtest) un `scale` ar fi deformat haloul. */
+@keyframes halo-breathe {
   0%,
   100% {
-    box-shadow: 0 0 0 0 color-mix(in oklab, var(--primary) 50%, transparent);
+    opacity: 0.9;
   }
   50% {
-    box-shadow: 0 0 0 6px color-mix(in oklab, var(--primary) 0%, transparent);
+    opacity: 0;
   }
 }
 @keyframes shimmer {
@@ -243,7 +248,8 @@
     inset: 0;
     border-radius: inherit;
     pointer-events: none;
-    animation: pulse-glow 2.4s ease-in-out infinite;
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--primary) 35%, transparent);
+    animation: halo-breathe 2.4s ease-in-out infinite;
   }
 }
 
@@ -520,13 +526,20 @@
   }
 }
 
-/* ---- Bare de progres cu gradient care curge ---- */
+/* ---- Bare de progres cu strălucire care alunecă ----
+ *
+ * Bara are culoarea fixă; peste ea trece o bandă luminoasă (::after) mutată
+ * prin `transform`, pe care o face placa video. Înainte curgea gradientul
+ * (`background-position` animat) — redesenare la fiecare cadru, pe fiecare
+ * bară activă (25 oct 2026). `overflow: hidden` taie banda la marginea barei,
+ * deci nimic din bară nu trebuie să iasă în afara ei (punctul luminos de la
+ * sesiunile Plex e frate al barei, nu copil). */
 @keyframes progress-flow {
-  0% {
-    background-position: 0% 50%;
+  from {
+    transform: translateX(-100%);
   }
-  100% {
-    background-position: 200% 50%;
+  to {
+    transform: translateX(200%);
   }
 }
 
@@ -536,10 +549,23 @@
   --flow-a: color-mix(in oklab, var(--primary) 70%, transparent);
   --flow-b: oklch(0.72 0.19 200 / 0.95);
   --flow-glow: color-mix(in oklab, var(--primary) 60%, transparent);
-  background-image: linear-gradient(90deg, var(--flow-a), var(--flow-b), var(--flow-a));
-  background-size: 200% 100%;
-  animation: progress-flow 2.2s linear infinite;
+  position: relative;
+  overflow: hidden;
+  background-image: linear-gradient(
+    90deg,
+    var(--flow-a),
+    color-mix(in oklab, var(--flow-a) 60%, var(--flow-b))
+  );
   box-shadow: 0 0 12px -2px var(--flow-glow);
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 50%;
+    pointer-events: none;
+    background: linear-gradient(90deg, transparent, var(--flow-b), transparent);
+    animation: progress-flow 2.2s linear infinite;
+  }
 }
 
 /* Seeding — același flux, dar verde și mai lent (urcă, nu se grăbește) */
@@ -547,8 +573,10 @@
   --flow-a: oklch(0.7 0.17 155 / 0.75);
   --flow-b: oklch(0.85 0.19 148 / 0.95);
   --flow-glow: oklch(0.72 0.19 155 / 0.55);
-  animation-duration: 3.2s;
-  animation-direction: reverse;
+  &::after {
+    animation-duration: 3.2s;
+    animation-direction: reverse;
+  }
 }
 
 /* Redare Plex — același flux, în chihlimbarul barei de progres a sesiunii */
@@ -556,19 +584,12 @@
   --flow-a: oklch(0.8 0.16 80 / 0.8);
   --flow-b: oklch(0.9 0.15 90 / 0.95);
   --flow-glow: oklch(0.8 0.16 80 / 0.5);
-  animation-duration: 3s;
+  &::after {
+    animation-duration: 3s;
+  }
 }
 
 /* Halo verde, pereche pentru pulse-glow, folosit pe cardurile în seeding */
-@keyframes pulse-glow-up {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 oklch(0.72 0.19 155 / 0.45);
-  }
-  50% {
-    box-shadow: 0 0 0 6px oklch(0.72 0.19 155 / 0);
-  }
-}
 /* Vezi nota de la `pulse-glow` — și aici haloul e pe ::after, din același motiv. */
 @utility pulse-glow-up {
   position: relative;
@@ -578,20 +599,12 @@
     inset: 0;
     border-radius: inherit;
     pointer-events: none;
-    animation: pulse-glow-up 2.8s ease-in-out infinite;
+    box-shadow: 0 0 0 3px oklch(0.72 0.19 155 / 0.32);
+    animation: halo-breathe 2.8s ease-in-out infinite;
   }
 }
 
 /* Halo chihlimbar — pulse-glow în culorile Plex, tot pe ::after. */
-@keyframes pulse-glow-amber {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 oklch(0.8 0.16 75 / 0.5);
-  }
-  50% {
-    box-shadow: 0 0 0 7px oklch(0.8 0.16 75 / 0);
-  }
-}
 @utility pulse-glow-amber {
   position: relative;
   &::after {
@@ -600,7 +613,8 @@
     inset: 0;
     border-radius: inherit;
     pointer-events: none;
-    animation: pulse-glow-amber 2.4s ease-in-out infinite;
+    box-shadow: 0 0 0 3px oklch(0.8 0.16 75 / 0.38);
+    animation: halo-breathe 2.4s ease-in-out infinite;
   }
 }
 
