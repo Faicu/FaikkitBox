@@ -22,6 +22,7 @@ import {
   CATEGORY_NAMES,
   parseCategoryId,
 } from "./categories";
+import { isFullDisc } from "../media/torrent-rank";
 
 // Categoriile Filelist.io pentru fiecare filtru expus în UI — folosit atât de
 // căutarea internă (searchFilelistRaw) cât și de server function-ul public
@@ -43,11 +44,7 @@ function resolveCategoryIds(category: FilelistCategory): readonly number[] {
 // "Pinocchio: Unstrung" 2026-08-25 — descărcat, dar nefolosibil, a trebuit
 // șters manual). Exclus peste tot, inclusiv din căutarea manuală — un disc
 // brut nu e niciodată o alegere validă în acest proiect.
-const RAW_DISC_PATTERN = /blu-?ray\.(avc|vc-?1|mpeg-?2)/i;
-
-function isRawDiscRelease(name: string): boolean {
-  return RAW_DISC_PATTERN.test(name);
-}
+// Regula propriu-zisă e în torrent-rank.ts (isFullDisc), comună cu clasamentul.
 
 // Mapează răspunsul brut al API-ului Filelist.io la forma internă
 // FilelistTorrent — folosit atât de căutarea internă cât și de server
@@ -68,7 +65,7 @@ function mapApiTorrents(raw: FilelistApiTorrent[]): FilelistTorrent[] {
       upload_date: String(t.upload_date ?? ""),
       imdb: t.imdb || undefined,
     }))
-    .filter((t) => !isRawDiscRelease(t.name));
+    .filter((t) => !isFullDisc(t.name));
 }
 
 async function searchFilelistRaw(

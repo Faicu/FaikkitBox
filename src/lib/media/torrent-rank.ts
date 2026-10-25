@@ -38,16 +38,23 @@ const BLURAY = /\b(blu-?ray|bdrip)\b/;
 const STEREO_3D = /\b(3d|h-?sbs|h-?ou|half-?(sbs|ou)|sbs)\b/;
 const isRemux = (n: string) => /\b(bd)?remux\b/.test(n);
 
-// Disc complet: „COMPLETE.BLURAY", sau „Blu-ray" (cu cratimă — convenția
-// pentru discuri; encode-urile scriu „BluRay") + codecul discului, fără
-// encode (x264/x265/H.264/H.265) și fără Remux. „BluRay.HEVC" fără cratimă e
-// un encode obișnuit, nu disc.
-function isFullDisc(n: string): boolean {
-  if (/\bcomplete[.\s-]?blu-?ray\b/.test(n)) return true;
+// Disc complet (folder BDMV sau imagine ISO, nu fișier video) — singura
+// regulă din proiect: o folosește și căutarea Filelist (filelist-client.ts),
+// care le scoate din orice listă, inclusiv din căutarea manuală.
+//   - „COMPLETE.BLURAY" / „COMPLETE.UHD.BLURAY" (scene), „ISO", „BDMV";
+//   - „BluRay"/„Blu-ray" + AVC/VC-1/MPEG-2 (codecul discului);
+//   - „Blu-ray" cu cratimă + HEVC (discurile UHD) — „BluRay.HEVC" fără
+//     cratimă e un encode obișnuit;
+// în ultimele două cazuri, doar fără encode (x264/x265/H.264/H.265) și fără
+// Remux.
+export function isFullDisc(name: string): boolean {
+  const n = name.toLowerCase();
+  if (/\bcomplete[.\s-]?(uhd[.\s-]?)?blu-?ray\b/.test(n)) return true;
+  if (/\b(iso|bdmv)\b/.test(n)) return true;
+  if (/\b(x26[45]|h\.?26[45]|(bd)?remux)\b/.test(n)) return false;
   return (
-    /\bblu-ray\b/.test(n) &&
-    /\b(avc|hevc|vc-?1|mpeg-?2)\b/.test(n) &&
-    !/\b(x26[45]|h\.?26[45]|(bd)?remux)\b/.test(n)
+    (/\bblu-?ray\b/.test(n) && /\b(avc|vc-?1|mpeg-?2)\b/.test(n)) ||
+    (/\bblu-ray\b/.test(n) && /\bhevc\b/.test(n))
   );
 }
 

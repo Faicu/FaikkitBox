@@ -61,6 +61,19 @@ describe("excluse", () => {
     expect(isExcludedTorrent(t("Film.2023.1080p.Blu-ray.AVC.BDRemux.DTS-HD-GRP"))).toBe(false);
   });
 
+  it("discurile UHD scene, ISO/BDMV și „BluRay.AVC” fără cratimă", () => {
+    for (const n of [
+      "Film.2019.COMPLETE.UHD.BLURAY-GRP",
+      "Film.2019.MULTi.COMPLETE.UHD.BLURAY-GRP",
+      "Film.2019.1080p.BluRay.ISO-GRP",
+      "Film.2019.1080p.BDMV.DTS-HD-GRP",
+      "Film 2019 1080p BluRay AVC DTS-HD MA 5.1-GRP",
+      "Film.2019.1080p.BluRay.VC-1.DTS-HD.MA.5.1-GRP",
+    ]) {
+      expect(isExcludedTorrent(t(n)), n).toBe(true);
+    }
+  });
+
   it("BDRemux e tot REMUX — ultimul", () => {
     const list = [t("Film.2023.1080p.BDRemux.AVC.DTS-HD-A"), t("Film.2023.1080p.BluRay.x264-B")];
     expect(names(rankTorrents(list, "movie"))[0]).toBe("Film.2023.1080p.BluRay.x264-B");
