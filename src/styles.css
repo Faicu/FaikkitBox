@@ -493,7 +493,17 @@
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  animation: border-flow 6s linear infinite;
+  animation: text-gradient-flow 6s linear infinite;
+}
+/* Proprie, nu împrumutată de la `border-flow`: aceea mută acum elementul prin
+ * `transform`, ceea ce aici ar plimba tot textul (25 oct 2026). */
+@keyframes text-gradient-flow {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
 }
 
 /* Press feedback for interactive tiles.
