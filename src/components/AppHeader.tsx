@@ -58,7 +58,7 @@ export function AppHeader({ title, subtitle, right }: Props) {
       <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-lg font-semibold leading-tight text-gradient-primary">{title}</h1>
+            <h1 className="brand-title text-xl leading-tight font-bold tracking-wide">{title}</h1>
             {admin.data?.isAdmin ? (
               <span
                 className="inline-flex cursor-pointer select-none items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-400 ring-1 ring-emerald-500/25 active:bg-emerald-500/30"
