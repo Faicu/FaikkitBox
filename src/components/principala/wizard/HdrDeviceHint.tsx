@@ -1,27 +1,20 @@
 import { useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { CheckCircle2, CircleHelp, XCircle } from "lucide-react";
 
 import {
-  getHdrDeviceHint,
   setDeviceHdr,
   type HdrDeviceHint as DeviceHint,
 } from "@/lib/services/device-hdr.functions";
-
-const QUERY_KEY = ["hdr-device-hint"];
+import { HDR_HINT_QUERY_KEY, useHdrDeviceHint } from "./useHdrDeviceHint";
 
 // Indiciul din întrebarea HDR: pe ce se uită de obicei utilizatorul (și pe ce
 // s-a uitat ultima dată, dacă e altceva) și dacă acel ecran are HDR. Doar
 // informează — nu răspunde la întrebare în locul lui. Fără cont Plex legat
 // sau fără vizionări nu apare nimic.
 export function HdrDeviceHint() {
-  const fetchHint = useServerFn(getHdrDeviceHint);
-  const { data } = useQuery({
-    queryKey: QUERY_KEY,
-    queryFn: () => fetchHint(),
-    staleTime: 60_000,
-  });
+  const { data } = useHdrDeviceHint();
   if (!data) return null;
   return (
     <div className="space-y-1.5 rounded-lg border border-border/60 bg-background/40 p-2">
@@ -48,7 +41,7 @@ function DeviceLine({ label, hint }: { label: string; hint: DeviceHint }) {
       await setFn({ data: { clientId: hint.clientId, hasHdr } });
     } finally {
       setBusy(false);
-      await queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+      await queryClient.invalidateQueries({ queryKey: HDR_HINT_QUERY_KEY });
     }
   }
 

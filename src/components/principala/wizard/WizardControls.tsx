@@ -17,6 +17,7 @@ import {
 
 import { formatBytes } from "@/lib/format";
 import { HdrDeviceHint } from "./HdrDeviceHint";
+import { recommendedHdrAnswer, useHdrDeviceHint } from "./useHdrDeviceHint";
 import type { FilelistTorrent } from "@/lib/filelist.functions";
 import { RO_DUBBED_CATEGORY } from "@/lib/filelist/categories";
 import type { Quality } from "./types";
@@ -181,6 +182,9 @@ export function HdrQuestion({
   onYes: () => void;
   onNo: () => void;
 }) {
+  const usual = useHdrDeviceHint().data?.usual;
+  const recommended = recommendedHdrAnswer(usual);
+  const ring = "ring-2 ring-emerald-400/70";
   return (
     <div className="space-y-3 rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-3">
       <div className="flex items-center gap-2 text-sm font-semibold text-cyan-200">
@@ -206,7 +210,7 @@ export function HdrQuestion({
           type="button"
           disabled={busy}
           onClick={onNo}
-          className="flex-1 rounded-xl border border-border py-2 text-sm text-muted-foreground transition-colors hover:bg-muted disabled:opacity-40"
+          className={`flex-1 rounded-xl border border-border py-2 text-sm text-muted-foreground transition-colors hover:bg-muted disabled:opacity-40 ${recommended === "no" ? ring : ""}`}
         >
           Nu, vreau {sdrQuality}
         </button>
@@ -214,12 +218,17 @@ export function HdrQuestion({
           type="button"
           disabled={busy}
           onClick={onYes}
-          className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-cyan-500/40 bg-cyan-500/20 py-2 text-sm font-medium text-cyan-200 transition-colors hover:bg-cyan-500/30 disabled:opacity-40"
+          className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-cyan-500/40 bg-cyan-500/20 py-2 text-sm font-medium text-cyan-200 transition-colors hover:bg-cyan-500/30 disabled:opacity-40 ${recommended === "yes" ? ring : ""}`}
         >
           {busy && <Loader2 className="h-4 w-4 animate-spin" />}
           {yesLabel}
         </button>
       </div>
+      {recommended && usual && (
+        <p className="text-center text-[11px] text-emerald-300/80">
+          Recomandat după {usual.name}, dispozitivul pe care te uiți de obicei
+        </p>
+      )}
     </div>
   );
 }
