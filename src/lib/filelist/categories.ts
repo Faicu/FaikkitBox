@@ -23,9 +23,17 @@
 // se alege fără om.
 // ---------------------------------------------------------------------------
 
-// Filme: SD=1, DVD=2, DVD-RO=3, HD=4, HD-RO=19, 4K=6, 4K Blu-Ray=26, Blu-Ray=20, 3D=25
+// Filme: SD=1, DVD=2, DVD-RO=3, HD=4, HD-RO=19, 4K=6, 4K Blu-Ray=26, Blu-Ray=20
 // Seriale: SD=23, HD=21, 4K=27, K-Drama=31
-export const MOVIE_CATEGORIES = [1, 2, 3, 4, 6, 19, 20, 25, 26];
+//
+// 3D=25 nu se caută deloc (verificat pe Filelist 25 oct 2026: doar lansări
+// SBS/OU și discuri 3D, nimic redabil pe un TV obișnuit). Rămâne film pentru
+// isMovieCategory, ca un torrent din 25 ajuns totuși la descărcare să nu fie
+// tratat ca serial. 20/26 rămân: au doar discuri complete (excluse după nume,
+// vezi isFullDisc) și REMUX-uri — ultimele în clasament, dar uneori singura
+// variantă la o calitate.
+export const MOVIE_CATEGORIES = [1, 2, 3, 4, 6, 19, 20, 26];
+export const STEREO_3D_CATEGORY = 25;
 export const SERIES_CATEGORIES = [21, 23, 27, 31];
 export const MIXED_CATEGORIES = [28];
 export const RO_DUBBED_CATEGORY = 28;
@@ -90,7 +98,7 @@ export const CATEGORY_NAMES: Record<number, string> = {
 };
 
 export function isMovieCategory(catId: number): boolean {
-  return MOVIE_CATEGORIES.includes(catId);
+  return MOVIE_CATEGORIES.includes(catId) || catId === STEREO_3D_CATEGORY;
 }
 
 export function isSeriesCategory(catId: number): boolean {
