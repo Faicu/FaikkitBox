@@ -223,6 +223,8 @@ export interface PlexView {
   ratingKey?: string;
   type: string;
   viewedAt: number;
+  // ID-ul local al dispozitivului (cheia din /devices) — pentru indiciul HDR.
+  deviceId?: number;
 }
 
 // Vizionările din istoricul Plex (tot istoricul, toți userii), grupate pe
@@ -417,6 +419,7 @@ async function fetchPlexHistory(
         ratingKey,
         type: String(e.type ?? "unknown"),
         viewedAt,
+        deviceId: e.deviceID != null ? Number(e.deviceID) : undefined,
       });
     }
 

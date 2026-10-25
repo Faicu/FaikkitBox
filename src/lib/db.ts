@@ -377,6 +377,20 @@ export function getDb(): DatabaseSync {
       min_episodes INTEGER NOT NULL,
       window_days INTEGER NOT NULL
     );
+
+    -- Ce se știe despre HDR-ul unui dispozitiv Plex, pe clientIdentifier
+    -- (= Player.machineIdentifier din sesiuni): modelul raportat de aplicație,
+    -- ultima redare directă a unui fișier HDR și confirmarea manuală
+    -- (1/0/NULL). Vezi media/device-hdr.ts și services/device-hdr.server.ts.
+    CREATE TABLE IF NOT EXISTS device_hdr (
+      client_id TEXT PRIMARY KEY,
+      model TEXT,
+      product TEXT,
+      hdr_direct_at INTEGER,
+      user_answer INTEGER,
+      answered_by_user_id INTEGER,
+      answered_at INTEGER
+    );
   `);
 
   // Curățări one-time, versionate cu PRAGMA user_version

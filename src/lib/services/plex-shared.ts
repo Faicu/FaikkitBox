@@ -87,6 +87,9 @@ export interface PlexMetadataItem {
   art?: string;
   grandparentArt?: string;
   accountID?: number;
+  // Doar în istoric: ID-ul local (numeric) al dispozitivului de pe server,
+  // cheia din /devices — vezi services/device-hdr.server.ts.
+  deviceID?: number;
   viewedAt?: number;
   summary?: string;
   Media?: PlexMedia[];
@@ -95,7 +98,17 @@ export interface PlexMetadataItem {
   // seriale/episoade (de regulă doar tmdb/tvdb, fără imdb).
   Guid?: Array<{ id?: string }>;
   User?: { title?: string };
-  Player?: { title?: string; device?: string; product?: string; state?: string };
+  Player?: {
+    title?: string;
+    device?: string;
+    product?: string;
+    state?: string;
+    platform?: string;
+    // = `clientIdentifier` din /devices; `model` e codul de model raportat de
+    // aplicație („50QNED80T3A.BEUJLJP" la LG), adesea mai precis decât numele.
+    machineIdentifier?: string;
+    model?: string;
+  };
   TranscodeSession?: PlexTranscodeSession;
   Session?: { bandwidth?: number; location?: string };
 }
@@ -205,7 +218,7 @@ export function plexQualityFromMedia(media: PlexMedia | undefined): string | nul
 // Numele fișierului singur nu ajunge: „...DV HDR10P..." se prinde, dar o
 // lansare marcată doar „DV" nu. Stream-ul video poartă însă datele reale —
 // `colorTrc`, `DOVIPresent` și `displayTitle` ("1080p DoVi/HDR10+").
-function mediaIsHdr(media: PlexMedia | undefined): boolean {
+export function mediaIsHdr(media: PlexMedia | undefined): boolean {
   const video = (media?.Part?.[0]?.Stream ?? []).find((st) => st.streamType === 1);
   if (video?.DOVIPresent) return true;
   // smpte2084 = PQ (HDR10/HDR10+/DoVi), arib-std-b67 = HLG.

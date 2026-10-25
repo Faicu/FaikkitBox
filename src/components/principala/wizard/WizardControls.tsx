@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 
 import { formatBytes } from "@/lib/format";
+import { HdrDeviceHint } from "./HdrDeviceHint";
 import type { FilelistTorrent } from "@/lib/filelist.functions";
 import { RO_DUBBED_CATEGORY } from "@/lib/filelist/categories";
 import type { Quality } from "./types";
@@ -195,10 +196,11 @@ export function HdrQuestion({
           <li>TV 4K fabricat după 2017 — majoritatea au</li>
           <li>TV doar Full HD — nu</li>
           <li>Telefon mai nou — da</li>
-          <li>Tabletă mai nouă — majoritatea au</li>
+          <li>Tabletă — doar modelele de top</li>
           <li>Laptop — majoritatea nu</li>
         </ul>
       </div>
+      <HdrDeviceHint />
       <div className="flex gap-2">
         <button
           type="button"

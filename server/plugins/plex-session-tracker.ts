@@ -1,7 +1,10 @@
 // ---------------------------------------------------------------------------
 // Plugin: sesiunile Plex active, la 30s — începutul și sfârșitul fiecărei
-// vizionări, în jurnal (trackPlexSessions din activity-log.ts).
+// vizionări, în jurnal (trackPlexSessions din activity-log.ts), plus ce se
+// vede despre HDR-ul dispozitivelor (recordDeviceSessions).
 // ---------------------------------------------------------------------------
+
+import type { PlexMetadataItem } from "../../src/lib/services/plex-shared";
 
 const INTERVAL_MS = 30_000;
 // Mult sub interval: un Plex blocat (în timpul unui update, de exemplu) ar ține
@@ -22,6 +25,7 @@ export default function () {
     polling = true;
     try {
       const { trackPlexSessions } = await import("../../src/lib/activity-log");
+      const { recordDeviceSessions } = await import("../../src/lib/services/device-hdr.server");
 
       const headers: Record<string, string> = {
         Accept: "application/json",
@@ -48,6 +52,10 @@ export default function () {
         };
       };
       const sessionsMd = json?.MediaContainer?.Metadata ?? [];
+
+      // Separat de jurnal: o eroare aici nu trebuie să oprească urmărirea
+      // vizionărilor (și invers).
+      await recordDeviceSessions(sessionsMd as PlexMetadataItem[]).catch(() => {});
 
       await trackPlexSessions(
         sessionsMd.map((s) => {
