@@ -481,19 +481,24 @@
   animation: data-tick 0.7s ease-out;
 }
 
-/* Gradient text used for headings */
+/* Titlul din antet (și login/înregistrare): gradient în culorile aplicației —
+ * chihlimbar (Plex), cyan (descărcări), verde (seeding) — care curge lent.
+ * Primul și ultimul stop sunt identici, iar imaginea are 2× lățimea textului,
+ * deci o deplasare de 200% închide bucla fără salt. Text mic: redesenarea
+ * gradientului la fiecare cadru costă neglijabil. */
 @utility text-gradient-primary {
   background: linear-gradient(
-    92deg,
-    var(--foreground) 0%,
-    color-mix(in oklab, var(--primary) 60%, var(--foreground)) 55%,
-    var(--foreground) 100%
+    90deg,
+    oklch(0.86 0.15 80) 0%,
+    oklch(0.84 0.12 210) 33%,
+    oklch(0.84 0.16 160) 66%,
+    oklch(0.86 0.15 80) 100%
   );
   background-size: 200% 100%;
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  animation: text-gradient-flow 6s linear infinite;
+  animation: text-gradient-flow 8s linear infinite;
 }
 /* Proprie, nu împrumutată de la `border-flow`: aceea mută acum elementul prin
  * `transform`, ceea ce aici ar plimba tot textul (25 oct 2026). */
