@@ -38,6 +38,17 @@ const BLURAY = /\b(blu-?ray|bdrip)\b/;
 const STEREO_3D = /\b(3d|h-?sbs|h-?ou|half-?(sbs|ou)|sbs)\b/;
 const isRemux = (n: string) => /\b(bd)?remux\b/.test(n);
 
+// Partea tehnică a numelui: de la anul lansării sau de la S01/S01E02 încolo.
+// „TS", „3D", „CAM" se caută doar aici, ca un titlu care chiar conține
+// cuvântul („Toy Story 3D", „TS Eliot…") să nu fie exclus. Un an chiar la
+// începutul numelui e titlu („2012.2009.1080p…"), nu marcaj. Fără an sau
+// sezon în nume, tot numele.
+const RELEASE_MARK = /(?<=[.\s_([-])((19|20)\d{2}|s\d{1,2}(e\d{1,3})?)(?=$|[.\s_)\]-])/;
+function releaseTail(n: string): string {
+  const m = RELEASE_MARK.exec(n);
+  return m ? n.slice(m.index) : n;
+}
+
 // Disc complet (folder BDMV sau imagine ISO, nu fișier video) — singura
 // regulă din proiect: o folosește și căutarea Filelist (filelist-client.ts),
 // care le scoate din orice listă, inclusiv din căutarea manuală.
@@ -61,9 +72,10 @@ export function isFullDisc(name: string): boolean {
 export function isExcludedTorrent(t: RankableTorrent): boolean {
   if (!(t.seeders > 0)) return true;
   const n = t.name.toLowerCase();
-  if (LOW_QUALITY_SOURCE.test(n)) return true;
+  const tail = releaseTail(n);
+  if (LOW_QUALITY_SOURCE.test(tail)) return true;
   if (isFullDisc(n)) return true;
-  if (STEREO_3D.test(n)) return true;
+  if (STEREO_3D.test(tail)) return true;
   // „DV.HDR" / „DV HDR10" are strat HDR10 de rezervă; doar „DV" nu — dar
   // numai la WEB: Dolby Vision de pe Blu-ray/Remux (profil 7) are mereu bază HDR10,
   // chiar dacă numele scrie doar „DoVi".

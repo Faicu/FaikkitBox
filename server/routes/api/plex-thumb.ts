@@ -30,6 +30,13 @@ import {
 // (segmentul final lipsește la unele item-uri, de aici grupul opțional).
 const THUMB_PATH = /^\/library\/metadata\/\d+\/[a-z]+(\/\d+)?$/;
 
+// Micșorarea opțională (`w`), făcută de Plex prin /photo/:/transcode: latura
+// mică a imaginii ajunge la `w` px (minSize=1 → acoperă un pătrat w×w, deci
+// posterul 2:3 iese w lat, fundalul 16:9 iese w înalt). Doar mărimi fixe —
+// altfel oricine logat ar putea cere Plex-ului transcodări de orice mărime.
+// Fundalul de 253 KB iese ~10 KB la 240.
+const THUMB_WIDTHS = new Set([120, 180, 240]);
+
 // Sesiunea se citește DOAR, nu prin getSession(). h3-ul din Nitro (rc.32) e
 // mai nou decât cel din TanStack Start (h3-v2, rc.20), care emite și verifică
 // cookie-ul de login: getSession() vedea cookie-ul ca „sigiliu vechi” și îl
@@ -60,6 +67,13 @@ export default defineEventHandler(async (event) => {
     return "Invalid path";
   }
 
+  const wRaw = getQuery(event).w;
+  const width = wRaw == null ? null : Number(wRaw);
+  if (width != null && !THUMB_WIDTHS.has(width)) {
+    setResponseStatus(event, 400);
+    return "Invalid size";
+  }
+
   const base = process.env.PLEX_URL?.replace(/\/$/, "");
   const token = process.env.PLEX_TOKEN;
   if (!base || !token) {
@@ -70,7 +84,17 @@ export default defineEventHandler(async (event) => {
   try {
     // Tokenul merge pe header, nu în query string — altfel ajunge în logurile
     // de acces ale Plex-ului la fiecare poster încărcat.
-    const res = await fetch(`${base}${path}`, { headers: { "X-Plex-Token": token } });
+    const target =
+      width == null
+        ? `${base}${path}`
+        : `${base}/photo/:/transcode?${new URLSearchParams({
+            width: String(width),
+            height: String(width),
+            minSize: "1",
+            upscale: "0",
+            url: path,
+          })}`;
+    const res = await fetch(target, { headers: { "X-Plex-Token": token } });
     if (!res.ok) {
       setResponseStatus(event, res.status);
       return "Upstream error";

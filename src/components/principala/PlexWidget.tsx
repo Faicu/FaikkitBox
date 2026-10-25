@@ -148,7 +148,7 @@ function SessionRow({ session: s, offsetMs }: { session: PlexSession; offsetMs: 
     <div className="relative overflow-hidden rounded-xl ring-1 ring-amber-400/15">
       {bg && (
         <img
-          src={thumbSrc(bg)}
+          src={thumbSrc(bg, 240)}
           className="absolute inset-0 h-full w-full scale-110 object-cover opacity-50 blur-xl"
           loading="lazy"
           alt=""
@@ -161,7 +161,7 @@ function SessionRow({ session: s, offsetMs }: { session: PlexSession; offsetMs: 
         <div className="flex items-start gap-3">
           {s.thumbPath && (
             <img
-              src={thumbSrc(s.thumbPath)}
+              src={thumbSrc(s.thumbPath, 180)}
               className="h-20 w-14 shrink-0 rounded-md bg-muted object-cover shadow-lg shadow-black/50 ring-1 ring-white/10"
               loading="lazy"
               alt=""
@@ -391,8 +391,11 @@ function PlexSkeleton() {
   );
 }
 
-function thumbSrc(path: string): string {
-  return `/api/plex-thumb?path=${encodeURIComponent(path)}`;
+// Mărimea cerută Plex-ului (latura mică, px) — vezi THUMB_WIDTHS din
+// api/plex-thumb.ts. Posterul de 56px lățime ×3 pentru ecrane dense = 180;
+// fundalul e estompat, deci 240 ajunge cu prisosință.
+function thumbSrc(path: string, width: 180 | 240): string {
+  return `/api/plex-thumb?path=${encodeURIComponent(path)}&w=${width}`;
 }
 
 function fmtClock(ms: number): string {

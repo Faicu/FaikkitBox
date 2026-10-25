@@ -93,7 +93,7 @@ const LIBRARY_COUNT_TTL_MS = 5 * 60 * 1000;
 // drawer de detalii, atât badge-ul boolean cât și data afișată). Spre
 // deosebire de `userHistory` (plafonat la 50/user, gândit doar pentru
 // afișarea istoricului recent din dashboard), acest index ține TOATE
-// intrările primite de la Plex (până la 1000, per key → ultimul viewedAt),
+// intrările din istoricul Plex (tot, citit pe pagini; per key → ultimul viewedAt),
 // ca un utilizator activ să nu "piardă" din matching (sau din dată) titluri
 // vizionate mai demult doar pentru că a mai văzut multe altele între timp.
 export interface PlexWatchedIndex {
@@ -225,7 +225,7 @@ export interface PlexView {
   viewedAt: number;
 }
 
-// Vizionările din istoricul Plex (ultimele 1000, toți userii), grupate pe
+// Vizionările din istoricul Plex (tot istoricul, toți userii), grupate pe
 // ID-ul contului Plex (users.plex_account_id) — nu pe nume: numele din
 // /accounts e numele afișat („Dragomir Andreea"), nu username-ul salvat la
 // înregistrare („dragomirandreea"). null dacă Plex nu răspunde — ca
@@ -304,6 +304,8 @@ export async function getAllPlexWatchedIndexes(): Promise<Record<string, PlexWat
   }
 }
 
+const HISTORY_PAGE_SIZE = 1000;
+
 async function fetchPlexHistory(
   url: string,
   headers: Record<string, string>,
@@ -329,12 +331,21 @@ async function fetchPlexHistory(
       accountNames: plexHistoryCache.accountNames,
     };
   }
-  const historyJson = await fetchJson<PlexApiResponse>(
-    `${url}/status/sessions/history/all?sort=viewedAt:desc&X-Plex-Container-Start=0&X-Plex-Container-Size=1000`,
-    { headers },
-    12000,
-  );
-  const entries: PlexMetadataItem[] = historyJson?.MediaContainer?.Metadata ?? [];
+  // Tot istoricul, pe pagini de câte 1000 — fără plafon: „văzut" din
+  // Bibliotecă și „cine a mai văzut" trebuie să știe și de vizionările vechi
+  // (oct 2026: ~1000 de intrări pe an, un singur răspuns de ~300 KB).
+  const entries: PlexMetadataItem[] = [];
+  for (;;) {
+    const page = await fetchJson<PlexApiResponse>(
+      `${url}/status/sessions/history/all?sort=viewedAt:desc&X-Plex-Container-Start=${entries.length}&X-Plex-Container-Size=${HISTORY_PAGE_SIZE}`,
+      { headers },
+      12000,
+    );
+    const items: PlexMetadataItem[] = page?.MediaContainer?.Metadata ?? [];
+    entries.push(...items);
+    const total = Number(page?.MediaContainer?.totalSize ?? 0);
+    if (items.length < HISTORY_PAGE_SIZE || (total > 0 && entries.length >= total)) break;
+  }
 
   const accountMap = new Map<number, string>();
   try {

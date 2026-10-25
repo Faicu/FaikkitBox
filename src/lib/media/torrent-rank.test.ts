@@ -74,6 +74,26 @@ describe("excluse", () => {
     }
   });
 
+  it("cuvintele din titlu nu exclud — doar cele de după an/sezon", () => {
+    for (const n of [
+      "Toy.Story.3D.Adventure.2024.1080p.WEB-DL.x264-GRP",
+      "Cam.Girl.2018.1080p.WEB-DL.x264-GRP",
+      "TS.Eliot.Wasteland.2019.1080p.BluRay.x264-GRP",
+      "Show.TS.S01E02.1080p.WEB-DL.x264-GRP",
+      "2012.2009.1080p.BluRay.x264-GRP",
+    ]) {
+      expect(isExcludedTorrent(t(n)), n).toBe(false);
+    }
+    for (const n of [
+      "Film.2024.TS.x264-GRP",
+      "Film 2024 HDCAM x264",
+      "Show.S01E02.1080p.3D.HSBS.x264-GRP",
+      "Film.TS.fara.an.x264-GRP",
+    ]) {
+      expect(isExcludedTorrent(t(n)), n).toBe(true);
+    }
+  });
+
   it("BDRemux e tot REMUX — ultimul", () => {
     const list = [t("Film.2023.1080p.BDRemux.AVC.DTS-HD-A"), t("Film.2023.1080p.BluRay.x264-B")];
     expect(names(rankTorrents(list, "movie"))[0]).toBe("Film.2023.1080p.BluRay.x264-B");

@@ -4,6 +4,7 @@ import { CheckCircle2, Eye, Film } from "lucide-react";
 import { UserAvatar } from "@/components/principala/UserAvatar";
 import { relativeTime } from "@/components/tehnic/utils";
 import { pluralRo } from "@/lib/format";
+import { resizePosterUrl } from "@/lib/tmdb/poster";
 import type { RecentWatch } from "@/lib/services/recent-watch-types";
 
 // Câte vizionări arată cardul de pe Acasă înainte de "Arată mai multe".
@@ -121,7 +122,7 @@ function WatchRow({
       />
       {showImage ? (
         <img
-          src={it.thumbUrl!}
+          src={smallThumb(it.thumbUrl!)}
           className="h-14 w-10 shrink-0 rounded-md bg-muted object-cover shadow-md shadow-black/40 ring-1 ring-white/10"
           loading="lazy"
           alt=""
@@ -213,4 +214,12 @@ function groupByDay(items: RecentWatch[]): DayGroup[] {
     g.items.push({ item, index });
   });
   return groups;
+}
+
+// Posterul are 40px lățime: ×3 pentru ecrane dense ≈ 120px. TMDB servește
+// w154 (din w342 salvat în `media`); miniaturile Plex (trailere) trec prin
+// micșorarea proxy-ului (THUMB_WIDTHS din api/plex-thumb.ts).
+function smallThumb(url: string): string {
+  if (url.startsWith("/api/plex-thumb?")) return `${url}&w=120`;
+  return resizePosterUrl(url, "w154") ?? url;
 }
