@@ -149,7 +149,7 @@ function SessionRow({ session: s, offsetMs }: { session: PlexSession; offsetMs: 
       {bg && (
         <img
           src={thumbSrc(bg, 240)}
-          className="absolute inset-0 h-full w-full scale-110 object-cover opacity-50 blur-xl"
+          className="absolute inset-0 h-full w-full scale-110 object-cover opacity-50 blur-md"
           loading="lazy"
           alt=""
           aria-hidden
@@ -268,7 +268,7 @@ const STAT_TONES = {
 
 // Caseta cu cifra zilei. `translate`/`scale` din Tailwind 4 sunt proprietăți
 // separate de `transform`, deci ridicarea la hover merge și pe copiii unui
-// `stagger-in`, a căror animație ține `transform` blocat pe `none`.
+// `stagger-in` cât timp rulează animația de intrare (care scrie `transform`).
 function StatTile({
   label,
   value,

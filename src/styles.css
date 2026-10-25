@@ -139,11 +139,18 @@
  * Futuristic animation system
  * ============================================================ */
 
-/* `to` se termină în `transform: none`, NU în translate3d(0,0,0): animația
- * rulează cu `forwards`, deci valoarea finală persistă. Un transform diferit
- * de `none` face elementul containing block pentru `position: fixed` pe viață
- * — exact cauza overlay-urilor decupate documentate în BibliotecaList.tsx.
- * Cu `none` nu rămâne niciun containing block după ce animația s-a terminat. */
+/* Intrările (stagger-in, stagger-in-fast, rise-in) rulează cu `backwards`, nu
+ * `forwards`: `from` ține elementul ascuns doar în timpul întârzierii, iar
+ * după final animația nu mai e aplicată deloc — elementul rămâne pe stilul
+ * lui (vizibil, fără transform). Cu `forwards`, fiecare rând animat rămânea
+ * pe viață un strat separat pe GPU; pe Acasă, zeci de astfel de straturi peste
+ * carduri cu backdrop-filter epuizau memoria video a lui Chrome pe Android,
+ * care sărea apoi peste bucăți din pagină (goluri dreptunghiulare, în alt loc
+ * la fiecare refresh — 25 oct 2026).
+ *
+ * `to` rămâne `transform: none`, NU translate3d(0,0,0): un transform diferit
+ * de `none` face elementul containing block pentru `position: fixed` — cauza
+ * overlay-urilor decupate documentate în BibliotecaList.tsx. */
 @keyframes fade-slide-up {
   from {
     opacity: 0;
@@ -352,16 +359,15 @@
 
 /* Stagger children — set --stagger via inline style if desired
  *
- * ATENȚIE: copiii primesc `opacity: 0` și revin la 1 doar prin animația de
- * intrare. Nu pune pe un copil direct o clasă care setează `animation` pe
+ * ATENȚIE: nu pune pe un copil direct o clasă care setează `animation` pe
  * element (pulse-glow, live-dot, tick-flash, text-gradient-primary,
- * progress-flow) — shorthand-ul ar înlocui animația de aici și copilul ar
- * rămâne invizibil, ocupând spațiu gol. Pentru efecte decorative pe astfel de
- * copii, animează un ::before/::after, ca la `pulse-glow`. */
+ * progress-flow) — shorthand-ul ar înlocui animația de aici, iar copilul ar
+ * apărea fără intrare (înainte de `backwards`, rămânea invizibil). Pentru
+ * efecte decorative pe astfel de copii, animează un ::before/::after, ca la
+ * `pulse-glow`. */
 @utility stagger-in {
   & > * {
-    opacity: 0;
-    animation: fade-slide-up 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    animation: fade-slide-up 0.55s cubic-bezier(0.22, 1, 0.36, 1) backwards;
   }
   & > *:nth-child(1) {
     animation-delay: 40ms;
@@ -397,8 +403,7 @@
  * `animation` pe copiii direcți ca la `stagger-in`. */
 @utility stagger-in-fast {
   & > * {
-    opacity: 0;
-    animation: fade-slide-up 0.2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    animation: fade-slide-up 0.2s cubic-bezier(0.22, 1, 0.36, 1) backwards;
   }
   & > *:nth-child(2) {
     animation-delay: 15ms;
@@ -631,8 +636,7 @@
  * `stagger-in` ar porni de la 440 ms. Același avertisment: elementul are
  * `animation` pe el, deci nu-l pune ca copil direct al unui `stagger-in`. */
 @utility rise-in {
-  opacity: 0;
-  animation: fade-slide-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation: fade-slide-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) backwards;
 }
 
 /* ---- Skeleton cu sweep, alternativă la animate-pulse ---- */
