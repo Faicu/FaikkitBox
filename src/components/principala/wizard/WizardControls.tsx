@@ -196,13 +196,17 @@ export function HdrQuestion({
           Ai ales {quality}. Ecranul pe care te vei uita trebuie să suporte HDR — altfel imaginea
           iese spălăcită sau mai slabă decât varianta fără HDR.
         </p>
-        <ul className="list-disc space-y-0.5 pl-4">
-          <li>TV 4K fabricat după 2017 — majoritatea au</li>
-          <li>TV doar Full HD — nu</li>
-          <li>Telefon mai nou — da</li>
-          <li>Tabletă — doar modelele de top</li>
-          <li>Laptop — majoritatea nu</li>
-        </ul>
+        {/* Regulile generale nu mai spun nimic nou când dispozitivul obișnuit e
+            sigur (confirmat sau dovedit) — rândul din indiciu ține locul lor. */}
+        {!usual?.sure && (
+          <ul className="list-disc space-y-0.5 pl-4">
+            <li>TV 4K fabricat după 2017 — majoritatea au</li>
+            <li>TV doar Full HD — nu</li>
+            <li>Telefon mai nou — da</li>
+            <li>Tabletă — doar modelele de top</li>
+            <li>Laptop — majoritatea nu</li>
+          </ul>
+        )}
       </div>
       <HdrDeviceHint />
       <div className="flex gap-2">
