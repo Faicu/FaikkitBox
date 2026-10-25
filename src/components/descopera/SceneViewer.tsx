@@ -8,6 +8,7 @@ import { getTmdbVideos } from "@/lib/tmdb/tmdb.discover.functions";
 import type { DiscoverTitle } from "@/lib/tmdb/tmdb.discover.functions";
 import { getTmdbDetails } from "@/lib/tmdb/tmdb.functions";
 import { AddMediaWizard } from "@/components/principala/AddMediaWizard";
+import { BorderFlowSweep } from "@/components/BorderFlowSweep";
 
 export function SceneViewer({ item, onClose }: { item: DiscoverTitle; onClose: () => void }) {
   const videosFn = useServerFn(getTmdbVideos);
@@ -117,6 +118,7 @@ export function SceneViewer({ item, onClose }: { item: DiscoverTitle; onClose: (
                 onClick={() => setWizardOpen(true)}
                 className="border-flow flex w-full items-center justify-center gap-2 rounded-2xl bg-primary py-3 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/20 transition-transform hover:bg-primary/90 active:scale-[0.99]"
               >
+                <BorderFlowSweep />
                 <Plus className="h-4 w-4" /> Adaugă film/serial
               </button>
             )}

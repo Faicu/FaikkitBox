@@ -6,6 +6,7 @@ import { useCountUp } from "@/hooks/use-count-up";
 import { useFlashOnChange } from "@/hooks/use-flash-on-change";
 import { UserAvatar } from "@/components/principala/UserAvatar";
 import type { PlexData, PlexSession } from "@/lib/services/plex";
+import { BorderFlowSweep } from "@/components/BorderFlowSweep";
 
 // Cardul Plex de pe Acasă: cine se uită acum, cifrele zilei, bibliotecile.
 // Drawer-ele „Vizionate azi” / „Utilizatori activi” rămân în pagină — aici
@@ -35,6 +36,7 @@ export function PlexWidget({
     <div
       className={`corner-glow rounded-2xl glass-card p-4 ${live ? "border-flow border-flow-amber" : ""}`}
     >
+      {live && <BorderFlowSweep />}
       <div className="flex items-center gap-3">
         <span
           className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400/25 to-orange-500/10 text-amber-300 shadow-[0_0_22px_-6px] shadow-amber-400/60 ring-1 ring-amber-400/30 ${

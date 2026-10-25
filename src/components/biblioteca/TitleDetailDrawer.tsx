@@ -56,6 +56,7 @@ import {
   dayTimeLabel,
 } from "./utils";
 import { QualityButton, QualityChecklist } from "./QualityChecklist";
+import { BorderFlowSweep } from "@/components/BorderFlowSweep";
 
 // Peste pragul ăsta, "Se procesează" nu mai e o scanare Plex în curs — de
 // obicei legarea reușește în primul minut după descărcare.
@@ -511,6 +512,7 @@ export function TitleDetailDrawer({
                   <div
                     className={`rounded-xl border border-border bg-muted/30 p-3 space-y-2 ${d.autoDownload ? "border-flow" : ""}`}
                   >
+                    {d.autoDownload && <BorderFlowSweep />}
                     {/* Urmărirea episoadelor noi. Butoanele sunt ascunse
                         pentru serialele încheiate — n-au ce episoade noi să
                         primească — DAR nu și când urmărirea e deja pornită: un

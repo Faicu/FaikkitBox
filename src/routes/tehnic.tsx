@@ -28,6 +28,7 @@ import { ErrorLogSection } from "@/components/tehnic/sections/ErrorLogSection";
 import { SpeedtestChart } from "@/components/tehnic/sections/SpeedtestChart";
 import { NetworkLinkCard } from "@/components/tehnic/sections/NetworkLinkCard";
 import { TehnicSubNav } from "@/components/tehnic/TehnicSubNav";
+import { BorderFlowSweep } from "@/components/BorderFlowSweep";
 
 export const Route = createFileRoute("/tehnic")({
   beforeLoad: requireAdminBeforeLoad,
@@ -240,6 +241,7 @@ function TehnicPage() {
                 speedtestRunning || speedtestMutation.isPending ? "border-flow" : ""
               }`}
             >
+              {(speedtestRunning || speedtestMutation.isPending) && <BorderFlowSweep />}
               {speedtestRunning || speedtestMutation.isPending
                 ? "Se rulează testul... (poate dura 30-60s)"
                 : "Rulează test nou"}

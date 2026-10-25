@@ -15,6 +15,7 @@ import { getWantedMovieDetail, setMovieWatch, checkMovieNow } from "@/lib/media/
 import { Orb } from "@/components/ui/orb";
 import { dayTimeLabel, lastCheckedLabel } from "./utils";
 import { QualityButton, QualityChecklist } from "./QualityChecklist";
+import { BorderFlowSweep } from "@/components/BorderFlowSweep";
 
 // Detaliile unui film așteptat. Drawer propriu, nu TitleDetailDrawer: acela e
 // construit în jurul Plex-ului, episoadelor și subtitrărilor, care aici nu
@@ -166,6 +167,7 @@ export function WantedMovieDrawer({
                 stare + acțiuni, ce se caută + calitatea, apoi ultima
                 verificare. */}
             <div className="space-y-2 rounded-xl border border-border bg-muted/30 p-3 border-flow">
+              <BorderFlowSweep />
               <div className="flex items-center gap-2">
                 <Orb state="searching" px={18} label="Așteptat" />
                 <span className="flex-1 text-xs font-medium">Așteptat</span>

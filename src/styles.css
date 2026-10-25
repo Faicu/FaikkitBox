@@ -202,11 +202,11 @@
   }
 }
 @keyframes border-flow {
-  0% {
-    background-position: 0% 50%;
+  from {
+    transform: translateX(-100%);
   }
-  100% {
-    background-position: 200% 50%;
+  to {
+    transform: translateX(250%);
   }
 }
 @keyframes live-blink {
@@ -294,7 +294,16 @@
   animation: shimmer 3.4s ease-in-out infinite;
 }
 
-/* Animated conic border — apply on top of a rounded element */
+/* Bordură în gradient cu o lumină care alunecă de-a lungul ei.
+ *
+ * Inelul (::before) e desenat o singură dată. Lumina e un element real,
+ * <BorderFlowSweep /> (components/BorderFlowSweep.tsx), pus în interiorul
+ * elementului cu `border-flow`: o bandă mutată prin `transform`, tăiată de
+ * masca inelului de pe părintele ei — totul pe placa video. Înainte curgea
+ * gradientul inelului (`background-position` animat, plus mască): redesenare
+ * la fiecare cadru a unei suprafețe cât tot elementul — pe Acasă, cât tot
+ * cardul Plex cu sesiunile active (25 oct 2026). Lumina nu poate sta pe un
+ * pseudo-element: are nevoie de un părinte mascat care să nu se miște. */
 @utility border-flow {
   position: relative;
   &::before {
@@ -309,8 +318,6 @@
       var(--border-flow-b, oklch(0.72 0.19 155 / 0.7)),
       var(--border-flow-a, color-mix(in oklab, var(--primary) 60%, transparent))
     );
-    background-size: 200% 100%;
-    animation: border-flow 3s linear infinite;
     -webkit-mask:
       linear-gradient(#000 0 0) content-box,
       linear-gradient(#000 0 0);
@@ -325,6 +332,38 @@
 @utility border-flow-amber {
   --border-flow-a: oklch(0.8 0.16 75 / 0.75);
   --border-flow-b: oklch(0.88 0.14 95 / 0.35);
+  --border-flow-light: oklch(0.95 0.1 90 / 0.95);
+}
+
+@utility border-flow-sweep {
+  position: absolute;
+  inset: -1px;
+  /* E copil al unor carduri cu `space-y-*`, care pune margin-block pe copii;
+   * pe un element absolut cu top/bottom, marginea l-ar micșora. */
+  margin: 0 !important;
+  border-radius: inherit;
+  padding: 1px;
+  overflow: hidden;
+  pointer-events: none;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  & > span {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 40%;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      var(--border-flow-light, oklch(0.9 0.15 155 / 0.95)),
+      transparent
+    );
+    animation: border-flow 3s linear infinite;
+  }
 }
 
 /* Ambient blurred orbs behind content */

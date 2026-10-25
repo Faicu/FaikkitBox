@@ -17,6 +17,7 @@ import { SupportWidget } from "@/components/principala/SupportWidget";
 import { PlexWidget } from "@/components/principala/PlexWidget";
 import { RecentWatchesWidget } from "@/components/principala/RecentWatchesWidget";
 import { plexQuery, plexSessionsQuery, adminStatusQuery, recentWatchesQuery } from "@/lib/queries";
+import { BorderFlowSweep } from "@/components/BorderFlowSweep";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -63,6 +64,7 @@ function Overview() {
           onClick={() => setWizardOpen(true)}
           className="border-flow mb-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-border/60 bg-card py-3 text-sm font-semibold text-foreground transition-colors hover:bg-muted/60 active:scale-[0.99]"
         >
+          <BorderFlowSweep />
           <Plus className="h-4 w-4" /> Adaugă film/serial
         </button>
       ) : (
