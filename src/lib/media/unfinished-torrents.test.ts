@@ -56,12 +56,12 @@ afterAll(() => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-// De ce contează interogarea asta: pe ea se sprijină singură reluarea
-// polling-ului după un restart (sarcina download-resume din Watcher). Dacă
+// De ce contează interogarea asta: pe ea se sprijină singură
+// urmărirea descărcărilor (sarcina „downloads” din Watcher). Dacă
 // ratează un torrent, acela se termină în qBittorrent, dar aplicația nu află
 // niciodată — fără subtitrare, fără completed_at, fără notificare, fără
 // legare la Plex, și complet tăcut. Dacă, invers, întoarce prea mult,
-// pornește bucle de polling pentru torrente care nu mai există.
+// cere la fiecare 10s torrente care nu mai există.
 describe("listUnfinishedTorrents", () => {
   it("întoarce o descărcare în curs", () => {
     insertMedia({ title: "Film în curs", hash: "aaa", imdb: "tt1" });
@@ -89,7 +89,7 @@ describe("listUnfinishedTorrents", () => {
   });
 
   it("nu întoarce descărcări mai vechi de 48h", () => {
-    // Fereastra în care pollUntilComplete renunță oricum — un torrent
+    // Fereastra de urmărire de 48h — un torrent
     // abandonat săptămâna trecută n-are ce relua.
     insertMedia({ title: "Abandonat", hash: "ddd", addedAt: "2026-01-01 00:00:00" });
 

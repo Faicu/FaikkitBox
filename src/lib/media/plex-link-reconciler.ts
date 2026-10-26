@@ -1,20 +1,16 @@
 // ---------------------------------------------------------------------------
 // Reconciliere periodică: titluri descărcate complet, dar nelegate încă la Plex.
 //
-// După ce un torrent se termină, download.ts încearcă legarea într-o buclă de
-// 30 de minute (180 × 10s). Problema: bucla trăiește în procesul serverului, iar
-// resumeOrphanedPolls reia la pornire DOAR descărcările cu `completed_at` NULL
-// (listUnfinishedTorrents) — adică exact cele care încă se descarcă. Un titlu deja marcat complet, prins
-// de un restart în fereastra aceea de 30 de minute, nu mai era reluat de nimeni
-// (comentariul din download.ts o spunea explicit: "nu mai există job periodic de
-// backfill ca plasă de siguranță, deci fereastra asta e singura șansă").
+// În primele 30 de minute după terminare, legarea o încearcă sarcina
+// „downloads” a Watcher-ului, la fiecare 10s. Ce rămâne nelegat după asta —
+// fișier întârziat în scanarea Plex, Plex oprit o vreme — e reîncercat aici, la
+// 10 minute, până la 72h.
 //
-// Cum workflow-ul de deploy repornește serviciul la fiecare modificare de cod,
-// scenariul nu e teoretic: rândul rămânea permanent cu plex_rating_key NULL,
-// blocat pe "Se procesează în Plex" în Bibliotecă.
-//
-// Jobul de aici e plasa de siguranță lipsă: la pornire și apoi periodic, caută
-// rândurile în starea asta și reîncearcă legarea.
+// Istoric: înainte de Watcher, legarea era o buclă de 30 de minute în memorie,
+// iar un restart în fereastra ei lăsa rândul permanent cu plex_rating_key NULL,
+// blocat pe "Se procesează în Plex" în Bibliotecă. Jobul de aici a apărut ca
+// plasă de siguranță pentru asta; acum fereastra scurtă stă și ea în DB, deci
+// rămâne plasă doar pentru titlurile care întârzie în Plex.
 // ---------------------------------------------------------------------------
 
 import { getDb } from "../db";
@@ -28,6 +24,9 @@ import {
 // ajuns niciodată în bibliotecă (șters manual, mutat, respins de Plex), fie e
 // nevoie de intervenție — reîncercarea la nesfârșit ar fi doar zgomot.
 const MAX_AGE_HOURS = 72;
+// Primele 30 de minute după terminare sunt ale sarcinii „downloads”, care
+// încearcă legarea la fiecare 10s (vezi listRecentlyCompletedUnlinked).
+export const RECENT_LINK_MINUTES = 30;
 
 export interface ReconcileResult {
   checked: number;
@@ -55,9 +54,12 @@ export async function reconcilePlexLinks(): Promise<ReconcileResult> {
        WHERE torrent_hash IS NOT NULL
          AND plex_rating_key IS NULL
          AND completed_at IS NOT NULL
-         AND completed_at > datetime('now', ?)`,
+         AND completed_at > datetime('now', ?)
+         AND completed_at <= datetime('now', ?)`,
     )
-    .all(`-${MAX_AGE_HOURS} hours`) as Array<{ torrent_hash: string }>;
+    .all(`-${MAX_AGE_HOURS} hours`, `-${RECENT_LINK_MINUTES} minutes`) as Array<{
+    torrent_hash: string;
+  }>;
 
   if (rows.length === 0) return { checked: 0, linked: 0 };
 

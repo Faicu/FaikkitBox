@@ -176,7 +176,15 @@ describe("Watcher", () => {
     expect(row("boom").last_error).toBe("Plex nu răspunde");
     expect(row("boom").next_run_at).toBe(T0 + 5_000_000 + 60_000);
     expect(runs("boom")).toHaveLength(1);
-    expect(warn).toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledTimes(1);
+
+    // Aceeași eroare la rularea următoare: nici log, nici rând nou în istoric.
+    at(5_060_000);
+    runner.tick();
+    await flush();
+    expect(row("boom").last_finished_at).toBe(T0 + 5_060_000);
+    expect(runs("boom")).toHaveLength(1);
+    expect(warn).toHaveBeenCalledTimes(1);
     warn.mockRestore();
   });
 });

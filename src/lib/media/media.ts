@@ -547,7 +547,7 @@ export function clearMediaSubtitleStatus(torrentHash: string): void {
     .run(torrentHash);
 }
 
-// Apelat când torrentul a ajuns la 100% (pollUntilComplete) — marchează
+// Apelat când torrentul a ajuns la 100% (finalizeDownload) — marchează
 // finalizarea.
 //
 // Întoarce `true` doar pentru apelantul care a marcat efectiv finalizarea.
@@ -576,20 +576,21 @@ export interface UnfinishedTorrent {
   imdbId: string | null;
 }
 
-// Descărcările încă neterminate, pentru reluarea polling-ului după un restart
-// (sarcina download-resume din Watcher). Un rând per torrent, nu per episod —
-// un pachet de sezon cu 12 episoade are 12 rânduri `media` cu același hash,
-// dar are nevoie de o singură buclă de polling.
+// Descărcările încă neterminate, urmărite de sarcina „downloads” a
+// Watcher-ului (filelist/download-tracker.ts) la fiecare 10s. Un rând per
+// torrent, nu per episod — un pachet de sezon cu 12 episoade are 12 rânduri
+// `media` cu același hash, dar o singură finalizare.
 //
 // Cele două filtre suplimentare nu sunt cosmetice:
 //
 // `plex_rating_key IS NULL` — backfill-ul din Plex (2026-08-15) a lăsat 77 de
 // rânduri cu hash și fără `completed_at`, deși titlurile erau demult pe disc
-// și indexate. Fără filtru, fiecare pornire ar fi lansat 33 de bucle de
-// polling pentru torrente care nu mai există în qBittorrent.
+// și indexate. Fără filtru, 33 de torrente care nu mai există în qBittorrent
+// ar fi fost cerute la fiecare verificare.
 //
-// `added_at` în ultimele 48h — exact fereastra după care `pollUntilComplete`
-// renunță oricum. Un torrent abandonat acum o lună n-are ce relua.
+// `added_at` în ultimele 48h — fereastra de urmărire moștenită de la buclele
+// per torrent de dinainte de Watcher. Un torrent abandonat acum o lună n-are
+// ce mai aștepta.
 export function listUnfinishedTorrents(): UnfinishedTorrent[] {
   const rows = getDb()
     .prepare(
@@ -616,6 +617,25 @@ export function listUnfinishedTorrents(): UnfinishedTorrent[] {
     isMovie: !!r.is_movie,
     imdbId: r.imdb_id,
   }));
+}
+
+// Torrentele terminate de cel mult `minutes` minute și încă nelegate la Plex.
+// Sarcina „downloads” încearcă legarea lor la fiecare tact (scanarea Plex e
+// asincronă, fișierul apare în bibliotecă după câteva zeci de secunde); după
+// fereastra asta le preia plex-link-reconciler.ts, la 10 minute, până la 72h.
+// Ferestrele sunt disjuncte: două legări simultane ale aceluiași pachet de
+// sezon i-ar dubla rândurile de episod.
+export function listRecentlyCompletedUnlinked(minutes: number): string[] {
+  const rows = getDb()
+    .prepare(
+      `SELECT DISTINCT torrent_hash FROM media
+        WHERE torrent_hash IS NOT NULL
+          AND plex_rating_key IS NULL
+          AND completed_at IS NOT NULL
+          AND completed_at > datetime('now', ?)`,
+    )
+    .all(`-${minutes} minutes`) as Array<{ torrent_hash: string }>;
+  return rows.map((r) => r.torrent_hash);
 }
 
 // Titlu + poster deja cunoscute în `media` pentru un torrent — folosit de
@@ -669,7 +689,7 @@ export function deleteMediaByTorrentHash(torrentHash: string): void {
 }
 
 // Leagă un rând `media` de item-ul lui real din Plex — ratingKey, calitate,
-// durată. Apelat cu reîncercări (pollUntilComplete), pentru că scanarea Plex
+// durată. Apelat cu reîncercări (download-tracker.ts, la 10s), pentru că scanarea Plex
 // e asincronă: la refreshPlexLibrary, fișierul poate să nu fie încă indexat.
 // Sare peste pachetele de sezon (episode NULL) — un singur rând `media` nu
 // poate reprezenta N ratingKey-uri diferite, câte unul per episod din pachet.

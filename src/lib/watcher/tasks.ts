@@ -41,7 +41,7 @@ export interface WatcherTask {
   group?: string;
   // Rulările unice de la pornire nu se pot pune pe pauză și nici porni manual:
   // „Acțiuni întrerupte” ar marca drept întreruptă o acțiune care chiar
-  // rulează acum, iar reluarea descărcărilor ar dubla buclele de polling.
+  // rulează acum.
   controllable: boolean;
   // Textul scurt din istoric („2 legate la Plex”). Null = n-a avut ce face.
   run(ctx: WatcherRunContext): Promise<string | null>;
@@ -102,25 +102,26 @@ export const WATCHER_TASKS: WatcherTask[] = [
   },
 
   // -------------------------------------------------------------------------
-  // Reluarea descărcărilor întrerupte de un restart. O descărcare pornită din
-  // aplicație e urmărită de o buclă de polling care trăiește în proces
-  // (filelist/download.ts); un restart o omoară — iar fiecare deploy
-  // repornește serviciul. Descărcările încă neterminate (`completed_at` NULL)
-  // își primesc aici bucla înapoi. Fără ea, torrentul se termină în
-  // qBittorrent, dar aplicația nu află niciodată: fără subtitrare RO, fără
-  // completed_at, fără notificare, fără legare Plex. Exista ca `setTimeout` de
-  // modul în download.ts și a încetat silențios să ruleze când modulul a
-  // devenit import leneș. La 15s: serverul a pornit, qBittorrent e gata.
+  // Descărcările pornite din aplicație, până la final: torrentele terminate în
+  // qBittorrent primesc ID-ul IMDb în nume, completed_at, notificare,
+  // subtitrare RO și refresh Plex, apoi legarea la Plex în primele 30 de
+  // minute. Vezi src/lib/filelist/download-tracker.ts.
+  //
+  // Înlocuiește buclele per torrent din memorie (30s, până la 48h) și reluarea
+  // lor după restart: totul se citește acum din `media` la fiecare tact, deci
+  // un restart nu mai are ce întrerupe. Bucla veche murea și în tăcere după
+  // 48h, iar rândul rămânea neterminat până la următoarea repornire.
+  //
+  // La 15s după pornire: serverul a pornit, qBittorrent e gata.
   {
-    id: "download-resume",
-    label: "Reluare descărcări",
+    id: "downloads",
+    label: "Descărcări",
     delayMs: 15 * SEC,
-    everyMs: null,
-    controllable: false,
+    everyMs: 10 * SEC,
+    controllable: true,
     async run() {
-      const { resumeOrphanedPolls } = await import("../filelist/download");
-      await resumeOrphanedPolls();
-      return null;
+      const { trackDownloads } = await import("../filelist/download-tracker");
+      return trackDownloads();
     },
   },
 
@@ -130,7 +131,9 @@ export const WATCHER_TASKS: WatcherTask[] = [
   // se șterge abia la împlinirea lor; termenul stă în `media`, deci o ștergere
   // ratată cât serverul a fost oprit se face la pornirea următoare. Interogarea
   // e una singură, ieftină — de-aia minutul, ca timerul din Bibliotecă să fie
-  // ținut aproape exact. La 30s: qBittorrent e gata.
+  // ținut aproape exact. La 30s: qBittorrent e gata. Un torrent încă în
+  // finalizare (redenumire, subtitrare) e lăsat pentru minutul următor —
+  // vezi finalizingHashes în download-tracker.ts.
   {
     id: "scheduled-delete",
     label: "Ștergeri programate",
@@ -150,9 +153,8 @@ export const WATCHER_TASKS: WatcherTask[] = [
   // per serial (3 ore; 1 oră în zilele de lansare, vezi checkDueShows) stă pe
   // `media.watch_last_checked_at`.
   //
-  // La 45s după pornire: după reluarea descărcărilor (15s), ca descărcările
-  // întrerupte să-și repopuleze starea înainte să căutăm ce lipsește — altfel
-  // un episod deja în curs ar putea părea lipsă.
+  // La 45s după pornire: după primul tact al descărcărilor (15s), ca
+  // torrentele terminate cât serverul a fost oprit să fie deja marcate.
   //
   // Grupul „filelist”: o rulare caută pe Filelist pentru mai multe titluri,
   // iar două căutări de fundal simultane ar deschide sesiuni concurente acolo.
@@ -248,13 +250,12 @@ export const WATCHER_TASKS: WatcherTask[] = [
   },
 
   // -------------------------------------------------------------------------
-  // Legarea la Plex a titlurilor terminate, dar rămase fără plex_rating_key —
-  // prinse de un restart în fereastra de 30 de minute în care download.ts
-  // încearcă legarea, deci blocate pe „se procesează” în Bibliotecă. Vezi
+  // Legarea la Plex a titlurilor terminate de peste 30 de minute, dar rămase
+  // fără plex_rating_key (primele 30 de minute sunt ale sarcinii „downloads”)
+  // — altfel blocate pe „se procesează” în Bibliotecă. Vezi
   // src/lib/media/plex-link-reconciler.ts. La 45s (Plex a avut timp să
   // răspundă), apoi la 10 minute; interogarea nu atinge Plex decât dacă chiar
-  // există rânduri nelegate. Lucrează pe alte rânduri decât reluarea
-  // descărcărilor (completed_at NOT NULL vs. NULL).
+  // există rânduri nelegate.
   {
     id: "plex-link",
     label: "Legare Plex",
@@ -365,7 +366,7 @@ export const WATCHER_TASKS: WatcherTask[] = [
   // subtitle-retry.ts). Tactul e din oră în oră, dar cadența reală per
   // torrent (o dată pe zi) stă pe `subtitle_checked_at`. O rulare poate dura
   // (căutări externe, ffmpeg pe fiecare fișier). La 10 minute după pornire:
-  // după reluarea descărcărilor și primul ciclu al urmăririi.
+  // după primele tacte ale descărcărilor și primul ciclu al urmăririi.
   {
     id: "subtitle-retry",
     label: "Reîncercare subtitrări",

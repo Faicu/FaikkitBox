@@ -116,12 +116,16 @@ export async function deleteTorrentNow(row: {
 // termenul atins și le scrie în jurnal. O ștergere eșuată rămâne programată
 // și se reîncearcă la următorul tic. Întoarce câte s-au executat.
 export async function runDueDeletions(nowMs = Date.now()): Promise<number> {
+  const { finalizingHashes } = await import("./download-tracker");
   const { logActivity } = await import("../activity-log");
   let done = 0;
   for (const due of listDueDeletions(nowMs)) {
     try {
       // Cineva poate să fi renunțat între listare și ștergerea precedentă.
       if (!scheduledDeletion(due.torrentHash)) continue;
+      // Torrentul tocmai s-a terminat și i se scriu fișierele (redenumire,
+      // subtitrare) — rămâne programat, se șterge la minutul următor.
+      if (finalizingHashes().has(due.torrentHash)) continue;
       const row = getDb()
         .prepare("SELECT media_type, imdb_id FROM media WHERE id = ?")
         .get(due.mediaId) as { media_type: string | null; imdb_id: string | null } | undefined;

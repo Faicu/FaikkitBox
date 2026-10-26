@@ -2,11 +2,11 @@ import { writeFile, unlink, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
-import type { FilelistDownloadResult, QbitTorrentInfo } from "./types";
+import type { FilelistDownloadResult } from "./types";
 import { CATEGORY_NAMES, parseCategoryId, isMovieCategory, isSeriesCategory } from "./categories";
 import { downloadTorrentFile } from "./filelist-client";
 import { parseSeasonEpisodeFromName } from "../media/torrent-name-parse";
-import { qbitGet, qbitLogin, qbitEnsureCookie, resetQbitCookie } from "../qbit-client";
+import { qbitLogin, qbitEnsureCookie, resetQbitCookie } from "../qbit-client";
 import { CORRECTED_OUTCOMES } from "./subtitle-outcomes";
 import type { SubtitleRunItem, DeleteSubtitleResult } from "./subtitles";
 import { refreshPlexLibrary } from "../plex-refresh";
@@ -17,9 +17,9 @@ import { refreshPlexLibrary } from "../plex-refresh";
 // browserului.
 
 // Un torrent e considerat complet dacă a ajuns la 100% și starea din
-// qBittorrent indică seeding/pauzat-după-seeding — folosit de
-// pollUntilComplete (torrent pornit din aplicație).
-function isTorrentComplete(progress: number, state: string): boolean {
+// qBittorrent indică seeding/pauzat-după-seeding — folosit de sarcina
+// „downloads” a Watcher-ului (download-tracker.ts).
+export function isTorrentComplete(progress: number, state: string): boolean {
   return (
     progress >= 1 &&
     (state.includes("UP") || state === "uploading" || state === "pausedUP" || state === "stalledUP")
@@ -92,214 +92,85 @@ function computeTorrentInfoHash(torrentBuffer: ArrayBuffer): string | null {
 // Background polling: verifică progresul torrentului și refresh Plex la final
 // ---------------------------------------------------------------------------
 
-async function pollUntilComplete(
-  qbitUrl: string,
-  torrentHash: string,
-  plexType: "movie" | "show",
-  torrentName: string,
-  // Null la reluarea după restart: id-ul de torrent Filelist nu se păstrează
-  // în `media`, iar garda de finalizare lucrează pe hash, deci nu mai e
-  // nevoie de el. Ajunge doar în meta-ul evenimentului din jurnal — mai bine
-  // absent decât un 0 inventat.
-  torrentId: number | null,
-  qbitUser: string,
-  qbitPass: string,
-  imdbId?: string | null,
-): Promise<void> {
-  const MAX_WAIT_MS = 48 * 60 * 60 * 1000;
-  const POLL_INTERVAL_MS = 30_000;
-  const started = Date.now();
-
-  console.log(`[filelist] Pornesc polling pentru "${torrentName}" (${torrentHash})`);
-
-  while (Date.now() - started < MAX_WAIT_MS) {
-    await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
-
-    try {
-      // qbitGet (nu fetch brut cu un cookie înghețat) — SID-ul WebUI expiră
-      // implicit după o oră, iar bucla asta poate rula până la 48h. Înainte,
-      // orice descărcare mai lungă de o oră primea 403 la fiecare poll, iar
-      // `if (!res.ok) continue` trata asta identic cu "încă nu e gata": fără
-      // subtitrare, fără completed_at, fără notificare, fără legare Plex —
-      // și complet tăcut. qbitGet reautentifică singur la 401/403.
-      const res = await qbitGet(
-        qbitUrl,
-        `/api/v2/torrents/info?hashes=${torrentHash}`,
-        qbitUser,
-        qbitPass,
-      );
-      if (!res.ok) {
-        console.warn(
-          `[filelist] Poll qBit pentru "${torrentName}": HTTP ${res.status} — reîncerc peste ${POLL_INTERVAL_MS / 1000}s`,
-        );
-        continue;
-      }
-
-      const list: QbitTorrentInfo[] = await res.json();
-      if (!list.length) continue;
-
-      const torrent = list[0];
-      const progress = Number(torrent.progress ?? 0);
-      const state: string = torrent.state ?? "";
-
-      const isDone = isTorrentComplete(progress, state);
-
-      if (isDone) {
-        // ID-ul IMDb în numele fișierelor, ca Plex să potrivească titlul din
-        // prima (vezi plex-id-hint.ts). Înaintea gărzii de mai jos, nu după:
-        // un restart între cele două reia polling-ul (completed_at e încă
-        // NULL), deci pasul nu se poate pierde. E idempotent — o a doua
-        // buclă pe același hash găsește fișierele deja redenumite.
-        const { applyPlexIdHint } = await import("./plex-id-hint");
-        await applyPlexIdHint({ qbitUrl, qbitUser, qbitPass, torrentHash });
-
-        // Garda de "cine a ajuns primul aici" stă pe `media`, nu pe
-        // id-ul de torrent Filelist: markMediaCompleted face UPDATE ... WHERE completed_at
-        // IS NULL și întoarce true doar pentru apelantul care a schimbat
-        // efectiv rândul. Pe hash, nu pe id-ul de torrent Filelist — pentru
-        // un pachet de sezon există zeci de rânduri media, dar o singură
-        // finalizare.
-        const media = await import("../media/media");
-        const wasFirst = media.markMediaCompleted(torrentHash);
-        if (wasFirst) {
-          console.log(`[filelist] "${torrentName}" complet — dau refresh Plex`);
-          import("../notifications/notifications")
-            .then(({ buildTorrentCompleteNotification }) =>
-              buildTorrentCompleteNotification({ torrentName, imdb: imdbId, torrentHash }),
-            )
-            .then((n) =>
-              import("../activity-log").then(({ logActivity }) =>
-                logActivity(
-                  "torrent_complete",
-                  n.body,
-                  { torrentId, torrentHash },
-                  {
-                    image: n.image,
-                    url: n.url,
-                    title: n.title,
-                    tag: `torrent-${torrentHash}`,
-                  },
-                ),
-              ),
-            )
-            .catch(() => {});
-          try {
-            const { ensureRomanianSubtitle, logSubtitleRun } = await import("./subtitles");
-            const subtitleItem = await ensureRomanianSubtitle({
-              qbitUrl,
-              qbitUser,
-              qbitPass,
-              torrentHash,
-              torrentName,
-              imdbId,
-              mediaType: plexType === "movie" ? "movie" : "tv",
-            });
-            await logSubtitleRun([subtitleItem], "download");
-            const { updateMediaSubtitleStatus } = await import("../media/media");
-            updateMediaSubtitleStatus(torrentHash, subtitleItem);
-          } catch (e) {
-            console.warn(`[filelist] Eroare subtitrare pentru "${torrentName}":`, e);
-          }
-          // completed_at e deja setat de garda de mai sus — aici rămâne
-          // doar legarea la Plex.
-          const { resolveMediaPlexLinkByTorrentHash, resolveSeasonPackPlexLinks } = media;
-          await refreshPlexLibrary(plexType);
-          console.log(`[filelist] Plex refresh trimis pentru "${plexType}"`);
-
-          // Scanarea Plex e asincronă — fișierul poate să nu fie încă indexat
-          // chiar după refresh. Reîncercăm cu pauze, ca ratingKey/calitatea/
-          // durata din `media` să se completeze fără intervenție manuală.
-          // Fereastră totală 30 min (180 × 10s) — nu mai există job periodic
-          // de backfill ca plasă de siguranță, deci fereastra asta e singura
-          // șansă. resolveMediaPlexLinkByTorrentHash acoperă episod/film
-          // individual; resolveSeasonPackPlexLinks acoperă rândul-pachet
-          // (episode NULL) — încercăm ambele, doar una din ele găsește
-          // vreodată un rând pentru hash-ul curent.
-          for (let attempt = 0; attempt < 180; attempt++) {
-            await new Promise((r) => setTimeout(r, 10_000));
-
-            const linked = await resolveMediaPlexLinkByTorrentHash(torrentHash).catch(() => false);
-            const linkedPack = linked
-              ? false
-              : await resolveSeasonPackPlexLinks(torrentHash).catch(() => false);
-            if (linked || linkedPack) break;
-          }
-        } else {
-          console.log(`[filelist] "${torrentName}" deja marcat complet de alt loop — skip`);
-        }
-        return;
-      }
-    } catch (e) {
-      console.warn(`[filelist] Eroare polling qBit: ${e}`);
-    }
-  }
-
-  console.warn(`[filelist] Timeout polling pentru "${torrentName}" după 48h`);
-}
-
-// ---------------------------------------------------------------------------
-// Resume polling pentru descărcări întrerupte de restart server
-// ---------------------------------------------------------------------------
-
-let resumeDone = false;
-
-async function resumeOrphanedPolls(): Promise<void> {
-  if (resumeDone) return;
-  resumeDone = true;
-
-  try {
-    // Sursă unică: `media`. Rândul se scrie la fiecare descărcare, chiar și
-    // când titlul n-a putut fi identificat la TMDB (vezi fallback-ul din
-    // startDownload) — altfel exact descărcările alea ar fi rămas nereluabile
-    // după un restart.
-    const { listUnfinishedTorrents } = await import("../media/media");
-    const orphaned = listUnfinishedTorrents();
-
-    if (orphaned.length === 0) return;
-
-    const qbitBase = process.env.QBIT_URL;
-    const qbitUser = process.env.QBIT_USERNAME;
-    const qbitPass = process.env.QBIT_PASSWORD;
-    if (!qbitBase || !qbitUser || !qbitPass) return;
-
-    const url = qbitBase.replace(/\/$/, "");
-    // Nu facem login aici: pollUntilComplete folosește qbitGet, care
-    // gestionează singur cookie-ul (și reautentifică la expirare). Un login
-    // eșuat la pornire nu trebuie să anuleze reluarea tuturor polling-urilor.
-
-    console.log(
-      `[filelist] Reiau polling pentru ${orphaned.length} descărcări întrerupte de restart`,
-    );
-    for (const entry of orphaned) {
-      const plexType = entry.isMovie ? "movie" : "show";
-      pollUntilComplete(
-        url,
-        entry.torrentHash,
-        plexType,
-        entry.torrentName,
-        null,
-        qbitUser,
-        qbitPass,
-        entry.imdbId,
-      ).catch((e) => console.error("[filelist] Eroare resume polling:", e));
-    }
-  } catch (e) {
-    console.warn("[filelist] resumeOrphanedPolls eșuat:", e);
-  }
-}
-
-// Declanșată de sarcina download-resume din Watcher, NU dintr-un efect
-// secundar la nivel de modul.
+// Finalizarea unei descărcări ajunse la 100% în qBittorrent: ID-ul IMDb în
+// numele fișierelor, completed_at, notificare, subtitrare română și refresh
+// Plex. Apelată de sarcina „downloads” a Watcher-ului (download-tracker.ts),
+// care observă torrentele terminate dintr-o singură cerere qBittorrent la 10s.
+// Legarea la Plex nu mai e aici: o face tot sarcina, la fiecare tact, pentru
+// titlurile terminate în ultimele 30 de minute — din DB, deci peste restart.
 //
-// Înainte era un `setTimeout` executat la încărcarea modulului, ceea ce
-// funcționa doar accidental: barrel-ul filelist.functions.ts importa static
-// download.ts, deci modulul se încărca la boot. După ce server function-urile
-// s-au mutat în download.functions.ts (ca să nu mai scurgem cod server în
-// bundle-ul public), download.ts a devenit import leneș — și reluarea nu a mai
-// rulat NICIODATĂ la pornire. Reprodus: un torrent ajuns 100% în qBittorrent
-// rămânea cu completed_at NULL, fără subtitrare și fără legare Plex, fiindcă
-// bucla lui de polling murise la restart și nimeni nu o mai relua.
-export { resumeOrphanedPolls };
+// Înainte, fiecare torrent avea propria buclă în memorie (30s, până la 48h,
+// plus 30 de minute de reîncercări de legare), pe care un restart o omora;
+// de-aia exista o reluare separată la pornire.
+export async function finalizeDownload(t: {
+  torrentHash: string;
+  torrentName: string;
+  isMovie: boolean;
+  imdbId: string | null;
+  qbitUrl: string;
+  qbitUser: string;
+  qbitPass: string;
+}): Promise<void> {
+  const { torrentHash, torrentName, imdbId, qbitUrl, qbitUser, qbitPass } = t;
+  const plexType = t.isMovie ? "movie" : "show";
+
+  // ID-ul IMDb în numele fișierelor, ca Plex să potrivească titlul din prima
+  // (vezi plex-id-hint.ts). Înaintea gărzii de mai jos, nu după: un restart
+  // între cele două lasă completed_at NULL, deci torrentul e prins din nou de
+  // sarcină și pasul nu se poate pierde. E idempotent — a doua oară găsește
+  // fișierele deja redenumite.
+  const { applyPlexIdHint } = await import("./plex-id-hint");
+  await applyPlexIdHint({ qbitUrl, qbitUser, qbitPass, torrentHash });
+
+  // Garda de "cine a ajuns primul aici" stă pe `media`: markMediaCompleted
+  // face UPDATE ... WHERE completed_at IS NULL și întoarce true doar pentru
+  // apelantul care a schimbat efectiv rândul. Pe hash — pentru un pachet de
+  // sezon există zeci de rânduri media, dar o singură finalizare.
+  const media = await import("../media/media");
+  if (!media.markMediaCompleted(torrentHash)) {
+    console.log(`[filelist] "${torrentName}" deja marcat complet — skip`);
+    return;
+  }
+  console.log(`[filelist] "${torrentName}" complet — dau refresh Plex`);
+  import("../notifications/notifications")
+    .then(({ buildTorrentCompleteNotification }) =>
+      buildTorrentCompleteNotification({ torrentName, imdb: imdbId, torrentHash }),
+    )
+    .then((n) =>
+      import("../activity-log").then(({ logActivity }) =>
+        logActivity(
+          "torrent_complete",
+          n.body,
+          { torrentHash },
+          {
+            image: n.image,
+            url: n.url,
+            title: n.title,
+            tag: `torrent-${torrentHash}`,
+          },
+        ),
+      ),
+    )
+    .catch(() => {});
+  try {
+    const { ensureRomanianSubtitle, logSubtitleRun } = await import("./subtitles");
+    const subtitleItem = await ensureRomanianSubtitle({
+      qbitUrl,
+      qbitUser,
+      qbitPass,
+      torrentHash,
+      torrentName,
+      imdbId,
+      mediaType: t.isMovie ? "movie" : "tv",
+    });
+    await logSubtitleRun([subtitleItem], "download");
+    media.updateMediaSubtitleStatus(torrentHash, subtitleItem);
+  } catch (e) {
+    console.warn(`[filelist] Eroare subtitrare pentru "${torrentName}":`, e);
+  }
+  await refreshPlexLibrary(plexType);
+  console.log(`[filelist] Plex refresh trimis pentru "${plexType}"`);
+}
 
 // ---------------------------------------------------------------------------
 // Server function: descarcă torrent și trimite la qBittorrent
@@ -514,9 +385,6 @@ export async function downloadFilelistCore(
       catName,
       savePath,
       isMovie,
-      url,
-      qbitUser,
-      qbitPass,
       torrentHash: computeTorrentInfoHash(torrentBuffer),
     }).catch((e) => console.error("[filelist] Eroare la finalizarea descărcării în fundal:", e));
 
@@ -535,12 +403,9 @@ async function finishFilelistDownload(ctx: {
   catName: string;
   savePath: string;
   isMovie: boolean;
-  url: string;
-  qbitUser: string;
-  qbitPass: string;
   torrentHash: string | null;
 }): Promise<void> {
-  const { params, catId, catName, savePath, isMovie, url, qbitUser, qbitPass, torrentHash } = ctx;
+  const { params, catId, catName, savePath, isMovie, torrentHash } = ctx;
 
   // 6. Scrie în `media` ÎNAINTE de notificare — sursă unică pentru titlu/
   // poster, ca notificarea (mai jos) să le citească de-acolo, nu să le
@@ -634,21 +499,11 @@ async function finishFilelistDownload(ctx: {
     )
     .catch(() => {});
 
-  // 8. Pornește polling background — refresh Plex și marchează complet DOAR la final
-  const plexType = isMovie ? "movie" : "show";
-  if (torrentHash) {
-    pollUntilComplete(
-      url,
-      torrentHash,
-      plexType,
-      params.torrentName,
-      params.torrentId,
-      qbitUser,
-      qbitPass,
-      params.imdb,
-    ).catch((e) => console.error("[filelist] Eroare polling:", e));
-  } else {
-    console.warn("[filelist] Hash nedisponibil — Plex nu va fi refreshuit automat");
+  // 8. Urmărirea până la final o face sarcina „downloads” a Watcher-ului,
+  // care citește din `media` torrentele neterminate — rândul scris mai sus
+  // ajunge, fără nicio buclă pornită de aici.
+  if (!torrentHash) {
+    console.warn("[filelist] Hash nedisponibil — descărcarea nu poate fi urmărită până la final");
   }
 }
 

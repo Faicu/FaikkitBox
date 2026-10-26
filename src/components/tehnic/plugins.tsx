@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import {
   PlayCircle,
   Link2,
-  RotateCcw,
+  Download,
   Power,
   PlugZap,
   DatabaseBackup,
@@ -87,14 +87,15 @@ export const WATCHER_TASK_INFO: Record<string, WatcherTaskInfo> = {
     ],
     icon: <PlayCircle className="h-3.5 w-3.5 text-amber-400" />,
   },
-  "download-resume": {
-    summary: "Repornește urmărirea descărcărilor încă neterminate după un restart.",
+  downloads: {
+    summary: "Urmărește descărcările până la final și le leagă la Plex.",
     points: [
-      "O descărcare e urmărită de o buclă care trăiește în proces; un restart o omoară — și fiecare deploy repornește serviciul.",
-      "Fără reluare, torrentul se termină în qBittorrent, dar aplicația nu află niciodată: fără subtitrare RO, fără completed_at, fără notificare, fără legare la Plex.",
-      "A existat cândva ca efect secundar de modul și a încetat silențios să mai ruleze când modulul a devenit import leneș.",
+      "La fiecare 10 secunde, o singură cerere către qBittorrent pentru toate descărcările neterminate pornite din aplicație.",
+      "Un torrent terminat primește ID-ul IMDb în numele fișierelor, notificarea, subtitrarea română și refresh-ul Plex. Partea asta rulează separat, deci o subtitrare care durează minute nu le ține pe loc pe celelalte.",
+      "În primele 30 de minute după terminare încearcă legarea la Plex la fiecare 10 secunde; după aceea preia „Legare Plex”.",
+      "Totul se citește din baza de date la fiecare tact, deci un restart nu întrerupe nimic. Înainte, fiecare descărcare avea propria buclă în memorie, pe care fiecare deploy o omora și care trebuia reluată la pornire.",
     ],
-    icon: <RotateCcw className="h-3.5 w-3.5 text-blue-400" />,
+    icon: <Download className="h-3.5 w-3.5 text-blue-400" />,
   },
   "scheduled-delete": {
     summary: "Șterge titlurile cerute spre ștergere în primele 24 h, la împlinirea lor.",
@@ -102,6 +103,7 @@ export const WATCHER_TASK_INFO: Record<string, WatcherTaskInfo> = {
       "Filelist consideră hit and run un torrent șters în primele 24 de ore de la descărcare. Cererea se acceptă, dar ștergerea se programează pentru împlinirea celor 24 h.",
       "Până atunci torrentul continuă să se descarce și să facă seed, iar titlul apare în Bibliotecă cu un timer. Oricine poate renunța la ștergere și devine astfel proprietarul titlului. Adminul poate ocoli programarea cu „Șterge acum”.",
       "Termenul stă în baza de date: o ștergere ratată cât serverul a fost oprit se face la pornirea următoare.",
+      "Un torrent care tocmai s-a terminat și își primește încă subtitrarea e lăsat pentru minutul următor, ca să nu fie șters exact cât i se scriu fișierele.",
       "Programarea, renunțarea și ștergerea efectivă apar în jurnal (filtrul Torrente), fără notificare push.",
     ],
     icon: <Trash2 className="h-3.5 w-3.5 text-red-400" />,
@@ -129,7 +131,7 @@ export const WATCHER_TASK_INFO: Record<string, WatcherTaskInfo> = {
   "plex-link": {
     summary: "Leagă la Plex titlurile descărcate, dar rămase nelegate.",
     points: [
-      "Un titlu terminat, dar prins de un restart înainte ca Plex să-l indexeze, rămâne fără plex_rating_key — adică blocat pe „se procesează” la nesfârșit.",
+      "Primele 30 de minute după terminare sunt ale sarcinii „Descărcări”. Ce rămâne nelegat după asta (Plex oprit, scanare întârziată) ar sta altfel blocat pe „se procesează” la nesfârșit.",
       "Reîncearcă pentru tot ce s-a terminat în ultimele 72h și n-are încă legătură. Nu atinge Plex decât dacă chiar există ceva nelegat.",
       "Completează și calitatea filmelor legate corect, dar la care nu s-a putut decide care versiune din Plex e a noastră.",
     ],

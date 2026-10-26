@@ -99,6 +99,17 @@ function prune(taskId: string): void {
     .run(taskId, taskId, HISTORY_KEEP);
 }
 
+function isRepeatedError(taskId: string, error: string): boolean {
+  try {
+    const prev = getDb()
+      .prepare("SELECT last_ok, last_error FROM watcher_tasks WHERE id = ?")
+      .get(taskId) as { last_ok: number | null; last_error: string | null } | undefined;
+    return prev?.last_ok === 0 && prev.last_error === error;
+  } catch {
+    return false;
+  }
+}
+
 async function execute(task: WatcherTask, manual: boolean): Promise<void> {
   const started = Date.now();
   running.set(task.id, started);
@@ -117,12 +128,20 @@ async function execute(task: WatcherTask, manual: boolean): Promise<void> {
   let ok = true;
   let summary: string | null = null;
   let error: string | null = null;
+  let repeated = false;
   try {
     summary = await task.run({ manual });
   } catch (e) {
     ok = false;
     error = errorText(e);
-    console.warn(`[watcher] ${task.label} — rulare eșuată, se reia la următoarea:`, e);
+    // Aceeași eroare ca la rularea precedentă (qBittorrent oprit, de exemplu,
+    // la o sarcină de 10s) se raportează o singură dată: altfel ar umple
+    // „Erori aplicație” și istoricul cu sute de rânduri identice. Starea
+    // sarcinii o arată în continuare, până trece.
+    repeated = isRepeatedError(task.id, error);
+    if (!repeated) {
+      console.warn(`[watcher] ${task.label} — rulare eșuată, se reia la următoarea:`, e);
+    }
   }
 
   const finished = Date.now();
@@ -141,7 +160,7 @@ async function execute(task: WatcherTask, manual: boolean): Promise<void> {
     ).run(next, started, finished, finished - started, ok ? 1 : 0, error, summary, task.id);
 
     const frequent = task.everyMs !== null && task.everyMs <= FREQUENT_MS;
-    if (!frequent || manual || !ok || summary !== null) {
+    if (!repeated && (!frequent || manual || !ok || summary !== null)) {
       db.prepare(
         `INSERT INTO watcher_runs (task_id, started_at, finished_at, duration_ms, ok, manual, summary, error)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,

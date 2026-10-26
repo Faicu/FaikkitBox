@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------------
 // Asigură subtitrare română corectă la finalul unei descărcări Filelist (film
 // sau, pentru pachete de episoade, fiecare episod din torrent — vezi
-// processSeasonPack). Apelat din pollUntilComplete (download.ts) și din
+// processSeasonPack). Apelat din finalizeDownload (download.ts) și din
 // corectSubtitleForMedia (corecție punctuală per titlu), înainte de
 // refreshPlexLibrary.
 //
