@@ -41,6 +41,10 @@ export interface WatcherTask {
   // Sarcinile din același grup nu rulează niciodată simultan. Una ținută pe
   // loc de grup rămâne scadentă și pornește la primul tact cu grupul liber.
   group?: string;
+  // Ritmul afișat în Tehnic, când diferă de interval: la sarcinile cu ceas
+  // propriu sau per titlu, intervalul e doar tactul (ori ritmul de
+  // reîncercare), nu cât de des se întâmplă ceva.
+  cadenceLabel?: string;
   // Rulările unice de la pornire nu se pot pune pe pauză și nici porni manual:
   // „Acțiuni întrerupte” ar marca drept întreruptă o acțiune care chiar
   // rulează acum.
@@ -166,6 +170,7 @@ export const WATCHER_TASKS: WatcherTask[] = [
   {
     id: "show-watch",
     label: "Seriale și filme",
+    cadenceLabel: "la 3h / serial",
     delayMs: 45 * SEC,
     everyMs: 10 * MIN,
     group: "filelist",
@@ -309,6 +314,7 @@ export const WATCHER_TASKS: WatcherTask[] = [
   {
     id: "db-backup",
     label: "Backup bază de date",
+    cadenceLabel: "zilnic",
     delayMs: 90 * SEC,
     everyMs: HOUR,
     controllable: true,
@@ -334,6 +340,7 @@ export const WATCHER_TASKS: WatcherTask[] = [
   {
     id: "imdb-ratings",
     label: "Rating-uri IMDb",
+    cadenceLabel: "zilnic",
     delayMs: 2 * MIN,
     everyMs: HOUR,
     controllable: true,
@@ -359,6 +366,7 @@ export const WATCHER_TASKS: WatcherTask[] = [
   {
     id: "update-check",
     label: "Actualizări disponibile",
+    cadenceLabel: "zilnic",
     delayMs: 5 * MIN,
     everyMs: HOUR,
     controllable: true,
@@ -381,6 +389,7 @@ export const WATCHER_TASKS: WatcherTask[] = [
   {
     id: "subtitle-retry",
     label: "Reîncercare subtitrări",
+    cadenceLabel: "zilnic / titlu",
     delayMs: 10 * MIN,
     everyMs: HOUR,
     controllable: true,

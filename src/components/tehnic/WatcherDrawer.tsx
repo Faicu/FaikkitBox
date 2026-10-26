@@ -46,8 +46,10 @@ function formatDuration(ms: number): string {
   return `${h}h ${String(m % 60).padStart(2, "0")}m`;
 }
 
-function inTime(iso: string, now: number): string {
-  const s = Math.round((new Date(iso).getTime() - now) / 1000);
+// Date.now(), nu ceasul din useNow: datele noi pot sosi între două bătăi ale
+// lui, iar „peste 32s” la o sarcină de 30s arăta ca o greșeală.
+function inTime(iso: string): string {
+  const s = Math.round((new Date(iso).getTime() - Date.now()) / 1000);
   if (s <= 0) return "acum";
   if (s < 60) return `peste ${s}s`;
   const m = Math.round(s / 60);
@@ -56,7 +58,8 @@ function inTime(iso: string, now: number): string {
   return m % 60 ? `peste ${h}h ${m % 60}m` : `peste ${h}h`;
 }
 
-function cadenceText(t: Pick<WatcherTaskStatus, "everyMs">): string {
+function cadenceText(t: Pick<WatcherTaskStatus, "everyMs" | "cadenceLabel">): string {
+  if (t.cadenceLabel) return t.cadenceLabel;
   if (t.everyMs === null) return "la pornire";
   const s = t.everyMs / 1000;
   if (s < 60) return `la ${s}s`;
@@ -172,7 +175,7 @@ function LiveOperations({ tasks, now }: { tasks: WatcherTaskStatus[]; now: numbe
         <div className="text-muted-foreground">
           Nicio operațiune în curs.
           {upcoming?.nextRunAt
-            ? ` Următoarea: ${upcoming.label}, ${inTime(upcoming.nextRunAt, now)}.`
+            ? ` Următoarea: ${upcoming.label}, ${inTime(upcoming.nextRunAt)}.`
             : ""}
         </div>
       ) : (
@@ -239,7 +242,7 @@ function TaskItem({
           <span className="mt-0.5 block truncate leading-relaxed text-muted-foreground">
             {task.lastOk === false
               ? (task.lastError ?? "eroare")
-              : (task.lastSummary ?? info?.summary ?? "")}
+              : (task.lastActionSummary ?? info?.summary ?? "")}
           </span>
         </span>
         <span className="mt-0.5 flex shrink-0 items-center gap-1.5">
@@ -253,9 +256,14 @@ function TaskItem({
               pauză
             </span>
           )}
-          {task.lastFinishedAt && (
-            <span className="whitespace-nowrap text-[10px] text-muted-foreground">
-              {relativeTime(task.lastFinishedAt)}
+          {/* Ora ultimei acțiuni reale, nu a ultimei rulări — la sarcinile dese
+              aceea ar fi mereu „acum”. */}
+          {task.lastActionAt && (
+            <span
+              className="whitespace-nowrap text-[10px] text-muted-foreground"
+              title={formatDateTime(task.lastActionAt)}
+            >
+              {relativeTime(task.lastActionAt)}
             </span>
           )}
           <ChevronDown
@@ -274,7 +282,9 @@ function TaskItem({
   );
 }
 
-function TaskDetails({ task, now }: { task: WatcherTaskStatus; now: number }) {
+// `now` nu e citit, dar schimbarea lui la fiecare secundă re-randează
+// „Următoarea: peste 12s”.
+function TaskDetails({ task, now: _tick }: { task: WatcherTaskStatus; now: number }) {
   const info = WATCHER_TASK_INFO[task.id];
   const qc = useQueryClient();
   const runNow = useServerFn(runWatcherTaskNow);
@@ -306,7 +316,7 @@ function TaskDetails({ task, now }: { task: WatcherTaskStatus; now: number }) {
       : task.runningSince
         ? "după rularea curentă"
         : task.nextRunAt
-          ? inTime(task.nextRunAt, now)
+          ? inTime(task.nextRunAt)
           : "—";
 
   return (
@@ -343,7 +353,7 @@ function TaskDetails({ task, now }: { task: WatcherTaskStatus; now: number }) {
             type="button"
             onClick={() => run.mutate()}
             disabled={run.isPending || !!task.requestedAt || !!task.runningSince}
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary/15 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/25 disabled:opacity-50"
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
           >
             <Play className="h-3.5 w-3.5" />
             {task.runningSince ? "Rulează…" : task.requestedAt ? "Cerută…" : "Rulează acum"}

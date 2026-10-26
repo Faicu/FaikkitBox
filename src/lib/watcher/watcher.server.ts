@@ -29,15 +29,26 @@ const iso = (ms: number | null) => (ms === null ? null : new Date(ms).toISOStrin
 export function readWatcherStatus(): WatcherTaskStatus[] {
   const rows = getDb().prepare("SELECT * FROM watcher_tasks").all() as unknown as TaskRow[];
   const byId = new Map(rows.map((r) => [r.id, r]));
+  // Ultima rulare reușită cu rezumat, per sarcină.
+  const actions = getDb()
+    .prepare(
+      `SELECT r.task_id, r.finished_at, r.summary FROM watcher_runs r
+        WHERE r.id = (SELECT MAX(id) FROM watcher_runs
+                       WHERE task_id = r.task_id AND ok = 1 AND summary IS NOT NULL)`,
+    )
+    .all() as unknown as Array<{ task_id: string; finished_at: number; summary: string }>;
+  const actionById = new Map(actions.map((a) => [a.task_id, a]));
   // Ordinea din registru, nu din bază — e și ordinea în care au sens citite.
   return WATCHER_TASKS.map((t) => {
     const r = byId.get(t.id);
+    const action = actionById.get(t.id);
     return {
       id: t.id,
       label: t.label,
       delayMs: t.delayMs,
       everyMs: t.everyMs,
       group: t.group ?? null,
+      cadenceLabel: t.cadenceLabel ?? null,
       controllable: t.controllable,
       paused: r?.paused === 1,
       requestedAt: iso(r?.run_requested_at ?? null),
@@ -50,6 +61,8 @@ export function readWatcherStatus(): WatcherTaskStatus[] {
       lastOk: r?.last_ok === null || r?.last_ok === undefined ? null : r.last_ok === 1,
       lastError: r?.last_error ?? null,
       lastSummary: r?.last_summary ?? null,
+      lastActionAt: iso(action?.finished_at ?? null),
+      lastActionSummary: action?.summary ?? null,
     };
   });
 }
