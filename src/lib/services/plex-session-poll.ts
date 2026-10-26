@@ -1,17 +1,11 @@
-// ---------------------------------------------------------------------------
-// Sesiunile Plex active — sarcina „plex-sessions” din Watcher, la 10s:
-// începutul și sfârșitul fiecărei vizionări, în jurnal (trackPlexSessions din
-// activity-log.ts), plus ce se vede despre HDR-ul dispozitivelor
-// (recordDeviceSessions). Garda de suprapunere e a Watcher-ului: două
-// verificări care primesc aceeași sesiune nouă ar vedea-o amândouă ca
-// necunoscută și ar scrie de două ori „a început să vizioneze”, cu două
-// notificări push.
-// ---------------------------------------------------------------------------
+// Sesiunile Plex active — sarcina „plex-sessions” din Watcher: începutul și
+// sfârșitul vizionărilor în jurnal (trackPlexSessions) și HDR-ul dispozitivelor
+// (recordDeviceSessions). Nu trebuie rulată în paralel cu ea însăși — ar scrie
+// de două ori „a început să vizioneze”; garda e a Watcher-ului.
 
 import type { PlexMetadataItem } from "./plex-shared";
 
-// Mult sub interval: un Plex blocat (în timpul unui update, de exemplu) ar ține
-// altfel cererea minute întregi.
+// Un Plex blocat (în timpul unui update) ar ține altfel cererea minute întregi.
 const REQUEST_TIMEOUT_MS = 10_000;
 
 export async function pollPlexSessions(): Promise<void> {
@@ -49,20 +43,15 @@ export async function pollPlexSessions(): Promise<void> {
     };
     const sessionsMd = json?.MediaContainer?.Metadata ?? [];
 
-    // Separat de jurnal: o eroare aici nu trebuie să oprească urmărirea
-    // vizionărilor (și invers).
+    // Separat de jurnal: o eroare aici nu oprește urmărirea vizionărilor.
     await recordDeviceSessions(sessionsMd as PlexMetadataItem[]).catch(() => {});
 
     await trackPlexSessions(
       sessionsMd.map((s) => {
         const dur = Number(s.duration ?? 0);
-        // viewOffset de la Plex e mereu în milisecunde. Aici exista o
-        // conversie care înmulțea cu 1000 orice offset sub 1000, presupunând
-        // secunde — dar asta lovea exact cazul legitim al unei redări abia
-        // pornite: 500 ms (o jumătate de secundă) devenea 500 000 ms, adică
-        // 8 minute. Peste pragul MIN_PROGRESS_MS din activity-log.ts, deci o
-        // vizionare pornită și oprită imediat scria în "Vizionări recente" o
-        // intrare falsă, cu progres inventat.
+        // viewOffset vine mereu în ms. O conversie veche înmulțea cu 1000
+        // offset-urile sub 1000, deci o redare abia pornită apărea cu 8 minute
+        // de progres în „Vizionări recente”.
         const off = Number(s.viewOffset ?? 0);
         return {
           user: s.User?.title ?? "unknown",
@@ -76,9 +65,7 @@ export async function pollPlexSessions(): Promise<void> {
       }),
     );
   } catch {
-    // Plex poate fi offline (sau n-a răspuns la timp) — sesiunile rămân
-    // cum erau, nu le închidem pe baza unei erori. Nici nu o raportăm ca
-    // eroare a sarcinii: din 10 în 10 secunde, cât Plex e oprit, ar umple
-    // istoricul și „Erori aplicație” cu același lucru.
+    // Plex offline: sesiunile rămân cum erau, iar eroarea nu se raportează —
+    // la 10s ar umple istoricul cât Plex e oprit.
   }
 }

@@ -1,41 +1,28 @@
 // ---------------------------------------------------------------------------
-// Motorul Watcher-ului: un singur tact, la o secundă, care pornește sarcinile
-// din tasks.ts când le vine rândul.
+// Motorul Watcher-ului: un tact la o secundă care pornește sarcinile din
+// tasks.ts când le vine rândul. Tactul nu așteaptă nicio sarcină — fiecare e o
+// operațiune independentă, deci una lentă nu le ține pe loc pe celelalte.
 //
-// Tactul doar verifică — nu așteaptă nicio sarcină. Fiecare sarcină pornită
-// devine o operațiune independentă, deci una lentă (subtitrări cu ffmpeg,
-// minute întregi) nu le ține pe loc pe celelalte (sesiunile Plex, la 10s).
-//
-// La fiecare tact, pentru fiecare sarcină:
-// - rulează deja → sare (garda de suprapunere, comună tuturor);
-// - pe pauză → sare, cu excepția unei rulări cerute manual;
-// - altfel, dacă e scadentă sau cerută manual → pornește.
-//
-// Starea stă în watcher_tasks (vezi db.ts): server functions din Tehnic o
-// citesc de acolo și scriu tot acolo pauza și cererile „Rulează acum”, pe
-// care tactul le citește la fiecare secundă. În memorie rămân doar
-// operațiunile în curs — ce trebuie să știe exact procesul ăsta.
+// Starea stă în watcher_tasks: server functions din Tehnic o citesc de acolo
+// și scriu acolo pauza și „Rulează acum”, citite de tact la fiecare secundă.
+// În memorie rămân doar operațiunile în curs.
 // ---------------------------------------------------------------------------
 
 import { getDb } from "../db";
 import { WATCHER_TASKS, type WatcherOutcome, type WatcherTask } from "./tasks";
 
 const TICK_MS = 1000;
-// Istoricul păstrează ultimele 20 de rulări care au făcut ceva, au eșuat sau
-// au fost pornite manual. Rulările fără nimic de făcut se văd doar în starea
-// sarcinii („Ultima rulare”) — altfel ar împinge afară din istoric tot ce
-// contează: la sarcinile dese, 20 de rânduri ar acoperi câteva minute.
+// Istoricul: ultimele 20 de rulări care au făcut ceva, au eșuat sau au fost
+// manuale — cele goale ar împinge afară tot ce contează.
 const HISTORY_KEEP = 20;
-// Limitele orei cerute de o sarcină (WatcherOutcome.nextAt): nu mai devreme
-// de un minut — o sarcină care cere mereu „acum” n-ar face altceva — și nu
-// mai târziu de 25h, ca o oră greșită să nu oprească sarcina pe termen lung.
+// Limitele orei cerute de o sarcină: cel puțin un minut (fără bucle), cel mult
+// 25h (o oră greșită nu oprește sarcina pe termen lung).
 const NEXT_MIN_MS = 60_000;
 const NEXT_MAX_MS = 25 * 60 * 60 * 1000;
 
 const running = new Map<string, number>();
 const nextAt = new Map<string, number>();
-// Sarcinile chemate cu pokeWatcher cât rulau deja, cu ora cerută — rularea
-// următoare vine cel târziu atunci, ca semnalul să nu se piardă.
+// pokeWatcher primit cât sarcina rula — rularea următoare vine cel târziu atunci.
 const poked = new Map<string, number>();
 
 interface ControlRow {
@@ -49,8 +36,8 @@ function errorText(e: unknown): string {
   return msg.length > 500 ? `${msg.slice(0, 500)}…` : msg;
 }
 
-// La pornire: un rând pentru fiecare sarcină, rulările rămase „în curs” de la
-// procesul anterior trecute în istoric ca întrerupte, și ora primei rulări.
+// La pornire: un rând per sarcină, rulările rămase „în curs” trecute ca
+// întrerupte, și ora primei rulări.
 export function boot(now: number): void {
   const db = getDb();
   db.prepare(
@@ -81,13 +68,9 @@ export function boot(now: number): void {
       prune(task.id);
     }
 
-    // Ora salvată se păstrează peste un deploy; întârzierea de pornire se
-    // aplică doar dacă sarcina e deja scadentă (sau n-a rulat niciodată).
-    // Plafonată la NEXT_MAX_MS (25h), ca o oră salvată greșit să nu oprească
-    // sarcina. Nu la intervalul sarcinii: la backup, IMDb și actualizări
-    // intervalul e doar ritmul de reîncercare (1h), iar ora salvată e cea
-    // cerută de sarcină (peste 23h) — plafonul la interval o scurta după
-    // fiecare deploy.
+    // Ora salvată rămâne peste un deploy; întârzierea de pornire se aplică doar
+    // dacă e depășită. Plafonul e 25h, nu intervalul: la backup intervalul e
+    // doar reîncercarea (1h) și ar scurta ora cerută (23h) după fiecare deploy.
     const first =
       task.everyMs === null
         ? now + task.delayMs
@@ -95,8 +78,7 @@ export function boot(now: number): void {
     nextAt.set(task.id, first);
     db.prepare("UPDATE watcher_tasks SET next_run_at = ? WHERE id = ?").run(first, task.id);
   }
-  // Cererile manuale rămase de dinainte de restart nu mai au pe cine să
-  // aștepte — sarcina rulează oricum la ora ei.
+  // Cererile manuale de dinainte de restart nu mai au pe cine să aștepte.
   db.prepare("UPDATE watcher_tasks SET run_requested_at = NULL").run();
 }
 
@@ -151,10 +133,8 @@ async function execute(task: WatcherTask, manual: boolean): Promise<void> {
   } catch (e) {
     ok = false;
     error = errorText(e);
-    // Aceeași eroare ca la rularea precedentă (qBittorrent oprit, de exemplu,
-    // la o sarcină de 10s) se raportează o singură dată: altfel ar umple
-    // „Erori aplicație” și istoricul cu sute de rânduri identice. Starea
-    // sarcinii o arată în continuare, până trece.
+    // Aceeași eroare ca data trecută se raportează o singură dată — altfel o
+    // sarcină de 10s ar umple „Erori aplicație” cât e qBittorrent oprit.
     repeated = isRepeatedError(task.id, error);
     if (!repeated) {
       console.warn(`[watcher] ${task.label} — rulare eșuată, se reia la următoarea:`, e);
@@ -162,9 +142,7 @@ async function execute(task: WatcherTask, manual: boolean): Promise<void> {
   }
 
   const finished = Date.now();
-  // Ora cerută de sarcină (backup-ul știe că următorul e peste 14h) are
-  // întâietate față de interval; o rulare eșuată revine la interval, ca să se
-  // reîncerce la ritmul obișnuit.
+  // Ora cerută de sarcină are întâietate; o rulare eșuată revine la interval.
   let next: number | null = null;
   if (ok && requestedNext !== null)
     next = Math.min(Math.max(requestedNext, finished + NEXT_MIN_MS), finished + NEXT_MAX_MS);
@@ -207,8 +185,7 @@ async function execute(task: WatcherTask, manual: boolean): Promise<void> {
   }
 }
 
-// O eroare la citirea bazei se repetă la fiecare secundă — o logăm cel mult o
-// dată pe minut, nu de 60 de ori.
+// Eroarea de citire se repetă la fiecare secundă — logată cel mult o dată pe minut.
 let lastTickWarn = 0;
 
 // Exportată (ca și boot și poke) pentru teste — runner.test.ts.
@@ -246,13 +223,9 @@ declare global {
   var __faikkitboxWatcherPoke: ((taskId: string, delayMs?: number) => void) | undefined;
 }
 
-// Aduce rularea unei sarcini cel târziu la `delayMs` de acum, fără să mai
-// aștepte intervalul — de exemplu urmărirea serialelor, imediat după ce
-// pornești urmărirea unuia, sau descărcările, care dorm cât nu e nimic de
-// urmărit. Nu amână niciodată o rulare deja mai apropiată. Chemată prin
-// globalThis (vezi poke.ts): server functions rulează în altă copie a
-// modulelor, dar în același proces. Nu e „Rulează acum”: respectă pauza și
-// nu apare ca manuală în istoric.
+// Aduce rularea unei sarcini cel târziu la `delayMs` de acum, fără s-o amâne
+// vreodată. Chemată prin globalThis (poke.ts): server functions rulează în
+// altă copie a modulelor, dar în același proces. Respectă pauza.
 export function poke(taskId: string, delayMs = 0): void {
   if (!WATCHER_TASKS.some((t) => t.id === taskId)) return;
   const at = Date.now() + delayMs;
@@ -275,8 +248,7 @@ export function startWatcher(): void {
   try {
     boot(Date.now());
   } catch (e) {
-    // Fără starea din DB, sarcinile pornesc totuși după întârzierea lor —
-    // mai bine fără istoric decât fără backup și fără urmărire.
+    // Fără starea din DB, sarcinile pornesc totuși după întârzierea lor.
     console.warn("[watcher] Pornirea din starea salvată a eșuat:", e);
     const now = Date.now();
     for (const t of WATCHER_TASKS) nextAt.set(t.id, now + t.delayMs);

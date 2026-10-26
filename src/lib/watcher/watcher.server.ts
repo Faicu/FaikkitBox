@@ -1,9 +1,5 @@
-// ---------------------------------------------------------------------------
 // Citirea și comanda Watcher-ului din Tehnic. Server functions rulează în altă
-// copie a modulelor decât plugin-ul (vezi db.ts, watcher_tasks), deci totul
-// trece prin bază: citim starea scrisă de tact și scriem pauza și cererile
-// „Rulează acum”, pe care tactul le preia în cel mult o secundă.
-// ---------------------------------------------------------------------------
+// copie a modulelor decât plugin-ul, deci totul trece prin bază (watcher_tasks).
 
 import { getDb } from "../db";
 import { WATCHER_TASKS, findWatcherTask } from "./tasks";
@@ -36,7 +32,7 @@ export function readWatcherStatus(): WatcherTaskStatus[] {
     )
     .all() as unknown as Array<{ task_id: string; finished_at: number; summary: string }>;
   const actionById = new Map(actions.map((a) => [a.task_id, a]));
-  // Ordinea din registru, nu din bază — e și ordinea în care au sens citite.
+  // Ordinea din registru.
   return WATCHER_TASKS.map((t) => {
     const r = byId.get(t.id);
     const action = actionById.get(t.id);

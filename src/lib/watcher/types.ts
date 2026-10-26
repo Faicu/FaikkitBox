@@ -1,5 +1,4 @@
-// Formele trimise clientului de watcher.functions.ts. Fișier fără importuri,
-// ca să poată fi citit și din componente fără să tragă cod server în bundle.
+// Formele trimise clientului. Fără importuri, ca să nu tragă cod server în bundle.
 
 export interface WatcherTaskStatus {
   id: string;
@@ -18,8 +17,8 @@ export interface WatcherTaskStatus {
   lastDurationMs: number | null;
   lastOk: boolean | null;
   lastError: string | null;
-  // Ultima rulare care a făcut efectiv ceva (din istoric) — rândul din Tehnic
-  // o arată pe ea, nu ultima rulare, care la sarcinile dese e mereu „acum”.
+  // Ultima rulare care a făcut ceva (din istoric) — ultima rulare simplă, la
+  // sarcinile dese, ar fi mereu „acum”.
   lastActionAt: string | null;
   lastActionSummary: string | null;
 }

@@ -1,27 +1,15 @@
 // ---------------------------------------------------------------------------
-// Urmărirea descărcărilor — sarcina „downloads” a Watcher-ului, de la
-// pornirea unei descărcări până la titlul gata în Plex.
+// Sarcina „downloads” a Watcher-ului: descărcările, de la pornire până la
+// titlul legat în Plex. La fiecare rulare:
+// 1. torrentele neterminate din `media`, într-o singură cerere qBittorrent;
+//    cele gata pornesc finalizarea (finalizeDownload) separat — subtitrarea
+//    poate dura minute, iar celelalte n-au de ce să aștepte;
+// 2. legarea la Plex a celor terminate de cel mult 30 de minute;
+// 3. la 10 minute, reconcilierea celor mai vechi, până la 72h.
 //
-// La fiecare rulare:
-// 1. Torrentele neterminate din `media` (listUnfinishedTorrents), cerute toate
-//    într-o singură cerere qBittorrent. Cele ajunse la 100% pornesc
-//    finalizarea (finalizeDownload din download.ts) ca operațiune separată,
-//    fără ca rularea s-o aștepte: subtitrarea poate dura minute, iar celelalte
-//    torrente n-au de ce să stea după ea.
-// 2. Legarea la Plex a celor terminate de cel mult 30 de minute.
-// 3. La 10 minute, reconcilierea (plex-link-reconciler.ts): legarea celor
-//    terminate de peste 30 de minute, până la 72h. Era o sarcină separată,
-//    „Legare Plex”; aici nu mai pot lega simultan același pachet de sezon.
-//
-// Ritmul depinde de ce e de făcut: la 10s cât se descarcă, se finalizează sau
-// se leagă ceva; la 10 minute cât rămân doar titluri nelegate mai vechi; altfel
-// doarme — o descărcare nouă o trezește (pokeWatcher în download.ts), iar o
-// verificare din oră în oră rămâne plasă de siguranță.
-//
-// Starea e toată în DB, deci un restart nu pierde nimic: descărcările
-// neterminate și legările în curs sunt prinse la primul tact de după pornire.
-// Înainte, fiecare torrent avea propria buclă în memorie (30s, până la 48h,
-// plus 30 de minute de legare), reluată la pornire de o sarcină separată.
+// Ritmul: 10s cât e ceva în curs, 10 minute cât rămân doar titluri nelegate
+// mai vechi, altfel doarme (trezită de pokeWatcher, verificare orară). Starea
+// e toată în DB, deci un restart nu pierde nimic.
 // ---------------------------------------------------------------------------
 
 import type { QbitTorrentInfo } from "./types";
@@ -31,21 +19,18 @@ const IDLE_CHECK_MS = 60 * 60_000;
 
 declare global {
   var __faikkitboxFinalizing: Set<string> | undefined;
-  // Ultima reconciliere și dacă a lăsat titluri nelegate. În memorie: după un
-  // restart, reconcilierea rulează la prima rulare, ca înainte la pornire.
+  // Ultima reconciliere; după un restart, reconcilierea rulează imediat.
   var __faikkitboxReconcile: { at: number; pending: boolean } | undefined;
 }
 
-// Torrentele în curs de finalizare (redenumire, subtitrare, refresh Plex).
-// Pe globalThis, nu în modul: plugin-ul și server functions rulează în copii
-// separate ale modulelor, dar în același proces — „Ștergeri programate” o
-// citește ca să nu șteargă un torrent exact cât i se scriu fișierele.
+// Torrentele în curs de finalizare. Pe globalThis: plugin-ul și server
+// functions rulează în copii separate ale modulelor, dar în același proces —
+// „Ștergeri programate” nu șterge un torrent cât i se scriu fișierele.
 export function finalizingHashes(): Set<string> {
   return (globalThis.__faikkitboxFinalizing ??= new Set());
 }
 
-// `nextAt` null = ritmul obișnuit al sarcinii (10s); altfel ora următoarei
-// rulări (vezi WatcherOutcome în watcher/tasks.ts).
+// `nextAt` null = ritmul obișnuit (10s); altfel ora următoarei rulări.
 export async function trackDownloads(): Promise<{ summary: string | null; nextAt: number | null }> {
   const qbitUrl = (process.env.QBIT_URL ?? "http://192.168.1.192:25556").replace(/\/$/, "");
   const qbitUser = process.env.QBIT_USERNAME;
@@ -74,8 +59,7 @@ export async function trackDownloads(): Promise<{ summary: string | null; nextAt
 
     const done: string[] = [];
     for (const t of unfinished) {
-      // Lipsă din qBittorrent (șters manual): rămâne neterminat, fără zgomot,
-      // până iese din fereastra de 14 zile.
+      // Lipsă din qBittorrent (șters manual): rămâne neterminat, fără zgomot.
       const info = byHash.get(t.torrentHash.toLowerCase());
       if (!info || !isTorrentComplete(Number(info.progress ?? 0), info.state ?? "")) continue;
       finalizing.add(t.torrentHash);
@@ -87,22 +71,20 @@ export async function trackDownloads(): Promise<{ summary: string | null; nextAt
     if (done.length) parts.push(`terminat: ${done.join(", ")}`);
   }
 
-  // Legarea la Plex. Cele încă în finalizare n-au primit refresh-ul Plex, deci
-  // n-au ce găsi acolo — vin la tactul de după.
+  // Cele încă în finalizare n-au primit refresh-ul Plex — vin la tactul următor.
   const { RECENT_LINK_MINUTES } = await import("../media/plex-link-reconciler");
   const recent = media.listRecentlyCompletedUnlinked(RECENT_LINK_MINUTES);
   const toLink = recent.filter((h) => !finalizing.has(h));
   let linked = 0;
   for (const hash of toLink) {
-    // O eroare (Plex oprit, scanare neterminată) e tăcută, ca în bucla veche:
-    // se reîncearcă peste 10s, iar după 30 de minute o preia reconcilierea.
+    // Eroare tăcută (Plex oprit, scanare neterminată): se reia peste 10s.
     const ok = await media.resolveMediaPlexLinkByTorrentHash(hash).catch(() => false);
     const okPack = ok ? false : await media.resolveSeasonPackPlexLinks(hash).catch(() => false);
     if (ok || okPack) linked++;
   }
 
-  // Reconcilierea, la 10 minute. Completează și calitatea filmelor legate fără
-  // ea; dacă doar asta mai e de făcut, se întâmplă la verificarea orară.
+  // Reconcilierea completează și calitatea filmelor legate fără ea; dacă doar
+  // asta mai e de făcut, se întâmplă la verificarea orară.
   const now = Date.now();
   let reconcile = globalThis.__faikkitboxReconcile;
   if (!reconcile || now - reconcile.at >= RECONCILE_EVERY_MS) {
