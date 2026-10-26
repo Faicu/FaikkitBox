@@ -44,8 +44,7 @@ export const qbitAction = createServerFn({ method: "POST" })
   .validator((data: { hashes: string[] | "all"; action: "pause" | "resume" | "delete" }) => data)
   .handler(async ({ data }): Promise<{ ok: boolean; error?: string }> => {
     const { requireAdmin } = await import("../auth/admin.server");
-    // Fără try: sesiunea expirată trebuie să ajungă la client ca eroare, ca să
-    // declanșeze redirectul spre login (vezi auth/unauthorized.ts).
+    // Fără try: sesiunea expirată ajunge la client ca eroare (redirect la login).
     await requireAdmin();
     const base = process.env.QBIT_URL;
     const user = process.env.QBIT_USERNAME;
@@ -55,13 +54,9 @@ export const qbitAction = createServerFn({ method: "POST" })
     const hashesStr = data.hashes === "all" ? "all" : data.hashes.join("|");
     try {
       if (data.action === "delete") {
-        // Categoria qBittorrent a fiecărui torrent ("filme"/"seriale", setată
-        // la descărcare — vezi download.ts) ne spune ce bibliotecă Plex să
-        // rescanăm; o citim ÎNAINTE de ștergere, cât încă există torrentul.
-        // encodeURIComponent: hash-urile vin de la client, iar aici (spre
-        // deosebire de qbitPostForm, care trece prin URLSearchParams) ajung
-        // brut într-un query string — un "&" într-un hash ar fi adăugat
-        // parametri proprii cererii către qBittorrent.
+        // Categoria fiecărui torrent decide biblioteca Plex de rescanat — citită
+        // ÎNAINTE de ștergere. encodeURIComponent: hash-urile vin de la client și
+        // intră brut în query string (un „&” ar adăuga parametri).
         const categoriesBeforeDelete = await qbitGet(
           url,
           `/api/v2/torrents/info?hashes=${encodeURIComponent(hashesStr)}`,
@@ -88,8 +83,7 @@ export const qbitAction = createServerFn({ method: "POST" })
           } else if (hasShows && !hasMovies) {
             refreshPlexLibraryAndEmptyTrash("show").catch(() => {});
           } else {
-            // Fie ambele categorii amestecate (ștergere multiplă), fie
-            // categoria n-a putut fi determinată — rescanăm ambele biblioteci.
+            // Categorii amestecate sau necunoscute — ambele biblioteci.
             refreshPlexLibrariesAndEmptyTrash().catch(() => {});
           }
         }
@@ -100,9 +94,8 @@ export const qbitAction = createServerFn({ method: "POST" })
       const fallback = data.action === "pause" ? "/api/v2/torrents/stop" : "/api/v2/torrents/start";
       let res = await qbitPostForm(url, primary, user, pass, { hashes: hashesStr });
       let primaryError: string | undefined;
-      // /torrents/pause și /resume nu mai există în qBittorrent 5.x (404) —
-      // în acel caz încercăm API-ul vechi /stop, /start. Orice alt eșec
-      // (ex. 401/403/500) e raportat direct, fără fallback silențios.
+      // qBittorrent 5.x n-are /pause și /resume (404) — încercăm /stop, /start.
+      // Alte eșecuri se raportează direct.
       if (!res.ok) {
         if (res.status === 404) {
           res = await qbitPostForm(url, fallback, user, pass, { hashes: hashesStr });
@@ -123,7 +116,7 @@ export const qbitAction = createServerFn({ method: "POST" })
     }
   });
 
-// Cache partajat între toți clienții — vezi cachedAsync din ./shared.
+// Cache comun tuturor clienților (cachedAsync).
 const QBIT_TTL_MS = 800; // sub ritmul minim al clientului (1s) — vezi host.ts
 
 export const getQbit = createServerFn({ method: "GET" }).handler(async (): Promise<QbitData> => {
@@ -193,7 +186,7 @@ async function collectQbitData(): Promise<QbitData> {
     const xfer: QbitTransferInfo = await xferRes.json();
     const torrentsRaw: QbitTorrentRaw[] = await torrentsRes.json();
 
-    // Preferences for free disk space
+    // Spațiul liber, din preferințe.
     let freeSpace = 0;
     let alltimeDl = 0;
     let alltimeUp = 0;
@@ -204,7 +197,7 @@ async function collectQbitData(): Promise<QbitData> {
       alltimeDl = Number(main?.server_state?.alltime_dl ?? 0);
       alltimeUp = Number(main?.server_state?.alltime_ul ?? 0);
     } catch {
-      // free space / alltime rămân 0 — endpoint indisponibil pe unele versiuni qBit
+      // Spațiul liber rămâne 0 — endpoint indisponibil pe unele versiuni.
     }
 
     const torrents: QbitTorrent[] = torrentsRaw.map((t) => ({
@@ -227,15 +220,15 @@ async function collectQbitData(): Promise<QbitData> {
       seeding = 0,
       paused = 0;
     for (const t of torrentsRaw) {
-      // qBittorrent 5.x a redenumit pausedDL/pausedUP în stoppedDL/stoppedUP;
-      // fără "stopped", torrentele oprite cădeau la seeding (conțin "UP").
+      // qBittorrent 5.x: pausedDL/UP → stoppedDL/UP; fără „stopped”, torrentele
+      // oprite cădeau la seeding.
       if (t.state?.includes("paused") || t.state?.includes("stopped")) paused++;
       else if (t.state?.includes("UP") || t.state === "uploading" || t.state === "stalledUP")
         seeding++;
       else downloading++;
     }
 
-    // Largest remaining download
+    // Cea mai mare descărcare rămasă.
     let largestEta: { name: string; eta: number; remaining: number } | null = null;
     for (const t of torrentsRaw) {
       const p = Number(t.progress ?? 0);
@@ -246,7 +239,7 @@ async function collectQbitData(): Promise<QbitData> {
       }
     }
 
-    // Per-category aggregation
+    // Agregare pe categorii.
     const catMap = new Map<string, { count: number; dlspeed: number; upspeed: number }>();
     for (const t of torrentsRaw) {
       const cat = (t.category && String(t.category)) || "uncategorized";
@@ -282,13 +275,9 @@ async function collectQbitData(): Promise<QbitData> {
       perCategory,
     };
   } catch (e) {
-    // Aruncăm, nu întoarcem un răspuns "ok"-shaped cu status:"error": un eșec
-    // tranzitoriu (ex. flap scurt de link Ethernet — vezi network-link.ts)
-    // altfel se comportă ca un răspuns valid pentru react-query, care golește
-    // `data` (torrente, progres) chiar dacă acum o clipă mai devreme totul
-    // mergea. Aruncând, query-ul intră în eroare dar `data` din ultimul
-    // fetch reușit rămâne afișat (`keepPrev` din queries.ts) — pagina qBit
-    // nu mai clipește la "Eroare necunoscută" pentru câteva secunde de rețea.
+    // Aruncăm, nu un răspuns „ok” cu status:"error": react-query ar goli `data`
+    // la un eșec tranzitoriu, pe când la eroare păstrează ultimele date bune
+    // (`keepPrev`) — pagina nu mai clipește la o cădere scurtă de rețea.
     resetQbitCookie();
     throw new Error(errMsg(e), { cause: e });
   }

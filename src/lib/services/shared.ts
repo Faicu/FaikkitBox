@@ -17,7 +17,7 @@ async function fetchOk(url: string, init?: RequestInit, timeoutMs = 8000): Promi
     }
     return res;
   } catch (e) {
-    // Undici hides the real reason under `cause`; surface it.
+    // Undici ascunde motivul real în `cause` — îl scoatem la suprafață.
     throw new Error(`${url} → ${errMsg(e)}`, { cause: e });
   } finally {
     clearTimeout(t);
@@ -39,15 +39,9 @@ export async function fetchJson<T>(url: string, init?: RequestInit, timeoutMs = 
 }
 
 // ---------------------------------------------------------------------------
-// Cache in-process, partajat între toți clienții.
-//
-// Paginile de statistici cer datele la interval scurt, iar fiecare tab deschis
-// producea un set complet de apeluri proprii: 3 telefoane cu Sistem deschis =
-// 3× si.processes() + 3× docker + 3× qBittorrent, în fiecare secundă. Cache-ul
-// e pe server, deci N clienți costă cât unul singur.
-//
-// Cererile concurente pe aceeași cheie primesc aceeași promisiune (nu pornesc
-// fiecare propriul fetch), iar la eroare intrarea nu se cachează.
+// Cache în proces, comun tuturor clienților: fiecare tab cerea propriul set
+// complet de date la fiecare secundă. Cererile concurente pe aceeași cheie
+// primesc aceeași promisiune; erorile nu se cachează.
 // ---------------------------------------------------------------------------
 
 interface CacheEntry<T> {
@@ -60,13 +54,8 @@ const asyncCache = new Map<string, CacheEntry<unknown>>();
 
 export interface CachedAsyncOptions {
   /**
-   * La expirare, întoarce imediat valoarea veche și reîmprospătează în fundal,
-   * în loc să pună apelantul să aștepte recalcularea.
-   *
-   * Pentru date scumpe și lent-schimbătoare (statistici Docker: 1.7s pentru 8
-   * containere) diferența e vizibilă în UI — fără asta, o cerere din 15 dura
-   * 2.3s în loc de 50ms, iar pagina Sistem "se poticnea" periodic.
-   * Prima cerere, când nu există nimic în cache, tot așteaptă.
+   * La expirare, valoarea veche imediat și reîmprospătare în fundal — pentru
+   * date scumpe și lente (Docker: 1,7s). Doar prima cerere așteaptă.
    */
   staleWhileRevalidate?: boolean;
 }
@@ -84,9 +73,7 @@ export function cachedAsync<T>(
   if (hit && options?.staleWhileRevalidate) {
     if (!hit.refreshing) {
       hit.refreshing = true;
-      // Reîmprospătare în fundal. Dacă eșuează, păstrăm valoarea veche și
-      // reîncercăm la următorul apel — mai bine date puțin vechi decât o
-      // eroare pentru ceva ce aveam deja.
+      // Eșec în fundal: valoarea veche rămâne, se reîncearcă la apelul următor.
       produce()
         .then((fresh) => {
           asyncCache.set(key, { value: Promise.resolve(fresh), expiresAt: Date.now() + ttlMs });
@@ -107,8 +94,8 @@ export function cachedAsync<T>(
   return value;
 }
 
-// Pentru date schimbate de noi înșine (ex. versiunile după un update): ce era
-// în cache nu mai e adevărat, deci următorul apelant recalculează.
+// După o schimbare făcută de noi (versiunile după un update), cache-ul minte —
+// următorul apelant recalculează.
 export function invalidateCached(key: string): void {
   asyncCache.delete(key);
 }

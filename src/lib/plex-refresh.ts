@@ -1,11 +1,7 @@
 // ---------------------------------------------------------------------------
-// SINGURUL loc din tot proiectul care ar trebui să declanșeze un rescan de
-// bibliotecă Plex. Orice funcție care adaugă sau șterge conținut media de pe
-// disk — descărcări noi, ștergeri din jurnal, ștergere directă de torrente
-// din pagina qBittorrent, corectare sau ștergere de subtitrări — trebuie să
-// apeleze refreshPlexLibrary / refreshPlexLibraryAndEmptyTrash de aici, ca
-// Plex să reflecte imediat schimbarea, nu doar la următoarea scanare
-// automată (poate dura ore).
+// SINGURUL loc care declanșează rescanarea Plex. Orice adaugă sau șterge
+// conținut de pe disc (descărcări, ștergeri, subtitrări) trece pe aici, ca
+// Plex să vadă schimbarea imediat, nu la scanarea automată.
 // ---------------------------------------------------------------------------
 
 export type PlexLibraryType = "movie" | "show";
@@ -34,14 +30,9 @@ async function plexFindLibraryKey(type: PlexLibraryType): Promise<string | null>
   }
 }
 
-// GET /refresh doar pune scanarea în coadă pe server, nu așteaptă să se
-// termine — dacă apelantul face emptyTrash imediat după, Plex n-a apucat
-// încă să marcheze fișierele lipsă ca indisponibile, deci emptyTrash n-are
-// ce curăța și un titlu șters rămâne "fantomă" în index (vezi reziduul
-// Season 6 din The Crown, 2026-09-02). De-aia interoghează secțiunea la
-// interval scurt și așteaptă ca flag-ul "scanning" să revină la false,
-// cu un plafon de timp cât să nu blocheze la nesfârșit dacă Plex nu
-// răspunde niciodată cu scanning:false (scan foarte mare/agățat).
+// /refresh doar pune scanarea în coadă — un emptyTrash imediat n-ar avea ce
+// curăța, iar titlul șters rămânea fantomă (The Crown S06, 2 sept. 2026).
+// Așteptăm ca „scanning” să revină la false, cu plafon de timp.
 async function plexWaitForScanIdle(sectionKey: string, timeoutMs = 20_000): Promise<void> {
   const base = process.env.PLEX_URL ?? "http://127.0.0.1:32400";
   const token = process.env.PLEX_TOKEN;
@@ -81,7 +72,7 @@ async function plexRefreshLibraryBySection(sectionKey: string): Promise<void> {
       console.warn(`[plex-refresh] Plex refresh HTTP ${res.status} pentru secțiunea ${sectionKey}`);
       return;
     }
-    // Lasă scanarea o clipă să pornească efectiv înainte de a începe polling-ul.
+    // O clipă, ca scanarea să pornească efectiv.
     await new Promise((r) => setTimeout(r, 500));
     await plexWaitForScanIdle(sectionKey);
   } catch (e) {
@@ -114,12 +105,8 @@ async function plexEmptyTrashBySection(sectionKey: string): Promise<void> {
   }
 }
 
-// Rescanează, apoi golește coșul de gunoi al secțiunii — un simplu refresh
-// doar marchează fișierele lipsă ca indisponibile, dar le ține în index;
-// fără emptyTrash, un titlu șters rămâne găsit de findWithQualities (verificarea
-// "deja în bibliotecă Plex" din wizard-ul de adăugare) mult după ce a fost
-// efectiv șters de pe disk. Folosit exclusiv de fluxurile de ștergere —
-// refreshPlexLibrary simplu rămâne suficient după descărcări noi.
+// Rescanare plus golirea coșului: refresh-ul simplu doar marchează fișierele
+// lipsă, iar wizard-ul ar crede titlul încă în Plex. Doar pentru ștergeri.
 export async function refreshPlexLibraryAndEmptyTrash(plexType: PlexLibraryType): Promise<void> {
   const sectionKey = await plexFindLibraryKey(plexType);
   if (!sectionKey) return;

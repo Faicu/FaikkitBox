@@ -20,9 +20,7 @@ import {
   type PaymentMethod,
 } from "./months";
 
-// Toate importurile server (db, auth, jurnal) sunt dinamice, în handler:
-// modulul e importat și de client (Acasă, /contributii), iar un import static
-// ar trage db.ts în bundle-ul public.
+// Importuri server doar dinamice: modulul e importat și de client.
 
 export interface ContributionProgress {
   month: string;
@@ -46,8 +44,7 @@ export type MyContribution =
       kind: "user";
       exempt: boolean;
       status: MonthStatus;
-      // Ultima lună acoperită (plătită sau în așteptare) fără goluri de la
-      // luna curentă — pentru „Plătit până în ianuarie 2027".
+      // Ultima lună acoperită fără goluri de la luna curentă („Plătit până în…”).
       coveredUntil: string | null;
       pendingPayments: MyPayment[];
       progress: ContributionProgress;
@@ -55,9 +52,8 @@ export type MyContribution =
       activity: { counts: ViewCounts; active: boolean; windowDays: number } | null;
     };
 
-// Utilizator activ (peste pragul de vizionări) care n-a plătit și nici n-a
-// declarat luna curentă: cardul de pe Acasă e evidențiat. După
-// „Am plătit" (în așteptare) revine la normal.
+// Utilizator activ care n-a plătit și n-a declarat luna curentă: cardul de pe
+// Acasă e evidențiat (după „Am plătit” revine la normal).
 export function isContributionUrgent(data: MyContribution | undefined): boolean {
   return data?.kind === "user" && data.status === "unpaid" && !!data.activity?.active;
 }
@@ -67,8 +63,7 @@ export interface AdminPayment {
   userId: number;
   username: string;
   months: string[];
-  // Pentru plățile respinse `months` e gol (lunile s-au eliberat); rămâne
-  // câte luni acoperea.
+  // La plățile respinse `months` e gol; rămâne câte luni acoperea.
   monthsCount: number;
   perMonth: number;
   total: number;
@@ -95,8 +90,7 @@ export interface ContributionsOverview {
   month: string;
   currentMonth: string;
   progress: ContributionProgress;
-  // Ținta curentă, cea pe care o modifică formularul (se aplică de la luna
-  // curentă înainte), separată de ținta lunii afișate.
+  // Ținta curentă (pe care o modifică formularul), separată de a lunii afișate.
   currentTarget: number;
   contributors: ContributorRow[];
   activitySettings: ActivitySettings;
@@ -160,8 +154,8 @@ function countPending(database: DatabaseSync): number {
   ).c;
 }
 
-// Plata + lunile ei, într-o tranzacție: fără ea, o lună deja ocupată
-// (UNIQUE) ar lăsa o plată fără luni.
+// Plata și lunile ei, într-o tranzacție — altfel o lună ocupată (UNIQUE) ar
+// lăsa o plată fără luni.
 function insertPayment(
   database: DatabaseSync,
   p: {
@@ -219,9 +213,7 @@ function activitySettings(database: DatabaseSync): ActivitySettings {
   return { minMovies: row.min_movies, minEpisodes: row.min_episodes, windowDays: row.window_days };
 }
 
-// Vizionările din fereastră pentru fiecare cont Plex, după
-// users.plex_account_id (vezi getPlexViewsByAccount). null dacă Plex nu
-// răspunde.
+// Vizionările din fereastră per cont Plex; null dacă Plex nu răspunde.
 async function viewCountsByPlexAccount(
   windowDays: number,
 ): Promise<((plexAccountId: number | null) => ViewCounts | null) | null> {
@@ -540,8 +532,7 @@ export const rejectContribution = createServerFn({ method: "POST" })
     if (row.status !== "pending") throw new Error("Plata nu mai e în așteptare.");
     const by = session.data.username ?? "admin";
     const months = monthsOf(database, data.id);
-    // Lunile se eliberează, ca utilizatorul să poată declara din nou; în
-    // istoric rămâne câte luni a acoperit plata respinsă (months_count).
+    // Lunile se eliberează; în istoric rămâne câte acoperea plata.
     database.prepare("DELETE FROM contribution_months WHERE payment_id = ?").run(data.id);
     database
       .prepare(
@@ -634,8 +625,7 @@ export const setContributionTarget = createServerFn({ method: "POST" })
         "INSERT INTO contribution_targets (month, target) VALUES (?, ?) ON CONFLICT(month) DO UPDATE SET target = excluded.target",
       )
       .run(month, data.target);
-    // Țintele programate după luna curentă (n-ar trebui să existe, dar dacă
-    // ar exista) ar anula schimbarea de acum — le scoatem.
+    // Țintele programate după luna curentă ar anula schimbarea — le scoatem.
     database.prepare("DELETE FROM contribution_targets WHERE month > ?").run(month);
     const by = session.data.username ?? "admin";
     await logContribution(`Ținta lunară schimbată la ${data.target} lei (de ${by})`, {

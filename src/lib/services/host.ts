@@ -38,13 +38,13 @@ export interface HostData {
   diskIO?: Array<{ name: string; ioRead: number; ioWrite: number }>;
 }
 
-// Cache pentru date statice care nu se schimbă
+// Cache pentru datele statice.
 let staticHostCache: {
   osInfo: Systeminformation.OsData;
   cpu: Systeminformation.CpuData;
 } | null = null;
 
-// Cache pentru calculul vitezei disk I/O per disc din /proc/diskstats
+// Cache pentru viteza I/O per disc (/proc/diskstats).
 interface DiskSnapshot {
   rSec: number;
   wSec: number;
@@ -78,21 +78,16 @@ export const getHost = createServerFn({ method: "GET" }).handler(async (): Promi
   return cachedAsync("host", HOST_TTL_MS, collectHostData);
 });
 
-// Sub cel mai rapid ritm pe care îl poate cere clientul (1s), ca TTL-ul să nu
-// devină el plafonul: la 2500ms, o pagină setată pe 1s primea de două ori din
-// trei exact aceleași date. Colectarea costă ~7ms acum (partea scumpă e
-// cachată separat, cu HEAVY_TTL_MS), deci nu e nimic de economisit aici.
+// Sub cel mai rapid ritm al clientului (1s), ca TTL-ul să nu devină plafonul;
+// colectarea costă ~7ms (partea scumpă e cachată separat).
 const HOST_TTL_MS = 800;
 
-// Apelurile cele mai scumpe din tot setul: si.processes() parcurge întreg
-// /proc la fiecare invocare, iar si.dockerContainers() lovește socket-ul
-// Docker. Rulau o dată pe secundă, per client. Nu se schimbă semnificativ de
-// la o secundă la alta, deci au cache propriu, mult mai lung.
+// Cele mai scumpe apeluri (si.processes() parcurge /proc, docker lovește
+// socket-ul) — se schimbă lent, deci cache propriu, mai lung.
 const HEAVY_TTL_MS = 15_000;
 
-// Servește valoarea veche imediat și reîmprospătează în fundal — vezi
-// cachedAsync. Fără asta, o cerere din 15 plătea recalcularea (2.3s), iar
-// pagina Sistem se poticnea periodic.
+// Valoarea veche imediat, reîmprospătare în fundal (cachedAsync) — altfel o
+// cerere din 15 plătea 2,3s, iar pagina Sistem se poticnea.
 const SWR = { staleWhileRevalidate: true } as const;
 
 async function collectHostData(): Promise<HostData> {
@@ -100,14 +95,14 @@ async function collectHostData(): Promise<HostData> {
     const si = await import("systeminformation");
     const os = await import("node:os");
 
-    // Date statice — preluate o singură dată și cachate în memorie
+    // Statice — o singură dată.
     if (!staticHostCache) {
       const [osInfo, cpu] = await Promise.all([si.osInfo(), si.cpu()]);
       staticHostCache = { osInfo, cpu };
     }
     const { osInfo, cpu } = staticHostCache;
 
-    // Date dinamice — preluate la fiecare refresh
+    // Dinamice — la fiecare refresh.
     const [currentLoad, mem, fsSize, netStats, cpuTemp, processes, dockerContainers, diskStatsRaw] =
       await Promise.all([
         si.currentLoad(),
@@ -130,7 +125,7 @@ async function collectHostData(): Promise<HostData> {
 
     const loadAvg = os.loadavg() as [number, number, number];
 
-    // Calculez viteze per disc din /proc/diskstats cumulative
+    // Vitezele per disc, din contoarele cumulative.
     const now = Date.now();
     const diskSpeeds: Record<string, { readBps: number; writeBps: number }> = {};
     for (const [dev, cur] of Object.entries(diskStatsRaw)) {
@@ -148,9 +143,8 @@ async function collectHostData(): Promise<HostData> {
     const disks = fsSize
       .filter((f) => f.size > 0)
       .map((f) => {
-        // Device-ul vine direct din fsSize ("/dev/nvme0n1p2" → "nvme0n1p2"),
-        // iar /proc/diskstats are rânduri și pentru partiții. O mapare scrisă
-        // de mână inversase cele două NVMe (numerotarea lor nu e stabilă).
+        // Device-ul vine din fsSize, iar /proc/diskstats are și partiții. O
+        // mapare manuală inversase cele două NVMe (numerotare instabilă).
         const dev = f.fs.startsWith("/dev/") ? f.fs.slice(5) : undefined;
         const io = dev ? diskSpeeds[dev] : undefined;
         return {
@@ -182,19 +176,16 @@ async function collectHostData(): Promise<HostData> {
       .slice(0, 6)
       .map((p) => ({ name: p.name || "?", cpu: Number(p.cpu ?? 0), mem: Number(p.mem ?? 0) }));
 
-    // Docker containers (Plex, Immich) — recunoscute dupa nume/imagine.
-    // qBittorrent ruleaza ca proces systemd nativ, il gasim in lista de procese.
+    // Containerele Docker (Plex, Immich), după nume/imagine; qBittorrent e
+    // proces systemd, căutat în lista de procese.
     const APP_MAP: Array<{ name: string; match: RegExp }> = [
       { name: "Plex", match: /plex/i },
       { name: "Immich", match: /immich/i },
       { name: "qBittorrent", match: /qbittorrent|qbit/i },
     ];
 
-    // Cel mai scump apel din tot setul, de departe: măsurat 1676ms pentru 8
-    // containere — 83% din costul total al lui collectHostData. Fără cache,
-    // fiecare refresh al paginii Sistem plătea acele ~1.7s, iar cum TanStack
-    // Query repornește intervalul DUPĂ ce cererea se încheie, perioada reală
-    // percepută devenea 3s + 2s ≈ 5s în loc de 3s.
+    // Cel mai scump apel (~1,7s pentru 8 containere, 83% din total); fără cache,
+    // ritmul perceput al paginii Sistem urca de la 3s la ~5s.
     const containerStats = await cachedAsync(
       "host:containerStats",
       HEAVY_TTL_MS,
@@ -264,8 +255,8 @@ async function collectHostData(): Promise<HostData> {
       sensors,
       topProcesses,
       apps,
-      // systeminformation nu expune usor I/O per-proces cross-platform ca Glances;
-      // lasam lista goala mai degraba decat sa afisam date incorecte.
+      // I/O per proces nu e disponibil portabil — mai bine listă goală decât
+      // date incorecte.
       diskIO: [],
     };
   } catch (e) {

@@ -1,21 +1,8 @@
 // Verificarea completă a unui titlu pentru wizard, într-o singură cerere.
-//
-// Înainte, ecranul de verificare făcea 10 cereri HTTP separate de pe telefon,
-// în trei valuri care se așteptau unul pe altul: detaliile TMDB, apoi Plex +
-// Filelist + „ce se descarcă deja", apoi CÂTE O CERERE PER SEZON pentru starea
-// din Plex, plus schema sezoanelor și TVMaze.
-//
-// Măsurat pe server, munca în sine durează ~1 secundă, aproape toată în
-// paralel: Plex răspunde în 5ms, Filelist în 113ms, TMDB în 49ms. Costul real
-// erau cele zece dus-întors, înmulțite cu latența unei legături mobile — de
-// unde „foarte multe secunde" pe 5G pentru ceva ce serverul rezolvă instant.
-//
-// Aici valurile rămân aceleași (al doilea are nevoie de `originalTitle` și
-// `imdbId` din primul), dar se execută pe server, unde un dus-întors costă
-// milisecunde. Clientul face una singură.
-//
-// Transversal prin construcție — atinge TMDB, Plex, Filelist, `media` și
-// TVMaze — de-asta stă la rădăcina lui `lib/`, nu într-un domeniu anume.
+// Înainte, telefonul făcea 10 cereri în trei valuri; munca durează ~1s pe
+// server, dar dus-întorsurile pe 5G adunau „foarte multe secunde”. Valurile
+// rămân (al doilea are nevoie de datele primului), dar rulează pe server.
+// Transversal (TMDB, Plex, Filelist, `media`, TVMaze), deci la rădăcina `lib/`.
 
 import { createServerFn } from "@tanstack/react-start";
 
@@ -28,16 +15,14 @@ export interface WizardCheckResult {
   details: TmdbDetails;
   originalTitle: string;
   plexFound: boolean;
-  // TOATE calitățile pe care Plex le are pentru titlu, nu doar una: un film
-  // poate fi în bibliotecă simultan la 4K HDR și 1080p, iar wizard-ul nu
-  // trebuie să ofere o calitate deja deținută (vezi qualityDirection).
+  // TOATE calitățile din Plex (4K HDR și 1080p), ca wizard-ul să nu ofere una
+  // deja deținută.
   plexQualities: string[];
   torrents: FilelistTorrent[];
   seasons: Array<{ seasonNumber: number; episodeCount: number }>;
   seasonSchema: TmdbSeasonSchema[];
   tvmazeAirstamps: TvmazeAirstamp[];
-  // Serializat ca pereche [sezon, episoade]: un Map nu supraviețuiește
-  // trecerii prin JSON, iar clientul îl reface la primire.
+  // Perechi [sezon, episoade]: un Map nu trece prin JSON.
   plexBySeason: Array<[number, { num: number; quality: string | null; watched: boolean }[]]>;
   downloadingEntries: DownloadingMediaEntry[];
   wantedEntry: WantedMovie | null;
@@ -49,8 +34,7 @@ export const checkTitleForWizard = createServerFn({ method: "GET" })
       tmdbId: number;
       mediaType: "movie" | "tv";
       title: string;
-      // Titlul original de la TMDB, folosit doar ca ultimă rezervă dacă
-      // detaliile nu aduc unul mai bun.
+      // Titlul original TMDB, ultima rezervă.
       fallbackOriginalTitle: string;
     }) => data,
   )
@@ -90,9 +74,7 @@ export const checkTitleForWizard = createServerFn({ method: "GET" })
 
     const downloadingEntries = await getDownloadingMediaForTmdbIdCore(data.tmdbId, data.mediaType);
 
-    // `canManage` se calculează aici, ca în listWantedMovies: sesiunea e
-    // cunoscută doar la nivelul ăsta, iar clientul primește un boolean gata
-    // decis, nu id-uri de utilizator de comparat.
+    // canManage calculat aici, unde e sesiunea — clientul primește un boolean.
     const wantedEntry =
       data.mediaType === "movie"
         ? (listWantedMoviesCore()

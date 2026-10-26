@@ -21,9 +21,8 @@ const MAX_ROWS = 1000;
 const RETENTION_DAYS = 30;
 
 // ---------------------------------------------------------------------------
-// Rate limit global: protejează scrierea sincronă în SQLite de o buclă care
-// ar loga erori cu mesaj mereu diferit (dedup-ul pe grup n-ar ajuta în acel
-// caz, fiindcă fiecare mesaj ar forma un grup nou).
+// Limită globală: o buclă cu mesaje mereu diferite ar ocoli gruparea și ar
+// bloca scrierea sincronă în SQLite.
 // ---------------------------------------------------------------------------
 
 const GLOBAL_WINDOW_MS = 60_000;
@@ -43,10 +42,9 @@ function globalRateLimitExceeded(): boolean {
   return globalWriteCount > GLOBAL_MAX_WRITES;
 }
 
-// Clientul a închis conexiunea înainte de răspuns (tab închis, PWA reluată
-// care își reîncarcă pagina, rețea schimbată pe telefon). Nu e o eroare a
-// aplicației: din Node 26 / srvx nou ajunge la console.error ca `aborted`
-// (ECONNRESET, direct sau ca `cause`) și trimitea notificări push degeaba.
+// Clientul a închis conexiunea (tab închis, PWA reluată, rețea schimbată) — nu
+// e o eroare a aplicației, dar din Node 26 ajunge la console.error ca `aborted`
+// și trimitea push-uri degeaba.
 export function isClientAbort(error: unknown): boolean {
   for (let e = error, depth = 0; e && typeof e === "object" && depth < 3; depth++) {
     const err = e as { message?: unknown; code?: unknown; cause?: unknown };
@@ -80,13 +78,12 @@ export function logError(source: ErrorSource, error: unknown, level: ErrorLevel 
 
     writeGroupedRow(source, level, message, stack);
   } catch {
-    // logare best-effort — nu trebuie să blocăm/arunce din handler-ul de erori
+    // Best-effort — handler-ul de erori nu are voie să arunce.
   }
 }
 
-// Grupare: erori identice (sursă + nivel + mesaj) incrementează un contor pe
-// același rând, în loc să umple jurnalul cu duplicate — utilă mai ales acum
-// că orice console.warn/error din toată aplicația e captat automat.
+// Erorile identice (sursă + nivel + mesaj) incrementează un contor pe același
+// rând.
 function writeGroupedRow(
   source: ErrorSource,
   level: ErrorLevel,
@@ -115,8 +112,7 @@ function writeGroupedRow(
 
       sweepOldEntries(db);
 
-      // Doar la apariția unui tip NOU de eroare, nu la repetări — altfel o
-      // eroare care se repetă des ar inunda jurnalul de activitate și push.
+      // Doar la un tip NOU de eroare, nu la repetări.
       notifyNewErrorGroup(source, level, message);
     })
     .catch(() => {});
@@ -141,9 +137,8 @@ function sweepOldEntries(db: DatabaseSync): void {
   }
 }
 
-// Notificare (Jurnal de activitate + push) la apariția unui tip nou de
-// eroare — rate-limitată separat de scrierea în DB, ca o cascadă de erori
-// diferite (ex. la un incident real) să nu trimită zeci de push-uri deodată.
+// Jurnal + push la un tip nou de eroare, limitat separat — un incident cu multe
+// erori diferite nu trimite zeci de push-uri.
 const NOTIFY_WINDOW_MS = 10 * 60_000;
 const NOTIFY_MAX = 5;
 let notifyWindowStart = Date.now();
@@ -189,10 +184,8 @@ function rowToEntry(r: {
   };
 }
 
-// Server functions au fost mutate în error-log.functions.ts — modulul ăsta are
-// importuri server statice (node:crypto, node:sqlite) și era una dintre
-// rădăcinile care târau cod server în bundle-ul public. Aici rămân doar
-// funcțiile simple pe care le apelează acele handlere.
+// Server functions sunt în error-log.functions.ts — aici rămân funcțiile
+// simple, cu importuri server statice.
 
 export async function readErrorLogs(): Promise<ErrorLogEntry[]> {
   const { getDb } = await import("../db");
@@ -210,9 +203,8 @@ export async function clearErrorLogsCore(): Promise<void> {
   getDb().exec("DELETE FROM error_log");
 }
 
-// Limitare per-IP: max 20 rapoarte de eroare client pe minut, indiferent de mesaj
-// — logError are deja o dedublare per (sursă+mesaj), dar aceea poate fi ocolită
-// variind mesajul; asta limitează volumul total de la o singură sursă.
+// Max 20 de rapoarte de eroare client pe minut per IP — gruparea pe mesaj se
+// ocolește variind mesajul.
 const clientErrorHits = new Map<string, { count: number; windowStart: number }>();
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 20;
