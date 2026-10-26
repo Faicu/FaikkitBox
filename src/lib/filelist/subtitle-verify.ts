@@ -1,24 +1,16 @@
 // ---------------------------------------------------------------------------
-// Verificarea conținutului unei subtitrări față de fișierul media, înainte să
-// rămână lângă el — ultima plasă după filtrele de episod de la căutare
-// (subtitle-sources.ts). Numele pot minți (upload etichetat greșit, arhivă
-// subs.ro cu alt episod înăuntru); conținutul nu.
+// Verificarea conținutului unei subtitrări față de fișier — ultima plasă după
+// filtrele de episod: numele pot minți, conținutul nu (MobLand S02E02/E03
+// aveau byte cu byte subtitrarea lui S02E01, 9 oct. 2026).
 //
-// Găsit pe 9 oct. 2026: MobLand S02E02 și S02E03 aveau, byte cu byte,
-// subtitrarea lui S02E01 — subs.ro avea doar arhiva cu E01, iar înainte de
-// 643c7d2 orice episod o primea.
-//
-// Trei verificări, fiecare sărită dacă nu are pe ce se baza:
-//  1. limba — trebuie să pară română (looksRomanian);
+// Trei verificări, fiecare sărită fără reper:
+//  1. limba — trebuie să pară română;
 //  2. durata — ultima replică nu poate fi mult după sfârșitul fișierului;
-//  3. sincronizarea — comparată cu o subtitrare text deja încorporată în
-//     fișier (de obicei engleza, la WEB-DL): în același episod se vorbește
-//     în aceleași momente, cu cel mult un decalaj constant (alt release).
-//     Comparăm intervalele de vorbire, nu începuturile replicilor: un
-//     traducător își împarte replicile altfel decât engleza SDH, iar prima
-//     variantă (pe începuturi) dădea doar 0,17–0,20 la The Rookie S08, cu
-//     subtitrările corecte. Pe intervale: episodul corect 0,72–1,00 (The
-//     Rookie, MobLand, o traducere automată Subtitle Cat), altul ≤ 0,29.
+//  3. sincronizarea — față de o subtitrare încorporată (de obicei engleza):
+//     în același episod se vorbește în aceleași momente, cu cel mult un
+//     decalaj constant. Pe intervale de vorbire, nu pe începuturi de replici
+//     (traducătorii împart altfel replicile): episodul corect 0,72–1,00, altul
+//     ≤ 0,29.
 // ---------------------------------------------------------------------------
 
 import { execFile } from "node:child_process";
@@ -27,8 +19,7 @@ import { looksRomanian } from "./subtitle-checks";
 
 const execFileAsync = promisify(execFile);
 
-// Cât poate depăși ultima replică durata fișierului (genericul de final,
-// diferențe mici între release-uri).
+// Cât poate depăși ultima replică durata fișierului (generic, release-uri).
 const DURATION_SLACK_S = 120;
 // Corelația minimă a intervalelor de vorbire (vezi speechCorrelation).
 const MIN_SPEECH_CORRELATION = 0.45;
@@ -66,9 +57,8 @@ export function parseSrtTiming(text: string): SrtTiming {
   return { starts, intervals, lastEnd };
 }
 
-// Corelația (Pearson) dintre „se vorbește / nu se vorbește" în cele două
-// subtitrări, pe felii de BIN_S secunde, la cel mai bun decalaj constant
-// (± MAX_OFFSET_S). 1 = aceleași momente de vorbire, ~0 = fără legătură.
+// Corelația Pearson dintre „se vorbește / nu” pe felii de BIN_S secunde, la
+// cel mai bun decalaj constant. 1 = aceleași momente, ~0 = fără legătură.
 export function speechCorrelation(
   candidate: Array<[number, number]>,
   reference: Array<[number, number]>,
@@ -130,8 +120,8 @@ async function mediaDurationSeconds(mediaAbsPath: string): Promise<number | null
   }
 }
 
-// Prima subtitrare text încorporată care nu e română (o română încorporată
-// ar fi oprit oricum pipeline-ul la pasul 1a), extrasă ca SRT.
+// Prima subtitrare text încorporată care nu e română (una română ar fi oprit
+// pipeline-ul la pasul 1a), ca SRT.
 async function embeddedReferenceTiming(mediaAbsPath: string): Promise<SrtTiming | null> {
   try {
     const { stdout } = await execFileAsync(
@@ -177,18 +167,12 @@ function formatTime(s: number): string {
   return `${m}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 }
 
-// Sincronizare „bună": fără decalaj și cu momentele de vorbire potrivite.
-// Peste ea nu mai căutăm altă variantă (subtitle-pipeline.ts), iar
-// subtitrarea e raportată ca potrivire sigură, nu „aproximativă" — oricât de
-// diferit ar fi numele release-ului. The Invite: varianta cptclaudiu, pentru
-// alt release (2160p), dădea 0,91 fără decalaj; cea aleasă după nume
-// (BluRay 1080p) 0,53 cu ~3 s decalaj.
-//
-// Pragul de corelație e calibrat pe auditul bibliotecii (9 oct. 2026):
-// traducerile făcute de om, sincronizate, dau 0,62–1,00 — cele sub 0,8 doar
-// fiindcă traducătorul unește sau taie replici. Ce contează e decalajul:
-// variantele pentru alt montaj (The Rookie S08E14 de la Amazon pe un fișier
-// HULU) ieșeau 0,67 cu 2 s decalaj, crescând spre final.
+// Sincronizare „bună”: fără decalaj și cu vorbirea potrivită — nu mai căutăm
+// altceva și e raportată ca sigură, oricât de diferit ar fi numele (The Invite:
+// cptclaudiu 0,91 fără decalaj, față de varianta aleasă după nume, 0,53 cu
+// ~3 s). Prag calibrat pe auditul bibliotecii (9 oct. 2026): traducerile umane
+// sincronizate dau 0,62–1,00; ce contează e decalajul — alt montaj ieșea 0,67
+// cu 2 s, crescând spre final.
 const GOOD_SYNC_SCORE = 0.6;
 const GOOD_SYNC_MAX_OFFSET_S = 0.5;
 
@@ -201,12 +185,10 @@ export function isWellSynced(sync: SyncMeasure): boolean {
   return sync.score >= GOOD_SYNC_SCORE && Math.abs(sync.offset) <= GOOD_SYNC_MAX_OFFSET_S;
 }
 
-// Potrivire sigură pentru o variantă care a trecut verificarea (corelație
-// ≥ MIN_SPEECH_CORRELATION): bine sincronizată, sau cu numele release-ului
-// identic cu fișierul și fără decalaj. Euphoria S01 (24 oct. 2026): varianta
-// KiNGS, sincronizată (verificat replică cu replică și pe sunet), dădea doar
-// 0,47–0,54 fiindcă traducătorul unește replicile engleze; alt montaj pică
-// oricum la decalaj sau la corelație (HONE/playWEB: 0,09–0,35).
+// Potrivire sigură pentru o variantă trecută de verificare: bine sincronizată,
+// sau cu release identic și fără decalaj. Euphoria S01 (24 oct. 2026): KiNGS,
+// corectă, dădea doar 0,47–0,54 fiindcă traducătorul unește replicile; alt
+// montaj pică oricum la decalaj sau corelație (0,09–0,35).
 export function isConfidentSync(
   sync: SyncMeasure,
   match: { matchedCriteria: number; maxCriteria: number },
@@ -215,16 +197,13 @@ export function isConfidentSync(
   return isWellSynced(sync) || (exactRelease && Math.abs(sync.offset) <= GOOD_SYNC_MAX_OFFSET_S);
 }
 
-// Sub diferența asta, două corelații sunt „la egalitate" — aceeași traducere
-// copiată pentru mai multe release-uri dă corelații identice până la a doua
-// zecimală, doar decalajul diferă.
+// Sub diferența asta, corelațiile sunt egale — aceeași traducere pentru mai
+// multe release-uri diferă doar la decalaj.
 const SAME_SCORE_EPSILON = 0.02;
 
-// Dacă `candidate` e mai bine sincronizată decât `best`. La scor practic egal
-// decide decalajul mai mic, apoi rămâne cea deja aleasă (ordinea după nume).
-// Euphoria S01E02 (23 oct. 2026): varianta KiNGS, identică cu fișierul, dădea
-// 0,4670 fără decalaj; aceeași traducere sub numele XviD-AFG, 0,4680 cu 8 s
-// decalaj — și câștiga, la diferență de o miime.
+// Mai bine sincronizată decât `best`? La scor practic egal decide decalajul,
+// apoi rămâne cea deja aleasă. Euphoria S01E02: aceeași traducere cu 8 s
+// decalaj câștiga la o miime diferență.
 export function isBetterSync(candidate: SyncMeasure, best: SyncMeasure | null): boolean {
   if (!best) return true;
   if (Math.abs(candidate.score - best.score) < SAME_SCORE_EPSILON)
@@ -237,14 +216,12 @@ export interface SubtitleCheck {
   reason: string | null;
   // Același motiv, scurt, pentru afișarea structurată din jurnal.
   short?: string;
-  // Sincronizarea măsurată față de subtitrarea încorporată; null dacă
-  // fișierul n-are una (sau sunt prea puține replici ca să conteze).
+  // Sincronizarea față de subtitrarea încorporată; null fără una.
   sync: SyncMeasure | null;
 }
 
-// Un verificator per fișier media: durata și subtitrarea de referință se
-// citesc o singură dată, chiar dacă verificăm mai mulți candidați (un .srt
-// existent, apoi variantele descărcate).
+// Un verificator per fișier: durata și referința se citesc o singură dată
+// pentru toți candidații.
 export function createSubtitleVerifier(mediaAbsPath: string) {
   let duration: Promise<number | null> | null = null;
   let reference: Promise<SrtTiming | null> | null = null;

@@ -1,10 +1,6 @@
-// ---------------------------------------------------------------------------
-// Pas 1 — verificări de existență/conținut, înainte de a căuta sau descărca
-// orice subtitrare: are deja subtitrare/audio română încorporate (ffprobe)?
-// pare românesc un .srt deja bundle-uit? există deja un .srt sidecar pe disc?
-// Funcții pure de citire — niciuna nu atinge qBittorrent sau disk-ul în scris
-// (vezi subtitle-apply.ts pentru acțiunile care modifică ceva).
-// ---------------------------------------------------------------------------
+// Pasul 1 — verificări doar de citire, înainte de orice căutare: are deja
+// subtitrare/audio română (ffprobe)? pare român un .srt inclus? există un .srt
+// pe disc? Scrierile sunt în subtitle-apply.ts.
 
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -16,10 +12,8 @@ const execFileAsync = promisify(execFile);
 export const MEDIA_EXTENSIONS = [".mkv", ".mp4", ".avi", ".m2ts", ".ts", ".wmv", ".mov"];
 const ROMANIAN_LANG_CODES = ["ro", "rum", "ron"];
 
-// Extrage sezon+episod dintr-un nume de fișier (ex. "...S08E01..." → {8, 1}).
-// Folosit atât pentru a asocia fiecare fișier media cu subtitrarea lui
-// corectă într-un pachet de episoade, cât și pentru a determina sezonul
-// pachetului (din primul fișier media care se potrivește).
+// Sezon + episod din numele unui fișier („…S08E01…” → {8, 1}) — asocierea
+// subtitrărilor într-un pachet și sezonul pachetului.
 export function parseSeasonEpisode(name: string): { season: number; episode: number } | null {
   const m = name.match(/S(\d{1,3})E(\d{1,3})/i);
   if (!m) return null;
@@ -31,17 +25,14 @@ export function episodeKeyFrom(season: number, episode: number): string {
   return `S${String(season).padStart(2, "0")}E${String(episode).padStart(2, "0")}`;
 }
 
-// Cheie normalizată pentru potrivire exactă între un fișier media și
-// subtitrarea/candidatul lui.
+// Cheia pentru potrivirea exactă fișier–subtitrare.
 export function extractEpisodeKey(name: string): string | null {
   const se = parseSeasonEpisode(name);
   return se ? episodeKeyFrom(se.season, se.episode) : null;
 }
 
-// Episodul pe care îl indică TOATE reperele unui candidat (metadatele API-ului,
-// numele release-ului, numele fișierului). null dacă niciunul nu are SxxExx
-// sau dacă se contrazic — un upload etichetat S02E04 dar cu fișierul
-// „…S02E01…" e o subtitrare de încredere zero, oricare ar fi adevărul.
+// Episodul indicat de TOATE reperele unui candidat (API, release, fișier); null
+// dacă niciunul n-are SxxEyy sau se contrazic — încredere zero.
 export function agreedEpisodeKey(signals: Array<string | null | undefined>): string | null {
   const keys = new Set(
     signals.map((s) => (s ? extractEpisodeKey(s) : null)).filter((k): k is string => k != null),
@@ -49,10 +40,9 @@ export function agreedEpisodeKey(signals: Array<string | null | undefined>): str
   return keys.size === 1 ? [...keys][0] : null;
 }
 
-// Un candidat OpenSubtitles e pentru episodul `episodeKey`? Metadatele
-// API-ului, release-ul și numele fișierului trebuie să fie de acord (cele
-// care au SxxExx). Un candidat fără niciun reper de episod e respins — mai
-// bine fără subtitrare decât cu a altui episod.
+// Un candidat OpenSubtitles e pentru `episodeKey`? Reperele care au SxxEyy
+// trebuie să fie de acord; fără niciun reper, respins — mai bine fără
+// subtitrare decât cu a altui episod.
 export function osResultMatchesEpisode(
   r: { release: string; seasonNumber?: number; episodeNumber?: number; fileName?: string },
   episodeKey: string,
@@ -64,14 +54,10 @@ export function osResultMatchesEpisode(
   return agreedEpisodeKey([fromApi, r.release, r.fileName]) === episodeKey;
 }
 
-// Verificare de limbă pentru un .srt deja bundle-uit în torrent — NU putem
-// presupune că, fiindcă e singurul .srt al fișierului, e automat română (bug
-// real: unele lansări vin cu subtitrare engleză bundle-uită, care ar fi fost
-// redenumită orbește în .ro.srt și afișată greșit în Plex ca română).
-// Diacriticele (ă/â/î/ș/ț) sunt un semnal aproape sigur — engleza nu le are
-// niciodată; cuvinte uzuale RO sunt rezervă pentru fișiere fără diacritice.
-// Și ş/ţ cu sedilă: subtitrările mai vechi (și unii traducători de azi, ex.
-// Snake_Eyes la Fall 2) le folosesc în locul celor cu virgulă.
+// Un .srt inclus în torrent nu e român doar fiindcă e singurul — unele lansări
+// vin cu engleză, care altfel apărea în Plex ca română. Diacriticele sunt un
+// semnal aproape sigur (și ş/ţ cu sedilă, folosite încă de unii traducători);
+// cuvintele uzuale sunt rezerva pentru fișiere fără diacritice.
 export function looksRomanian(text: string): boolean {
   const diacritics = (text.match(/[ăâîșțşţĂÂÎȘȚŞŢ]/g) ?? []).length;
   if (diacritics >= 5) return true;
@@ -80,9 +66,8 @@ export function looksRomanian(text: string): boolean {
   return stopwords.filter((w) => lower.includes(w)).length >= 3;
 }
 
-// Engleză? Pentru un .srt din torrent care nu e română: în engleză primește
-// eticheta „.en"; în altă limbă e pus deoparte. Fără diacritice românești și
-// cu cuvinte uzuale englezești.
+// Engleză? Un .srt străin în engleză primește „.en”; în altă limbă e pus
+// deoparte.
 export function looksEnglish(text: string): boolean {
   if (looksRomanian(text)) return false;
   const lower = ` ${text.toLowerCase().replace(/[^a-z']+/g, " ")} `;
@@ -106,11 +91,8 @@ export async function fileExists(absPath: string): Promise<boolean> {
   }
 }
 
-// Verifică prin ffprobe dacă fișierul media are deja un stream (subtitrare
-// sau audio) cu tag de limbă română. Dacă ffprobe nu e disponibil pe server
-// sau fișierul n-are deloc tag de limbă pe stream-ul respectiv, tratăm ca
-// "necunoscut" (returnăm false) — apelanții preferă să încerce în plus decât
-// să presupună greșit că nu e nevoie.
+// Are fișierul un stream (subtitrare sau audio) marcat român? Fără ffprobe sau
+// fără tag de limbă: false — mai bine încercăm în plus decât să presupunem.
 async function hasRomanianLanguageStream(
   mediaAbsPath: string,
   streamSelector: "s" | "a",
@@ -141,34 +123,26 @@ async function hasRomanianLanguageStream(
   }
 }
 
-// Verifică dacă fișierul media are deja un stream de subtitrare în română
-// încorporat — mai bine încercăm să adăugăm un .srt în plus decât să lăsăm
-// filmul fără subtitrare deloc.
+// Subtitrare română încorporată?
 export async function hasEmbeddedRomanianSubtitle(mediaAbsPath: string): Promise<boolean> {
   return hasRomanianLanguageStream(mediaAbsPath, "s");
 }
 
-// Verifică dacă track-ul audio principal e deja în română — conținut nativ
-// românesc (emisiuni TV, producții locale) n-are nevoie de nicio subtitrare.
+// Audio principal român — conținutul nativ n-are nevoie de subtitrare.
 async function hasRomanianAudio(mediaAbsPath: string): Promise<boolean> {
   return hasRomanianLanguageStream(mediaAbsPath, "a");
 }
 
-// Platforme/surse cunoscute care oferă exclusiv conținut audio nativ în
-// română (emisiuni TV românești) — indiciu de rezervă când ffprobe nu poate
-// confirma limba audio (fișier fără tag de limbă setat pe track, frecvent la
-// rip-uri TV). Listă mică, extensibilă — adaugă alte platforme aici dacă
-// apar cazuri similare.
+// Platforme cu conținut exclusiv românesc — rezervă când ffprobe nu confirmă
+// limba audio (frecvent la rip-uri TV fără tag).
 const ROMANIAN_ONLY_PLATFORM_TAGS = ["ANTP"]; // Antena Play
 
 function knownRomanianOnlySourceTag(mediaFileName: string): string | null {
   return ROMANIAN_ONLY_PLATFORM_TAGS.find((tag) => findTag(mediaFileName, [tag]) === tag) ?? null;
 }
 
-// Verifică (audio ffprobe, apoi heuristica de platformă) dacă fișierul e deja
-// conținut românesc, care nu are nevoie de nicio subtitrare — evită erori
-// "fără IMDb id" pentru emisiuni TV locale (fără prezență pe IMDb) și evită
-// să căutăm inutil o subtitrare pentru ceva deja în română.
+// Conținut deja românesc (audio sau platformă) — fără căutare inutilă și fără
+// eroarea „fără IMDb id” la emisiunile locale.
 export async function detectAlreadyRomanianContent(
   mediaAbsPath: string,
   mediaFileName: string,
@@ -183,9 +157,8 @@ export async function detectAlreadyRomanianContent(
   return null;
 }
 
-// Limba marcată în numele unui .srt („Film.ENG.srt", „Film.ro.srt",
-// „Subs/2_English.srt"): "ro", "other" sau null (nemarcată). Doar coduri
-// cunoscute — un sufix ca „-GRP" din numele release-ului nu e o limbă.
+// Limba marcată în numele unui .srt: "ro", "other" sau null. Doar coduri
+// cunoscute — „-GRP” din release nu e o limbă.
 const RO_TAGS = ["ro", "rum", "ron", "romanian", "romana", "română"];
 const OTHER_TAGS = [
   "en",
@@ -252,10 +225,9 @@ function basenameNoExt(path: string): string {
   return file.replace(/\.[^.]+$/, "");
 }
 
-// Dintre mai multe .srt-uri ale aceluiași fișier, cel care e subtitrarea
-// română: conținutul decide (looksRomanian), nu numele. Între mai multe
-// românești: cel deja marcat „ro", apoi cel nemarcat, apoi cel mai mare
-// (cel „forced" are doar câteva replici). null dacă niciunul nu e român.
+// Subtitrarea română dintre mai multe .srt-uri: decide conținutul, nu numele.
+// Între mai multe române: marcată „ro”, apoi nemarcată, apoi cea mai mare
+// (cea „forced” are doar câteva replici).
 export function pickRomanianSrt<T extends { name: string; size: number }>(
   files: Array<{ file: T; romanian: boolean }>,
 ): T | null {

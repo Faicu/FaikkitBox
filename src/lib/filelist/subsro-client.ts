@@ -1,10 +1,5 @@
-// ---------------------------------------------------------------------------
-// Client subs.ro (api.subs.ro/v1.0) — sursă de rezervă pentru subtitrări în
-// română când OpenSubtitles nu are o potrivire exactă de sursă/rezoluție.
-// Arhivele subs.ro conțin adesea mai multe variante de fișier (una per
-// combinație sursă+rezoluție), extrase și scorate la fel ca rezultatele
-// OpenSubtitles — vezi src/lib/filelist/subtitles.ts (pickBestByRelease).
-// ---------------------------------------------------------------------------
+// Client subs.ro (api.subs.ro/v1.0). Arhivele au adesea mai multe variante
+// (sursă/rezoluție), scorate la fel ca rezultatele OpenSubtitles.
 
 import AdmZip from "adm-zip";
 import { execFile } from "node:child_process";
@@ -18,9 +13,7 @@ const execFileAsync = promisify(execFile);
 
 const API_BASE = "https://api.subs.ro/v1.0";
 
-// Traducători ignorați: „Ai" publică traduceri automate (Teenage Sex and Death
-// at Camp Miasma: „mănâncă brioșe tot timpul", „ce ar trebui sa fac") —
-// userul a cerut ca traducerile automate să nu fie folosite deloc.
+// Traducători ignorați: „Ai” publică traduceri automate — userul nu le vrea.
 const IGNORED_TRANSLATORS = ["ai"];
 
 export interface SubsRoItem {
@@ -40,17 +33,10 @@ function withTtPrefix(imdbId: string): string {
   return /^tt/i.test(imdbId) ? imdbId : `tt${imdbId}`;
 }
 
-// Caută subtitrări pentru un IMDb id. Nu trimitem parametrul `language`:
-// subs.ro găzduiește și subtitrări în engleză (marcate „en", de obicei
-// originalul, urcat de ex. de „R."), dar limba se decide după conținutul
-// fiecărui fișier (resolveBestSubtitle), nu după etichetă — o arhivă poate
-// avea câte un fișier în fiecare limbă. (Nota veche de aici spunea că
-// arhiva „en" de la The Invite ar fi fost în română; verificat pe 9 oct.
-// 2026, e în engleză.)
-// Fail-soft: listă goală la orice eroare sau lipsă cheie API — consistent
-// cu restul integrărilor externe. Loghează distinct fiecare caz de eșec
-// (cheie lipsă / HTTP non-ok / excepție) ca să se poată diagnostica ulterior
-// de ce o căutare a întors 0 rezultate.
+// Subtitrările unui IMDb id. Fără parametrul `language`: subs.ro are și
+// originale în engleză, iar limba se decide după conținutul fiecărui fișier,
+// nu după etichetă. Fail-soft (listă goală), cu fiecare eșec logat distinct
+// (cheie lipsă / HTTP / excepție).
 export async function searchSubsRo(imdbId: string): Promise<SubsRoItem[]> {
   const key = apiKey();
   const ttImdbId = withTtPrefix(imdbId);
@@ -94,13 +80,10 @@ export async function searchSubsRo(imdbId: string): Promise<SubsRoItem[]> {
   }
 }
 
-// Pentru seriale, o căutare după IMDb id-ul serialului întoarce rezultate
-// pentru toate sezoanele — filtrăm după numărul sezonului căutat, extras din
-// title/description (ex. "The Rookie - Sezonul 8", "Sezonul 8 complet, 18
-// episoade..."). Case insensitive, acceptă și "sezon" fără "ul".
-// Pachetele cu mai multe sezoane vin ca interval sau listă: „Ted - Sezoanele
-// 1-2", „Sezonul 1-3", „Sezoanele 1, 2 și 3". Lista (virgulă/„și") doar la
-// plural — la „Sezonul 8, 18 episoade" virgula nu leagă alt sezon.
+// Căutarea după serial aduce toate sezoanele — filtrăm după sezonul din titlu
+// sau descriere („Sezonul 8”, „Sezoanele 1-2”, „Sezonul 1-3”, „Sezoanele 1, 2
+// și 3”). Lista cu virgulă doar la plural: în „Sezonul 8, 18 episoade” virgula
+// nu leagă alt sezon.
 export function subsRoItemMatchesSeason(item: SubsRoItem, seasonNumber: number): boolean {
   const text = `${item.title} ${item.description}`;
   const plural = text.match(/sezoanele\s+(\d{1,3}(?:(?:\s*[-–,&]\s*|\s+(?:și|si)\s+)\d{1,3})*)\b/i);
@@ -149,40 +132,29 @@ export async function downloadSubsRoZip(id: number): Promise<Buffer | null> {
 }
 
 export interface SubsRoSrtEntry {
-  // Numele fișierului din arhivă, fără extensie — de obicei chiar numele
-  // lansării exacte (ex. "Disclosure.Day.2026.1080p.MA.WEB-DL...-BYNDR"),
-  // folosit pentru scorare la fel ca "release" de la OpenSubtitles.
+  // Numele fișierului din arhivă — de obicei chiar release-ul, pentru scorare.
   release: string;
-  // Numele fișierului din arhivă (fără folder și extensie) — reperul de
-  // episod: un folder „Serial.S02E01-E04" nu spune nimic despre fișierul din
-  // el, numele fișierului da (vezi subsRoEntryEpisodeKey).
+  // Reperul de episod e numele fișierului, nu folderul („S02E01-E04” nu spune
+  // nimic despre fișierul din el).
   fileName: string;
   content: Buffer;
 }
 
-// subs.ro nu garantează formatul arhivei — unele subtitrări sunt .zip, altele
-// .rar (ex. "The Invite" 2026, id 130446) — detectat din magic bytes, nu din
-// Content-Type (API-ul nu-l expune diferențiat).
+// Arhiva poate fi .zip sau .rar (The Invite) — detectat din magic bytes.
 function isRarArchive(buf: Buffer): boolean {
   return buf.length >= 6 && buf.subarray(0, 6).toString("hex") === "526172211a07";
 }
 
-// Numele de release relevant (rezoluție/sursă/grup) e adesea în folderul
-// părinte din arhivă, nu în numele fișierului — arhivele cu mai multe
-// variante grupează fișierele pe subfolder cu numele exact al release-ului
-// (ex. "The.Crown.S02.1080p.BluRay.DTS.x264-CiNEFiLE/Episode.rum.srt", unde
-// fișierul în sine se numește doar "Episode.rum.srt"). Ignorând folderul,
-// scoring-ul din pickBestByRelease nu vedea niciun tag pe acest candidat și
-// nu-l alegea niciodată, chiar când era o potrivire perfectă (The Crown S02,
-// 2026-09-02) — de-asta combinăm folder + nume fișier.
+// Release-ul e adesea în folderul din arhivă („The.Crown.S02.1080p.BluRay…/
+// Episode.rum.srt”) — fără folder, scorarea nu vedea niciun tag și nu alegea
+// niciodată o potrivire perfectă (The Crown S02, 2 sept. 2026).
 function releaseFromEntryPath(entryPath: string): { release: string; fileName: string } {
   const fileName = (entryPath.split("/").pop() ?? entryPath).replace(/\.srt$/i, "");
   const dirName = entryPath.includes("/") ? entryPath.slice(0, entryPath.lastIndexOf("/")) : "";
   return { release: dirName ? `${dirName} ${fileName}` : fileName, fileName };
 }
 
-// Episodul unei subtitrări din arhivă: din numele fișierului; folderul
-// contează doar dacă fișierul n-are SxxExx deloc („Episode.rum.srt") și
+// Episodul din numele fișierului; folderul doar dacă fișierul n-are SxxEyy și
 // folderul numește un singur episod.
 export function subsRoEntryEpisodeKey(entry: { release: string; fileName: string }): string | null {
   return (
@@ -202,9 +174,8 @@ function extractSrtEntriesFromZip(buf: Buffer): SubsRoSrtEntry[] {
     }));
 }
 
-// Extrage via binarul de sistem `unrar` (apt) într-un folder temporar —
-// nicio librărie JS pură pentru RAR5 nu era suficient de fiabilă/simplă de
-// integrat în build-ul curent.
+// RAR prin `unrar` (apt) — nicio librărie JS pentru RAR5 nu era destul de
+// fiabilă.
 async function extractSrtEntriesFromRar(buf: Buffer): Promise<SubsRoSrtEntry[]> {
   const dir = await mkdtemp(join(tmpdir(), "subsro-rar-"));
   try {
@@ -228,11 +199,8 @@ async function extractSrtEntriesFromRar(buf: Buffer): Promise<SubsRoSrtEntry[]> 
   }
 }
 
-// Extrage toate fișierele .srt dintr-o arhivă subs.ro (.zip sau .rar) — poate
-// conține mai multe variante (una per sursă/rezoluție). Fail-soft: listă
-// goală dacă arhiva nu poate fi citită, cu logging distinct pentru
-// diagnosticare (vezi istoricul „The Invite" 2026, unde eșecul de extragere
-// dintr-un .rar tratat ca .zip era indistinguibil de „0 fișiere .srt").
+// Toate .srt-urile dintr-o arhivă. Fail-soft, cu eșecul de extragere logat
+// distinct de „0 fișiere .srt” (un .rar tratat ca .zip era indistinguibil).
 export async function extractSrtEntries(buf: Buffer): Promise<SubsRoSrtEntry[]> {
   try {
     const entries = isRarArchive(buf)

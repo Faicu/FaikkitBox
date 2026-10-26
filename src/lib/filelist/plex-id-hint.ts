@@ -1,19 +1,12 @@
 // ---------------------------------------------------------------------------
 // ID-ul IMDb în numele fișierului, ca Plex să potrivească titlul din prima.
+// Altfel Plex ghicește după nume și greșește la titluri asemănătoare
+// („S.W.A.T. Exiles” → „S.W.A.T.” 2017), iar titlul rămânea pe „Se procesează
+// în Plex”. Cu `{imdb-tt…}` agenții Plex iau direct titlul (testat 28 sept.
+// 2026: film, episod în rădăcină, în pachet, episod nou, `.ro.srt`).
 //
-// Fără el, Plex ghicește titlul doar din numele lansării — și greșește când
-// există un titlu asemănător: „S.W.A.T. Exiles" (2026) ajungea la „S.W.A.T."
-// (2017), „Runner" (2026) devenea a doua versiune a lui „The Runner" (2026).
-// Legarea din `media` caută după TMDB, deci rămânea pe „Se procesează în
-// Plex" fără nicio eroare. Cu `{imdb-tt…}` în nume, agenții Plex (Plex Movie /
-// Plex TV Series) iau direct titlul cu acel ID — testat pe 28 sept 2026:
-// film și episod direct în rădăcină, episod într-un folder de pachet, episod
-// nou al unui serial deja existent, plus subtitrarea `.ro.srt` cu același nume.
-//
-// Redenumirea trece prin API-ul qBittorrent (nu direct pe disc), ca torrentul
-// să rămână complet și să continue seed-ul. Rulează la finalul descărcării,
-// înainte de subtitrare (care ia numele din qBittorrent, deci îl vede pe cel
-// nou) și de refresh-ul Plex.
+// Redenumirea trece prin API-ul qBittorrent, ca seed-ul să continue; rulează
+// înainte de subtitrare și de refresh-ul Plex.
 // ---------------------------------------------------------------------------
 
 import { basename, dirname, extname } from "node:path";
@@ -34,12 +27,9 @@ function joinRel(dir: string, file: string): string {
   return dir === "." ? file : `${dir}/${file}`;
 }
 
-// Ce trebuie redenumit, pentru lista de fișiere a unui torrent (căi relative,
-// ca în /torrents/files). Fiecare fișier video primește ` {imdb-tt…}` înainte
-// de extensie; fișierele din același folder care îi poartă numele (subtitrări
-// `X.en.srt`, `X.srt` din torrent) sunt redenumite la fel, altfel Plex nu le
-// mai asociază cu video-ul. Folderele rămân neatinse. Idempotent: un fișier
-// care are deja un indiciu de ID e sărit.
+// Redenumirile pentru lista de fișiere a unui torrent: fiecare video primește
+// ` {imdb-tt…}`, iar fișierele cu același nume din folder (subtitrări) la fel,
+// ca Plex să le asocieze. Idempotent.
 export function planPlexIdRenames(fileNames: string[], imdbId: string): PlannedRename[] {
   if (!/^tt\d+$/.test(imdbId)) return [];
   const hint = ` {imdb-${imdbId}}`;
@@ -48,7 +38,7 @@ export function planPlexIdRenames(fileNames: string[], imdbId: string): PlannedR
 
   for (const name of fileNames) {
     if (!isVideo(name) || HAS_HINT_RE.test(name)) continue;
-    // Mostrele nu intră în bibliotecă (Plex le ignoră); nu are rost să le atingem.
+    // Mostrele nu intră în bibliotecă.
     if (/(^|[\\/._ -])sample([\\/._ -]|$)/i.test(name)) continue;
 
     const dir = dirname(name);
@@ -71,11 +61,9 @@ export function planPlexIdRenames(fileNames: string[], imdbId: string): PlannedR
   return renames;
 }
 
-// ID-ul IMDb de pus în nume, din `media` — doar pentru rânduri confirmate de
-// TMDB (tmdb_id setat). Un rând scris cu numele lansării, fără identificare
-// TMDB, poartă cel mult ID-ul de pe Filelist, neverificat: mai bine fără
-// indiciu (Plex ghicește, ca înainte) decât cu unul greșit, pe care Plex l-ar
-// urma fără ezitare. Pe episoade, imdb_id e al serialului — exact ce vrea Plex.
+// ID-ul IMDb din `media`, doar pentru rânduri confirmate de TMDB — un ID
+// neverificat de pe Filelist ar fi urmat de Plex fără ezitare, deci mai bine
+// fără. Pe episoade, imdb_id e al serialului — exact ce vrea Plex.
 async function imdbIdForTorrent(torrentHash: string): Promise<string | null> {
   const { getDb } = await import("../db");
   const row = getDb()
@@ -88,12 +76,9 @@ async function imdbIdForTorrent(torrentHash: string): Promise<string | null> {
   return row?.imdb_id ?? null;
 }
 
-// qBittorrent confirmă redenumirea imediat, dar mută fișierul pe disc
-// asincron. Pasul următor (subtitrarea) citește fișierul video cu ffprobe și
-// scrie `.ro.srt` lângă el — dacă ajunge înaintea mutării, ar vedea un fișier
-// lipsă (și ar descărca inutil o subtitrare peste una încorporată). Așteptăm
-// deci să apară noile nume pe disc, cu o limită: la depășire, continuăm
-// oricum, cu un avertisment.
+// qBittorrent confirmă redenumirea imediat, dar mută fișierul asincron. Dacă
+// subtitrarea ajunge înaintea mutării, vede un fișier lipsă — așteptăm noile
+// nume pe disc, cu limită (apoi continuăm, cu avertisment).
 async function waitForRenamesOnDisk(
   params: { qbitUrl: string; qbitUser: string; qbitPass: string; torrentHash: string },
   renames: PlannedRename[],
@@ -127,9 +112,7 @@ async function waitForRenamesOnDisk(
   console.warn(`[plex-id] Redenumirile nu au apărut pe disc în 30s (${params.torrentHash})`);
 }
 
-// Aplică redenumirile pentru un torrent. Nu aruncă niciodată: o redenumire
-// eșuată lasă fișierul cu numele vechi (Plex ghicește, ca înainte), dar nu
-// trebuie să blocheze subtitrarea și legarea care urmează.
+// Nu aruncă niciodată: o redenumire eșuată nu blochează subtitrarea și legarea.
 export async function applyPlexIdHint(params: {
   qbitUrl: string;
   qbitUser: string;

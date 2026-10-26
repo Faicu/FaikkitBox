@@ -12,11 +12,9 @@ import {
   usernameOf,
 } from "../media/scheduled-delete";
 
-// Ștergerea efectivă a unui titlu: qBittorrent (torrent + fișiere), reziduul
-// de pe disk, rândurile din `media` și Plex. Fără verificări de drepturi sau
-// de termen — le fac apelanții: deleteMediaEntry (log.ts), la cererea unui
-// utilizator, și sarcina „Ștergeri programate” din Watcher, la
-// împlinirea celor 24 h (vezi scheduled-delete.ts).
+// Ștergerea efectivă: qBittorrent (torrent + fișiere), resturile de pe disc,
+// rândurile din `media` și Plex. Drepturile și termenul le verifică apelanții
+// (deleteMediaEntry din log.ts, „Ștergeri programate”).
 export async function deleteTorrentNow(row: {
   torrent_hash: string;
   media_type: string | null;
@@ -31,12 +29,9 @@ export async function deleteTorrentNow(row: {
     const pass = process.env.QBIT_PASSWORD ?? "";
     const cookie = await qbitLogin(qbitUrl, user, pass);
 
-    // Reținem calea reală de pe disc dinaintea ștergerii — numele
-    // torrentului salvat în DB poate diferi de numele folderului de pe
-    // disk (qBittorrent normalizează unele nume), deci e singura sursă
-    // de adevăr pentru curățarea de mai jos. Rădăcina, nu content_path:
-    // un fișier unic într-un folder propriu și-ar lăsa altfel folderul
-    // gol pe disc (vezi qbitTorrentRootPath).
+    // Calea reală, înainte de ștergere — numele din DB poate diferi de folderul
+    // de pe disc. Rădăcina, nu content_path: altfel un fișier unic își lasă
+    // folderul gol.
     rootPath = await qbitTorrentRootPath(qbitUrl, row.torrent_hash, user, pass);
 
     const form = new URLSearchParams({ hashes: row.torrent_hash, deleteFiles: "true" });
@@ -50,54 +45,35 @@ export async function deleteTorrentNow(row: {
     console.warn("[filelist] Nu am putut șterge din qBit:", e);
   }
 
-  // Ce a rămas după qBittorrent (subtitrările scrise de aplicație) —
-  // vezi disk-cleanup.ts.
+  // Ce a rămas după qBittorrent (subtitrările scrise de aplicație).
   if (rootPath) {
     const { removeTorrentResidue } = await import("./disk-cleanup");
     await removeTorrentResidue(rootPath);
   }
 
-  // Toate rândurile media care împart același torrent_hash (episoadele
-  // unui pachet de sezon) — nu doar cel apăsat — altfel restul rămân
-  // orfane, cu un hash care nu mai există în qBittorrent, și apar
-  // permanent ca "se descarcă" în Bibliotecă. Mesajul de confirmare din
-  // drawer promite ștergerea întregului pachet — asta chiar face.
+  // Toate rândurile cu același hash (episoadele unui pachet), nu doar cel
+  // apăsat — altfel restul rămân „se descarcă” pe veci.
   deleteMediaByTorrentHash(row.torrent_hash);
 
-  // Rânduri "fantomă" pentru același titlu (același imdb_id), fără
-  // torrent_hash — create de exemplu de un backfill dintr-un scan Plex
-  // vechi, nelegat niciodată de un download real. Invizibile pentru
-  // ștergerea de mai sus (care lucrează strict după torrent_hash), deci
-  // rămân orfane la nesfârșit dacă nu le curățăm explicit aici (găsit la
-  // "Pompeii: Out of Time with Tom Hiddleston", 2026-09-02).
-  // `parent_id IS NOT NULL` e esențial: rândul-părinte al unui serial
-  // (ensureMediaPlaceholder) are prin construcție torrent_hash NULL, deci
-  // fără filtrul ăsta era prins de curățare — iar ștergerea lui declanșa
-  // ON DELETE CASCADE pe parent_id și lua cu el TOATE episoadele
-  // celorlalte sezoane, care rămâneau perfect valide în qBittorrent
-  // (găsit la "My Life with the Walter Boys", 2026-09-06: ștergerea unui
-  // episod din pachetul S2 a golit și S3 din bibliotecă).
+  // Rândurile „fantomă” ale aceluiași titlu, fără hash (de la un backfill
+  // vechi) — altfel rămân orfane (Pompeii, 2 sept. 2026). `parent_id IS NOT
+  // NULL` e esențial: rândul-părinte al serialului n-are hash, iar ștergerea lui
+  // lua prin CASCADE episoadele tuturor sezoanelor (Walter Boys, 6 sept. 2026).
   if (row.imdb_id) {
     db.prepare(
       "DELETE FROM media WHERE imdb_id = ? AND torrent_hash IS NULL AND parent_id IS NOT NULL",
     ).run(row.imdb_id);
 
-    // Rândul-serial rămâne util cât are măcar un episod; abia când
-    // pachetul șters era ultimul, devine un titlu gol în Bibliotecă și
-    // se curăță — intenția originală a curățării de mai sus, acum fără
-    // efectul colateral asupra sezoanelor rămase.
+    // Rândul-serial se curăță doar când pachetul șters era ultimul lui.
     db.prepare(
       `DELETE FROM media WHERE imdb_id = ? AND media_type = 'tv_show'
          AND id NOT IN (SELECT parent_id FROM media WHERE parent_id IS NOT NULL)`,
     ).run(row.imdb_id);
   }
 
-  // Refresh Plex necondiționat, după media_type — sursa film/serial,
-  // nu categoria Filelist (RO Dubbed amestecă filme și seriale). Fără
-  // el, refresh la ambele biblioteci ca fallback sigur — la fel ca la
-  // ștergerea din pagina qBittorrent (qbittorrent.ts), în loc să
-  // renunțăm silențios (găsit la "Avatar: Foc și cenușă", 2026-09-02 —
-  // titlul șters din DB/disk, dar rămas fantomă în Plex).
+  // Refresh Plex mereu, după media_type (RO Dubbed amestecă filme și seriale);
+  // fără el, ambele biblioteci — altfel titlul rămânea fantomă în Plex
+  // (Avatar, 2 sept. 2026).
   try {
     if (row.media_type) {
       const plexType = row.media_type === "movie" ? "movie" : "show";
@@ -112,19 +88,17 @@ export async function deleteTorrentNow(row: {
   return { qbitDeleted };
 }
 
-// Sarcina „Ștergeri programate” din Watcher: execută ștergerile cu
-// termenul atins și le scrie în jurnal. O ștergere eșuată rămâne programată
-// și se reîncearcă la următorul tic. Întoarce câte s-au executat.
+// Ștergerile cu termenul atins, scrise în jurnal. O ștergere eșuată rămâne
+// programată. Întoarce câte s-au executat.
 export async function runDueDeletions(nowMs = Date.now()): Promise<number> {
   const { finalizingHashes } = await import("./download-tracker");
   const { logActivity } = await import("../activity-log");
   let done = 0;
   for (const due of listDueDeletions(nowMs)) {
     try {
-      // Cineva poate să fi renunțat între listare și ștergerea precedentă.
+      // Cineva poate să fi renunțat între timp.
       if (!scheduledDeletion(due.torrentHash)) continue;
-      // Torrentul tocmai s-a terminat și i se scriu fișierele (redenumire,
-      // subtitrare) — rămâne programat, se șterge la minutul următor.
+      // Torrent tocmai terminat, încă în finalizare — rămâne pentru data viitoare.
       if (finalizingHashes().has(due.torrentHash)) continue;
       const row = getDb()
         .prepare("SELECT media_type, imdb_id FROM media WHERE id = ?")

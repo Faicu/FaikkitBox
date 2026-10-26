@@ -1,37 +1,20 @@
 // ---------------------------------------------------------------------------
-// Categorii Filelist.io
+// Categorii Filelist.io (31 de ID-uri, verificate pe API 2 aug. 2026). Cele
+// fără filme/seriale nu apar aici. Cele mixte rămân necăutate: Cartoons=15,
+// Mobile=22, Anime=24 — ar contamina rezultatele.
 //
-// Lista completă (verificată direct pe API, 2026-08-02) are 31 de ID-uri
-// valide. Multe nu au legătură cu filme/seriale (Apps=8, Games=9/10,
-// Music=11, Videoclips=12, Sport=13, Docs=16 — de fapt cărți/cursuri, nu
-// documentare, Various=18, Books=29, Courses=30, XXX=7) — nu apar mai jos.
-//
-// Câteva categorii sunt MIXTE (filme + seriale amestecate în același ID) și
-// nu pot fi încadrate curat nici la MOVIE_CATEGORIES, nici la
-// SERIES_CATEGORIES fără riscul de a contamina rezultatele: Cartoons=15
-// (desene animate — filme ȘI seriale), Mobile=22 (aplicații/jocuri +
-// filme/seriale în format mobil — de asta NU mai e inclus la seriale, deși
-// a fost istoric), Anime=24 (filme ȘI seriale anime). Rămân neclasificate —
-// căutarea Filelist pur și simplu nu le va găsi.
-//
-// Excepție: RO Dubbed=28 (filme ȘI seriale dublate) e căutată, ca
-// MIXED_CATEGORIES. Căutarea wizard-ului e strict după IMDb, deci un ID de
-// film nu poate aduce un serial; iar tipul descărcării (folder, bibliotecă
-// Plex) vine din ce s-a cerut / din `media.media_type`, nu din categorie —
-// de asta 28 nu e în niciuna dintre listele de mai jos. Urmărirea automată
-// o exclude (vezi checkFilelistForItemInternal): o variantă doar dublată nu
-// se alege fără om.
+// Excepție: RO Dubbed=28 (filme și seriale) se caută, ca MIXED_CATEGORIES:
+// căutarea e după IMDb, deci nu aduce celălalt tip, iar tipul descărcării vine
+// din ce s-a cerut, nu din categorie. Urmărirea automată o exclude — o
+// variantă doar dublată nu se alege fără om.
 // ---------------------------------------------------------------------------
 
 // Filme: SD=1, DVD=2, DVD-RO=3, HD=4, HD-RO=19, 4K=6, 4K Blu-Ray=26, Blu-Ray=20
 // Seriale: SD=23, HD=21, 4K=27, K-Drama=31
 //
-// 3D=25 nu se caută deloc (verificat pe Filelist 25 oct 2026: doar lansări
-// SBS/OU și discuri 3D, nimic redabil pe un TV obișnuit). Rămâne film pentru
-// isMovieCategory, ca un torrent din 25 ajuns totuși la descărcare să nu fie
-// tratat ca serial. 20/26 rămân: au doar discuri complete (excluse după nume,
-// vezi isFullDisc) și REMUX-uri — ultimele în clasament, dar uneori singura
-// variantă la o calitate.
+// 3D=25 nu se caută (doar SBS/OU și discuri — nimic redabil pe un TV obișnuit),
+// dar rămâne film pentru isMovieCategory. 20/26 rămân: discurile complete sunt
+// excluse după nume, iar REMUX-ul e uneori singura variantă la o calitate.
 export const MOVIE_CATEGORIES = [1, 2, 3, 4, 6, 19, 20, 26];
 export const STEREO_3D_CATEGORY = 25;
 export const SERIES_CATEGORIES = [21, 23, 27, 31];
@@ -39,7 +22,7 @@ export const MIXED_CATEGORIES = [28];
 export const RO_DUBBED_CATEGORY = 28;
 export const ALL_CATEGORIES = [...MOVIE_CATEGORIES, ...SERIES_CATEGORIES, ...MIXED_CATEGORIES];
 
-// Filelist API poate returna categoria ca string (ex: "Movies HD") — mapăm la ID numeric
+// API-ul poate da categoria ca text („Movies HD”) — mapată la ID.
 const CATEGORY_STRING_MAP: Record<string, number> = {
   "Movies SD": 1,
   "Filme SD": 1,

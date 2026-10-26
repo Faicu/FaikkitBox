@@ -1,16 +1,9 @@
 // ---------------------------------------------------------------------------
-// Tabul „Top Filelist" din Descoperă — cele mai populare titluri dintre
-// torrentele urcate pe Filelist în perioada aleasă (24h … 7 zile). API-ul
-// Filelist nu are un endpoint de top: `latest-torrents` dă doar ultimele 100
-// per cerere, fără paginare. Ca fereastra să ajungă cât mai departe, cerem
-// fiecare categorie separat (100 per categorie): filmele acoperă așa peste o
-// săptămână, dar serialele HD doar ~1 zi — acolo nu există altă cale, iar
-// tabul arată cât acoperă de fapt (`coverage`). Un titlu vechi, încă foarte
-// seed-uit, nu apare — limitare acceptată, vezi decizia din 27 sept 2026.
-// Gruparea/ordonarea e în top-torrents.ts.
-//
-// Importurile server (filelist-client, tmdb-title-lookup) sunt dinamice, în
-// handler — corpul lui e eliminat din bundle-ul de client.
+// Tabul „Top Filelist” din Descoperă: cele mai populare titluri urcate în
+// perioada aleasă. API-ul n-are top — `latest-torrents` dă ultimele 100, fără
+// paginare, deci cerem fiecare categorie separat: filmele acoperă peste o
+// săptămână, serialele HD ~1 zi (tabul arată cât acoperă). Un titlu vechi încă
+// foarte seed-uit nu apare — limitare acceptată (27 sept. 2026).
 // ---------------------------------------------------------------------------
 
 import { createServerFn } from "@tanstack/react-start";
@@ -27,8 +20,7 @@ export interface TopTorrentsResult {
   error?: string;
 }
 
-// O cerere per categorie: 13 la o reîmprospătare. Contul Filelist are o
-// limită orară de cereri, deci lista stă în cache 30 de minute.
+// 13 cereri la o reîmprospătare, cu limita orară a contului — cache 30 de minute.
 const CACHE_TTL = 30 * 60_000;
 const MAX_PER_TYPE = 60;
 
@@ -48,7 +40,7 @@ async function fetchRaw(): Promise<RawData> {
   const { MOVIE_CATEGORIES, SERIES_CATEGORIES } = await import("./categories");
   const { coveredHours } = await import("./top-torrents");
 
-  // Câte 4 cereri odată — 13 simultan către Filelist ar fi inutil de agresiv.
+  // Câte 4 cereri odată.
   const fetchAll = async (cats: readonly number[]) => {
     const out: Awaited<ReturnType<typeof fetchLatestTorrents>>[] = [];
     for (let i = 0; i < cats.length; i += 4) {
@@ -76,10 +68,8 @@ async function buildTopList(torrents: FilelistTorrent[], hours: TopPeriodHours) 
   const since = Date.now() - hours * 3_600_000;
   const inPeriod = torrents.filter((t) => t.upload_date && parseUploadDate(t.upload_date) >= since);
 
-  // Gruparea se face după titlul TMDB, deci rezolvăm toate IMDb id-urile
-  // distincte din perioadă. Lookup-urile sunt în cache 1h
-  // (tmdb-title-lookup) — la reîmprospătare costă doar titlurile noi. Loturi
-  // de 10 ca să nu lovim TMDB cu zeci de cereri simultane.
+  // Toate IMDb id-urile distincte se rezolvă la TMDB (cache 1h — la
+  // reîmprospătare doar cele noi), în loturi de 10.
   const imdbIds = [
     ...new Set(inPeriod.map((t) => normalizeImdbId(t.imdb)).filter((i) => i !== null)),
   ];

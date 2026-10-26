@@ -1,14 +1,8 @@
 // ---------------------------------------------------------------------------
-// Pipeline unificat per fișier media — leagă pașii 1→4 (verificare existență
-// → surse externe → pregătire → aplicare) într-un singur loc, apelat o
-// singură dată pentru film și în buclă (per episod) pentru pachet de sezon.
-//
-// Scop explicit: elimină duplicarea dintre fluxul de film și cel de pachet —
-// înainte de refactor, aceeași secvență de decizii era scrisă de două ori
-// separat în subtitles.ts, ceea ce a permis un bug real (2026-09-02):
-// verificarea de limbă a unui .srt bundle-uit exista doar pe fluxul de film,
-// lipsea complet la pachete. Cu un singur loc care implementează pașii,
-// ambele fluxuri se comportă identic prin construcție, nu prin disciplină.
+// Pașii per fișier media (verificare → surse externe → pregătire → aplicare),
+// într-un singur loc pentru film și pentru fiecare episod dintr-un pachet.
+// Scriși de două ori, fluxurile s-au despărțit: verificarea de limbă a unui
+// .srt inclus exista doar la filme (bug, 2 sept. 2026).
 // ---------------------------------------------------------------------------
 
 import { basename, dirname, extname, join } from "node:path";
@@ -51,32 +45,25 @@ import {
 
 export interface ProcessMediaFileParams {
   mediaFile: QbitFileInfo;
-  // .srt-urile deja urmărite de qBittorrent, asociate ACESTUI fișier media —
-  // apelantul decide asocierea (toate .srt-urile torrentului, la film; doar
-  // cele cu aceeași cheie SxxExx, la pachet).
+  // .srt-urile urmărite de qBittorrent asociate fișierului — asocierea o face
+  // apelantul (toate la film; doar cele cu același SxxEyy la pachet).
   matchingSrtFiles: QbitFileInfo[];
   savePath: string;
   qbitUrl: string;
   torrentHash: string;
   qbitUser: string;
   qbitPass: string;
-  // Numele folosit la scorarea candidaților externi (torrentName la film —
-  // un singur fișier, deci numele torrentului e destul de precis; numele
-  // fișierului episodului la pachet, ca scoring-ul să vadă exact taguri de
-  // rezoluție/sursă/grup ale ACELUI episod, nu ale pachetului întreg).
+  // Numele pentru scorarea candidaților: al torrentului la film, al fișierului
+  // la pachet (taguri exacte ale episodului, nu ale pachetului).
   searchTargetName: string;
-  // Episodul pe care apelantul îl așteaptă în fișier (din numele torrentului
-  // la un episod descărcat singur, din numele fișierului la pachet). null la
-  // filme.
+  // Episodul așteptat în fișier; null la filme.
   expectedEpisodeKey: string | null;
-  // Candidații externi, nefiltrați pe episod — filtrul e în
-  // rankSubtitleCandidates. Lazy — apelate doar dacă chiar se ajunge la
-  // căutare externă.
+  // Candidații externi, nefiltrați pe episod (filtrul e în
+  // rankSubtitleCandidates), ceruți doar dacă e nevoie.
   getOsCandidates: () => Promise<OpenSubtitlesResult[]>;
   getSubsRoCandidates: () => Promise<SubsRoSrtEntry[]>;
-  // Subtitrarea existentă e „aproximativă": dacă .srt-ul trece verificarea,
-  // nu ne oprim la el, ci căutăm o variantă mai bună și îl înlocuim doar cu
-  // una sigur mai bună (reîncercarea zilnică, subtitle-retry.ts).
+  // Subtitrarea existentă e „aproximativă”: căutăm una mai bună și o
+  // înlocuim doar cu una sigur mai bună (reîncercarea zilnică).
   upgradeApproximate?: boolean;
 }
 
@@ -87,7 +74,7 @@ export interface ProcessMediaFileResult {
   path?: string;
   matchedCriteria?: number;
   maxCriteria?: number;
-  // Sursa externă reală a subtitrării descărcate (outcome-ul nu o mai spune).
+  // Sursa externă a subtitrării descărcate.
   source?: SubtitleSource;
   sync?: SubtitleSync;
   // Pentru jurnalul structurat (SubtitleFileReport).
@@ -115,8 +102,8 @@ export async function processMediaFile(
     upgradeApproximate = false,
   } = params;
 
-  // Episodul țintă: cel din numele fișierului media. Dacă torrentul anunță
-  // alt episod decât fișierul din el, nu ghicim care e adevărat.
+  // Episodul țintă e cel din numele fișierului; dacă torrentul anunță altul,
+  // nu ghicim.
   const mediaEpisodeKey = extractEpisodeKey(mediaFile.name);
   if (mediaEpisodeKey && expectedEpisodeKey && mediaEpisodeKey !== expectedEpisodeKey) {
     return {
@@ -125,8 +112,7 @@ export async function processMediaFile(
     };
   }
   const episodeKey = mediaEpisodeKey ?? expectedEpisodeKey;
-  // .srt-urile din torrent care numesc explicit alt episod nu sunt ale
-  // fișierului ăstuia, oricum le-ar fi asociat apelantul.
+  // .srt-urile care numesc alt episod nu sunt ale fișierului ăstuia.
   const ownSrtFiles = episodeKey
     ? matchingSrtFiles.filter((f) => {
         const k = extractEpisodeKey(f.name);
@@ -136,9 +122,8 @@ export async function processMediaFile(
 
   const mediaAbsPath = join(savePath, mediaFile.name);
   const verify = createSubtitleVerifier(mediaAbsPath);
-  // Subtitrarea se scrie lângă fișierul media, pe calea raportată de
-  // qBittorrent. Dacă fișierul nu e acolo (mutat, save_path schimbat), .srt-ul
-  // ar ajunge într-un director fără video — nu scriem nimic.
+  // Fără fișierul video pe calea raportată (mutat), .srt-ul ar ajunge într-un
+  // director fără video — nu scriem nimic.
   if (!(await fileExists(mediaAbsPath))) {
     return {
       outcome: "no_media_file",
@@ -162,17 +147,11 @@ export async function processMediaFile(
     return { outcome: "audio_already_romanian", detail: alreadyRomanianDetail };
   }
 
-  // Pas 1b — .srt-uri deja urmărite de qBittorrent pentru acest fișier.
-  // Verificăm ÎNTÂI conținutul, nu presupunem după nume sau după faptul că e
-  // singurul. De obicei singurul .srt e româna; rar, engleza. La mai multe
-  // (de obicei „Film.ENG.srt" + „Film.srt" cu româna, nemarcată), cel român
-  // după conținut devine „.ro.srt", ca Plex să-l recunoască.
-  //
-  // Cele care nu sunt române și ar încurca Plex — singurul .srt, cel
-  // nemarcat de lângă video („Film.srt", luat drept implicit) sau un
-  // „Film.ro.srt" greșit — primesc „.en" dacă sunt în engleză, altfel sunt
-  // puse deoparte (`.respins`). Toate prin qBittorrent. Cele marcate deja cu
-  // altă limbă („Film.ENG.srt") rămân cum sunt.
+  // Pas 1b — .srt-urile urmărite de qBittorrent, verificate după CONȚINUT, nu
+  // după nume. Cel român devine „.ro.srt”, ca Plex să-l recunoască. Cele
+  // străine care ar încurca Plex (singurul .srt, cel nemarcat de lângă video,
+  // un „.ro.srt” greșit) primesc „.en” dacă sunt în engleză, altfel `.respins`.
+  // Cele marcate deja cu altă limbă rămân. Totul prin qBittorrent.
   if (ownSrtFiles.length > 0) {
     const read = await Promise.all(
       ownSrtFiles.map(async (file) => {
@@ -195,9 +174,8 @@ export async function processMediaFile(
 
     const romanian = pickRomanianSrt(read);
     if (romanian) {
-      // Ținta „.ro.srt" ocupată de un .srt din torrent care nu e român (altfel
-      // ar fi fost el cel ales): mutat întâi, altfel qBittorrent refuză
-      // redenumirea celui român peste un fișier al torrentului.
+      // Ținta „.ro.srt” ocupată de un .srt străin al torrentului: mutat întâi,
+      // altfel qBittorrent refuză redenumirea.
       if (romanian.name !== targetSrtRelPath) {
         const occupant = read.find((r) => r.file.name === targetSrtRelPath);
         if (occupant) await clearNonRomanian(occupant);
@@ -219,8 +197,8 @@ export async function processMediaFile(
       };
     }
 
-    // Niciunul nu e român: „.ro.srt"-ul greșit primul, ca „Film.srt" să nu-i
-    // ia numele .en. Apoi căutăm mai jos o subtitrare română reală.
+    // Niciunul nu e român: „.ro.srt”-ul greșit primul, ca „Film.srt” să nu-i
+    // ia numele .en.
     const ordered = [...read].sort(
       (a, b) => Number(b.file.name === targetSrtRelPath) - Number(a.file.name === targetSrtRelPath),
     );
@@ -232,16 +210,12 @@ export async function processMediaFile(
     }
   }
 
-  // Pas 1c — .srt sidecar descărcat anterior de sistem, netrackuit de
-  // qBittorrent (deci invizibil la pasul 1b, chiar și la rulări ulterioare).
-  //
-  // Conținutul lui se verifică întâi: un .srt rămas de la o rulare veche, cu
-  // alt episod înăuntru, nu mai e acceptat doar fiindcă are numele bun —
-  // se pune deoparte (`.ro.srt.respins`, ignorat de Plex) și căutăm din nou.
+  // Pas 1c — un .srt lăsat de o rulare anterioară (neurmărit de qBittorrent):
+  // verificat după conținut — cu alt episod înăuntru, e pus deoparte
+  // (`.ro.srt.respins`) și căutăm din nou.
   const sidecarAbsPath = join(savePath, targetSrtRelPath);
-  // Un „.ro.srt" al torrentului care nu e român și n-a plecat de pe cale nici
-  // după mutarea prin qBittorrent (eșuată sau prea lentă): nu-l mutăm și nu
-  // scriem peste el pe disc, pe la spatele lui qBittorrent.
+  // Un „.ro.srt” străin al torrentului, rămas pe cale: nu scriem peste el pe
+  // la spatele lui qBittorrent.
   if (ownSrtFiles.some((f) => f.name === targetSrtRelPath) && (await fileExists(sidecarAbsPath))) {
     return {
       outcome: "no_subtitle_found",
@@ -257,8 +231,7 @@ export async function processMediaFile(
     const check = sidecarBuf ? await verify(decodeToUtf8Text(sidecarBuf).text) : null;
     const reason = check?.reason ?? null;
     if (!reason) {
-      // Deja bine sincronizată (aproximativă era doar după nume) — nimic de
-      // îmbunătățit.
+      // Deja bine sincronizată — nimic de îmbunătățit.
       if (!upgradeApproximate || (check?.sync && isWellSynced(check.sync))) {
         const { outcome, detail } = await handleSidecarSrt(sidecarAbsPath);
         return { outcome, detail };
@@ -271,8 +244,7 @@ export async function processMediaFile(
       movedAside = check?.short ?? reason;
     }
   }
-  // Rezultatul când căutarea unei variante mai bune nu găsește nimic: .srt-ul
-  // existent rămâne, iar starea din DB nu se schimbă (srt_already_ok).
+  // Fără variantă mai bună: .srt-ul rămâne, starea nu se schimbă.
   const keepExisting = (why: string): ProcessMediaFileResult => ({
     outcome: "srt_already_ok",
     detail: `subtitrarea aproximativă existentă rămâne — ${why}`,
@@ -281,8 +253,8 @@ export async function processMediaFile(
     rejectedSidecar ? `${rejectedSidecar}; ${detail}` : detail;
   const rejected: RejectedVariant[] = [];
 
-  // Pas 2 — nicio subtitrare deloc: caută pe cele două surse externe și
-  // ordonează variantele după cât de apropiate sunt de fișierul țintă.
+  // Pas 2 — nicio subtitrare: căutăm pe ambele surse și ordonăm variantele
+  // după apropierea de fișier.
   const osCandidates = await getOsCandidates();
   const ranked = await rankSubtitleCandidates(
     searchTargetName,
@@ -290,10 +262,9 @@ export async function processMediaFile(
     osCandidates,
     getSubsRoCandidates,
   );
-  // La înlocuirea uneia aproximative: de pe subs.ro toate (gratuite), de pe
-  // OpenSubtitles doar cele cu numele release-ului identic cu fișierul —
-  // altfel fiecare titlu aproximativ ar consuma zilnic până la 3 descărcări
-  // din limita contului, pentru variante care probabil nu sunt mai bune.
+  // La înlocuirea uneia aproximative: subs.ro toate (gratuite), OpenSubtitles
+  // doar cele cu release identic — altfel fiecare titlu ar consuma zilnic din
+  // limita contului.
   const candidates = upgrading
     ? ranked.filter(
         (c) => c.source === "subsro" || (c.maxCriteria > 0 && c.matchedCriteria === c.maxCriteria),
@@ -310,16 +281,11 @@ export async function processMediaFile(
     };
   }
 
-  // Pas 4 — alege și scrie o variantă. Una respinsă (altă limbă, alt
-  // episod) sau nedescărcabilă nu oprește căutarea: se trece la următoarea.
-  //
-  // Când fișierul are o subtitrare încorporată de comparat, alegerea se face
-  // după sincronizarea măsurată, nu după numele release-ului: se compară
-  // variantele în ordine și câștigă cea mai bine sincronizată, cu oprire la
-  // prima practic perfectă (fiecare variantă OpenSubtitles consumă o
-  // descărcare). The Invite primise după nume o variantă BluRay decalată cu
-  // ~3 s, deși subs.ro avea una WEB-DL fără decalaj. Fără subtitrare de
-  // comparat rămâne prima variantă care trece verificarea.
+  // Pas 4 — alege și scrie. O variantă respinsă sau nedescărcabilă trece la
+  // următoarea. Cu o subtitrare încorporată de comparat, câștigă cea mai bine
+  // sincronizată (oprire la prima practic perfectă — fiecare variantă
+  // OpenSubtitles costă o descărcare), nu cea cu numele cel mai apropiat (The
+  // Invite primise o variantă decalată cu ~3 s). Fără ea, prima care trece.
   const destPath = join(savePath, mediaDir === "." ? "" : mediaDir, `${mediaBaseName}.ro.srt`);
   const failures: string[] = [];
   let allDownloadsFailed = true;
@@ -344,8 +310,7 @@ export async function processMediaFile(
     allDownloadsFailed = false;
     const check = await verify(fetched.text);
     if (check.reason) {
-      // console.log, nu warn: o variantă respinsă e un rezultat obișnuit
-      // (apare în jurnal), nu o eroare — warn/error ajung în „Erori aplicație".
+      // log, nu warn: o variantă respinsă e un rezultat obișnuit, nu o eroare.
       console.log(`[subtitles] ${label} respinsă: ${check.reason}`);
       failures.push(`${label}: respinsă — ${check.reason}`);
       rejected.push({
@@ -366,8 +331,8 @@ export async function processMediaFile(
   }
 
   if (upgrading) {
-    // Mai bună înseamnă: sigură după sincronizare (isConfidentSync), sau, fără
-    // măsurătoare, cu numele release-ului identic cu fișierul.
+    // Mai bună = sigură după sincronizare, sau, fără măsurătoare, cu release
+    // identic.
     const better =
       best &&
       (best.sync

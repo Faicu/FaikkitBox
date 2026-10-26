@@ -1,10 +1,5 @@
-// ---------------------------------------------------------------------------
-// Client Filelist.io — SINGURUL loc care vorbește direct cu api.php/
-// download.php (căutare torrente + descărcarea fișierului .torrent). Orice
-// altă logică legată de o descărcare (upload la qBittorrent, scriere în
-// `media`, notificări, polling) rămâne în download.ts, care consumă doar
-// funcțiile de aici.
-// ---------------------------------------------------------------------------
+// Client Filelist.io — SINGURUL loc care vorbește cu api.php și download.php.
+// Restul descărcării (qBittorrent, `media`, notificări) e în download.ts.
 
 import { createServerFn } from "@tanstack/react-start";
 import type {
@@ -24,11 +19,8 @@ import {
 } from "./categories";
 import { isFullDisc } from "../media/torrent-rank";
 
-// Categoriile Filelist.io pentru fiecare filtru expus în UI — folosit atât de
-// căutarea internă (searchFilelistRaw) cât și de server function-ul public
-// (searchFilelist).
-// Categoriile mixte (RO Dubbed) intră la ambele filtre: căutările pe
-// filme/seriale sunt după IMDb, deci un ID nu poate aduce celălalt tip.
+// Categoriile Filelist pentru fiecare filtru din UI. Cele mixte (RO Dubbed)
+// intră la ambele: căutarea e după IMDb, deci nu aduce celălalt tip.
 function resolveCategoryIds(category: FilelistCategory): readonly number[] {
   return category === "movies"
     ? [...MOVIE_CATEGORIES, ...MIXED_CATEGORIES]
@@ -37,18 +29,11 @@ function resolveCategoryIds(category: FilelistCategory): readonly number[] {
       : ALL_CATEGORIES;
 }
 
-// Disc Blu-ray brut (folder BDMV, nu fișier video) — convenția de nume pe
-// tracker e "Blu-ray.AVC"/"VC-1"/"MPEG-2" (codecul discului, fără encodare),
-// spre deosebire de "BluRay.x264"/"x265"/"REMUX" care sunt fișiere .mkv
-// normale. qBittorrent/Plex nu pot gestiona un disc brut ca pe un film (vezi
-// "Pinocchio: Unstrung" 2026-08-25 — descărcat, dar nefolosibil, a trebuit
-// șters manual). Exclus peste tot, inclusiv din căutarea manuală — un disc
-// brut nu e niciodată o alegere validă în acest proiect.
-// Regula propriu-zisă e în torrent-rank.ts (isFullDisc), comună cu clasamentul.
+// Discurile Blu-ray brute (BDMV) nu sunt fișiere video redabile
+// („Pinocchio: Unstrung”, 25 aug. 2026 — descărcat degeaba), deci sunt excluse
+// peste tot, inclusiv din căutarea manuală. Regula: isFullDisc (torrent-rank.ts).
 
-// Mapează răspunsul brut al API-ului Filelist.io la forma internă
-// FilelistTorrent — folosit atât de căutarea internă cât și de server
-// function-ul public, ca să nu diverge maparea între ele.
+// Răspunsul API → FilelistTorrent, comun tuturor căutărilor.
 function mapApiTorrents(raw: FilelistApiTorrent[]): FilelistTorrent[] {
   return raw
     .map((t) => ({
@@ -98,17 +83,13 @@ async function searchFilelistRaw(
   }
 }
 
-// Ultimele torrente urcate (max 100, limita API-ului, fără paginare) din
-// categoriile date — sursa tabului „Top Filelist" din Descoperă. API-ul nu
-// are un endpoint de top/populare, deci popularitatea se calculează din
-// seederi/leecheri doar peste fereastra asta recentă. Apelantul cere câte o
-// categorie odată: 100 de torrente pe toate categoriile de seriale acoperă
-// ~1 zi, pe Filme 4K singură ~3 săptămâni.
-// Aruncă la eroare, ca apelantul să nu pună în cache o listă goală falsă.
+// Ultimele torrente urcate (max 100, fără paginare) din categoriile date — tabul
+// „Top Filelist” din Descoperă. API-ul n-are „populare”, deci popularitatea vine
+// din seederi/leecheri pe fereastra asta: ~1 zi pe seriale, ~3 săptămâni pe
+// Filme 4K. Aruncă la eroare, ca apelantul să nu pună în cache o listă falsă.
 export interface LatestTorrentsBatch {
   torrents: FilelistTorrent[];
-  // API-ul a dat plafonul de 100: mai vechi de `oldestUpload` există torrente
-  // pe care nu le vedem. Sub plafon, lotul e tot ce există în categorie.
+  // Plafonul de 100 atins: mai vechi de `oldestUpload` există torrente nevăzute.
   capped: boolean;
   oldestUpload: string | null;
 }
@@ -136,8 +117,7 @@ export async function fetchLatestTorrents(
   const raw: unknown = await res.json();
   if (!Array.isArray(raw)) throw new Error("Răspuns neașteptat de la Filelist API");
   const list = raw as FilelistApiTorrent[];
-  // Din lista brută, înainte de filtrarea discurilor Blu-ray: plafonul și
-  // fereastra acoperită țin de ce a dat API-ul, nu de ce păstrăm.
+  // Din lista brută: plafonul ține de ce a dat API-ul, nu de ce păstrăm.
   const dates = list
     .map((t) => String(t.upload_date ?? ""))
     .filter(Boolean)
@@ -211,24 +191,15 @@ export const searchFilelist = createServerFn({ method: "GET" })
   });
 
 // ---------------------------------------------------------------------------
-// Verificare unificată "există pe Filelist?" — folosită de wizard (Acasă) la
-// identificarea unui titlu. Caută STRICT după IMDb id — fallback-ul pe titlu
-// a fost eliminat deliberat (confirmat de suportul Filelist: căutarea pe
-// titlu dă rezultate nesigure). Fără IMDb id, întoarce direct listă goală,
-// fără niciun apel către Filelist. Contul Filelist are o limită orară de
-// cereri — un cache scurt (10 min) evită să repetăm aceleași căutări la
-// apeluri repetate în fereastra respectivă.
+// „Există pe Filelist?” — STRICT după IMDb id (căutarea pe titlu e nesigură,
+// confirmat de suportul Filelist); fără id, listă goală, fără cerere.
 // ---------------------------------------------------------------------------
 
 const filelistCheckCache = new Map<string, { expiresAt: number; result: FilelistSearchResult }>();
 const FILELIST_CHECK_CACHE_TTL = 10 * 60_000;
 
-// Măturare pe timer, nu pe prag de mărime — o bibliotecă mare (mii de
-// titluri distincte verificate o singură dată, ex. tot ce se răsfoiește în
-// Descoperă) putea oscila mereu sub un prag fix (500 chei) și nu declanșa
-// niciodată curățarea, deși intrările expiraseră demult (TTL 10 min). Rulează
-// la fiecare jumătate de TTL — suficient de des ca memoria să nu crească
-// nemărginit, fără să coste o trecere la fiecare citire/scriere din cache.
+// Măturare pe timer, nu pe prag de mărime: o bibliotecă mare putea oscila mereu
+// sub prag, cu intrări expirate de mult.
 function sweepExpiredFilelistCache(): void {
   const now = Date.now();
   for (const [key, entry] of filelistCheckCache) {
@@ -242,18 +213,13 @@ export async function checkFilelistForItemInternal(data: {
   originalTitle: string;
   imdbId?: string | null;
   mediaType: "movie" | "tv";
-  // Citește din cache-ul de 10 minute. Doar wizard-ul îl cere: acolo un om
-  // răsfoiește și redeschide aceleași titluri, iar cache-ul cruță limita
-  // orară a contului Filelist. Urmărirea (seriale și filme, automată sau
-  // „Verifică acum") întreabă mereu Filelist direct — un răspuns din cache
-  // acolo ar fi o minciună, nu o optimizare: ar raporta „nimic nou" pe baza
-  // unei căutări vechi. Scrierea în cache se face oricum, ca wizard-ul să
-  // profite de rezultatul proaspăt.
+  // Cache-ul de 10 minute e doar al wizard-ului (cruță limita orară a contului).
+  // Urmărirea întreabă mereu direct — un răspuns din cache acolo ar raporta
+  // „nimic nou” pe baza unei căutări vechi. Scrierea în cache se face oricum.
   useCache?: boolean;
-  // Include torrentele RO Dubbed. Doar wizard-ul le cere — acolo alege un om.
-  // Urmărirea le ignoră: ar putea descărca singură o variantă doar dublată.
-  // Cererea către Filelist și cache-ul le conțin mereu (o singură intrare
-  // per titlu, comună wizard-ului și urmăririi); filtrarea se face la ieșire.
+  // RO Dubbed doar în wizard, unde alege un om — urmărirea ar putea descărca
+  // singură o variantă doar dublată. Cache-ul le conține mereu; se filtrează
+  // la ieșire.
   includeDubbed?: boolean;
 }): Promise<FilelistSearchResult> {
   const username = process.env.FILELIST_USERNAME;
@@ -301,8 +267,7 @@ export async function checkFilelistForItemInternal(data: {
   }
 }
 
-// Descarcă bytes-ii fișierului .torrent de la Filelist — Filelist API nu are
-// endpoint dedicat de download, se folosește direct download.php cu passkey.
+// Fișierul .torrent, prin download.php cu passkey (API-ul n-are endpoint).
 export async function downloadTorrentFile(torrentId: number): Promise<ArrayBuffer> {
   const passkey = process.env.FILELIST_PASSKEY;
   if (!passkey) throw new Error("FILELIST_PASSKEY nu este configurat");

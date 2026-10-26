@@ -1,26 +1,15 @@
 // ---------------------------------------------------------------------------
-// Reîncercarea zilnică a subtitrărilor care lipsesc.
-//
-// Subtitrarea se caută o singură dată, la finalul descărcării — exact când e
-// cel mai puțin probabil să existe: episoadele noi apar pe Filelist în aceeași
-// zi, iar traducerile românești vin abia peste una-trei zile (MobLand S02E04,
-// S.W.A.T. Exiles S01E02–E03, 9 oct. 2026). Până acum, singura cale de a o
-// lua mai târziu era „Corectează subtitrare", apăsat de mână.
-//
-// Regula: o dată pe zi, timp de 14 zile de la finalizarea descărcării, pentru
-// orice torrent fără subtitrare română (nici încorporată, nici .srt, nici
-// audio în română) — și pentru cele cu o subtitrare „aproximativă": la
-// episoadele noi apare des întâi varianta pentru alt release, iar cea exactă
-// abia peste una-două zile. Aproximativa se înlocuiește doar cu una sigur mai
-// bună (processMediaFile, `upgradeApproximate`), altfel rămâne. Ceasul e `subtitle_checked_at` din DB, nu un timer în
-// memorie — un deploy nu-l resetează. Jurnalul și push-ul apar doar când s-a
-// găsit ceva (checkSubtitleForTorrent cu `logRun: "corrected"`).
+// Reîncercarea zilnică a subtitrărilor. Prima căutare, la finalul descărcării,
+// vine exact când e cel mai puțin probabil să existe ceva: traducerile vin
+// peste una-trei zile. Așa că o dată pe zi, 14 zile, pentru torrentele fără
+// subtitrare română — și pentru cele cu una „aproximativă” (varianta exactă
+// apare des după una-două zile), înlocuită doar cu una sigur mai bună.
+// Ceasul e `subtitle_checked_at`; jurnal și push doar când găsește ceva.
 // ---------------------------------------------------------------------------
 
 import { getDb } from "../db";
 import { SUBTITLE_RETRY_DAYS as RETRY_DAYS } from "./subtitle-outcomes";
-// 23h, nu 24h: cu verificare din oră în oră, pauza reală e pragul plus cel
-// mult o oră.
+// 23h, nu 24h: cu tact orar, pauza reală e pragul plus cel mult o oră.
 const RETRY_MIN_AGE_HOURS = 23;
 
 interface DueTorrent {
@@ -32,10 +21,8 @@ interface DueTorrent {
   approximate: number;
 }
 
-// Un pachet de sezon are câte un rând per episod, cu același hash — deci
-// GROUP BY. Fiecare episod își are starea lui (updateMediaSubtitleStatus),
-// așa că pachetul se reia cât timp măcar un episod e fără subtitrare (MIN),
-// nu doar când niciunul n-are (MAX).
+// GROUP BY: un pachet are un rând per episod. Se reia cât măcar un episod e
+// fără subtitrare (MIN), nu doar când niciunul n-are.
 export function listTorrentsDueForSubtitleRetry(): DueTorrent[] {
   return getDb()
     .prepare(
@@ -55,9 +42,8 @@ export function listTorrentsDueForSubtitleRetry(): DueTorrent[] {
     .all(`-${RETRY_DAYS} days`, `-${RETRY_MIN_AGE_HOURS} hours`) as unknown as DueTorrent[];
 }
 
-// Episoadele unui pachet cu subtitrare aproximativă ("S01E02"). Goală când
-// singurul rând marcat e cel al pachetului, încă fără episod (Plex nu l-a
-// indexat): atunci nu știm care episod e — se reverifică toate.
+// Episoadele aproximative ale unui pachet („S01E02”). Goală când e marcat doar
+// rândul pachetului (neindexat) — se reverifică toate.
 export function approximateEpisodeKeys(torrentHash: string): ReadonlySet<string> | undefined {
   const rows = getDb()
     .prepare(
@@ -69,8 +55,7 @@ export function approximateEpisodeKeys(torrentHash: string): ReadonlySet<string>
   return rows.length ? new Set(rows.map((r) => r.k)) : undefined;
 }
 
-// Întoarce câte titluri au fost scadente și câte au primit subtitrare —
-// rezumatul rulării, afișat în Watcher.
+// Câte titluri au fost scadente și câte au primit subtitrare.
 export async function retryMissingSubtitles(): Promise<{ checked: number; found: number }> {
   const due = listTorrentsDueForSubtitleRetry();
   if (due.length === 0) return { checked: 0, found: 0 };
@@ -109,7 +94,7 @@ export async function retryMissingSubtitles(): Promise<{ checked: number; found:
 }
 
 // ---------------------------------------------------------------------------
-// Starea, pentru Tehnic → Watcher și pentru drawer-ul din Bibliotecă.
+// Starea, pentru Watcher și pentru drawer-ul din Bibliotecă.
 // ---------------------------------------------------------------------------
 
 export interface SubtitleRetryTitle {
@@ -117,11 +102,9 @@ export interface SubtitleRetryTitle {
   // „Imperiul Mafiei S02E04", „The Rookie S08 (pachet)" sau titlul filmului.
   title: string;
   torrentName: string | null;
-  // missing = fără subtitrare română; approximate = are una aproximativă,
-  // care se înlocuiește dacă apare una sigur mai bună.
+  // missing = fără subtitrare; approximate = cu una de înlocuit.
   kind: "missing" | "approximate";
-  // La un torrent cu mai multe episoade: cele cu subtitrare aproximativă
-  // ("E02", "E03"…), ca titlul să nu numească un episod anume.
+  // La mai multe episoade: cele aproximative („E02”, „E03”).
   approximateEpisodes: string[];
   // Datele în formatul SQLite, UTC.
   completedAt: string;
@@ -132,8 +115,7 @@ export interface SubtitleRetryTitle {
 export interface SubtitleRetryStatus {
   // În fereastra de 14 zile, căutate zilnic.
   searching: SubtitleRetryTitle[];
-  // Tot fără subtitrare, dar fereastra s-a încheiat în ultimele 30 de zile —
-  // de-acum doar „Corectează subtitrare".
+  // Fereastra s-a încheiat în ultimele 30 de zile — doar „Corectează”.
   ended: SubtitleRetryTitle[];
   // Subtitrări găsite de reîncercare, din jurnal (ultimele 10).
   found: Array<{ id: string; timestamp: string; message: string }>;
@@ -144,11 +126,9 @@ const ENDED_SHOWN_DAYS = 30;
 export function getSubtitleRetryStatus(): SubtitleRetryStatus {
   const db = getDb();
 
-  // Un rând per torrent (un pachet are câte un rând per episod; „missing"
-  // cât timp măcar unul e fără subtitrare). Titlul afișat: serialul
-  // (rândul-părinte, în română) + episodul. Un pachet rezolvat în episoade
-  // nu mai are is_season_pack pe niciun rând — îl recunoaștem după numărul
-  // de episoade (Euphoria S01 apărea „S01E01", după MIN(episode)).
+  // Un rând per torrent. Titlul: serialul (în română) + episodul. Un pachet
+  // desfăcut se recunoaște după numărul de episoade (Euphoria S01 apărea
+  // „S01E01”).
   const rows = db
     .prepare(
       `SELECT MIN(m.id) AS mediaId, MIN(m.torrent_name) AS torrentName,
@@ -217,8 +197,7 @@ export function getSubtitleRetryStatus(): SubtitleRetryStatus {
 
   return {
     searching: rows.filter((r) => r.until > now).map(toItem),
-    // Aproximativele ieșite din fereastră au totuși subtitrare — nu le
-    // trecem la „fără subtitrare".
+    // Aproximativele expirate au totuși subtitrare.
     ended: rows
       .filter((r) => r.until <= now && !r.hasRo)
       .map(toItem)

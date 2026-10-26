@@ -1,17 +1,7 @@
-// ---------------------------------------------------------------------------
-// Server functions pentru descărcare/subtitrări, separate de download.ts.
-//
-// download.ts avertiza deja în comentariul lui de sus că "orice import static
-// de aici se poate scurge în bundle-ul browserului" — și chiar așa se
-// întâmpla. Barrel-ul filelist.functions.ts re-exporta download.ts, iar
-// componente client (AddMediaWizard, TitleDetailDrawer, use-download) importau
-// din barrel, trăgând tot graful server în bundle-ul public: qbit-client,
-// filelist-client, log, media, activity-log, notifications și, prin ele,
-// db.ts cu schema SQLite completă — servit cu 200 către orice browser.
-//
-// Corpul unui handler de server function e eliminat din bundle-ul de client,
-// deci importurile dinamice de aici rămân exclusiv pe server.
-// ---------------------------------------------------------------------------
+// Server functions pentru descărcare și subtitrări, separate de download.ts:
+// re-exportat printr-un barrel importat de componente client, download.ts trăgea
+// tot graful server (db.ts cu schema) în bundle-ul public. Importurile din
+// handlere sunt dinamice, deci rămân pe server.
 
 import { createServerFn } from "@tanstack/react-start";
 

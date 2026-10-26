@@ -1,24 +1,11 @@
 // ---------------------------------------------------------------------------
-// Asigură subtitrare română corectă la finalul unei descărcări Filelist (film
-// sau, pentru pachete de episoade, fiecare episod din torrent — vezi
-// processSeasonPack). Apelat din finalizeDownload (download.ts) și din
-// corectSubtitleForMedia (corecție punctuală per titlu), înainte de
-// refreshPlexLibrary.
+// Subtitrarea română la finalul unei descărcări (film, sau fiecare episod
+// dintr-un pachet) și la „Corectează subtitrare”, înainte de refresh-ul Plex.
+// Aici doar orchestrarea; pașii per fișier sunt în subtitle-pipeline.ts:
+// verificări (subtitle-checks), surse (subtitle-sources: OpenSubtitles,
+// subs.ro), codare (subtitle-encoding), scriere (subtitle-apply).
 //
-// Fișierul ăsta e doar orchestrare (film vs. pachet, agregare rezultate,
-// logging) — logica per fișier media (cei 4 pași, aplicați identic la film
-// și la fiecare episod dintr-un pachet) trăiește în subtitle-pipeline.ts:
-//  1. subtitle-checks.ts    — are deja subtitrare/audio română? .srt existent
-//     pare română?
-//  2. subtitle-sources.ts   — alege cea mai bună subtitrare dintre
-//     OpenSubtitles și subs.ro (clienții HTTP: opensubtitles-client.ts,
-//     subsro-client.ts).
-//  3. subtitle-encoding.ts  — decodare/conversie UTF-8, I/O cu retry.
-//  4. subtitle-apply.ts     — redenumire prin API qBittorrent, scriere pe
-//     disc a subtitrării alese.
-//
-// Orice eroare aici e prinsă și logată — nu trebuie să blocheze niciodată
-// refresh-ul Plex care urmează.
+// Orice eroare e prinsă — nu trebuie să blocheze refresh-ul Plex.
 // ---------------------------------------------------------------------------
 
 import { readdir, unlink } from "node:fs/promises";
@@ -86,51 +73,38 @@ interface EnsureRomanianSubtitleParams {
   torrentHash: string;
   torrentName: string;
   imdbId?: string | null;
-  // Ajută căutarea TMDB de rezervă (când imdbId lipsește) să aleagă corect
-  // între /search/movie și /search/tv. Fără el, se încearcă ambele.
+  // Ajută căutarea TMDB de rezervă (fără imdbId) să aleagă film sau serial.
   mediaType?: "movie" | "tv";
-  // Caută o variantă mai bună pentru o subtitrare „aproximativă" deja pusă
-  // (vezi processMediaFile, subtitle-retry.ts).
+  // Caută o variantă mai bună pentru o subtitrare „aproximativă” deja pusă.
   upgradeApproximate?: boolean;
-  // La un pachet: episoadele cu subtitrare aproximativă (ex. "S01E02"), doar
-  // ele se reverifică pentru o variantă mai bună — cele exacte rămân, fără
-  // să consume din limita OpenSubtitles. Lipsă = toate episoadele.
+  // La un pachet: doar episoadele aproximative se reverifică — cele exacte nu
+  // consumă din limita OpenSubtitles. Lipsă = toate.
   approximateEpisodes?: ReadonlySet<string>;
 }
 
-// Rezultatul unei singure verificări/corectări — nu mai loghează nimic
-// direct, doar întoarce ce s-a întâmplat. Logarea (o singură intrare per
-// rulare, fie o descărcare, fie un backfill întreg) se face în logSubtitleRun.
+// Rezultatul unei verificări — fără logare; logSubtitleRun scrie o singură
+// intrare per rulare.
 export interface SubtitleRunItem {
   torrentName: string;
-  // Titlul filmului/serialului (via TMDB, pornind de la IMDb id) — folosit
-  // pentru afișare în jurnal/push, în loc de numele tehnic al lansării
-  // (ex. "The.Death.of.Robin.Hood.2026.1080p.AMZN.WEB-DL..."). Cade pe
-  // torrentName când nu avem IMDb id sau căutarea TMDB eșuează.
+  // Titlul (TMDB, din IMDb id) pentru jurnal și push, în locul numelui tehnic
+  // al lansării; altfel torrentName.
   displayTitle: string;
   outcome: SubtitleOutcome;
   detail: string;
   release?: string;
   path?: string;
-  // Câte din criteriile aplicabile (rezoluție/mod obținere/platformă/codec/
-  // grup) s-au potrivit, din câte erau identificabile în numele fișierului
-  // țintă — prezent doar când s-a descărcat efectiv o subtitrare (nu la
-  // rezultate gen "deja are subtitrare" unde nu s-a făcut nicio scorare).
+  // Câte criterii (rezoluție, sursă, platformă, codec, grup) s-au potrivit din
+  // cele identificabile — doar când s-a descărcat o subtitrare.
   matchedCriteria?: number;
   maxCriteria?: number;
-  // Sursa externă (OpenSubtitles / subs.ro) de unde a venit subtitrarea —
-  // prezentă doar la outcome-urile de descărcare.
+  // De unde a venit subtitrarea — doar la descărcări.
   source?: SubtitleSource;
-  // Sincronizarea măsurată a subtitrării descărcate, când fișierul avea o
-  // subtitrare încorporată de comparat.
+  // Sincronizarea măsurată față de subtitrarea încorporată, când există.
   sync?: SubtitleSync;
-  // Jurnalul structurat: un raport per fișier media (un film, sau fiecare
-  // episod dintr-un pachet) și variantele respinse. Lipsesc la rezultatele
-  // de dinainte de a ajunge la vreun fișier (ex. torrent negăsit).
+  // Jurnalul structurat: un raport per fișier și variantele respinse.
   files?: SubtitleFileReport[];
   rejected?: SubtitleRejectionReport[];
-  // La un pachet: detaliul fiecărui episod („S01E07" → text), scris pe
-  // rândul episodului în `media` — `detail` e agregatul pentru jurnal.
+  // La un pachet: detaliul fiecărui episod, scris pe rândul lui în `media`.
   episodeDetails?: Record<string, string>;
 }
 
@@ -160,15 +134,12 @@ export async function ensureRomanianSubtitle(
   const { qbitUrl, qbitUser, qbitPass, torrentHash, torrentName } = params;
 
   const [files, savePath, imdbLookup] = await Promise.all([
-    // Eroare la listare (ex. hash care nu mai există în qBittorrent — torrent
-    // șters manual chiar înainte de un backfill) nu trebuie să arunce
-    // necapturat; tratăm la fel ca o listă goală, mai jos (no_media_file).
+    // O eroare la listare (torrent șters manual) se tratează ca listă goală.
     qbitListFiles(qbitUrl, torrentHash, qbitUser, qbitPass).catch(() => []),
     getTorrentSavePath(qbitUrl, torrentHash, qbitUser, qbitPass),
-    // Dacă avem deja IMDb id (torrent descărcat prin site), luăm doar
-    // titlul. Dacă nu (torrent adăugat manual în qBittorrent), încercăm să
-    // găsim IMDb id-ul căutând titlul extras din numele lansării pe TMDB —
-    // altfel n-am avea cum să căutăm subtitrarea pe OpenSubtitles.
+    // Fără IMDb id (torrent adăugat direct în qBittorrent) îl căutăm pe TMDB
+    // după titlul din numele lansării — altfel n-am avea cum căuta pe
+    // OpenSubtitles.
     params.imdbId
       ? lookupTitleByImdbId(params.imdbId).then((title) => ({ imdbId: params.imdbId!, title }))
       : searchImdbIdByReleaseName(torrentName, params.mediaType),
@@ -184,10 +155,8 @@ export async function ensureRomanianSubtitle(
     );
   }
 
-  // Un fișier din torrent poate avea prioritate 0 ("nu descărca") — apare în
-  // listă, dar nu există fizic pe disc, deși torrentul e altfel complet.
-  // Ignorăm complet astfel de fișiere, altfel un .srt "fantomă" ar da eroare
-  // la citire (ENOENT) sau ar fi asociat greșit cu media descărcată.
+  // Fișierele cu prioritate 0 („nu descărca”) apar în listă, dar nu există pe
+  // disc — un .srt „fantomă” ar da ENOENT sau s-ar asocia greșit.
   const downloadedFiles = files.filter((f) => Number(f.progress ?? 0) >= 1);
 
   const mediaFiles = downloadedFiles.filter((f) =>
@@ -201,8 +170,7 @@ export async function ensureRomanianSubtitle(
       "niciun fișier media recunoscut în torrent",
     );
   }
-  // Torrent cu mai multe episoade ("season pack") — procesat separat, per
-  // episod (fiecare fișier media asociat cu subtitrarea lui după SxxExx).
+  // Pachet de episoade: fiecare episod cu subtitrarea lui, după SxxEyy.
   if (mediaFiles.length > 1) {
     return processSeasonPack({
       mediaFiles,
@@ -233,12 +201,9 @@ export async function ensureRomanianSubtitle(
 
   const matchingSrtFiles = downloadedFiles.filter((f) => f.name.toLowerCase().endsWith(".srt"));
 
-  // Episod individual: episodul vine din numele torrentului, iar fișierul
-  // din el trebuie să fie același (verificat în processMediaFile). Toți
-  // candidații externi trec prin filtrul de episod din resolveBestSubtitle —
-  // S.W.A.T. Exiles S01E02 primise subtitrarea lui S01E01 (2 oct 2026),
-  // MobLand S02E02/E03 pe a lui S02E01. Filmele (fără SxxExx) rămân
-  // nefiltrate.
+  // Episod individual: toți candidații trec prin filtrul de episod
+  // (resolveBestSubtitle) — S.W.A.T. Exiles S01E02 primise subtitrarea lui
+  // S01E01 (2 oct. 2026). Filmele rămân nefiltrate.
   const episode = parseSeasonEpisode(torrentName) ?? parseSeasonEpisode(mediaFile.name);
   const episodeKey = extractEpisodeKey(torrentName);
 
@@ -258,11 +223,9 @@ export async function ensureRomanianSubtitle(
         ? searchEpisodeSubtitles(imdbId, episode.season, episode.episode, "ro")
         : searchSubtitles(imdbId, "ro"),
     getSubsRoCandidates: async () => {
-      // O arhivă subs.ro poate conține mai multe variante (una per
-      // sursă/rezoluție), fiecare tratată ca un candidat separat, scorat la fel.
+      // O arhivă subs.ro poate avea mai multe variante, fiecare un candidat.
       // La un episod, arhivele sezonului lui au întâietate — altfel, la un
-      // serial cu multe sezoane, primele arhive puteau fi toate ale altor
-      // sezoane și episodul rămânea fără subtitrare.
+      // serial cu multe sezoane, primele arhive puteau fi ale altor sezoane.
       const subsRoItems = await searchSubsRo(imdbId);
       const ordered = episode
         ? [
@@ -271,9 +234,8 @@ export async function ensureRomanianSubtitle(
           ]
         : subsRoItems;
       const zipEntries: SubsRoSrtEntry[] = [];
-      // Până la 6 arhive și la filme: cele populare au des mai multe
-      // traduceri (The Invite: SubRip, cptclaudiu, plus una în engleză), iar
-      // cea potrivită release-ului putea fi a patra.
+      // Până la 6 arhive și la filme: cea potrivită release-ului poate fi a
+      // patra (The Invite).
       for (const it of ordered.slice(0, 6)) {
         const zipBuf = await downloadSubsRoZip(it.id);
         if (zipBuf) zipEntries.push(...(await extractSrtEntries(zipBuf)));
@@ -296,11 +258,9 @@ export async function ensureRomanianSubtitle(
 }
 
 // ---------------------------------------------------------------------------
-// Șterge de pe disk subtitrarea(ile) .srt sidecar asociate fișierelor media
-// dintr-un torrent (nume-de-fișier-media + ".srt", indiferent de limbă —
-// ".ro.srt", ".en.srt" etc.), ca utilizatorul să poată forța o re-căutare
-// curată printr-un „Corectează subtitrare" ulterior. Nu atinge subtitrările
-// încorporate în fișierul media (embedded) — doar fișiere .srt separate.
+// Șterge de pe disc .srt-urile separate ale fișierelor din torrent (orice
+// limbă), pentru o re-căutare curată cu „Corectează subtitrare”. Subtitrările
+// încorporate rămân.
 // ---------------------------------------------------------------------------
 
 export type DeleteSubtitleResult =
@@ -360,13 +320,10 @@ export async function deleteRomanianSubtitle(params: {
 }
 
 // ---------------------------------------------------------------------------
-// Pachet de episoade (season pack) — fiecare fișier media procesat separat
-// prin processMediaFile (subtitle-pipeline.ts), asociat cu subtitrarea lui
-// după cheia SxxExx. Rezultatele OpenSubtitles (căutare pe tot sezonul, un
-// singur apel) și subs.ro (căutare + arhive, preluate lazy — doar dacă chiar
-// e nevoie) sunt partajate între toate episoadele din același torrent, nu
-// re-cerute per episod. Agregă totul într-un singur SubtitleRunItem, cu
-// detaliu per episod în `detail`.
+// Pachet de episoade: fiecare fișier prin processMediaFile, asociat după
+// SxxEyy. Căutările OpenSubtitles (un apel pe sezon) și subs.ro sunt comune
+// tuturor episoadelor și făcute doar dacă e nevoie. Rezultatul e un singur
+// SubtitleRunItem, cu detaliu per episod.
 // ---------------------------------------------------------------------------
 
 interface ProcessSeasonPackParams {
@@ -414,9 +371,7 @@ async function processSeasonPack(params: ProcessSeasonPackParams): Promise<Subti
     );
   }
 
-  // OpenSubtitles pentru tot sezonul — un singur apel, dar lazy: doar dacă
-  // vreun episod chiar ajunge la pasul de căutare externă (nu are rost dacă
-  // toate episoadele au deja embedded/tracked/sidecar rezolvate).
+  // Lazy: doar dacă vreun episod ajunge la căutarea externă.
   let osSeasonResults: OpenSubtitlesResult[] | null = null;
   async function getOsSeasonResults(): Promise<OpenSubtitlesResult[]> {
     if (!osSeasonResults)
@@ -424,16 +379,9 @@ async function processSeasonPack(params: ProcessSeasonPackParams): Promise<Subti
     return osSeasonResults;
   }
 
-  // subs.ro — la fel, lazy, doar dacă vreun episod chiar are nevoie (nicio
-  // potrivire "confident" în OpenSubtitles pentru el). Un sezon în
-  // desfășurare apare adesea ca mai multe pachete PARȚIALE, publicate pe
-  // măsură ce ies episoadele (ex. "Episoadele 1-4", apoi separat "Episoadele
-  // 5-8"), toate potrivind același "Sezonul N" din descriere — de asta
-  // descărcăm TOATE pachetele sezonului găsite (până la un plafon generos),
-  // nu doar primele 1-2, altfel am rata episoadele dintr-un pachet mai vechi.
-  // Rezultatele din toate pachetele sunt puse laolaltă și filtrate per
-  // episod mai jos — un episod care nu apare în niciunul rămâne fără
-  // subtitrare de pe subs.ro (raportat explicit, nu blochează restul).
+  // subs.ro, tot lazy. Un sezon în desfășurare apare ca mai multe pachete
+  // parțiale („Episoadele 1-4”, apoi „5-8”), deci le luăm pe TOATE (până la un
+  // plafon) — altfel am rata episoadele din pachetele mai vechi.
   let subsRoEntries: SubsRoSrtEntry[] | null = null;
   async function getSubsRoEntries(): Promise<SubsRoSrtEntry[]> {
     if (subsRoEntries) return subsRoEntries;
@@ -518,9 +466,8 @@ async function processSeasonPack(params: ProcessSeasonPackParams): Promise<Subti
 }
 
 // ---------------------------------------------------------------------------
-// Logging: o singură intrare de activitate per rulare (o descărcare sau un
-// backfill întreg), cu lista per-torrent atașată în meta.items pentru
-// afișarea de detalii la click în UI.
+// O singură intrare de activitate per rulare (descărcare sau backfill), cu
+// detaliile per torrent în meta.items.
 // ---------------------------------------------------------------------------
 
 export type SubtitleRunTrigger = "download" | "backfill";
@@ -528,8 +475,8 @@ export type SubtitleRunTrigger = "download" | "backfill";
 export async function logSubtitleRun(
   items: SubtitleRunItem[],
   trigger: SubtitleRunTrigger,
-  // `via: "retry"` — găsită de reîncercarea zilnică (subtitle-retry.ts);
-  // lista „Găsite" din Tehnic → Watcher se citește după marcajul ăsta.
+  // `via: "retry"` — găsită de reîncercarea zilnică; lista „Găsite” din
+  // Watcher se citește după marcajul ăsta.
   extra?: { via?: "retry" },
 ): Promise<void> {
   if (!items.length) return;
@@ -551,10 +498,8 @@ export async function logSubtitleRun(
         })}`
       : `Backfill subtitrări: ${items.length} verificate — ${corrected} corectate, ${ok} deja ok, ${rest} sărite/eșuate`;
 
-  // La o descărcare unică, dacă n-a fost nevoie de nicio intervenție
-  // (subtitrare deja încorporată sau .srt deja corect) nu trimitem push —
-  // rămâne vizibil în jurnal, dar nu mai e nimic nou de anunțat. La backfill
-  // trimitem mereu, rezumatul e util indiferent de rezultat.
+  // La o descărcare fără nicio intervenție (subtitrare deja bună) nu trimitem
+  // push — rămâne în jurnal. La backfill, mereu.
   const skipPush = trigger === "download" && OK_OUTCOMES.includes(items[0].outcome);
 
   try {
@@ -584,8 +529,7 @@ export async function logSubtitleRun(
           syncOffset: it.sync?.offset,
           syncGood: it.sync?.good,
         })),
-        // Jurnalul structurat (SubtitleFixDrawer) — plat, legat de itemi
-        // prin `torrent`.
+        // Jurnalul structurat (SubtitleFixDrawer), legat de itemi prin `torrent`.
         files: items.flatMap((it) => (it.files ?? []).map((f) => ({ ...f }))),
         rejected: items.flatMap((it) => (it.rejected ?? []).map((r) => ({ ...r }))),
       },

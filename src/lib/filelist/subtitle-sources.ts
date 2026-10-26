@@ -1,11 +1,6 @@
-// ---------------------------------------------------------------------------
-// Pas 2 — ordonarea subtitrărilor găsite pe cele două surse externe.
-// Clienții propriu-ziși (căutare + descărcare HTTP) rămân separați, în
-// opensubtitles-client.ts și subsro-client.ts — aici doar filtrăm și ordonăm
-// candidații deja obținuți de la ei, folosind scoring-ul comun din
-// release-scoring.ts. Pipeline-ul (subtitle-pipeline.ts) îi încearcă în
-// ordine, până când unul trece verificarea conținutului.
-// ---------------------------------------------------------------------------
+// Pasul 2 — ordonarea candidaților de pe cele două surse (clienții HTTP sunt
+// separați), cu scorul din release-scoring.ts. Pipeline-ul îi încearcă în
+// ordine până trece unul verificarea conținutului.
 
 import { createHash } from "node:crypto";
 import { downloadSubtitle, type OpenSubtitlesResult } from "./opensubtitles-client";
@@ -24,25 +19,15 @@ export interface SubtitleCandidate {
   confident: boolean;
 }
 
-// Câte variante de pe OpenSubtitles încercăm cel mult pentru un fișier:
-// fiecare consumă o descărcare din limita zilnică a contului (20), iar una
-// respinsă la verificare e o descărcare pierdută. Variantele subs.ro nu
-// costă nimic în plus — arhivele sunt deja descărcate când ajungem aici —
-// deci se încearcă toate.
+// Variante OpenSubtitles încercate cel mult: fiecare consumă o descărcare din
+// cele 20 pe zi. Cele subs.ro sunt deja descărcate, deci se încearcă toate.
 const MAX_OS_ATTEMPTS = 3;
 
-// Pentru un episod (`episodeKey` nenul) rămân doar candidații care sunt
-// sigur ai lui — filtrul stă aici, nu la apelanți, ca să nu existe cale prin
-// care o subtitrare a altui episod să ajungă la scorare (MobLand S02E02/E03
-// primiseră subtitrarea lui E01, vezi subtitle-verify.ts). Filmele
-// (`episodeKey` null) rămân nefiltrate.
-//
-// Ordinea: scorul release-ului față de fișier, iar la scor egal subs.ro
-// înaintea OpenSubtitles (decizia userului, 9 oct. 2026): acolo traduc
-// traducători români, iar pe OpenSubtitles apar și traduceri automate
-// nemarcate ca AI — MobLand S02E03 de la ss_valis avea exact replicile și
-// timpii englezei din fișier și notele muzicale netraduse, deși subs.ro avea
-// traducerea SubRip pentru același release.
+// La un episod rămân doar candidații sigur ai lui — filtrul e aici, ca nicio
+// cale să nu ducă subtitrarea altui episod la scorare. Filmele, nefiltrate.
+// La scor egal, subs.ro înaintea OpenSubtitles (decizia userului, 9 oct.
+// 2026): traducători români, pe când OpenSubtitles are și traduceri automate
+// nemarcate (MobLand S02E03).
 export async function rankSubtitleCandidates(
   targetName: string,
   episodeKey: string | null,
@@ -59,20 +44,16 @@ export async function rankSubtitleCandidates(
     targetName,
   ).slice(0, MAX_OS_ATTEMPTS);
 
-  // Doar fișierele chiar în română: pe subs.ro unii uploaderi (în special
-  // „R.") pun subtitrarea originală în engleză, marcată „en", cu numele exact
-  // al release-ului — deci câștiga scorarea. Așa au primit Fall 2, The
-  // Invite, Teenage Sex… și Mutiny un `.ro.srt` în engleză (audit 9 oct.
-  // 2026). Decidem după conținut, nu după eticheta de limbă: o arhivă poate
-  // avea un fișier în fiecare limbă.
+  // Doar fișierele chiar în română, după conținut: pe subs.ro unii pun
+  // originalul în engleză cu numele exact al release-ului, care câștiga
+  // scorarea (patru titluri cu `.ro.srt` în engleză, audit 9 oct. 2026).
   const subsRoCandidates = (await getSubsRoCandidates()).filter(
     (e) =>
       (!episodeKey || subsRoEntryEpisodeKey(e) === episodeKey) &&
       looksRomanian(decodeToUtf8Text(e.content).text),
   );
-  // Fișierele identice (aceeași traducere copiată în arhivă pentru fiecare
-  // release) contează o singură dată, sub numele cel mai apropiat de fișier —
-  // una respinsă ar fi respinsă la fel și sub alt nume.
+  // Fișierele identice (aceeași traducere sub mai multe release-uri) contează o
+  // dată, sub numele cel mai apropiat.
   const seen = new Set<string>();
   const subsRoRanked = rankByRelease(
     subsRoCandidates,
@@ -118,7 +99,6 @@ export async function rankSubtitleCandidates(
       confident: r.confident,
     })),
   ];
-  // Sortare stabilă: la scor egal rămâne subs.ro înainte, apoi ordinea din
-  // fiecare sursă.
+  // Sortare stabilă: la scor egal, subs.ro înainte.
   return all.sort((a, b) => b.score - a.score);
 }

@@ -1,9 +1,5 @@
-// ---------------------------------------------------------------------------
-// Tip + constante pentru rezultatele ensureRomanianSubtitle (subtitles.ts).
-// Fișier "curat" — fără node:child_process/node:fs/iconv — ca să poată fi
-// importat static și din componente client (SubtitleFixDrawer.tsx), nu doar
-// din subtitles.ts (server-only, dinamic din cauza dependințelor Node).
-// ---------------------------------------------------------------------------
+// Tipuri și constante pentru rezultatele ensureRomanianSubtitle — fără module
+// Node, ca să poată fi importat și din client (SubtitleFixDrawer).
 
 export type SubtitleOutcome =
   | "already_embedded"
@@ -19,15 +15,12 @@ export type SubtitleOutcome =
   | "no_subtitle_found"
   | "download_failed"
   | "no_media_file"
-  // Rezultate agregate pentru un pachet de episoade (season pack) — un
-  // singur SubtitleRunItem per torrent, cu detaliu per episod în `detail`.
+  // Pachet de episoade: un singur item per torrent, cu detaliu per episod.
   | "season_corrected"
   | "season_already_ok"
   | "season_no_subtitle_found";
 
-// Outcome-uri care au schimbat efectiv ceva pe disk — folosite ca să știe
-// dacă trebuie declanșat refresh Plex, și de UI (SubtitleFixDrawer) pentru
-// gruparea "corectate" cu iconiță verde.
+// Au schimbat ceva pe disc — refresh Plex și gruparea „corectate” din UI.
 export const CORRECTED_OUTCOMES: SubtitleOutcome[] = [
   "renamed_srt",
   "reencoded_srt",
@@ -36,10 +29,7 @@ export const CORRECTED_OUTCOMES: SubtitleOutcome[] = [
   "season_corrected",
 ];
 
-// Outcome-uri "nimic de făcut" — subtitrarea era deja corectă. Folosite și
-// pentru a decide când NU trimitem notificare push la o descărcare unică
-// (logSubtitleRun) — utilizatorul nu vrea push când n-a fost nevoie de nicio
-// intervenție.
+// „Nimic de făcut” — fără push la o descărcare unică.
 export const OK_OUTCOMES: SubtitleOutcome[] = [
   "already_embedded",
   "audio_already_romanian",
@@ -49,9 +39,7 @@ export const OK_OUTCOMES: SubtitleOutcome[] = [
 
 export const APPROXIMATE_OUTCOMES: SubtitleOutcome[] = ["downloaded_approximate"];
 
-// Etichetă scurtă per outcome — folosită pentru linia din Jurnal Activități
-// și corpul notificării push la o descărcare unică (rezumatul complet, cu
-// nume de fișiere, rămâne doar în drawer-ul de detalii, nu în mesajul scurt).
+// Eticheta scurtă din jurnal și push (detaliul complet e în drawer).
 export const SHORT_LABELS: Record<SubtitleOutcome, string> = {
   already_embedded: "are deja subtitrare română încorporată",
   audio_already_romanian: "conținut audio deja în română — nu necesită subtitrare",
@@ -71,20 +59,14 @@ export const SHORT_LABELS: Record<SubtitleOutcome, string> = {
   season_no_subtitle_found: "unele episoade fără subtitrare găsită (vezi detalii)",
 };
 
-// Sursa externă de la care a venit subtitrarea descărcată. Outcome-ul nu o
-// mai spune (se numea `downloaded_opensubtitles` de pe vremea când
-// OpenSubtitles era singura sursă — redenumit la migrarea v29) — câmpul ăsta
-// e singurul care o zice.
+// Sursa externă a subtitrării descărcate (outcome-ul nu o mai spune).
 export type SubtitleSource = "opensubtitles" | "subsro";
 
-// Câte zile de la finalizarea descărcării caută zilnic reîncercarea
-// subtitrărilor (subtitle-retry.ts). Aici, nu acolo, ca s-o poată folosi și
-// detaliul din Bibliotecă (plex-browse.ts), importat și din client.
+// Zilele în care reîncercarea caută zilnic; aici, ca s-o vadă și clientul.
 export const SUBTITLE_RETRY_DAYS = 14;
 
-// Sincronizarea măsurată a subtitrării descărcate față de subtitrarea
-// încorporată în fișier (subtitle-verify.ts) — `good` e calculat acolo, aici
-// doar se afișează (fișierul ăsta e importat și din client).
+// Sincronizarea măsurată față de subtitrarea încorporată (calculată în
+// subtitle-verify.ts; aici doar se afișează).
 export interface SubtitleSync {
   score: number;
   offset: number;
@@ -98,12 +80,10 @@ export interface RejectedVariant {
   reason: string;
 }
 
-// Ce s-a întâmplat cu subtitrarea unui fișier media (un film, sau un episod
-// dintr-un pachet), pe câmpuri separate, pentru afișarea structurată din
-// jurnal (SubtitleFixDrawer). În meta-ul jurnalului se salvează „plat" —
-// fără obiecte imbricate — de-asta sincronizarea e desfăcută în trei câmpuri.
+// Ce s-a întâmplat cu subtitrarea unui fișier, pentru jurnalul structurat.
+// Salvat „plat” în meta, de-asta sincronizarea e desfăcută în trei câmpuri.
 export interface SubtitleFileReport {
-  // Numele torrentului din care face parte — legătura cu itemul rulării.
+  // Torrentul din care face parte.
   torrent: string;
   // „S01E03" la episoade, null la filme.
   episode: string | null;
@@ -129,8 +109,7 @@ export interface SubtitleRejectionReport extends RejectedVariant {
   episode: string | null;
 }
 
-// Raportul unui singur fișier (film sau episod), așa cum stă în
-// `media.subtitle_report` și cum îl afișează drawer-ul din Bibliotecă.
+// Raportul unui fișier, din `media.subtitle_report`.
 export interface FileSubtitleReport {
   file: SubtitleFileReport;
   rejected: SubtitleRejectionReport[];
@@ -141,11 +120,8 @@ export const SUBTITLE_SOURCE_LABELS: Record<SubtitleSource, string> = {
   subsro: "subs.ro",
 };
 
-// Eticheta scurtă pentru jurnal/push. Pentru descărcări o compunem din
-// datele rulării — sursa reală (ca să nu contrazică detaliul, care o conține
-// dintotdeauna) și cât de bine s-a potrivit release-ul, informația după care
-// se uită oricine citește notificarea ca să știe dacă merită verificată
-// sincronizarea. Fără ele (înregistrări vechi) rămâne eticheta statică.
+// Eticheta pentru jurnal/push. La descărcări: sursa reală și cât de bine se
+// potrivește — după asta decide cititorul dacă verifică sincronizarea.
 export function shortLabelFor(
   outcome: SubtitleOutcome,
   info?: {
@@ -159,9 +135,8 @@ export function shortLabelFor(
   if (!isDownload) return SHORT_LABELS[outcome];
 
   const sourceNote = info?.source ? ` de pe ${SUBTITLE_SOURCE_LABELS[info.source]}` : "";
-  // Cu sincronizarea măsurată, ea spune cât de bună e subtitrarea — nu câte
-  // criterii din nume se potrivesc. The Invite apărea „(1/5)" deși era
-  // sincronizată perfect, doar pentru alt release (2160p) decât fișierul.
+  // Cu sincronizarea măsurată, ea spune cât de bună e subtitrarea — The Invite
+  // apărea „(1/5)” deși era perfect sincronizată.
   if (info?.sync) {
     return info.sync.good
       ? `subtitrare descărcată${sourceNote} (sincronizare verificată)`
@@ -178,8 +153,7 @@ export function shortLabelFor(
     : `subtitrare aproximativă descărcată${sourceNote}${matchNote} — verifică sincronizarea`;
 }
 
-// Eticheta afișată pentru `media.subtitle_source` (Bibliotecă → detalii
-// tehnice). Valorile din DB sunt slug-uri, nu text pentru ochi.
+// Eticheta pentru `media.subtitle_source` (în DB sunt slug-uri).
 export const SUBTITLE_SOURCE_DISPLAY: Record<string, string> = {
   opensubtitles: "OpenSubtitles",
   subsro: "subs.ro",

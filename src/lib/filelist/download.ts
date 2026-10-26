@@ -10,15 +10,10 @@ import { qbitLogin, qbitEnsureCookie, resetQbitCookie } from "../qbit-client";
 import { CORRECTED_OUTCOMES } from "./subtitle-outcomes";
 import type { SubtitleRunItem, DeleteSubtitleResult } from "./subtitles";
 import { refreshPlexLibrary } from "../plex-refresh";
-// Import dinamic (nu static) — subtitles.ts foloseşte node:child_process/node:util
-// pentru ffprobe, care nu trebuie să ajungă în bundle-ul de client. download.ts
-// e statically importat de filelist.functions.ts, folosit și din componente
-// client, deci orice import static de aici se poate scurge în bundle-ul
-// browserului.
+// subtitles.ts se importă dinamic: folosește node:child_process (ffprobe), care
+// n-are ce căuta în bundle-ul de client.
 
-// Un torrent e considerat complet dacă a ajuns la 100% și starea din
-// qBittorrent indică seeding/pauzat-după-seeding — folosit de sarcina
-// „downloads” a Watcher-ului (download-tracker.ts).
+// Complet = 100% și o stare de seeding (sau oprit după seeding).
 export function isTorrentComplete(progress: number, state: string): boolean {
   return (
     progress >= 1 &&
@@ -26,14 +21,9 @@ export function isTorrentComplete(progress: number, state: string): boolean {
   );
 }
 
-// Calculează infohash-ul unui .torrent local, direct din bytes, fără să
-// întrebe qBittorrent — infohash-ul e definit ca SHA1 peste dicționarul
-// bencode "info" din fișier, deci e determinist și disponibil imediat.
-// Înlocuiește o variantă veche care căuta hash-ul prin lista qBittorrent
-// după nume normalizat, care eșua când numele intern din .torrent diferea
-// de titlul afișat pe Filelist (ex. uploader care redenumește fișierul
-// după listare — "Ok.The.Crown.S02..." în loc de "The.Crown.S02...DTS...",
-// 2026-09-02).
+// Infohash-ul unui .torrent, din bytes (SHA1 peste dicționarul „info”) — fără
+// qBittorrent. Varianta veche căuta hash-ul în qBittorrent după nume și eșua
+// când numele intern diferea de cel de pe Filelist (2 sept. 2026).
 function bencodeStringAt(buf: Buffer, start: number): { value: string; end: number } {
   const colon = buf.indexOf(0x3a, start);
   const len = parseInt(buf.toString("ascii", start, colon), 10);
@@ -88,20 +78,9 @@ function computeTorrentInfoHash(torrentBuffer: ArrayBuffer): string | null {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Background polling: verifică progresul torrentului și refresh Plex la final
-// ---------------------------------------------------------------------------
-
-// Finalizarea unei descărcări ajunse la 100% în qBittorrent: ID-ul IMDb în
-// numele fișierelor, completed_at, notificare, subtitrare română și refresh
-// Plex. Apelată de sarcina „downloads” a Watcher-ului (download-tracker.ts),
-// care observă torrentele terminate dintr-o singură cerere qBittorrent la 10s.
-// Legarea la Plex nu mai e aici: o face tot sarcina, la fiecare tact, pentru
-// titlurile terminate în ultimele 30 de minute — din DB, deci peste restart.
-//
-// Înainte, fiecare torrent avea propria buclă în memorie (30s, până la 48h,
-// plus 30 de minute de reîncercări de legare), pe care un restart o omora;
-// de-aia exista o reluare separată la pornire.
+// Finalizarea unei descărcări ajunse la 100%: ID-ul IMDb în nume, completed_at,
+// notificare, subtitrare română, refresh Plex. Apelată de sarcina „downloads”
+// (download-tracker.ts), care face și legarea la Plex.
 export async function finalizeDownload(t: {
   torrentHash: string;
   torrentName: string;
@@ -114,18 +93,14 @@ export async function finalizeDownload(t: {
   const { torrentHash, torrentName, imdbId, qbitUrl, qbitUser, qbitPass } = t;
   const plexType = t.isMovie ? "movie" : "show";
 
-  // ID-ul IMDb în numele fișierelor, ca Plex să potrivească titlul din prima
-  // (vezi plex-id-hint.ts). Înaintea gărzii de mai jos, nu după: un restart
-  // între cele două lasă completed_at NULL, deci torrentul e prins din nou de
-  // sarcină și pasul nu se poate pierde. E idempotent — a doua oară găsește
-  // fișierele deja redenumite.
+  // ID-ul IMDb în numele fișierelor (plex-id-hint.ts) — înaintea gărzii: un
+  // restart între cele două lasă completed_at NULL, deci pasul se reia
+  // (idempotent).
   const { applyPlexIdHint } = await import("./plex-id-hint");
   await applyPlexIdHint({ qbitUrl, qbitUser, qbitPass, torrentHash });
 
-  // Garda de "cine a ajuns primul aici" stă pe `media`: markMediaCompleted
-  // face UPDATE ... WHERE completed_at IS NULL și întoarce true doar pentru
-  // apelantul care a schimbat efectiv rândul. Pe hash — pentru un pachet de
-  // sezon există zeci de rânduri media, dar o singură finalizare.
+  // Garda atomică pe `media` (markMediaCompleted): o singură finalizare per
+  // hash, oricâte rânduri are pachetul.
   const media = await import("../media/media");
   if (!media.markMediaCompleted(torrentHash)) {
     console.log(`[filelist] "${torrentName}" deja marcat complet — skip`);
@@ -186,15 +161,8 @@ export interface DownloadFilelistParams {
   internal?: boolean;
   imdb?: string | null;
   requestedByUserId?: number | null;
-  // Metadate TMDB — trimise deja gata calculate de wizard/Lansări (au TMDB
-  // details la îndemână la momentul descărcării). Când lipsesc (căutarea
-  // manuală brută din FilelistSection, fără nicio legătură TMDB în UI),
-  // downloadFilelistCore încearcă singur o rezolvare
-  // best-effort (autoResolveManualMedia) — dacă eșuează, titlul pur și
-  // simplu nu ajunge în `media`, exact ca acum. Proveniența torrent-ului
-  // (nume/hash/categorie/mărime/cale) e completată aici, în
-  // downloadFilelistCore, care oricum le are deja calculate — nu e nevoie
-  // ca apelantul să le retrimită.
+  // Metadatele TMDB, gata calculate de wizard/urmărire. Lipsesc la căutarea
+  // manuală pe Filelist — atunci încearcă autoResolveManualMedia.
   media?: Omit<
     import("../media/media").UpsertMediaEntryInput,
     | "torrentName"
@@ -210,13 +178,8 @@ export interface DownloadFilelistParams {
   >;
 }
 
-// Rezolvare best-effort a metadatelor TMDB pentru un torrent descărcat din
-// căutarea manuală Filelist (FilelistSection), care n-are nicio legătură
-// TMDB în UI — spre deosebire de wizard/Lansări, care trimit deja `media`
-// gata calculat. Dacă torrentul are IMDb id (Filelist l-a confirmat) îl
-// folosim direct; altfel încercăm aceeași căutare pe nume ca la potrivirea
-// subtitrărilor. Fără IMDb id găsit, întoarce null — titlul nu ajunge în
-// `media`, exact comportamentul de dinainte (nimic nu se strică).
+// Metadatele TMDB pentru o descărcare din căutarea manuală, best-effort: după
+// IMDb id-ul confirmat de Filelist, altfel după numele lansării. null = fără.
 async function autoResolveManualMedia(
   torrentImdb: string | null | undefined,
   torrentName: string,
@@ -258,12 +221,9 @@ async function autoResolveManualMedia(
   };
 }
 
-// Film sau serial — decide folderul, categoria din qBittorrent, rândul din
-// `media` și biblioteca Plex. Întâi ce a cerut omul (wizard/Lansări/urmărire
-// trimit `media.mediaType`), apoi categoria, dacă e strict de filme sau de
-// seriale. Categoriile mixte (RO Dubbed) din căutarea manuală n-au nici una,
-// nici alta: întrebăm TMDB după IMDb-ul torrentului, iar fără el ne uităm
-// după S01/S01E02 în nume.
+// Film sau serial — decide folderul, categoria qBittorrent, rândul din `media`
+// și biblioteca Plex. Întâi ce a cerut omul, apoi categoria; la categoriile
+// mixte (RO Dubbed) întrebăm TMDB după IMDb, iar fără el căutăm S01/S01E02.
 async function resolveIsMovie(params: DownloadFilelistParams, catId: number): Promise<boolean> {
   if (params.media) return params.media.mediaType === "movie";
   if (isMovieCategory(catId)) return true;
@@ -277,8 +237,7 @@ async function resolveIsMovie(params: DownloadFilelistParams, catId: number): Pr
   return parseSeasonEpisodeFromName(params.torrentName) === null;
 }
 
-// Implementare comună pentru descărcare + upload la qBittorrent, folosită de
-// server function-ul public (downloadFilelist).
+// Descărcarea + trimiterea la qBittorrent, pentru downloadFilelist.
 export async function downloadFilelistCore(
   params: DownloadFilelistParams,
 ): Promise<FilelistDownloadResult> {
@@ -347,10 +306,8 @@ export async function downloadFilelistCore(
       signal: AbortSignal.timeout(30_000),
     });
 
-    // Sesiunea SID poate expira în qBittorrent între timp; un SID expirat
-    // primește tot 403 (nu 401), deci reîncercăm o dată cu login proaspăt.
-    // Alte coduri de eroare (400 body invalid, 500 server) nu se rezolvă
-    // printr-un relogin — le lăsăm să treacă direct la eroarea de mai jos.
+    // Un SID expirat primește tot 403 (nu 401) — reîncercăm o dată cu login
+    // proaspăt. Alte erori nu se rezolvă prin relogin.
     if (uploadRes.status === 401 || uploadRes.status === 403) {
       resetQbitCookie();
       cookie = await qbitLogin(url, qbitUser, qbitPass);
@@ -375,9 +332,8 @@ export async function downloadFilelistCore(
       console.warn("qBit upload răspuns neașteptat:", uploadText);
     }
 
-    // 5-7. Restul (jurnalizare, notificare, scriere media, pornire polling)
-    // rulează în fundal, fără să blocheze răspunsul — clientul n-are nevoie
-    // de hash ca să știe că upload-ul a reușit.
+    // 5–7 rulează în fundal: clientul n-are nevoie de hash ca să știe că
+    // trimiterea a reușit.
     const catName = params.categoryName || CATEGORY_NAMES[catId] || `Cat ${catId}`;
     finishFilelistDownload({
       params,
@@ -395,8 +351,7 @@ export async function downloadFilelistCore(
   }
 }
 
-// Pasul de finalizare (5-7 din downloadFilelistCore) — separat ca să poată
-// rula fără await, imediat după ce upload-ul la qBittorrent a fost confirmat.
+// Pașii 5–7, fără await, după ce qBittorrent a confirmat torrentul.
 async function finishFilelistDownload(ctx: {
   params: DownloadFilelistParams;
   catId: number;
@@ -407,23 +362,17 @@ async function finishFilelistDownload(ctx: {
 }): Promise<void> {
   const { params, catId, catName, savePath, isMovie, torrentHash } = ctx;
 
-  // 6. Scrie în `media` ÎNAINTE de notificare — sursă unică pentru titlu/
-  // poster, ca notificarea (mai jos) să le citească de-acolo, nu să le
-  // recalculeze independent printr-un lookup TMDB live paralel.
+  // 6. `media` ÎNAINTE de notificare — notificarea citește titlul și posterul
+  // de aici, nu printr-un lookup TMDB paralel.
   const mediaPayload =
     params.media ??
     (await autoResolveManualMedia(params.imdb, params.torrentName, isMovie).catch((e) => {
       console.warn("[filelist] Rezolvare automată media eșuată:", e);
       return null;
     }));
-  // Dacă titlul n-a putut fi identificat la TMDB, scriem totuși un rând, cu
-  // numele tehnic al lansării. Rândul `media` e singura urmă a unei
-  // descărcări de când `downloads` a dispărut, iar fără el descărcarea ar fi
-  // de două ori invizibilă: n-ar apărea în Bibliotecă, dar mai ales n-ar
-  // putea fi reluată după un restart (listUnfinishedTorrents citește din
-  // `media`) — deci s-ar termina fără subtitrare, fără notificare și
-  // nelegată la Plex, fără ca nimic să se plângă. Mai bine un titlu urât în
-  // Bibliotecă decât o descărcare fantomă.
+  // Și fără titlu identificat se scrie un rând, cu numele lansării: e singura
+  // urmă a descărcării — fără el n-ar apărea în Bibliotecă și n-ar fi urmărită
+  // până la final (subtitrare, notificare, Plex), fără ca nimic să se plângă.
   const { upsertMediaEntry } = await import("../media/media");
   const parsed = isMovie ? null : parseSeasonEpisodeFromName(params.torrentName);
   const fallbackPayload = {
@@ -450,10 +399,8 @@ async function finishFilelistDownload(ctx: {
       savePath,
       requestedByUserId: params.requestedByUserId ?? null,
     });
-    // Detaliile episodului (nume, descriere, imagine, posterul sezonului)
-    // acum, nu la reîmprospătarea de 12 ore a serialului. Pentru un pachet de
-    // sezon nu e nimic de completat încă — episoadele lui apar abia la
-    // desfacere (resolveSeasonPackPlexLinks), care cheamă același lucru.
+    // Detaliile episodului acum, nu la reîmprospătarea de 12h. Un pachet le
+    // primește la desfacere.
     if (!isMovie) {
       const { getDb } = await import("../db");
       const parent = getDb().prepare("SELECT parent_id FROM media WHERE id = ?").get(mediaId) as
@@ -465,7 +412,7 @@ async function finishFilelistDownload(ctx: {
     console.warn("[filelist] Nu am putut scrie în tabela media:", e);
   }
 
-  // 7. Loghează descărcarea imediat (completedAt null = în curs)
+  // 7. Jurnalul, imediat (completedAt null = în curs)
   import("../notifications/notifications")
     .then(({ buildTorrentAddedNotification }) =>
       buildTorrentAddedNotification({
@@ -490,8 +437,7 @@ async function finishFilelistDownload(ctx: {
             image: n.image,
             url: n.url,
             title: n.title,
-            // Fără hash, fără tag — un tag comun ar face torrente diferite să
-            // se înlocuiască între ele.
+            // Fără hash, fără tag — un tag comun ar înlocui notificări diferite.
             tag: torrentHash ? `torrent-${torrentHash}` : undefined,
           },
         ),
@@ -499,9 +445,7 @@ async function finishFilelistDownload(ctx: {
     )
     .catch(() => {});
 
-  // 8. Urmărirea până la final o face sarcina „downloads” a Watcher-ului,
-  // care citește din `media` torrentele neterminate — rândul scris mai sus
-  // ajunge. Sarcina doarme cât nu e nimic de urmărit, deci o trezim.
+  // 8. Urmărirea până la final e a sarcinii „downloads” — o trezim.
   if (torrentHash) {
     const { pokeWatcher } = await import("../watcher/poke");
     pokeWatcher("downloads");
@@ -510,17 +454,13 @@ async function finishFilelistDownload(ctx: {
   }
 }
 
-// Corectează subtitrarea pentru un singur titlu — folosește exact aceeași
-// logică (ensureRomanianSubtitle) ca descărcarea normală, dar aplicată direct
-// pe hash-ul torrentului cerut, fără să mai listeze/itereze toate torrentele
-// din qBittorrent.
+// Corectează subtitrarea unui singur titlu, cu aceeași logică
+// (ensureRomanianSubtitle), direct pe hash-ul lui.
 export type CorrectSubtitleResult =
   ({ status: "ok" } & SubtitleRunItem) | { status: "error"; error: string };
 
 // ---------------------------------------------------------------------------
-// Echivalentele de mai sus, dar sursate direct din `media` (media.id), nu din
-// `media` — folosite de Bibliotecă. Orice rând `media` cu torrent_hash
-// cunoscut e gestionabil.
+// Variantele pe `media.id`, pentru Bibliotecă.
 // ---------------------------------------------------------------------------
 
 interface MediaActionRow {
@@ -572,12 +512,10 @@ export async function correctSubtitleForMediaCore(
   }
 }
 
-// Verificarea/corectarea subtitrării unui torrent din `media`, cu tot ce urmează
-// după: jurnal, starea din DB, refresh Plex dacă s-a schimbat ceva pe disc.
-// Folosită de „Corectează subtitrare" și de reîncercarea zilnică
-// (subtitle-retry.ts). `logRun: "corrected"` scrie în jurnal (și trimite
-// push) doar când s-a pus efectiv o subtitrare — reîncercarea zilnică nu
-// trebuie să umple jurnalul cu „tot nimic" în fiecare zi.
+// Verificarea/corectarea subtitrării unui torrent, cu jurnal, stare în DB și
+// refresh Plex dacă s-a schimbat ceva. Folosită de „Corectează subtitrare” și
+// de reîncercarea zilnică; `logRun: "corrected"` scrie în jurnal doar când s-a
+// pus efectiv o subtitrare (altfel „tot nimic” zilnic).
 export async function checkSubtitleForTorrent(
   row: {
     torrentName: string | null;

@@ -1,10 +1,6 @@
-// ---------------------------------------------------------------------------
-// Pas 4 — aplicarea deciziei pe disc/torrent: redenumire prin API-ul
-// qBittorrent (nu direct pe disc, altfel qBittorrent pierde evidența
-// fișierului), scrierea unei subtitrări nou descărcate, conversie encoding
-// la nevoie. Fiecare funcție de-aici mută/scrie ceva — deciziile ("ce fișier,
-// ce sursă") se iau în subtitle-pipeline.ts.
-// ---------------------------------------------------------------------------
+// Pasul 4 — aplicarea deciziei: redenumiri prin API-ul qBittorrent (direct pe
+// disc, qBittorrent pierde evidența fișierului), scrierea subtitrării alese,
+// conversia codării. Deciziile se iau în subtitle-pipeline.ts.
 
 import { basename, join } from "node:path";
 import { qbitRenameFile, qbitSetFilePriority, type QbitFileInfo } from "../qbit-client";
@@ -23,9 +19,8 @@ import { fileExists } from "./subtitle-checks";
 import type { SubtitleCandidate } from "./subtitle-sources";
 import { describeSync, isConfidentSync, type SyncMeasure } from "./subtitle-verify";
 
-// Conținutul unei variante din rankSubtitleCandidates, ca text UTF-8 — null
-// dacă descărcarea a eșuat. Nu scrie nimic: pipeline-ul compară întâi mai
-// multe variante (subtitle-pipeline.ts), apoi o scrie pe cea aleasă.
+// O variantă ca text UTF-8 (null la eșec), fără scriere — pipeline-ul compară
+// întâi mai multe.
 export async function fetchCandidateText(
   candidate: SubtitleCandidate,
 ): Promise<{ text: string; wasConverted: boolean } | null> {
@@ -39,9 +34,8 @@ export async function fetchCandidateText(
   return decodeToUtf8Text(content);
 }
 
-// Scrie pe disc varianta aleasă. Cu sincronizarea măsurată (fișierul are o
-// subtitrare încorporată de comparat), ea decide dacă e o potrivire sigură
-// sau „aproximativă" — numele release-ului contează doar fără măsurătoare.
+// Scrie varianta aleasă. Sincronizarea măsurată decide dacă e sigură sau
+// „aproximativă”; numele release-ului contează doar fără măsurătoare.
 export async function writeChosenSubtitle(
   chosen: SubtitleCandidate,
   destPath: string,
@@ -108,9 +102,8 @@ interface TrackedSrtContext {
   savePath: string;
 }
 
-// Redenumește (dacă e cazul, prin API-ul qBittorrent) și verifică/convertește
-// la UTF-8 (dacă e cazul, excluzând fișierul de la seed) un .srt deja
-// urmărit de qBittorrent, asociat cu un anume fișier media.
+// Un .srt urmărit de qBittorrent: redenumit prin API și convertit la UTF-8
+// dacă e nevoie (exclus atunci de la seed).
 export async function handleTrackedSrt(
   current: QbitFileInfo,
   targetSrtRelPath: string,
@@ -170,9 +163,7 @@ export async function handleTrackedSrt(
   return { outcome: needsRename ? "renamed_srt" : "reencoded_srt", detail: parts.join("; ") };
 }
 
-// Verifică/convertește la UTF-8 un .srt extern deja descărcat de sistem
-// (nu urmărit de qBittorrent, deci invizibil pentru handleTrackedSrt) — nu
-// mai caută din nou o subtitrare pentru acest fișier.
+// Un .srt scris anterior de aplicație (neurmărit de qBittorrent): doar codarea.
 export async function handleSidecarSrt(
   sidecarAbsPath: string,
 ): Promise<{ outcome: SubtitleOutcome; detail: string }> {
@@ -185,13 +176,10 @@ export async function handleSidecarSrt(
   };
 }
 
-// Redenumește un .srt urmărit de qBittorrent tot prin API, cu așteptare până
-// dispare de la vechea cale: qBittorrent mută fișierul asincron, uneori după
-// câteva secunde (vezi readFileWithRetry, subtitle-encoding.ts). Fără
-// așteptare, pasul următor îl găsea încă acolo și fie îl redenumea direct pe
-// disc (qBittorrent îi pierdea urma), fie scria peste el subtitrarea nouă,
-// mutată apoi de redenumirea întârziată.
-// false dacă redenumirea a eșuat sau fișierul n-a plecat în timp util.
+// Redenumire prin API, cu așteptare până pleacă fișierul de la vechea cale —
+// qBittorrent mută asincron. Fără așteptare, pasul următor îl redenumea direct
+// pe disc (qBittorrent îi pierdea urma) sau scria peste el. false = eșec sau
+// fișierul n-a plecat la timp.
 export async function moveTrackedSrt(
   relPath: string,
   newRelPath: string,
@@ -222,8 +210,8 @@ export async function moveTrackedSrt(
   return false;
 }
 
-// Un .srt din torrent care nu e nici română, nici engleză: pus deoparte
-// (`.respins`, ignorat de Plex). Se șterge odată cu titlul (disk-cleanup.ts).
+// Un .srt străin, nici român, nici englez: pus deoparte (`.respins`, ignorat de
+// Plex), șters odată cu titlul.
 export function moveAsideTrackedSrt(
   relPath: string,
   ctx: TrackedSrtContext,
@@ -233,8 +221,7 @@ export function moveAsideTrackedSrt(
   return moveTrackedSrt(relPath, `${relPath}.respins`, ctx, attempts, delayMs);
 }
 
-// Un .srt din torrent în engleză primește eticheta „.en", ca Plex să-l arate
-// ca „English" și să nu-l ia drept subtitrarea implicită.
+// Un .srt englez primește „.en”, ca Plex să nu-l ia drept implicit.
 export function tagTrackedSrtEnglish(
   relPath: string,
   mediaBaseName: string,
