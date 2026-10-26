@@ -187,7 +187,7 @@ transversale, fără un singur domeniu clar.
 | `show-watch.ts`                                                                | Urmărirea serialelor — descărcarea automată a episoadelor noi. Declarativă, nu diferențială: TMDB spune ce s-a difuzat (inclusiv episodul lansat azi), `media WHERE parent_id = ?` spune ce avem, diferența e ce se descarcă. Idempotentă, deci se auto-repară după restart și nu poate descărca de două ori. Starea stă în coloanele `auto_download*` / `watch_*` pe rândul `tv_show` din `media`, nu într-o tabelă paralelă — vezi comentariul din fișier pentru ce a mers prost la prima încercare (`pinned_*`, eliminată în v14). După descărcări, poziția de start avansează (`watch-position.ts`); calitatea de rezervă după `fallback-quality.ts`. Tot aici: `refreshShowMetadata` (detaliile serialului + next_episode + airstamp TVmaze) și `syncEpisodeDetails` (nume, descriere, cadru, posterul sezonului — la descărcare și la 12h). | `server/plugins/show-watcher.ts`, `media.functions.ts`, `media.ts`, `filelist/download.ts`.            |
 | `movie-watch.ts`                                                               | Urmărirea filmelor — același principiu, modul separat și mult mai mic (un film e o singură întrebare, „a apărut?"). Două diferențe intenționate: urmărirea unui film se stinge singură la prima descărcare reușită, iar un film urmărit nu e un film deținut — rândul lui din `media` n-are `torrent_hash` și n-are `plex_rating_key`, ceea ce îl face automat invizibil în Bibliotecă, în reconcilierea Plex și în reluarea descărcărilor, fără nicio modificare acolo. Cadență 12h, nu 3h. Calitatea de rezervă, ca la seriale.                                                                                                                                                                                                                                                                                                                 | `server/plugins/show-watcher.ts`, `media.functions.ts`.                                                |
 | `movie-metadata.ts`                                                            | `refreshMovieMetadata` — detaliile filmelor (titlu, original, an, descriere, genuri, poster) cerute în română la 12h, cu engleza ca rezervă; un câmp gol la TMDB nu șterge ce avem. Perechea pentru filme a lui `refreshShowMetadata`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | `server/plugins/show-watcher.ts`.                                                                      |
-| `metadata-report.ts`                                                           | Jurnalul reîmprospătării metadatelor: raportul unei rulări (ce titluri/episoade s-au schimbat, comparat valoare cu valoare, înainte și după), mesajul și intrarea `metadata_refresh`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | `show-watch.ts`, `movie-metadata.ts`, `server/plugins/show-watcher.ts`.                                |
+| `metadata-report.ts`                                                           | Jurnalul reîmprospătării metadatelor: raportul unei rulări (ce titluri/episoade s-au schimbat, comparat valoare cu valoare, înainte și după), mesajul și intrarea `metadata_refresh`, scrisă doar când rularea a adus schimbări reale sau titluri eșuate (`hasMetaNews`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | `show-watch.ts`, `movie-metadata.ts`, `server/plugins/show-watcher.ts`.                                |
 | `aired-episodes.ts`                                                            | Ce episoade consideră urmărirea ca apărute — `airedEpisodeKeys`, cu opțiunea de a include ziua de azi (TMDB dă doar data, iar `aired` al lui e strict „înainte de azi"). Funcție pură.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | `show-watch.ts`.                                                                                       |
 | `watch-position.ts`                                                            | `advancedWatchFrom` — cât avansează poziția de start după descărcările urmăririi: peste episoadele consecutive acoperite, până la ultimul adus, oprindu-se la primul gol. Funcție pură; tot aici, tipul `EpisodeKey`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | `show-watch.ts`, `aired-episodes.ts`.                                                                  |
 | `fallback-quality.ts`                                                          | Regula calității de rezervă: doar-rezervă la o verificare = se notează; se ia la o verificare de peste cel puțin 3h dacă principala tot lipsește. Funcții pure.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | `show-watch.ts`, `movie-watch.ts`.                                                                     |
@@ -476,7 +476,7 @@ funcții numite, fan-in rezolvat prin importurile `@/` și relative, inclusiv
 `import()` dinamic). Tabelul e integral generat — nu are rânduri actualizate
 manual, deci nu poate fi parțial vechi.
 
-**Total: 280 fișiere, ~48 252 linii, ~1 125 funcții**
+**Total: 280 fișiere, ~48 292 linii, ~1 126 funcții**
 
 (numărătoare aproximativă — funcții numite, `const x = (...) =>` și
 `createServerFn`, fără metode de clasă sau funcții anonime inline)
@@ -486,28 +486,28 @@ manual, deci nu poate fi parțial vechi.
 | Zonă                                | Fișiere |  Linii |
 | ----------------------------------- | ------: | -----: |
 | `src/routes/` (pagini)              |      12 |  3 284 |
-| `src/lib/` (rădăcină, transversale) |      19 |  3 967 |
+| `src/lib/` (rădăcină, transversale) |      19 |  3 992 |
 | `src/lib/auth/`                     |      11 |  1 101 |
 | `src/lib/tmdb/`                     |       9 |  1 390 |
-| `src/lib/media/`                    |      32 |  6 958 |
+| `src/lib/media/`                    |      32 |  6 969 |
 | `src/lib/notifications/`            |       3 |    469 |
 | `src/lib/errors/`                   |       7 |    520 |
 | `src/lib/system/`                   |      17 |  1 789 |
 | `src/lib/filelist/`                 |      38 |  6 743 |
 | `src/lib/services/`                 |      20 |  4 997 |
 | `src/lib/tvmaze/`                   |       1 |     46 |
-| `src/components/` (toate)           |      85 | 13 535 |
+| `src/components/` (toate)           |      85 | 13 540 |
 | `src/hooks/`                        |       5 |    325 |
 | `server/plugins/`                   |       2 |     90 |
 | `server/routes/api/`                |       3 |    230 |
-| altele                              |      16 |  2 808 |
+| altele                              |      16 |  2 807 |
 
 ### Fișiere-hub (fan-in mare)
 
 | Fișier                                      | Fan-in | Linii |
 | ------------------------------------------- | -----: | ----: |
 | `src/start.ts`                              |     61 |    26 |
-| `src/lib/db.ts`                             |     51 |  1324 |
+| `src/lib/db.ts`                             |     51 |  1349 |
 | `src/server.ts`                             |     40 |    72 |
 | `src/lib/auth/admin.server.ts`              |     31 |   153 |
 | `src/lib/filelist/log.ts`                   |     30 |   135 |
@@ -523,11 +523,11 @@ manual, deci nu poate fi parțial vechi.
 
 | Fișier                                                        | Linii | Funcții | Fan-in |
 | ------------------------------------------------------------- | ----: | ------: | -----: |
-| `src/lib/db.ts`                                               |  1324 |       6 |     51 |
+| `src/lib/db.ts`                                               |  1349 |       6 |     51 |
 | `src/components/biblioteca/TitleDetailDrawer.tsx`             |  1124 |      13 |      1 |
 | `src/lib/services/plex-browse.ts`                             |  1088 |      12 |      6 |
 | `src/lib/media/media.ts`                                      |  1063 |      24 |     21 |
-| `src/lib/media/show-watch.ts`                                 |  1010 |      17 |     10 |
+| `src/lib/media/show-watch.ts`                                 |  1010 |      17 |     11 |
 | `src/routes/contributii.tsx`                                  |   732 |      10 |      5 |
 | `src/lib/services/plex.ts`                                    |   721 |      16 |     15 |
 | `src/lib/contributions/contributions.functions.ts`            |   690 |      25 |      3 |
@@ -540,14 +540,14 @@ manual, deci nu poate fi parțial vechi.
 | `src/components/principala/PlexWidget.tsx`                    |   507 |      17 |      1 |
 | `src/lib/github.functions.ts`                                 |   493 |      14 |      6 |
 | `src/routes/qbit.tsx`                                         |   486 |       3 |     11 |
-| `src/lib/media/metadata-refresh.test.ts`                      |   482 |       7 |      0 |
+| `src/lib/media/metadata-refresh.test.ts`                      |   485 |       7 |      0 |
 | `src/lib/media/show-watch.test.ts`                            |   471 |      14 |      0 |
+| `src/components/tehnic/WatcherDrawer.tsx`                     |   456 |      10 |      1 |
 | `src/components/principala/wizard/ResultStep.tsx`             |   454 |       6 |      1 |
-| `src/components/tehnic/WatcherDrawer.tsx`                     |   453 |      10 |      1 |
 | `src/components/tehnic/UserDetailDrawer.tsx`                  |   435 |       4 |      1 |
 | `src/lib/filelist/subtitle-pipeline.ts`                       |   412 |       2 |      1 |
-| `src/lib/watcher/tasks.ts`                                    |   408 |       3 |      3 |
-| `src/components/tehnic/watcher-cards.tsx`                     |   407 |      10 |      1 |
+| `src/components/tehnic/watcher-cards.tsx`                     |   409 |      10 |      1 |
+| `src/lib/watcher/tasks.ts`                                    |   407 |       3 |      3 |
 | `src/components/principala/wizard/WizardControls.tsx`         |   403 |       9 |      4 |
 | `src/lib/services/plex-library.ts`                            |   397 |      15 |      6 |
 | `src/components/tehnic/SubtitleFixDrawer.tsx`                 |   396 |      10 |      2 |
@@ -630,6 +630,7 @@ manual, deci nu poate fi parțial vechi.
 | `src/lib/wizard-check.functions.ts`                           |   157 |       1 |      1 |
 | `src/components/principala/wizard/use-wizard-download.ts`     |   156 |       4 |      1 |
 | `src/lib/auth/admin.server.ts`                                |   153 |      10 |     31 |
+| `src/lib/media/metadata-report.ts`                            |   153 |       7 |      4 |
 | `src/components/descopera/FilterTabs.tsx`                     |   151 |       2 |      1 |
 | `src/lib/media/plex-link-reconciler.test.ts`                  |   151 |       2 |      0 |
 | `src/components/principala/wizard/derive-seasons.ts`          |   149 |       1 |      2 |
@@ -637,7 +638,6 @@ manual, deci nu poate fi parțial vechi.
 | `src/lib/media/scheduled-delete.ts`                           |   148 |      10 |      6 |
 | `src/components/biblioteca/QualityChecklist.tsx`              |   146 |       4 |      2 |
 | `src/components/tehnic/CommitDrawer.tsx`                      |   145 |       4 |      2 |
-| `src/lib/media/metadata-report.ts`                            |   145 |       6 |      4 |
 | `src/components/biblioteca/EpisodeList.tsx`                   |   144 |       3 |      1 |
 | `src/components/descopera/SceneViewer.tsx`                    |   144 |       1 |      2 |
 | `src/lib/services/recent-watch-merge.test.ts`                 |   142 |       3 |      0 |

@@ -204,25 +204,25 @@ export const WATCHER_TASKS: WatcherTask[] = [
       // 12h fiecare — nu doar pentru cele urmărite, fiindcă tv_status decide
       // dacă vezi butonul de urmărire. Seriale și filme adună în același
       // raport: o rulare = o intrare în jurnal (vezi metadata-report.ts),
-      // scrisă doar dacă a fost ceva scadent — chiar dacă o jumătate a eșuat.
-      const { newMetaReport, logMetaReport } = await import("../media/metadata-report");
+      // scrisă doar dacă a adus schimbări reale sau a avut titluri eșuate —
+      // chiar dacă o jumătate a eșuat. Rezumatul rulării e același text.
+      const { newMetaReport, logMetaReport, hasMetaNews, buildMetaRefreshMessage } =
+        await import("../media/metadata-report");
       const report = newMetaReport();
-      let shows = 0;
-      let movies = 0;
       await steps(
         [
           [
             "Detalii seriale",
             async () => {
               const { refreshShowMetadata } = await import("../media/show-watch");
-              shows = await refreshShowMetadata(report);
+              await refreshShowMetadata(report);
             },
           ],
           [
             "Detalii filme",
             async () => {
               const { refreshMovieMetadata } = await import("../media/movie-metadata");
-              movies = await refreshMovieMetadata(report);
+              await refreshMovieMetadata(report);
             },
           ],
         ],
@@ -230,10 +230,9 @@ export const WATCHER_TASKS: WatcherTask[] = [
       );
       await logMetaReport(report);
       if (failed.length) throw new Error(`Pași eșuați: ${failed.join(", ")}`);
-      const parts: string[] = [];
-      if (shows) parts.push(plural(shows, "serial împrospătat", "seriale împrospătate"));
-      if (movies) parts.push(plural(movies, "film împrospătat", "filme împrospătate"));
-      return parts.length ? parts.join(" · ") : null;
+      return hasMetaNews(report)
+        ? buildMetaRefreshMessage(report).replace(/^Metadate: /, "")
+        : null;
     },
   },
 

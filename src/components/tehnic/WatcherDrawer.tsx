@@ -370,7 +370,10 @@ function TaskDetails({ task, now: _tick }: { task: WatcherTaskStatus; now: numbe
         </div>
       )}
 
-      <TaskHistory task={task} />
+      {/* La „Seriale și filme”, istoricul e cel al reîmprospătărilor, cu
+          detaliile fiecăreia (ShowWatchCards) — al doilea istoric, cu
+          aceleași rulări, ar fi doar o repetiție. */}
+      {task.id !== "show-watch" && <TaskHistory task={task} />}
 
       {task.id === "show-watch" && <ShowWatchCards />}
       {task.id === "subtitle-retry" && <SubtitleRetryCards />}

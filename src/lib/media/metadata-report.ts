@@ -6,7 +6,10 @@
 // nici ce a adus. Bug-ul din 26 sept. 2026 (serialele urmărite nu mai primeau
 // deloc reîmprospătarea episoadelor) a stat nedescoperit tocmai de-asta.
 //
-// O rulare = o intrare în jurnal, scrisă doar dacă a fost ceva scadent.
+// O rulare = o intrare în jurnal, scrisă doar dacă a adus schimbări reale sau
+// a avut titluri eșuate. Rulările „nimic nou” (cam 50 pe zi: detaliile se
+// împrospătează pe rând, câteva titluri la 10 minute) nu se mai scriu — doar
+// împingeau afară din istoric ce conta.
 // „Ce s-a schimbat” e comparat explicit, valoare cu valoare, înainte și după:
 // SQLite numără un rând ca modificat și când valorile scrise sunt identice,
 // deci `changes` n-ar deosebi „nimic nou” de o schimbare reală.
@@ -107,8 +110,13 @@ export function buildMetaRefreshMessage(r: MetaReport): string {
   return `Metadate: ${parts.join(" · ")}`;
 }
 
+// A adus rularea ceva de arătat? Schimbări reale sau titluri eșuate.
+export function hasMetaNews(r: MetaReport): boolean {
+  return r.changes.length > 0 || r.failed > 0;
+}
+
 export async function logMetaReport(r: MetaReport): Promise<void> {
-  if (r.shows + r.movies + r.failed === 0) return;
+  if (!hasMetaNews(r)) return;
   const { logActivity } = await import("../activity-log");
   await logActivity("metadata_refresh", buildMetaRefreshMessage(r), {
     shows: r.shows,

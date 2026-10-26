@@ -182,7 +182,8 @@ function ImmichUploadsCard({ uploads }: { uploads: ActivityEntry[] }) {
   );
 }
 
-// Ultimele rulări ale reîmprospătării de metadate, din jurnal. Inline, nu un
+// Ultimele reîmprospătări de metadate cu schimbări reale, din jurnal — singurul
+// istoric al sarcinii „Seriale și filme” în Watcher. Inline, nu un
 // drawer peste drawer (overlay-urile imbricate îngheață ecranul — vezi
 // commit c76ce30); câte o rulare deschisă odată.
 function MetaRefreshHistory({ entries }: { entries: ActivityEntry[] }) {
@@ -190,11 +191,12 @@ function MetaRefreshHistory({ entries }: { entries: ActivityEntry[] }) {
   return (
     <div className="overflow-hidden rounded-2xl glass-card text-xs">
       <div className="flex items-center gap-1.5 px-3 pt-3 pb-2 text-muted-foreground">
-        <History className="h-3.5 w-3.5" /> Istoric reîmprospătări
+        <History className="h-3.5 w-3.5" /> Istoric
       </div>
       {entries.length === 0 ? (
         <div className="px-3 pb-3 text-muted-foreground">
-          Nicio rulare înregistrată încă. Apare aici după următoarea reîmprospătare.
+          Nicio schimbare încă. Aici apar doar reîmprospătările care au adus ceva nou din TMDB sau
+          au avut titluri eșuate.
         </div>
       ) : (
         <div className="divide-y divide-border/50 border-t border-border/50">

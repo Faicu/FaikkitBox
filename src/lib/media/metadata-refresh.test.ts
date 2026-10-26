@@ -21,6 +21,7 @@ import {
   newMetaReport,
   buildEpisodeUpdateMessage,
   buildMetaRefreshMessage,
+  hasMetaNews,
 } from "./metadata-report";
 
 let movies: typeof import("./movie-metadata");
@@ -312,6 +313,8 @@ describe("jurnalul reîmprospătării (metadata-report)", () => {
 
     expect(report).toMatchObject({ movies: 1, changes: [] });
     expect(buildMetaRefreshMessage(report)).toBe("Metadate: 1 film · nimic nou");
+    // Fără nimic nou nu se scrie nimic — nici în jurnal, nici în Watcher.
+    expect(hasMetaNews(report)).toBe(false);
   });
 
   it("un serial: episodul cu nume real în locul lui „Episodul 1” (Insula Iubirii, 26 sept.)", async () => {

@@ -1307,6 +1307,31 @@ function applyCleanups(database: DatabaseSync): void {
       console.log("[db] Migrare v43: subtitle_retry_state eliminat (starea e în Watcher)");
       database.exec("PRAGMA user_version = 43");
     }
+
+    if (version < 44) {
+      // v44: reîmprospătările de metadate fără nimic nou nu se mai scriu (vezi
+      // metadata-report.ts) — le ștergem și pe cele vechi, cam o mie, ca
+      // istoricul din Watcher să arate doar schimbările reale. La fel
+      // rezumatele vechi ale sarcinii („5 filme împrospătate”), care numărau
+      // titlurile verificate, nu schimbările.
+      const removed = database
+        .prepare(
+          "DELETE FROM activity WHERE type = 'metadata_refresh' AND message LIKE '%· nimic nou'",
+        )
+        .run();
+      database
+        .prepare(
+          "DELETE FROM watcher_runs WHERE task_id = 'show-watch' AND summary LIKE '%împrospăt%'",
+        )
+        .run();
+      database
+        .prepare(
+          "UPDATE watcher_tasks SET last_summary = NULL WHERE id = 'show-watch' AND last_summary LIKE '%împrospăt%'",
+        )
+        .run();
+      console.log(`[db] Migrare v44: ${removed.changes} reîmprospătări „nimic nou” șterse`);
+      database.exec("PRAGMA user_version = 44");
+    }
   }
 }
 
