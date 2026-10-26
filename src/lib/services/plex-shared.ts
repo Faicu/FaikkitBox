@@ -1,9 +1,6 @@
 import { fetchJson, fetchText, errMsg, stripSlash } from "./shared";
 
-// ---------------------------------------------------------------------------
-// Tipuri și helpere partajate între modulele Plex (status/istoric, bibliotecă,
-// discovery). Extras din fostul plex.ts monolitic.
-// ---------------------------------------------------------------------------
+// Tipuri și helpere comune modulelor Plex.
 
 export interface PlexConnectionCandidate {
   uri: string;
@@ -20,10 +17,9 @@ export interface PlexStream {
   channels?: number;
   height?: number;
   displayTitle?: string;
-  // Semnale HDR date direct de Plex, mai de încredere decât numele fișierului:
-  // `colorTrc` e funcția de transfer ("smpte2084" = PQ/HDR10, "arib-std-b67" =
-  // HLG), iar `DOVIPresent` marchează Dolby Vision. O lansare numită doar
-  // „DV" — fără „HDR" în nume — nu se vede în filename, dar se vede aici.
+  // Semnalele HDR date de Plex, mai sigure decât numele fișierului: `colorTrc`
+  // ("smpte2084" = PQ/HDR10, "arib-std-b67" = HLG) și `DOVIPresent` (Dolby
+  // Vision) — un „DV” fără „HDR” în nume se vede aici.
   colorTrc?: string;
   DOVIPresent?: boolean;
 }
@@ -81,21 +77,19 @@ export interface PlexMetadataItem {
   duration?: number;
   viewOffset?: number;
   thumb?: string;
-  // Posterul serialului la episoade (`thumb` e acolo cadrul episodului, lat) și
-  // imaginile de fundal — folosite doar de cardul „în redare” de pe Acasă.
+  // Posterul serialului la episoade (`thumb` e cadrul episodului) și fundalurile
+  // — pentru cardul „în redare” de pe Acasă.
   grandparentThumb?: string;
   art?: string;
   grandparentArt?: string;
   accountID?: number;
-  // Doar în istoric: ID-ul local (numeric) al dispozitivului de pe server,
-  // cheia din /devices — vezi services/device-hdr.server.ts.
+  // Doar în istoric: ID-ul local al dispozitivului (cheia din /devices).
   deviceID?: number;
   viewedAt?: number;
   summary?: string;
   Media?: PlexMedia[];
-  // Identificatori externi (imdb/tmdb/tvdb) — fiabili pentru filme
-  // ("imdb://tt..." mereu prezent la agentul nou), dar NU pentru
-  // seriale/episoade (de regulă doar tmdb/tvdb, fără imdb).
+  // Identificatori externi — siguri la filme („imdb://…”), nu și la
+  // seriale/episoade (de regulă fără imdb).
   Guid?: Array<{ id?: string }>;
   User?: { title?: string };
   Player?: {
@@ -104,8 +98,8 @@ export interface PlexMetadataItem {
     product?: string;
     state?: string;
     platform?: string;
-    // = `clientIdentifier` din /devices; `model` e codul de model raportat de
-    // aplicație („50QNED80T3A.BEUJLJP" la LG), adesea mai precis decât numele.
+    // = `clientIdentifier` din /devices; `model` e codul raportat de aplicație,
+    // adesea mai precis decât numele.
     machineIdentifier?: string;
     model?: string;
   };
@@ -145,35 +139,21 @@ export function normalizeShowTitle(value: string): string {
     .trim();
 }
 
-// Toate calitățile pe care Plex le are pentru un item, nu doar prima.
-//
-// Un film poate exista în mai multe versiuni sub același item Plex (4K HDR +
-// 1080p). Citind doar `Media[0]`, wizard-ul credea că ai o singură calitate —
-// și-ți oferea „upgrade" la una pe care deja o aveai, adică o a treia
-// descărcare. Ordinea e cea dată de Plex; duplicatele se elimină.
+// Toate calitățile unui item, nu doar prima: cu `Media[0]`, wizard-ul oferea
+// „upgrade” la o calitate deja deținută (a treia descărcare).
 export function plexQualitiesFromItem(item: { Media?: PlexMedia[] } | undefined): string[] {
   const all = (item?.Media ?? []).map((m) => plexQualityFromMedia(m)).filter((q) => q !== null);
   return [...new Set(all)];
 }
 
-// Care dintre versiunile Plex ale unui item e fișierul nostru.
+// Care versiune Plex e fișierul nostru: `contentPath` din qBittorrent e calea
+// reală, identică cu `Part.file`. `torrent_name` nu e: Filelist zicea
+// „Avatar.Fire.and.Ash…DoVi.HDR.x265-HiDt”, pe disc „Avatar Fire and Ash … DV
+// HDR10P x265-HiDt.mkv”. `torrentName` rămâne doar rezervă (torrent șters din
+// qBittorrent).
 //
-// `contentPath` vine din qBittorrent (`qbitContentPath`) și e calea reală de pe
-// disk — se potrivește caracter cu caracter cu `Part.file` din Plex, fiindcă
-// ambele descriu același fișier. Prima încercare de potrivire folosea
-// `torrent_name` din `media`, și a eșuat exact pe cazul pentru care a fost
-// scrisă: torrentul se numea pe Filelist
-// „Avatar.Fire.and.Ash.2025.Hybrid.1080p...DoVi.HDR.x265-HiDt", iar pe disk
-// „Avatar Fire and Ash 2025 Hybrid 1080p ... DV HDR10P x265-HiDt.mkv".
-// Numele de pe tracker nu e o sursă de adevăr pentru disk.
-//
-// `torrentName` rămâne doar ca rezervă, pentru cazul în care torrentul nu mai
-// e în qBittorrent (șters manual după descărcare).
-//
-// Întoarce `undefined` când nu se potrivește nimic — apelantul NU trebuie să
-// cadă atunci pe `Media[0]`: ar afișa calitatea celeilalte versiuni ca fapt.
-// Mai bine fără calitate decât cu una greșită (aceeași regulă ca la
-// qualityRank din wizard).
+// `undefined` fără potrivire — apelantul NU cade pe `Media[0]`: mai bine fără
+// calitate decât cu a altei versiuni.
 export function plexMediaForPath(
   item: { Media?: PlexMedia[] } | undefined,
   contentPath: string | null,
@@ -181,7 +161,7 @@ export function plexMediaForPath(
 ): PlexMedia | undefined {
   const media = item?.Media ?? [];
   if (media.length === 0) return undefined;
-  // Un singur fișier pe item — nu e nimic de distins, e al nostru.
+  // Un singur fișier — al nostru.
   if (media.length === 1) return media[0];
 
   const files = (m: PlexMedia): string[] => (m.Part ?? []).map((part) => part.file ?? "");
@@ -203,7 +183,7 @@ export function plexMediaForPath(
 export function plexQualityFromMedia(media: PlexMedia | undefined): string | null {
   const res: string | undefined = media?.videoResolution;
   if (!res) return null;
-  // Plex trimite când "1080", când "1080p", în funcție de endpoint.
+  // Plex trimite „1080” sau „1080p”, după endpoint.
   const r = String(res).toLowerCase().replace(/p$/, "");
   const is4k = r === "4k" || r === "2160";
   const isHdr = mediaIsHdr(media);
@@ -213,11 +193,8 @@ export function plexQualityFromMedia(media: PlexMedia | undefined): string | nul
   return `${r}p`;
 }
 
-// HDR-ul unei versiuni, din tot ce spune Plex despre ea.
-//
-// Numele fișierului singur nu ajunge: „...DV HDR10P..." se prinde, dar o
-// lansare marcată doar „DV" nu. Stream-ul video poartă însă datele reale —
-// `colorTrc`, `DOVIPresent` și `displayTitle` ("1080p DoVi/HDR10+").
+// HDR-ul unei versiuni, din tot ce spune Plex: numele fișierului nu ajunge (un
+// „DV” simplu nu se prinde), stream-ul video are datele reale.
 export function mediaIsHdr(media: PlexMedia | undefined): boolean {
   const video = (media?.Part?.[0]?.Stream ?? []).find((st) => st.streamType === 1);
   if (video?.DOVIPresent) return true;
@@ -227,8 +204,7 @@ export function mediaIsHdr(media: PlexMedia | undefined): boolean {
   return isHdrLabel(media?.Part?.[0]?.file ?? "");
 }
 
-// DoVi/HDR10/HLG apar fie în numele fișierului, fie în `displayTitle`-ul
-// stream-ului video ("4K DoVi/HDR10 (HEVC Main 10)").
+// DoVi/HDR10/HLG din numele fișierului sau din `displayTitle`-ul stream-ului.
 export function isHdrLabel(value: string | undefined): boolean {
   return /dovi|dolby\s*vision|hdr10|hdr|hlg|pq/i.test(value ?? "");
 }
@@ -291,7 +267,7 @@ function parsePlexResources(payload: string): PlexConnectionCandidate[] {
     }
     return uniqueCandidates(candidates);
   } catch {
-    // Plex's resources endpoint often returns XML, so fall through to XML parsing.
+    // Endpoint-ul de resurse dă des XML — continuăm cu parsarea XML.
   }
 
   const deviceMatches = payload.matchAll(/<Device\b([^>]*)>([\s\S]*?)<\/Device>/g);
@@ -350,18 +326,10 @@ export async function discoverPlexUrl(
   const candidates = parsePlexResources(resourcesText);
 
   if (fallbackBase) {
-    // Prioritate -1: se încearcă PRIMA, înaintea adreselor de la plex.tv.
-    //
-    // Era 10 (ultima), iar adresele https plex.direct aveau 0 — deci serverul
-    // vorbea cu Plex-ul din aceeași rețea printr-un hostname plex.direct,
-    // rezolvat prin DNS și cu handshake TLS la fiecare cerere. Măsurat pe
-    // /status/sessions: ~539ms prin plex.direct vs ~0.4ms direct pe LAN.
-    // De peste 1000× mai lent, pentru o cutie care stă lângă Plex.
-    //
-    // Rămâne doar o preferință, nu o obligație: bucla de mai jos validează
-    // fiecare candidat înainte să-l accepte, deci dacă PLEX_URL e greșit sau
-    // serverul s-a mutat, se cade automat pe descoperirea de la plex.tv, ca
-    // înainte.
+    // Prioritate -1: PLEX_URL (LAN) se încearcă primul. Prin plex.direct
+    // (DNS + TLS la fiecare cerere) /status/sessions dura ~539ms, față de
+    // ~0,4ms direct. Doar preferință: fiecare candidat e validat, deci un
+    // PLEX_URL greșit cade pe descoperirea de la plex.tv.
     candidates.push({
       uri: stripSlash(fallbackBase),
       source: "PLEX_URL configurat (local)",

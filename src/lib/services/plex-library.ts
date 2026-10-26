@@ -10,10 +10,8 @@ import {
 } from "./plex-shared";
 
 // ---------------------------------------------------------------------------
-// Căutarea titlurilor/episoadelor în biblioteca Plex, după ID-ul TMDB (vezi
-// matchesLookup): pentru wizard („e deja în Plex?", ce episoade ai) și pentru
-// legarea rândurilor din `media` de item-ul lor Plex. Extras din fostul
-// plex.ts monolitic.
+// Căutarea titlurilor și episoadelor în Plex după ID-ul TMDB: pentru wizard
+// („e deja în Plex?”) și pentru legarea rândurilor din `media`.
 // ---------------------------------------------------------------------------
 
 export interface ShowEpisodeInfo {
@@ -31,8 +29,7 @@ export interface ShowStatusData {
   next: ShowEpisodeInfo | null;
 }
 
-// Cache scurt pentru key-urile secțiunilor (filme / seriale), ca să nu
-// interogăm /library/sections la fiecare căutare de fallback.
+// Cache scurt pentru key-urile secțiunilor (filme / seriale).
 const sectionCache = new Map<string, { url: string; key: string; expiresAt: number }>();
 
 async function findSectionKey(
@@ -50,8 +47,8 @@ async function findSectionKey(
   return section.key;
 }
 
-// Ce știm despre titlul căutat. `tmdbId` e reperul sigur; titlurile servesc
-// doar la căutare — și, când ID-ul lipsește, la potrivirea exactă.
+// Titlul căutat: `tmdbId` e reperul sigur; titlurile servesc la căutare și, fără
+// ID, la potrivirea exactă.
 export interface PlexLookup {
   tmdbId: number | null;
   titles: string[];
@@ -61,16 +58,10 @@ function hasTmdbId(item: PlexMetadataItem, tmdbId: number): boolean {
   return (item.Guid ?? []).some((g) => g.id === `tmdb://${tmdbId}`);
 }
 
-// Potrivirea unui item Plex cu titlul căutat.
-//
-// Cu ID TMDB, doar ID-ul decide. Titlul nu e un reper: biblioteca Plex e în
-// română („Imperiul Mafiei" pentru MobLand, „Străina" pentru Outlander), deci
-// titlul găsit diferă des de cel căutat, iar potrivirea „conține" sau „primul
-// rezultat" lega, la titluri scurte sau fără rezultat bun, alt serial (You →
-// Younger) — fără nicio eroare, doar cu alt ratingKey pe rând.
-//
-// Fără ID (o descărcare pe care TMDB n-a recunoscut-o, cu numele lansării pe
-// post de titlu), doar potrivirea exactă: mai bine nelegat decât legat greșit.
+// Cu ID TMDB, decide doar ID-ul: biblioteca Plex e în română („Imperiul
+// Mafiei” pentru MobLand), iar potrivirea după titlu lega în tăcere alt serial
+// (You → Younger). Fără ID, doar potrivirea exactă — mai bine nelegat decât
+// legat greșit.
 function matchesLookup(item: PlexMetadataItem, lookup: PlexLookup): boolean {
   if (lookup.tmdbId != null) return hasTmdbId(item, lookup.tmdbId);
   const wanted = new Set(lookup.titles.filter(Boolean).map(normalizeShowTitle));
@@ -79,11 +70,9 @@ function matchesLookup(item: PlexMetadataItem, lookup: PlexLookup): boolean {
   );
 }
 
-// Găsește item-ul Plex (film sau serial) pentru un titlu: întâi prin căutare,
-// apoi, dacă nu apare acolo, în lista completă a secțiunii — căutarea Plex nu
-// găsește mereu după titlul original (ex. „Élite" nu dă nimic, deși serialul
-// e în bibliotecă ca „Elita"). `includeGuids=1` e obligatoriu: fără el, Plex
-// nu întoarce `Guid` deloc.
+// Item-ul Plex al unui titlu: prin căutare, apoi în lista completă a secțiunii
+// (căutarea nu găsește mereu după titlul original — „Élite” vs „Elita”).
+// `includeGuids=1` e obligatoriu pentru `Guid`.
 async function findItem(
   url: string,
   headers: Record<string, string>,
@@ -118,8 +107,7 @@ async function findItem(
   );
 }
 
-// Găsește serialul și întoarce lista brută de episoade dintr-un sezon dat —
-// comun pentru episodesInSeason și legarea episoadelor.
+// Episoadele brute dintr-un sezon.
 async function findSeasonEpisodes(
   url: string,
   headers: Record<string, string>,
@@ -171,22 +159,16 @@ async function findWithQualities(
 ): Promise<{ found: boolean; qualities: string[] }> {
   const found = await findItem(url, headers, mediaType === "movie" ? "movie" : "show", lookup);
   if (!found) return { found: false, qualities: [] };
-  // Toate versiunile, nu doar prima: un film poate fi în bibliotecă simultan
-  // la 4K HDR și 1080p, iar wizard-ul trebuie să știe ambele ca să nu-ți
-  // ofere ceva ce deja ai.
+  // Toate versiunile (4K HDR și 1080p), ca wizard-ul să nu ofere ce ai deja.
   const full = found.ratingKey
     ? ((await fetchItemWithStreams(url, headers, String(found.ratingKey))) ?? found)
     : found;
   return { found: true, qualities: plexQualitiesFromItem(full) };
 }
 
-// Item-ul complet, cu stream-urile fiecărei versiuni.
-//
-// `/search` întoarce Media și Part, dar NU și `Part.Stream` — adică exact
-// câmpurile din care se vede HDR-ul fără echivoc (colorTrc, DOVIPresent).
-// Fără trecerea asta, eticheta ar depinde de numele fișierului, care nu spune
-// mereu adevărul (o lansare marcată doar „DV" n-are „HDR" în nume). Plex e
-// local, deci cererea în plus costă milisecunde.
+// Item-ul complet, cu stream-urile: `/search` nu întoarce `Part.Stream`, deci
+// fără asta HDR-ul s-ar ghici din numele fișierului (un „DV” n-are „HDR” în
+// nume). Plex e local, cererea costă milisecunde.
 async function fetchItemWithStreams(
   url: string,
   headers: Record<string, string>,
@@ -200,8 +182,7 @@ async function fetchItemWithStreams(
   return detail?.MediaContainer?.Metadata?.[0];
 }
 
-// Item-ul Plex cu toate versiunile lui, după ratingKey — pentru recalcularea
-// etichetelor de calitate ale rândurilor deja legate (media.ts).
+// Item-ul cu toate versiunile, după ratingKey — recalcularea calității.
 export async function fetchPlexItemVersions(
   ratingKey: string,
 ): Promise<PlexMetadataItem | undefined> {
@@ -221,19 +202,14 @@ export interface PlexItemLink {
   ratingKey: string;
   quality: string | null;
   durationMs: number;
-  // `null` când item-ul Plex are mai multe versiuni: `addedAt` e al ITEM-ului,
-  // adică data la care a intrat PRIMA versiune, nu a noastră. Scriind-o pe
-  // rândul nou, filmul proaspăt descărcat sărea instant în josul Bibliotecii,
-  // la data celui vechi. Apelantul lasă atunci coloana goală, iar sortarea
-  // cade pe `added_at` — când l-am adăugat noi (vezi rowAddedAt).
+  // `null` la mai multe versiuni: `addedAt` e al item-ului (prima versiune), iar
+  // un film abia descărcat sărea în josul Bibliotecii. Sortarea cade atunci pe
+  // `added_at`.
   addedAt: number | null;
 }
 
-// Ce scriem în `media` despre un item Plex: care versiune e a noastră, cu ce
-// calitate, durată și dată. Regula stă aici, într-un singur loc, fiindcă e
-// nevoie de ea din două direcții — la prima legare (findPlexMovieLink, care
-// caută item-ul după ID-ul TMDB) și la recalcularea unui rând deja legat
-// (media.ts, care pornește direct de la ratingKey).
+// Ce scriem în `media` despre un item Plex (versiunea noastră, calitate,
+// durată, dată) — la prima legare și la recalcularea unui rând legat.
 export function versionLinkFromItem(
   item: PlexMetadataItem,
   contentPath: string | null,
@@ -244,22 +220,16 @@ export function versionLinkFromItem(
   return {
     ratingKey: String(item.ratingKey),
     quality: plexQualityFromMedia(ours),
-    // Durata e a versiunii noastre când o știm; altfel cea a item-ului, care
-    // pentru un film e oricum aceeași în toate versiunile.
+    // Durata versiunii noastre, sau a item-ului (aceeași la un film).
     durationMs: Number(ours?.Part?.[0]?.duration ?? item.duration ?? 0),
     addedAt: (item.Media ?? []).length > 1 ? null : Number(item.addedAt ?? 0),
   };
 }
 
-// Găsește ratingKey-ul + calitatea/durata unui film deja apărut în Plex, după
-// ID-ul TMDB (vezi findItem) — folosit ca să legăm un rând din tabela `media`
-// de item-ul lui real din Plex, o singură dată, cache-uit permanent acolo
-// (vezi media.ts).
-// `contentPath` (calea reală de pe disk, din qBittorrent) identifică fișierul
-// NOSTRU printre versiunile item-ului Plex (vezi plexMediaForPath). Fără el —
-// sau când nu se potrivește nimic — legarea se face oricum (ratingKey-ul e al
-// item-ului, deci corect), dar calitatea rămâne null: mai bine lipsă decât
-// preluată de la altă versiune.
+// ratingKey-ul, calitatea și durata unui film din Plex, după ID-ul TMDB.
+// `contentPath` (din qBittorrent) identifică versiunea NOASTRĂ; fără potrivire,
+// legarea se face oricum, dar calitatea rămâne null — mai bine lipsă decât a
+// altei versiuni.
 export async function findPlexMovieLink(
   movie: PlexLookup,
   contentPath: string | null = null,
@@ -280,8 +250,7 @@ export async function findPlexMovieLink(
   }
 }
 
-// Echivalentul de mai sus, pentru un episod anume — reutilizează
-// findSeasonEpisodes (aceeași sursă ca getPlexEpisodesInSeason).
+// Echivalentul pentru un episod.
 export async function findPlexEpisodeLink(
   show: PlexLookup,
   season: number,
@@ -309,10 +278,7 @@ export async function findPlexEpisodeLink(
   }
 }
 
-// Ca findPlexEpisodeLink, dar pentru un sezon întreg dintr-o singură cerere
-// Plex — folosit la legarea pachetelor de sezon (media.ts), unde un rând
-// unic "pachet" trebuie desfăcut în câte un rând per episod, fiecare cu
-// propriul ratingKey.
+// Un sezon întreg dintr-o cerere — pentru desfacerea pachetelor (media.ts).
 export async function findPlexSeasonLinks(
   show: PlexLookup,
   season: number,
@@ -342,13 +308,8 @@ export async function findPlexSeasonLinks(
   }
 }
 
-// Verificările din Plex apelate de `wizard-check.functions.ts`, care face
-// toată munca unui titlu într-o singură cerere venită de la client.
-//
-// Sufixul "Internal" e o rămășiță: peste ele au existat și server function-uri
-// publice (checkPlexHasTitle, getPlexEpisodesInSeason, checkPlexHasEpisode),
-// de pe vremea când wizard-ul făcea zece cereri separate. După consolidare
-// nu le-a mai chemat nimeni, așa că au fost șterse.
+// Verificările pentru wizard-check.functions.ts (o singură cerere per titlu).
+// „Internal” e o rămășiță a vechilor server functions, șterse între timp.
 
 export async function checkPlexHasTitleInternal(data: {
   tmdbId: number;

@@ -15,8 +15,7 @@ export interface GitHubCommitsResult {
   status: "ok" | "error";
   error?: string;
   commits: GitHubCommit[];
-  // Doar din getCommitsFromDb: câte sunt în DB în total — lista e plafonată
-  // la 500, deci lungimea ei nu mai e totalul.
+  // Doar din getCommitsFromDb: totalul din DB (lista e plafonată la 500).
   total?: number;
 }
 
@@ -57,18 +56,10 @@ interface GitHubApiCommit {
 
 const GITHUB_REPO = process.env.GITHUB_REPO ?? "Faicu/FaikkitBox";
 
-// Un SHA de git e hex, atât. Validarea NU e cosmetică: `data.sha` ajunge
-// argument pentru `git show`, iar execFile nu folosește shell, deci nu
-// există injecție de shell — dar există injecție de ARGUMENT. `git show`
-// acceptă opțiunile de diff, printre care `--output=<fișier>`: un sha de
-// forma "--output=/root/.ssh/authorized_keys" scrie liniștit în calea aia.
-// Serviciul rulează ca root, deci era o scriere arbitrară de fișier ca root,
-// pornind de la o sesiune de admin — exact genul de acces pe care restul
-// aplicației îl evită cu grijă (vezi jobSteps din system/service-jobs.ts, unde
-// argumentele nu vin niciodată de la client).
-//
-// Verificat pe repo-ul ăsta: `git show --numstat --format= --output=/tmp/x`
-// chiar creează /tmp/x.
+// Un SHA e hex, atât. Validarea NU e cosmetică: `data.sha` ajunge argument
+// pentru `git show` — fără shell, deci fără injecție de shell, dar cu injecție
+// de ARGUMENT: `--output=<fișier>` scrie în orice cale (verificat: chiar
+// creează fișierul), cu drepturile serviciului, pornind de la o sesiune de admin.
 const SHA_RE = /^[0-9a-f]{7,40}$/i;
 
 function assertValidSha(sha: string): string {
@@ -85,7 +76,7 @@ function githubHeaders(): Record<string, string> {
   return h;
 }
 
-// Fetch GitHub + upsert în DB (rulat periodic din React Query)
+// GitHub → DB (rulat periodic de React Query).
 export const getRecentCommits = createServerFn({ method: "GET" }).handler(
   async (): Promise<GitHubCommitsResult> => {
     const { requireAdmin } = await import("./auth/admin.server");
@@ -102,7 +93,7 @@ export const getRecentCommits = createServerFn({ method: "GET" }).handler(
   },
 );
 
-// Citește commits din DB — sursa principală pentru timeline
+// Commit-urile din DB — sursa timeline-ului.
 export const getCommitsFromDb = createServerFn({ method: "GET" }).handler(
   async (): Promise<GitHubCommitsResult> => {
     const { requireAdmin } = await import("./auth/admin.server");
@@ -144,7 +135,7 @@ export const getCommitsFromDb = createServerFn({ method: "GET" }).handler(
   },
 );
 
-// Detalii complete pentru un commit — live de pe GitHub, la cerere
+// Detaliile unui commit, live de pe GitHub.
 export const getCommitDetail = createServerFn({ method: "GET" })
   .validator((data: { sha: string }) => {
     assertValidSha(data.sha);
@@ -154,9 +145,7 @@ export const getCommitDetail = createServerFn({ method: "GET" })
     const { requireAdmin } = await import("./auth/admin.server");
     await requireAdmin();
     try {
-      // encodeURIComponent în plus față de validare: sha e interpolat într-o
-      // cale de URL, iar validarea singură e ușor de slăbit din greșeală mai
-      // târziu.
+      // encodeURIComponent pe lângă validare — validarea e ușor de slăbit.
       const res = await fetch(
         `https://api.github.com/repos/${GITHUB_REPO}/commits/${encodeURIComponent(data.sha)}`,
         {
@@ -215,13 +204,9 @@ export interface GitHubSyncStatus {
   commitsAhead: number;
 }
 
-// Toate comenzile git rulează asincron. Înainte erau execSync/execFileSync,
-// iar `git fetch` (1,6–1,8 s până la GitHub) bloca tot procesul Node cât
-// dura: orice altă cerere — Plex, qBit, o citire banală din SQLite — aștepta
-// după el. Indicatorul din antet îl cerea la fiecare deschidere a aplicației,
-// la fiecare revenire în tab și la fiecare minut, deci prima atingere după
-// revenirea pe telefon „se gândea” ~2 s pe orice pagină (măsurat 3 oct. 2026).
-// Fără shell: argumentele merg ca listă, nu ca string interpolat.
+// Toate comenzile git sunt asincrone: un `git fetch` sincron (~1,7 s) bloca tot
+// procesul, iar prima atingere după revenirea pe telefon „se gândea” ~2 s pe
+// orice pagină (3 oct. 2026). Fără shell: argumentele merg ca listă.
 const execFileAsync = promisify(execFile);
 
 async function git(args: string[], timeout?: number): Promise<string> {
@@ -229,11 +214,8 @@ async function git(args: string[], timeout?: number): Promise<string> {
   return stdout.trim();
 }
 
-// `git fetch` doar actualizează referința origin/<branch>, iar ce scrie rămâne
-// pe disc — deci nu trebuie așteptat la fiecare cerere. Pornește în fundal cel
-// mult o dată la 5 minute; răspunsul curent folosește referința deja știută,
-// iar următorul o vede pe cea nouă. Push-ul din Tehnic actualizează oricum
-// referința singur, deci după el cifrele sunt corecte imediat.
+// `git fetch` în fundal, cel mult o dată la 5 minute; răspunsul curent folosește
+// referința deja știută. Push-ul din Tehnic o actualizează oricum.
 const FETCH_INTERVAL_MS = 5 * 60_000;
 let lastFetchAt = 0;
 let fetchInFlight: Promise<void> | null = null;
@@ -244,7 +226,7 @@ function refreshOriginInBackground(branch: string): void {
   fetchInFlight = git(["fetch", "--quiet", "origin", branch], 8000)
     .then(() => undefined)
     .catch(() => {
-      // fără rețea sau fără acces — continuăm cu ce știm local
+      // Fără rețea sau acces — continuăm cu ce știm local.
     })
     .finally(() => {
       fetchInFlight = null;
@@ -255,10 +237,8 @@ function currentBranch(): Promise<string> {
   return git(["rev-parse", "--abbrev-ref", "HEAD"]);
 }
 
-// Numărătoarea vine din git (origin/<branch>, reîmprospătat în fundal), nu din
-// lista de commit-uri de pe GitHub: acolo commit-ul local nepublicat nu apare
-// deloc, iar căutarea lui în listă dădea mereu "1 în urmă", indiferent câte
-// commit-uri erau de fapt — și în direcția greșită (serverul era înainte).
+// Numărătoarea vine din git, nu din lista GitHub: acolo commit-ul local nu
+// apare, iar căutarea lui dădea mereu „1 în urmă”, în direcția greșită.
 async function gitCounts(): Promise<{ branch: string; ahead: number; behind: number }> {
   const branch = await currentBranch();
   refreshOriginInBackground(branch);
@@ -306,10 +286,8 @@ export interface GitPushStatus {
   branch: string;
 }
 
-// Numărul de commit-uri locale nepublicate — sursa pentru butonul de push din
-// pagina Tehnic. `git fetch` e best-effort și rulează în fundal (vezi
-// refreshOriginInBackground); raportăm ahead/behind față de ultima referință
-// cunoscută.
+// Commit-urile locale nepublicate — pentru butonul de push din Tehnic (față de
+// ultima referință cunoscută; fetch-ul e în fundal).
 export const getGitPushStatus = createServerFn({ method: "GET" }).handler(
   async (): Promise<{ status: "ok"; data: GitPushStatus } | { status: "error"; error: string }> => {
     const { requireAdmin } = await import("./auth/admin.server");
@@ -331,8 +309,7 @@ export interface UnpushedCommit {
   date: string;
 }
 
-// Detalii despre commit-urile locale nepublicate — afișate deasupra butonului
-// de push din pagina Tehnic, ca userul să vadă ce urmează să trimită.
+// Detaliile commit-urilor nepublicate, afișate deasupra butonului de push.
 export const getUnpushedCommits = createServerFn({ method: "GET" }).handler(
   async (): Promise<
     { status: "ok"; commits: UnpushedCommit[] } | { status: "error"; error: string }
@@ -360,8 +337,7 @@ export const getUnpushedCommits = createServerFn({ method: "GET" }).handler(
   },
 );
 
-// Detalii complete pentru un commit local (nepublicat încă pe GitHub) — citite
-// direct din git, fiindcă GitHub API nu are cum să știe de el.
+// Detaliile unui commit local, din git (GitHub nu-l știe încă).
 export const getLocalCommitDetail = createServerFn({ method: "GET" })
   .validator((data: { sha: string }) => {
     assertValidSha(data.sha);
@@ -372,11 +348,8 @@ export const getLocalCommitDetail = createServerFn({ method: "GET" })
     await requireAdmin();
     try {
       const sep = "\x1f";
-      // `--end-of-options` peste validarea din validator: de aici încolo git
-      // tratează orice urmează ca revizie, nu ca opțiune, chiar dacă cineva
-      // slăbește cândva regexul. Două straturi, fiindcă greșeala aici scrie
-      // fișiere ca root (vezi SHA_RE).
-      // Fără trim: corpul mesajului (%B) e ultimul câmp tăiat de `.trim()` mai jos.
+      // `--end-of-options` pe lângă validare: tot ce urmează e revizie, nu
+      // opțiune (vezi SHA_RE). Fără trim: %B e ultimul câmp.
       const { stdout: header } = await execFileAsync(
         "git",
         [
@@ -456,9 +429,8 @@ export interface GitPushResult {
   pushedCommits: number;
 }
 
-// Trimite commit-urile locale pe GitHub — apăsat manual din pagina Tehnic.
-// Nu rulează build/restart: acelea s-au întâmplat deja când commit-urile au
-// fost create local, push-ul doar le publică.
+// Publică pe GitHub commit-urile locale — manual, din Tehnic. Build-ul și
+// restartul s-au făcut deja la commit.
 export const pushToGitHub = createServerFn({ method: "POST" }).handler(
   async (): Promise<GitPushResult> => {
     const { requireAdmin } = await import("./auth/admin.server");
@@ -470,12 +442,8 @@ export const pushToGitHub = createServerFn({ method: "POST" }).handler(
         return { status: "ok", pushedCommits: 0 };
       }
       await git(["push", "origin", branch], 30_000);
-      // Commit-urile publicate intră imediat în DB (cu notificarea lor), fără
-      // să depindă de webhook sau de polling-ul paginii. Fost plugin separat
-      // (github-commit-tracker), care sincroniza la fiecare pornire pentru un
-      // webhook pierdut într-un restart — dar push-ul pleacă doar de aici, cu
-      // serverul pornit. O sincronizare picată nu face push-ul eșuat: publicarea
-      // a reușit, iar polling-ul din Tehnic o reia.
+      // Commit-urile publicate intră imediat în DB, cu notificarea lor. O
+      // sincronizare picată nu face push-ul eșuat — polling-ul din Tehnic o reia.
       const { syncCommitsFromGitHub } = await import("./github-commits.server");
       await syncCommitsFromGitHub().catch((e) =>
         console.warn("[github] Sincronizarea de după push a eșuat:", e),

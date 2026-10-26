@@ -28,11 +28,10 @@ export interface PlexSession {
   videoDecision?: string;
   audioDecision?: string;
   bitrateKbps?: number;
-  // Posterul (la episoade, al serialului) și fundalul, ca căi Plex — trec prin
-  // proxy-ul /api/plex-thumb.
+  // Posterul (la episoade, al serialului) și fundalul — prin proxy-ul /api/plex-thumb.
   thumbPath?: string;
   artPath?: string;
-  // Detalii de calitate/redare (vezi mapPlexSessions)
+  // Calitate și redare (mapPlexSessions).
   playbackMode?: "direct" | "direct-stream" | "transcode";
   sourceQuality?: string;
   streamQuality?: string;
@@ -83,19 +82,14 @@ export interface PlexHistoryEntry {
 
 // ---------- Istoric vizionare (agregare + cache) ----------
 
-// Numărul de iteme dintr-o bibliotecă se schimbă rar — cache 5 minute per secțiune,
-// ca să nu refacem cereri "Size=0" la fiecare poll de 10s.
+// Numărul de iteme dintr-o bibliotecă se schimbă rar — cache 5 minute per secțiune.
 const libraryCountCache = new Map<string, { count: number | null; expiresAt: number }>();
 const LIBRARY_COUNT_TTL_MS = 5 * 60 * 1000;
 
-// Index "văzut de X" — sursă unică de adevăr pentru orice ecran care
-// afișează starea de vizionare SAU data vizionării (listă Bibliotecă +
-// drawer de detalii, atât badge-ul boolean cât și data afișată). Spre
-// deosebire de `userHistory` (plafonat la 50/user, gândit doar pentru
-// afișarea istoricului recent din dashboard), acest index ține TOATE
-// intrările din istoricul Plex (tot, citit pe pagini; per key → ultimul viewedAt),
-// ca un utilizator activ să nu "piardă" din matching (sau din dată) titluri
-// vizionate mai demult doar pentru că a mai văzut multe altele între timp.
+// Indexul „văzut de X” — sursa unică pentru starea și data vizionării în
+// Bibliotecă. Spre deosebire de `userHistory` (plafonat la 50/user), ține TOT
+// istoricul Plex (per key → ultimul viewedAt), ca titlurile văzute demult să
+// nu dispară.
 export interface PlexWatchedIndex {
   ratingKeys: Map<string, number>; // ratingKey -> ultimul viewedAt
   titleKeys: Map<string, number>; // titlu|sezon|episod (sau movie|titlu) -> ultimul viewedAt
@@ -118,8 +112,7 @@ export function isItemWatched(
   return getWatchedAt(index, item) != null;
 }
 
-// La fel ca `isItemWatched`, dar întoarce și data — folosit oriunde UI-ul
-// afișează "văzut pe <dată>", ca să nu mai depindă de istoricul plafonat.
+// Ca `isItemWatched`, dar cu data — pentru „văzut pe <dată>”.
 export function getWatchedAt(
   index: PlexWatchedIndex,
   item: {
@@ -140,14 +133,10 @@ export function getWatchedAt(
   return null;
 }
 
-// Contul "owner" al serverului (cel căruia îi aparține PLEX_TOKEN) — folosit
-// ca fallback pentru "Marchează ca vizionat" din Plex, care setează
-// viewCount direct pe item FĂRĂ să scrie o intrare de istoric/scrobble
-// (deci invizibil pentru `getPlexWatchedIndex`, oricât de bine ar potrivi
-// ratingKey-ul). viewCount raportat prin PLEX_TOKEN e scopat la contul
-// acelui token, deci fallback-ul e sigur doar pentru owner, nu pentru
-// utilizatorii gestionați (Plex Home) — aceia au propria stare, invizibilă
-// prin tokenul owner-ului.
+// Owner-ul serverului (contul lui PLEX_TOKEN) — pentru rezerva „Marchează ca
+// vizionat”, care setează viewCount fără să scrie în istoric. viewCount-ul
+// văzut prin token e al owner-ului, deci rezerva e sigură doar pentru el, nu
+// pentru utilizatorii Plex Home.
 let plexOwnerUsernameCache: { url: string; username: string | null; expiresAt: number } | null =
   null;
 
@@ -175,10 +164,8 @@ export async function getPlexOwnerUsername(): Promise<string | null> {
   }
 }
 
-// Verifică viewCount direct pe item-ele date (un singur request batch către
-// Plex) — folosit doar ca fallback pentru owner, când istoricul n-are nimic.
-// Întoarce data ultimei vizionări (lastViewedAt) per ratingKey, ca să poată
-// fi afișată în UI la fel ca pentru cazurile găsite prin istoric.
+// viewCount direct pe item-ele date (o singură cerere) — rezerva owner-ului,
+// cu data ultimei vizionări.
 export async function getPlexViewedRatingKeys(ratingKeys: string[]): Promise<Map<string, number>> {
   if (ratingKeys.length === 0) return new Map();
   const token = process.env.PLEX_TOKEN;
@@ -217,21 +204,18 @@ let plexHistoryCache: {
   expiresAt: number;
 } | null = null;
 
-// O vizionare din istoric, compactă și neplafonată per user (spre deosebire de
-// `userHistory`) — pentru numărătoarea „utilizator activ" de la contribuții.
+// O vizionare din istoric, neplafonată — pentru „utilizator activ” la contribuții.
 export interface PlexView {
   ratingKey?: string;
   type: string;
   viewedAt: number;
-  // ID-ul local al dispozitivului (cheia din /devices) — pentru indiciul HDR.
+  // ID-ul local al dispozitivului — pentru indiciul HDR.
   deviceId?: number;
 }
 
-// Vizionările din istoricul Plex (tot istoricul, toți userii), grupate pe
-// ID-ul contului Plex (users.plex_account_id) — nu pe nume: numele din
-// /accounts e numele afișat („Dragomir Andreea"), nu username-ul salvat la
-// înregistrare („dragomirandreea"). null dacă Plex nu răspunde — ca
-// apelantul să nu confunde „Plex căzut" cu „nimeni nu s-a uitat".
+// Vizionările din tot istoricul Plex, grupate pe ID-ul contului Plex — nu pe
+// nume: /accounts dă numele afișat („Dragomir Andreea”), nu username-ul de la
+// înregistrare. null dacă Plex nu răspunde (≠ „nimeni nu s-a uitat”).
 export async function getPlexViewsByAccount(): Promise<Record<string, PlexView[]> | null> {
   const token = process.env.PLEX_TOKEN;
   if (!token) return null;
@@ -244,15 +228,9 @@ export async function getPlexViewsByAccount(): Promise<Record<string, PlexView[]
   }
 }
 
-// Istoricul de vizionare al unui user Plex — folosește cache-ul intern al
-// fetchPlexHistory (rapid dacă e deja cald, de la pollingul dashboard-ului),
-// dar se auto-populează cu o cerere reală dacă e rece (ex. server proaspăt
-// repornit, nimeni nu s-a uitat încă pe Acasă) — altfel pagina de detalii ar
-// rămâne mereu goală fără motiv vizibil.
-//
-// Istoricul e grupat pe numele afișat în Plex („Dragomir Andreea"), care nu e
-// username-ul salvat la înregistrare („dragomirandreea") — de aceea numele se
-// află după ID-ul contului; username-ul rămâne doar rezervă.
+// Istoricul unui user — din cache-ul lui fetchPlexHistory, populat cu o cerere
+// reală dacă e rece (altfel pagina de detalii ar rămâne goală după restart).
+// Grupat pe numele afișat, aflat după ID-ul contului; username-ul e rezervă.
 export async function getPlexUserHistory(
   plexAccountId: number | null,
   username: string | null,
@@ -271,10 +249,8 @@ export async function getPlexUserHistory(
   }
 }
 
-// Cheia sub care apare un cont în istoricul Plex (userHistory,
-// watchedIndexByUser): numele afișat din /accounts, aflat după ID-ul contului.
-// Username-ul de la înregistrare rămâne rezervă (ex. Plex indisponibil) —
-// la mulți diferă („dragomirandreea" vs „Dragomir Andreea").
+// Cheia unui cont în istoricul Plex: numele afișat din /accounts, după ID-ul
+// contului; username-ul de la înregistrare e rezervă (la mulți diferă).
 export async function getPlexHistoryName(
   plexAccountId: number | null,
   username: string | null,
@@ -291,8 +267,7 @@ export async function getPlexHistoryName(
   }
 }
 
-// Indexul "văzut" pentru toți userii deodată — folosit de drawer pentru
-// "alți utilizatori care au văzut".
+// Indexul „văzut” pentru toți userii — „cine a mai văzut” din drawer.
 export async function getAllPlexWatchedIndexes(): Promise<Record<string, PlexWatchedIndex>> {
   const token = process.env.PLEX_TOKEN;
   if (!token) return {};
@@ -333,9 +308,7 @@ async function fetchPlexHistory(
       accountNames: plexHistoryCache.accountNames,
     };
   }
-  // Tot istoricul, pe pagini de câte 1000 — fără plafon: „văzut" din
-  // Bibliotecă și „cine a mai văzut" trebuie să știe și de vizionările vechi
-  // (oct 2026: ~1000 de intrări pe an, un singur răspuns de ~300 KB).
+  // Tot istoricul, pe pagini de 1000, fără plafon (~1000 de intrări pe an).
   const entries: PlexMetadataItem[] = [];
   for (;;) {
     const page = await fetchJson<PlexApiResponse>(
@@ -359,13 +332,13 @@ async function fetchPlexHistory(
       if (Number.isFinite(id) && name) accountMap.set(id, name);
     }
   } catch {
-    // ignore, fallback below
+    // Ignorat, cu rezervă mai jos.
   }
 
   const historyByUser = new Map<string, PlexHistoryEntry[]>();
   const watchedIndexByUser = new Map<string, PlexWatchedIndex>();
   const viewsByAccount: Record<string, PlexView[]> = {};
-  // Compute "today" in Europe/Bucharest, not UTC (worker runtime).
+  // „Azi” în ora României, nu UTC.
   const startOfTodaySec = (() => {
     const now = new Date();
     const parts = new Intl.DateTimeFormat("en-CA", {
@@ -438,8 +411,7 @@ async function fetchPlexHistory(
       historyByUser.set(wkey, list);
     }
 
-    // Neplafonat, spre deosebire de `historyByUser` — vezi comentariul de
-    // pe `PlexWatchedIndex`. Ținem ultimul (cel mai recent) viewedAt per key.
+    // Neplafonat (vezi PlexWatchedIndex) — ultimul viewedAt per key.
     const watchedIndex = watchedIndexByUser.get(wkey) ?? {
       ratingKeys: new Map<string, number>(),
       titleKeys: new Map<string, number>(),
@@ -510,12 +482,10 @@ function mapPlexSessions(sessionsMd: PlexMetadataItem[]): PlexSession[] {
     const ts = s.TranscodeSession;
     const videoDecision = ts?.videoDecision ?? video?.decision ?? part?.decision;
     const audioDecision = ts?.audioDecision ?? audio?.decision ?? part?.decision;
-    // Eticheta principală descrie video-ul, ca în panoul Plex: "transcode" =
-    // video re-encodat; "copy" = video neatins, doar reîmpachetat (direct
-    // stream); nimic = direct play. Un video copiat cu sunetul convertit
-    // (TrueHD/DTS → E-AC3 pe un televizor care nu le suportă) NU e
-    // transcodare video — înainte apărea „Transcodare HW" deși Plex arăta
-    // video direct; conversia sunetului apare separat (`audioTranscode`).
+    // Eticheta principală descrie video-ul, ca în Plex: "transcode" = video
+    // re-encodat; "copy" = doar reîmpachetat; nimic = direct play. Un video
+    // copiat cu sunetul convertit NU e transcodare video — sunetul apare
+    // separat (`audioTranscode`).
     const videoTranscoded = videoDecision === "transcode";
     const audioTranscoded = audioDecision === "transcode";
     const decisions = [videoDecision, audioDecision, part?.decision];
@@ -524,8 +494,7 @@ function mapPlexSessions(sessionsMd: PlexMetadataItem[]): PlexSession[] {
       : decisions.includes("copy") || decisions.includes("transcode")
         ? "direct-stream"
         : "direct";
-    // La direct play/stream fluxul livrat *e* sursa, deci eticheta e aceeași —
-    // preferată cea din stream, fiindcă include marcajul HDR.
+    // La direct play fluxul livrat e sursa — eticheta din stream, care are HDR-ul.
     const mediaQuality = plexQualityFromMedia(media);
     const sourceQuality = sourceQualityFromStream(video) ?? mediaQuality;
     const streamQuality = playbackMode === "transcode" ? mediaQuality : sourceQuality;
@@ -562,9 +531,8 @@ function mapPlexSessions(sessionsMd: PlexMetadataItem[]): PlexSession[] {
   });
 }
 
-// La transcodare, `Media`/`Part` din sesiune descriu deja fluxul *livrat*, nu
-// fișierul. Rezoluția sursei rămâne vizibilă doar în `displayTitle`-ul
-// stream-ului video ("4K DoVi/HDR10 (HEVC Main 10)"), de unde o scoatem.
+// La transcodare, `Media`/`Part` descriu fluxul LIVRAT; rezoluția sursei apare
+// doar în `displayTitle`-ul stream-ului video, de unde o scoatem.
 function sourceQualityFromStream(video: PlexStream | undefined): string | null {
   const title = video?.displayTitle;
   if (!title) return null;
@@ -582,9 +550,8 @@ function sourceQualityFromStream(video: PlexStream | undefined): string | null {
 export const getPlexSessions = createServerFn({ method: "GET" }).handler(
   async (): Promise<{ status: ServiceStatus; error?: string; sessions: PlexSession[] }> => {
     await (await import("../auth/admin.server")).requireAuth();
-    // Cache scurt, partajat: clientul cere la 1s (progresul de vizionare merită
-    // fluiditate), dar zece tab-uri deschise nu trebuie să însemne zece cereri
-    // pe secundă către Plex.
+    // Cache scurt, comun: clientul cere la 1s, dar zece tab-uri nu înseamnă
+    // zece cereri pe secundă către Plex.
     return cachedAsync("plexSessions", 900, collectPlexSessions);
   },
 );
@@ -643,7 +610,7 @@ export const getPlex = createServerFn({ method: "GET" }).handler(async (): Promi
       })),
     ]);
 
-    // Eșec total (nu doar o cerere izolată) — tratăm ca eroare, nu ca date parțiale
+    // Eșec total — eroare, nu date parțiale.
     if (!rootJson && !sessionsJson && !libsJson) {
       throw new Error("Plex nu a răspuns la nicio cerere");
     }

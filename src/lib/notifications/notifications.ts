@@ -1,18 +1,8 @@
 // ---------------------------------------------------------------------------
-// Sursă unică pentru CONȚINUTUL (titlu + text + imagine + link) notificărilor
-// push din aplicație — trimiterea efectivă rămâne în push.ts (sendPushToAll,
-// singura funcție care vorbește cu web-push), dar construirea conținutului nu
-// mai e împrăștiată sau duplicată în fiecare modul care are nevoie să notifice.
-//
-// Totul e aici: și builder-ele "bogate" (torrent/watcher, mai jos) care au
-// nevoie de parametri/lookup-uri, și PUSH_TITLES/PUSH_URLS — titlul/link-ul
-// implicit pentru evenimentele simple logate prin logActivity() (server,
-// Plex, Immich, update-uri, erori...), consumate de activity-log.ts. Dacă
-// vrei să schimbi cum arată orice notificare din aplicație, e un singur loc.
-//
-// Torrentele (download.ts) folosesc buildTorrentDisplayName
-// (tmdb-title-lookup.ts) + detectTorrentQuality (torrent-quality.ts) — aceeași
-// logică peste tot, nu recalculată ad-hoc per apel.
+// Sursa unică pentru CONȚINUTUL notificărilor push (titlu, text, imagine,
+// link); trimiterea e în push.ts. Aici sunt și builder-ele pentru torrente, și
+// titlurile/link-urile implicite (PUSH_TITLES/PUSH_URLS) ale evenimentelor
+// simple din logActivity — un singur loc pentru cum arată orice notificare.
 // ---------------------------------------------------------------------------
 
 import { sendPushToAll } from "./push";
@@ -28,19 +18,15 @@ export interface PushNotification {
   url?: string;
 }
 
-// --- Evenimente simple (logActivity, activity-log.ts) -----------------------
-// Titlul/link-ul implicit per tip de activitate — logActivity le folosește
-// când apelul nu suprascrie explicit `options.title`/`options.url` (ex.
-// torrent_added/torrent_complete, care diferă manual/automat — vezi mai jos).
+// --- Evenimente simple (logActivity) -----------------------------------------
+// Titlul și link-ul implicit per tip, când apelul nu le suprascrie.
 
 export const PUSH_TITLES: Record<ActivityType, string> = {
   server_start: "🟢 Serverul a pornit",
   server_stop: "🔴 Serverul s-a oprit",
   plex_watch_start: "🎬 Vizionare începută",
   plex_watch_stop: "🎬 Vizionare încheiată",
-  // Fallback — titlul real vine din options.title (n.title de la
-  // buildTorrentAddedNotification/buildTorrentCompleteNotification, mai jos),
-  // fiindcă torrent_added acoperă atât manual cât și automat.
+  // Rezervă — titlul real vine din options.title (manual sau automat).
   torrent_added: "⬇️ Descărcare Inițiată",
   torrent_complete: "✅ Descărcare Completă",
   immich_upload: "📷 Immich",
@@ -49,27 +35,20 @@ export const PUSH_TITLES: Record<ActivityType, string> = {
   ubuntu_update: "🐧 Ubuntu Actualizat",
   qbit_action: "⚙️ Acțiune qBittorrent",
   app_error: "⚠️ Eroare Nouă Aplicație",
-  // O singură intrare de log per rulare (descărcare unică sau backfill întreg
-  // — vezi logSubtitleRun în src/lib/filelist/subtitles.ts), deci un singur
-  // push per rulare, nu per torrent.
+  // O intrare per rulare (logSubtitleRun), deci un push per rulare, nu per torrent.
   subtitle_fix: "💬 Corecție Subtitrare",
   account_request: "🆕 Cerere Aprobare Cont",
-  // Fără push (titlu gol): rulează de mai multe ori pe zi și e doar de
-  // consultat, în Tehnic — vezi metadata-report.ts.
+  // Fără push (titlu gol): doar de consultat, în Watcher.
   metadata_refresh: "",
-  // Verificarea zilnică (update-check.ts); pagina vine din options.url.
+  // Verificarea zilnică; pagina vine din options.url.
   update_available: "🆕 Actualizare disponibilă",
-  // Push doar la declarația „Am plătit" (de confirmat); confirmarea,
-  // respingerea și plățile adăugate de admin trec cu skipPush — vezi
-  // contributions.functions.ts.
+  // Push doar la declarația „Am plătit”; restul trec cu skipPush.
   contribution: "💰 Contribuție declarată",
-  // Fără push (titlu gol): programarea, renunțarea și ștergerea efectivă a
-  // unui titlu — doar de consultat în jurnal (vezi scheduled-delete.ts).
+  // Fără push: programarea, renunțarea și ștergerea — doar în jurnal.
   title_delete: "",
 };
 
-// Pagina spre care duce apăsarea notificării — implicit per tip; se poate
-// suprascrie punctual din `options.url` la apel din logActivity.
+// Pagina deschisă de notificare, per tip; suprascrisă de options.url.
 export const PUSH_URLS: Record<ActivityType, string> = {
   server_start: "/sistem",
   server_stop: "/sistem",
@@ -112,22 +91,12 @@ export function buildPlexWatchStopMessage(user: string, what: string, progress: 
 }
 
 // --- Torrente (filelist/download.ts) ----------------------------------------
-//
-// Sursa de adevăr pentru titlu/poster e rândul deja scris în `media`
-// (upsertMediaEntry, la rândul lui alimentat de wizard/autoResolveManualMedia
-// — vezi getMediaDisplayByTorrentHash). Lookup-ul TMDB live de mai jos e
-// DOAR fallback, pentru fereastra scurtă dinaintea scrierii în `media` (sau
-// pentru torrente care n-au ajuns deloc să fie legate de un rând media) —
-// altfel am recalcula independent ceva ce riscă să difere de ce arată deja
-// Biblioteca/jurnalul Plex pentru același titlu.
+// Titlul și posterul vin din rândul deja scris în `media`
+// (getMediaDisplayByTorrentHash); lookup-ul TMDB e doar rezervă, pentru
+// torrentele fără rând — altfel ar putea diferi de ce arată Biblioteca.
 
-// Poster-ul stocat în `media` (poster_path) vine din surse diferite, cu
-// dimensiuni TMDB diferite (w92 în lista de căutare a wizard-ului, w342 la
-// autoResolveManualMedia etc.) — bune pentru carduri mici din UI, dar afișate
-// prea mare (lățime completă) în notificarea push, unde ies neclare. Urcăm
-// la o rezoluție mare doar aici, la nivel de URL TMDB, indiferent ce
-// dimensiune a fost stocată inițial, fără să atingem valoarea din DB
-// (folosită și în altă parte, la dimensiunea ei originală).
+// Posterul din `media` poate fi mic (w92 din wizard); în push e afișat pe toată
+// lățimea, deci urcăm rezoluția doar în URL, fără să atingem DB-ul.
 function upscalePosterForPush(posterPath: string | null): string | null {
   return resizePosterUrl(posterPath, "w780");
 }
@@ -172,8 +141,7 @@ export async function buildTorrentAddedNotification(params: {
   torrentName: string;
   imdb?: string | null;
   torrentHash?: string | null;
-  // Pornit de urmărirea serialelor, nu de un om — titlu distinct, ca o
-  // descărcare apărută "din senin" să fie imediat explicabilă.
+  // Pornit de urmărire — titlu distinct, ca descărcarea să fie explicabilă.
   auto?: boolean;
 }): Promise<PushNotification> {
   const { displayName, image, seasonLabel } = await resolveTorrentDisplay(params);
@@ -201,9 +169,8 @@ export async function buildTorrentCompleteNotification(params: {
   };
 }
 
-// --- Commit-uri GitHub (3 locuri: webhook, plugin de pornire, funcție server) ---
-// Trimiterea e imediată, nu amânată, dar e grupată pe lot: un push cu 9
-// commit-uri trebuie să dea o notificare, nu nouă.
+// --- Commit-uri GitHub (webhook, sincronizare după push, funcție server) ------
+// O notificare per lot, nu per commit.
 
 export interface CommitNotice {
   author: string;
@@ -211,11 +178,8 @@ export interface CommitNotice {
 }
 
 /**
- * O singură notificare pentru tot lotul de commit-uri noi.
- *
- * Înainte, fiecare apelant itera lista și trimitea un push per commit — un
- * push cu 9 commit-uri însemna 9 notificări, care pe Android se grupau
- * automat și acopereau ecranul.
+ * O singură notificare pentru tot lotul de commit-uri — nouă notificări pentru
+ * un push acopereau ecranul pe Android.
  */
 export async function notifyGithubCommits(commits: CommitNotice[]): Promise<void> {
   if (commits.length === 0) return;
@@ -228,8 +192,7 @@ export async function notifyGithubCommits(commits: CommitNotice[]): Promise<void
 
   const authors = [...new Set(commits.map((c) => c.author))];
   const who = authors.length === 1 ? ` — ${authors[0]}` : "";
-  // Primele câteva mesaje, ca notificarea să spună ceva concret; restul
-  // se numără, ca să nu devină un perete de text.
+  // Primele câteva mesaje; restul doar numărate.
   const MAX_LINES = 4;
   const lines = commits.slice(0, MAX_LINES).map((c) => `• ${c.message}`);
   const rest = commits.length - MAX_LINES;
