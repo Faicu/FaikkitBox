@@ -1,31 +1,15 @@
 // ---------------------------------------------------------------------------
 // Urmărirea serialelor: descărcarea automată a episoadelor noi.
 //
-// A doua încercare. Prima (pinned-watcher.ts + tabelele pinned_*, eliminate
-// în commit 1599c9e / migrarea v14) a fost problematică din două motive de
-// fond, ambele evitate aici:
+// Declarativă, nu diferențială: TMDB spune ce s-a difuzat, `media` spune ce
+// avem, diferența se descarcă. Rularea e idempotentă — se reia oricând, se
+// repară singură după restart, nu ratează nimic dacă un ciclu pică și nu
+// descarcă de două ori. Starea stă în coloanele `auto_download*`/`watch_*` ale
+// rândului-serial din `media`.
 //
-// 1. Trăia într-o structură paralelă. Titlurile urmărite stăteau în
-//    `pinned_items`, per-utilizator, legate de `media` doar prin tmdb_id.
-//    De-acolo veneau bug-urile ei: rânduri duplicate, dedublare între două
-//    liste, un GROUP BY defensiv ca să nu descarce de N ori pentru N useri
-//    care fixaseră același serial. Acum urmărirea e un set de coloane
-//    `auto_download*` / `watch_*` pe rândul 'tv_show' din `media` — rând care e
-//    deja unic per serial și deja legat de episoade prin parent_id. Nu mai
-//    există nimic de corelat.
-//
-// 2. Era diferențială, nu declarativă. Ținea `seen_torrent_ids` și
-//    `last_aired_key` și reacționa la "ce s-a schimbat de la ultima
-//    verificare": prima rulare per item era baseline (rata intenționat
-//    primul episod), starea se strica la restart, iar o verificare picată
-//    însemna un episod pierdut definitiv.
-//
-//    Aici comparăm starea dorită cu starea reală: TMDB spune ce episoade au
-//    fost difuzate, `media WHERE parent_id = ?` spune ce avem, diferența e
-//    ce trebuie descărcat. Rularea e idempotentă — se poate relua oricând,
-//    se auto-repară după un restart, nu ratează nimic dacă un ciclu pică, și
-//    nu poate descărca de două ori, fiindcă verifică realitatea, nu un
-//    jurnal de evenimente.
+// Prima încercare (pinned-watcher.ts, tabele pinned_*, scoase în 1599c9e)
+// ținea „ce am văzut ultima dată” într-o structură paralelă: rata primul
+// episod, se strica la restart și pierdea definitiv episoadele unui ciclu picat.
 // ---------------------------------------------------------------------------
 
 import { airedEpisodeKeys } from "./aired-episodes";
@@ -47,15 +31,12 @@ import {
 } from "./metadata-report";
 
 const ITEM_INTERVAL_MS = 3 * 60 * 60 * 1000; // 3 ore — cadența reală per serial
-// În fereastra lansării — ziua episodului următor sau a ultimului difuzat, ±1
-// zi — verificarea e orară: torrentul apare de obicei în primele ore de după
-// difuzare, iar 3 ore de așteptare acolo înseamnă episod descărcat mult mai
-// târziu. Ultimul episod difuzat contează fiindcă TMDB mută next_episode pe
-// episodul următor imediat după difuzare, deci fără el „+1 zi” s-ar pierde.
+// În ziua episodului următor sau a ultimului difuzat ±1 zi, verificarea e
+// orară — torrentul apare de obicei în primele ore. Ultimul difuzat contează
+// fiindcă TMDB mută next_episode imediat după difuzare.
 const RELEASE_WINDOW_INTERVAL_MS = 60 * 60 * 1000;
-// Câte descărcări pornim cel mult într-o rulare per serial. Un serial abia
-// activat cu multe episoade lipsă nu trebuie să arunce 30 de torrente în
-// qBittorrent deodată; restul vin la ciclurile următoare.
+// Descărcări per serial într-o rulare — un serial abia activat nu aruncă 30 de
+// torrente deodată; restul vin la ciclurile următoare.
 const MAX_DOWNLOADS_PER_RUN = 3;
 
 function formatEpisodeKey(k: EpisodeKey): string {
@@ -67,8 +48,7 @@ function parseEpisodeKey(s: string | null): EpisodeKey | null {
   return m ? { season: Number(m[1]), episode: Number(m[2]) } : null;
 }
 
-// Ordonare stabilă sezon-apoi-episod, folosită și la comparația cu
-// auto_download_from ("descarcă doar ce vine după punctul ăsta").
+// Ordonare sezon-apoi-episod, folosită și la comparația cu auto_download_from.
 function ord(k: EpisodeKey): number {
   return k.season * 1000 + k.episode;
 }
@@ -89,16 +69,10 @@ interface ShowRow {
   requested_by_user_id: number | null;
 }
 
-// Episoadele deja difuzate, după TMDB. Cerem doar sezoanele care ne
-// interesează (de la sezonul lui `from` în sus), nu tot serialul — și pe
-// alea într-un singur request, prin append_to_response.
-//
-// Sezonul 0 ("Specials") e sărit intenționat: nu face parte din numerotarea
-// pe care o urmărim, iar lansările de pe Filelist nu-l acoperă coerent.
-//
-// `details` vine din afară, nu îl cerem noi: apelantul are oricum nevoie de
-// el (pentru metadatele descărcării), iar tmdbFetch n-are niciun cache — două
-// apeluri însemnau două cereri HTTP identice la fiecare ciclu.
+// Episoadele difuzate, după TMDB — doar sezoanele de la `from` în sus, într-o
+// singură cerere. Sezonul 0 („Specials”) e sărit: nu face parte din numerotare,
+// iar Filelist nu-l acoperă coerent. `details` vine de la apelant: tmdbFetch
+// n-are cache, deci o a doua cerere ar fi identică.
 async function getAiredEpisodes(
   tmdbId: number,
   fromSeason: number,
@@ -123,34 +97,23 @@ type TmdbShowDetails = Awaited<
   ReturnType<typeof import("../tmdb/tmdb.functions").getTmdbDetailsInternal>
 >;
 
-// null și când TMDB „răspunde" gol: getTmdbDetailsInternal nu aruncă la o
-// eroare, ci întoarce un obiect cu titlul gol. Tratat ca răspuns valid, ar fi
-// șters următorul episod anunțat (`next_episode` se scrie direct, fără
-// COALESCE) până la reîmprospătarea următoare.
+// null și când TMDB „răspunde” gol (getTmdbDetailsInternal nu aruncă): tratat
+// ca valid, ar fi șters următorul episod anunțat.
 async function fetchShowDetails(tmdbId: number): Promise<TmdbShowDetails | null> {
   const { getTmdbDetailsInternal } = await import("../tmdb/tmdb.functions");
   const details = await getTmdbDetailsInternal(tmdbId, "tv").catch(() => null);
   return details?.title ? details : null;
 }
 
-// Scrie pe rândul-serial ce ține de titlu, nu de fișiere: detaliile (titluri,
-// an, descriere, genuri, poster), statusul curent și următorul episod anunțat.
-// Toate vin din același răspuns TMDB, deci sunt gratuite oriunde avem deja
-// `details` în mână.
+// Scrie pe rândul-serial detaliile, statusul și următorul episod — toate din
+// același răspuns TMDB. Ora exactă a episodului vine de la TVmaze (TMDB dă doar
+// data), ca instant ISO redat direct în ora României; TVmaze e întrebat doar
+// când există un episod următor.
 //
-// Ora exactă vine din altă parte: TMDB dă doar data (air_date), fără oră, așa
-// că o luăm de la TVmaze — aceeași sursă folosită de wizard. `airstamp` e un
-// instant ISO cu fus, deci browserul îl redă direct în ora României, fără să
-// calculăm noi vreun offset. TVmaze e interogat doar când chiar există un
-// episod următor, ca să nu-l batem degeaba pentru serialele încheiate.
-//
-// `markRefreshed` pornește ceasul de 12h (`meta_refreshed_at`) — doar
-// reîmprospătarea completă, care actualizează și episoadele, are voie să-l
-// pornească. Verificarea de episoade noi (la 3h) scria și ea aici, deci la
-// un serial urmărit ceasul nu apuca niciodată 12h, iar numele și descrierile
-// episoadelor nu se mai reîmprospătau deloc după descărcare (găsit pe 26 sept.
-// 2026: Insula Iubirii rămăsese cu „Episodul 1–3” și fără descrieri, deși
-// TMDB le avea de ore bune).
+// `markRefreshed` pornește ceasul de 12h — doar reîmprospătarea completă, care
+// atinge și episoadele. Când îl pornea și verificarea la 3h, la un serial
+// urmărit ceasul nu ajungea niciodată la 12h și numele episoadelor nu se mai
+// actualizau (Insula Iubirii, 26 sept. 2026).
 async function writeShowMeta(
   showId: number,
   imdbId: string | null,
@@ -174,22 +137,10 @@ async function writeShowMeta(
     );
   }
 
-  // Titlurile se împrospătează și ele. `title` (varianta de afișare, în
-  // română) și `original_title` (cea în limba originală de producție) erau
-  // scrise o singură dată, la crearea rândului, și rămâneau înghețate — iar
-  // ramura de backfill nu completa deloc original_title și year. Rezultatul
-  // s-a văzut la "The Rookie", importat din Plex pe 15 aug: title rămăsese
-  // englezescul "The Rookie" deși TMDB are "Recrutul", iar original_title era
-  // gol, deci nici titlul original nu apărea sub el.
-  //
-  // COALESCE + NULLIF: nu suprascriem cu gol dacă TMDB răspunde incomplet —
-  // mai bine un titlu vechi decât niciunul.
-  //
-  // Descrierea, genurile și posterul la fel (din 26 sept. 2026): sunt cerute
-  // în română la fiecare reîmprospătare, deci un serial adăugat înainte ca
-  // TMDB să aibă traducerea sau posterul românesc le primește singur, la cel
-  // mult 12 ore după ce apar pe TMDB. Fiecare câmp se scrie separat și doar
-  // cu o valoare nevidă — ce lipsește la TMDB nu șterge ce avem.
+  // Titlurile, descrierea, genurile și posterul se împrospătează la fiecare
+  // trecere (erau scrise o singură dată: „The Rookie” rămăsese în engleză deși
+  // TMDB avea „Recrutul”). COALESCE + NULLIF: un răspuns TMDB incomplet nu
+  // șterge ce avem.
   const year = details.releaseDate ? Number(details.releaseDate.slice(0, 4)) : null;
   const genres = (details.genres ?? []).length > 0 ? JSON.stringify(details.genres) : null;
   const db = getDb();
@@ -231,16 +182,10 @@ async function writeShowMeta(
     showId,
   );
 
-  // Episoadele poartă titlul serialului, prin convenția din `media` — dacă
-  // rămâneau pe cel vechi, un episod deschis singur ar fi arătat alt nume
-  // decât serialul din care face parte. `original_title` contează în plus:
-  // e cheia de rezervă la potrivirea vizionărilor cu Plex, când istoricul
-  // vine fără ratingKey.
-  //
-  // Descrierea și genurile episoadelor sunt tot copii ale celor ale serialului
-  // (upsertMediaEntry, desfacerea pachetelor), deci țin pasul cu ele. Posterul
-  // nu: pe episoade e posterul SEZONULUI, ținut de syncEpisodeDetails — scris
-  // și aici, cele două s-ar fi suprascris una pe alta la fiecare verificare.
+  // Episoadele poartă titlul serialului (convenția din `media`); original_title
+  // e și cheia de rezervă la potrivirea vizionărilor cu Plex. Descrierea și
+  // genurile sunt copii ale serialului. Posterul nu: pe episoade e posterul
+  // SEZONULUI (syncEpisodeDetails) — scris și aici, s-ar suprascrie reciproc.
   db.prepare(
     `UPDATE media
         SET title = COALESCE(NULLIF(?, ''), title),
@@ -262,16 +207,12 @@ export interface ShowWatchOutcome {
   skipped: string | null;
 }
 
-// Serialele aflate chiar acum în verificare. Restul logicii e idempotentă
-// pentru rulări SUCCESIVE (compară mereu realitatea), dar nu și pentru două
-// rulări SIMULTANE: butonul "Verifică acum" apăsat în timpul unui ciclu
-// automat ar face ambele să vadă aceleași episoade lipsă și să pornească
-// același torrent de două ori, înainte ca vreuna să apuce să scrie ceva.
+// Serialele în verificare acum. Rulările succesive sunt idempotente, dar două
+// SIMULTANE („Verifică acum” în timpul unui ciclu) ar porni același torrent de
+// două ori.
 const inProgress = new Set<number>();
 
-// Verifică un singur serial și pornește descărcările lipsă. Exportată separat
-// de bucla periodică fiindcă butonul "Verifică acum" din drawer o cheamă
-// direct, pentru serialul deschis.
+// Un singur serial — chemată și direct de „Verifică acum” din drawer.
 export async function checkShow(showId: number): Promise<ShowWatchOutcome> {
   if (inProgress.has(showId)) {
     return {
@@ -301,18 +242,13 @@ async function checkShowInner(showId: number): Promise<ShowWatchOutcome> {
     )
     .get(showId) as unknown as ShowRow | undefined;
 
-  // datetime('now'), nu new Date().toISOString(): restul coloanelor de timp
-  // din `media` sunt în formatul SQLite ("2026-09-06 07:54:16"), iar un ISO
-  // complet ("...T07:54:16.987Z") strica două lucruri deodată. Afișarea —
-  // conversia standard din UI îi mai adăuga un "Z" și ieșea dată invalidă.
-  // Și, mai grav, programarea: comparația din checkDueShows e pe șiruri, iar
-  // 'T' (84) > ' ' (32), deci un serial verificat azi nu devenea scadent în
-  // aceeași zi oricâte ore treceau — urmărirea rula o dată pe zi, nu la 3 ore.
+  // datetime('now'), nu ISO: comparația din checkDueShows e pe șiruri, iar un
+  // ISO („...T07:54”) nu devenea scadent în aceeași zi ('T' > ' ') — urmărirea
+  // rula o dată pe zi, nu la 3 ore. Și afișarea ieșea dată invalidă.
   const stamp = () =>
     db.prepare("UPDATE media SET watch_last_checked_at = datetime('now') WHERE id = ?").run(showId);
-  // Notițele calității de rezervă (vezi fallback-quality.ts). Se rescriu la
-  // fiecare verificare care a ajuns să compare calitățile: rămân doar țintele
-  // la care încă se așteaptă principala.
+  // Notițele calității de rezervă (fallback-quality.ts): rămân doar țintele la
+  // care încă se așteaptă principala.
   const saveFallbackSeen = (seen: FallbackSeen) =>
     db
       .prepare("UPDATE media SET watch_fallback_seen = ? WHERE id = ?")
@@ -328,8 +264,8 @@ async function checkShowInner(showId: number): Promise<ShowWatchOutcome> {
     skipped: null,
   };
 
-  // Fără IMDb id nu avem cum căuta: căutarea pe Filelist e strict pe IMDb
-  // (fallback-ul pe titlu a fost eliminat definitiv, confirmat de suport).
+  // Căutarea pe Filelist e strict după IMDb (fallback-ul pe titlu, eliminat
+  // definitiv, confirmat de suport).
   if (!row.imdb_id || !row.tmdb_id) {
     stamp();
     result.skipped = "lipsește imdb_id sau tmdb_id";
@@ -345,13 +281,9 @@ async function checkShowInner(showId: number): Promise<ShowWatchOutcome> {
       .map((e) => formatEpisodeKey({ season: e.season!, episode: e.episode! })),
   );
 
-  // Un pachet de sezon pornit, dar încă neterminat, e un singur rând cu
-  // episode NULL: episoadele lui apar abia după ce Plex îl indexează și
-  // resolveSeasonPackPlexLinks îl desface. Până atunci episoadele lui ar
-  // părea în continuare "lipsă", iar la ciclul următor am fi descărcat
-  // episoadele individuale PESTE pachetul care oricum le aduce. Plasa cu
-  // torrent_name de mai jos nu acoperă cazul ăsta — acolo e vorba de alt
-  // torrent, cu alt nume.
+  // Un pachet de sezon neterminat e un singur rând cu episode NULL; episoadele
+  // lui apar abia după desfacere. Până atunci ar părea „lipsă” și s-ar
+  // descărca individual PESTE pachet.
   const pendingPackSeasons = new Set(
     (
       db
@@ -366,8 +298,7 @@ async function checkShowInner(showId: number): Promise<ShowWatchOutcome> {
 
   const from = parseEpisodeKey(row.auto_download_from);
   const details = await fetchShowDetails(row.tmdb_id);
-  // Verificarea unui serial urmărit e și momentul în care îi împrospătăm
-  // metadatele — datele sunt deja aici, ar fi risipă să le aruncăm.
+  // Datele sunt deja aici — momentul potrivit pentru metadatele serialului.
   await writeShowMeta(row.id, details ? row.imdb_id : null, details, { markRefreshed: false });
   const aired = await getAiredEpisodes(row.tmdb_id, from ? from.season : 1, details, true);
   const missing = aired
@@ -391,8 +322,8 @@ async function checkShowInner(showId: number): Promise<ShowWatchOutcome> {
     mediaType: "tv",
   });
   if (search.status !== "ok" || search.torrents.length === 0) {
-    // La o eroare Filelist notițele rămân: nu știm nimic nou, iar ștergerea
-    // lor ar reporni de la zero așteptarea după principală.
+    // Eroare Filelist: notițele rămân, altfel așteptarea după principală ar
+    // reporni de la zero.
     if (search.status === "ok") saveFallbackSeen({});
     stamp();
     result.skipped =
@@ -404,11 +335,8 @@ async function checkShowInner(showId: number): Promise<ShowWatchOutcome> {
   const { parseSeasonEpisodeFromName } = await import("./torrent-name-parse");
   const wantedQuality = row.auto_download_quality || "1080p";
 
-  // Torrente deja aduse (indiferent de stadiu) — plasa care ține rularea
-  // idempotentă în fereastra dintre pornirea unui pachet de sezon și
-  // apariția rândurilor lui per episod: până atunci episoadele încă apar
-  // "lipsă", iar fără verificarea asta același pachet ar fi descărcat din
-  // nou la fiecare ciclu.
+  // Torrentele deja aduse — țin rularea idempotentă cât un pachet pornit încă
+  // n-are rânduri per episod.
   const alreadyFetched = new Set(
     (
       db
@@ -431,15 +359,12 @@ async function checkShowInner(showId: number): Promise<ShowWatchOutcome> {
     .filter((c) => {
       const p = c.parsed!;
       if (p.episode != null) return missingKeys.has(formatEpisodeKey({ ...p, episode: p.episode }));
-      // Pachet de sezon: util doar dacă acoperă măcar un episod lipsă.
-      // Alegerea ta explicită e să-l luăm oricând acoperă ceva, chiar dacă
-      // aduce și episoade deja deținute — singura excepție e pachetul din
-      // care avem deja tot, care n-ar aduce nimic nou.
+      // Pachet de sezon: luat dacă acoperă măcar un episod lipsă, chiar dacă
+      // aduce și episoade deținute (alegerea ta).
       return missing.some((k) => k.season === p.season);
     });
 
-  // Episoadele lipsă pe care le-ar aduce un torrent (un pachet = tot ce
-  // lipsește din sezonul lui).
+  // Episoadele lipsă aduse de un torrent (pachetul = tot ce lipsește din sezon).
   const coversOf = (p: { season: number; episode: number | null }): EpisodeKey[] =>
     p.episode != null
       ? [{ season: p.season, episode: p.episode }]
@@ -452,10 +377,8 @@ async function checkShowInner(showId: number): Promise<ShowWatchOutcome> {
 
   const primary = relevant.filter((c) => c.quality === wantedQuality);
 
-  // Calitatea de rezervă (vezi fallback-quality.ts): contează doar pentru
-  // ținte pe care principala nu le acoperă deloc — nici ca episod, nici prin
-  // pachetul sezonului. Prima dată se notează și se așteaptă; se descarcă abia
-  // la o verificare de peste cel puțin 3 ore, dacă principala tot lipsește.
+  // Rezerva contează doar pentru ținte pe care principala nu le acoperă deloc;
+  // prima dată se notează, se descarcă la o verificare de peste cel puțin 3h.
   const fallbackQuality = effectiveFallback(wantedQuality, row.auto_download_fallback_quality);
   const primaryCovers = new Set(primary.flatMap((c) => coversOf(c.parsed!).map(formatEpisodeKey)));
   const prevSeen = parseFallbackSeen(row.watch_fallback_seen);
@@ -481,9 +404,8 @@ async function checkShowInner(showId: number): Promise<ShowWatchOutcome> {
 
   const byRank = compareTorrents("tv");
   const candidates = [...primary, ...readyFallback]
-    // Episoadele individuale au prioritate față de pachete (mai puțin trafic
-    // pentru același rezultat), apoi principala față de rezervă, apoi
-    // clasamentul comun (torrent-rank.ts).
+    // Episoadele individuale înaintea pachetelor (mai puțin trafic), apoi
+    // principala înaintea rezervei, apoi clasamentul comun (torrent-rank.ts).
     .sort((a, b) => {
       const aPack = a.parsed!.episode == null ? 1 : 0;
       const bPack = b.parsed!.episode == null ? 1 : 0;
@@ -503,15 +425,13 @@ async function checkShowInner(showId: number): Promise<ShowWatchOutcome> {
 
   const { downloadFilelistCore } = await import("../filelist/download");
   const covered = new Set<string>();
-  // Ce a adus urmărirea în verificarea asta — reperul până la care avansează
-  // poziția de start (vezi watch-position.ts).
+  // Ce a adus verificarea — reperul pentru poziția de start (watch-position.ts).
   const downloadedNow: EpisodeKey[] = [];
 
   for (const c of candidates) {
     if (result.downloaded.length >= MAX_DOWNLOADS_PER_RUN) break;
     const p = c.parsed!;
-    // Nu porni două torrente care acoperă același episod în aceeași rulare
-    // (ex. episodul individual și pachetul sezonului lui).
+    // Fără două torrente pentru același episod (episodul și pachetul lui).
     const coversNowKeys = coversOf(p);
     const coversNow = coversNowKeys.map(formatEpisodeKey);
     if (coversNow.every((k) => covered.has(k))) continue;
@@ -527,10 +447,8 @@ async function checkShowInner(showId: number): Promise<ShowWatchOutcome> {
       imdb: c.torrent.imdb ?? row.imdb_id,
       requestedByUserId: row.requested_by_user_id,
       media: {
-        // parent_id nu se trimite: upsertMediaEntry îl rezolvă singur, prin
-        // ensureMediaPlaceholder, după tmdb_id/imdb_id/titlu — adică exact
-        // rândul-serial de la care am pornit. Dublarea lui aici ar fi o a
-        // doua sursă de adevăr pentru aceeași legătură.
+        // parent_id îl rezolvă upsertMediaEntry (ensureMediaPlaceholder) —
+        // trimis și aici, ar fi o a doua sursă pentru aceeași legătură.
         mediaType: "episode",
         imdbId: c.torrent.imdb ?? row.imdb_id,
         tmdbId: row.tmdb_id,
@@ -566,9 +484,7 @@ async function checkShowInner(showId: number): Promise<ShowWatchOutcome> {
     );
   }
 
-  // O rezervă „gata" care n-a pornit acum (descărcare eșuată, sau limita de
-  // descărcări pe verificare) rămâne gata și la verificarea următoare — nu
-  // reîncepe așteptarea de 3 ore.
+  // O rezervă „gata” care n-a pornit acum rămâne gata — nu reîncepe cele 3h.
   const unstarted = readyFallback.filter(
     (c) => !coversOf(c.parsed!).every((k) => covered.has(formatEpisodeKey(k))),
   );
@@ -580,9 +496,8 @@ async function checkShowInner(showId: number): Promise<ShowWatchOutcome> {
     saveFallbackSeen(nextSeen);
   }
 
-  // Poziția de start avansează peste ce tocmai a adus urmărirea, ca un episod
-  // văzut și șters apoi din Bibliotecă să nu fie redescărcat (vezi
-  // watch-position.ts pentru regulă și de ce se oprește la primul gol).
+  // Poziția de start avansează peste ce s-a adus, ca un episod văzut și șters
+  // să nu revină (watch-position.ts: de ce se oprește la primul gol).
   if (downloadedNow.length > 0) {
     const next = advancedWatchFrom({
       from,
@@ -606,23 +521,15 @@ async function checkShowInner(showId: number): Promise<ShowWatchOutcome> {
     }
   }
 
-  // Fără notificare proprie aici: downloadFilelistCore loghează deja
-  // torrent_added și trimite push-ul, iar `addedVia: "auto"` face titlul
-  // notificării "🤖 Descărcare Automată" în loc de "⬇️ Descărcare Inițiată".
-  // Un push în plus de-aici ar dubla fiecare episod.
+  // Fără notificare aici: downloadFilelistCore trimite deja push-ul („🤖
+  // Descărcare Automată” prin addedVia: "auto") — încă unul l-ar dubla.
   stamp();
   return result;
 }
 
-// Bucla periodică: verifică serialele urmărite cărora le-a expirat cadența —
-// 1 oră în fereastra lansării (vezi RELEASE_WINDOW_INTERVAL_MS), 3 ore în rest.
-// Cadența e persistată în DB (watch_last_checked_at), nu într-un timer în
-// memorie — altfel fiecare restart al serviciului ar reporni numărătoarea de
-// la zero.
-//
-// Ziua de azi e cea locală (serverul e pe ora României): datele TMDB sunt
-// ale difuzării americane, deci un episod de duminică seara acolo apare luni
-// dimineața aici — exact ce acoperă marja de ±1 zi.
+// Serialele cu cadența expirată: 1h în fereastra lansării, 3h în rest, ținută
+// în DB (un timer s-ar reseta la restart). Ziua e cea locală: un episod de
+// duminică seara în SUA apare luni aici — marja de ±1 zi îl acoperă.
 export async function checkDueShows(): Promise<void> {
   const db = getDb();
   const due = db
@@ -662,13 +569,10 @@ export interface SetShowWatchInput {
   mediaId: number;
   enabled: boolean;
   quality?: string;
-  // Calitatea de rezervă (vezi fallback-quality.ts). `undefined` = lasă
-  // neschimbată; `null` = fără rezervă.
+  // Calitatea de rezervă: `undefined` = neschimbată; `null` = fără.
   fallbackQuality?: string | null;
-  // "forward" (implicit) = doar episoadele care apar de-acum înainte;
-  // "backfill" = și tot ce lipsește deja din istoric. Distincția contează:
-  // pentru un serial cu 7 sezoane din care ai 2, "backfill" înseamnă câteva
-  // zeci de episoade, deci trebuie să fie o alegere conștientă, nu implicită.
+  // "forward" (implicit) = doar ce apare de-acum; "backfill" = și tot ce
+  // lipsește din istoric — zeci de episoade, deci doar la alegere explicită.
   mode?: "forward" | "backfill";
 }
 
@@ -681,19 +585,14 @@ export async function setShowWatchCore(input: SetShowWatchInput): Promise<void> 
     return;
   }
 
-  // Dacă urmărirea e DEJA pornită, singurul lucru care se schimbă e calitatea.
-  // Punctul de pornire rămâne neatins: recalculându-l, o simplă schimbare de
-  // calitate ar muta `auto_download_from` la ultimul episod difuzat și ar sări
-  // silențios peste episoadele care încă așteptau un torrent. E exact bug-ul
-  // reparat în 4a94143 la implementarea veche ("pinForMonitoring rescria
-  // necondiționat setările de urmărire, resetând silențios orice
-  // personalizare"), doar cu alt nume.
+  // Urmărire deja pornită: se schimbă doar calitatea. Recalculat, punctul de
+  // pornire ar sări peste episoadele care încă așteptau un torrent (același
+  // bug ca 4a94143 la implementarea veche).
   const current = db
     .prepare("SELECT auto_download FROM media WHERE id = ? AND media_type = 'tv_show'")
     .get(input.mediaId) as { auto_download: number } | undefined;
   if (current?.auto_download) {
-    // Notițele rezervei se golesc la orice schimbare de calitate: erau despre
-    // perechea veche (principală, rezervă), iar așteptarea reîncepe corect.
+    // Notițele rezervei erau despre perechea veche de calități.
     db.prepare(
       `UPDATE media SET auto_download_quality = ?,
               auto_download_fallback_quality = CASE WHEN ? THEN ? ELSE auto_download_fallback_quality END,
@@ -710,9 +609,8 @@ export async function setShowWatchCore(input: SetShowWatchInput): Promise<void> 
 
   let from: string | null = null;
   if ((input.mode ?? "forward") === "forward") {
-    // Punctul de plecare = ce e mai târziu dintre ultimul episod deținut și
-    // ultimul difuzat. Fără el, un serial din care ai doar primele sezoane
-    // ar declanșa la activare descărcarea a tot ce a apărut între timp.
+    // Punctul de plecare = cel mai târziu dintre ultimul episod deținut și
+    // ultimul difuzat — altfel activarea ar aduce tot ce a apărut între timp.
     const owned = db
       .prepare(
         `SELECT MAX(season * 1000 + episode) AS ord FROM media
@@ -750,44 +648,27 @@ export async function setShowWatchCore(input: SetShowWatchInput): Promise<void> 
 // Numele episoadelor
 // ---------------------------------------------------------------------------
 
-// Cât timp mai sperăm că TMDB completează titlul unui episod deja difuzat,
-// înainte să acceptăm placeholder-ul lui generic ca răspuns final.
+// Cât mai așteptăm ca TMDB să completeze titlul unui episod difuzat, înainte
+// să acceptăm placeholder-ul generic.
 const PLACEHOLDER_GRACE_MS = 14 * 24 * 60 * 60 * 1000;
 
-// "Episodul 8" / "Episode 8" — titlul generic pe care TMDB îl întoarce când
-// episodul n-are (încă) nume propriu.
+// „Episodul 8” — titlul generic al TMDB când episodul n-are (încă) nume.
 const GENERIC_EPISODE_TITLE = /^episo(?:dul|de)\s*\d+$/i;
 
-// Detaliile episoadelor, de la TMDB: numele, descrierea, imaginea și data
-// difuzării episodului, plus posterul sezonului (pe `poster_path`, locul
-// posterului vertical din notificări și miniaturi). Totul cerut în română, cu engleza ca
-// rezervă pentru ce lipsește (getTmdbAllSeasonsInternal cu `details`).
+// Detaliile episoadelor de la TMDB (nume, descriere, imagine, data, posterul
+// sezonului), în română cu engleza ca rezervă. Două rulări, pe un serial:
+// - imediat după ce se scrie un episod: doar episoadele cărora le lipsește
+//   ceva (syncEpisodeDetailsForShow);
+// - cu `all`, la reîmprospătarea de 12h: toate — așa ajunge româna când apare
+//   pe TMDB (un nume salvat în engleză nu se mai verifica niciodată).
 //
-// Două feluri de rulare, ambele pe un singur serial:
-// - `parentId` (imediat după ce se scrie un episod, vezi
-//   syncEpisodeDetailsForShow): episoadele acelui serial cărora le lipsește
-//   ceva — nume, descriere sau imagine — ca detaliile să apară odată cu
-//   episodul.
-// - `parentId` + `all` (reîmprospătarea serialului, la 12 ore): TOATE
-//   episoadele lui. Așa ajunge româna când apare pe TMDB: un nume salvat în
-//   engleză („Lights Out") e înlocuit cu cel românesc („Stingerea"), la cel
-//   mult 12 ore după ce apare. Înainte, un episod cu nume nu mai era
-//   verificat niciodată, deci engleza rămânea pe veci.
-//
-// (Până pe 26 sept. 2026 mai era un pas la 10 minute pentru episoadele fără
-// nume. Scos la cererea userului: cele două rulări de mai sus îl acoperă, iar
-// singurul lui câștig — numele real în cel mult 10 minute când, la
-// descărcare, TMDB avea doar „Episodul N" — nu merita un pas separat.)
-//
-// Reguli la scriere: un nume se înlocuiește doar cu un nume real, niciodată
-// cu „Episodul N"; descrierea, imaginea și posterul — doar cu valori nevide.
-// Ce lipsește la TMDB nu șterge ce avem.
+// Un nume se înlocuiește doar cu un nume real, niciodată cu „Episodul N”;
+// restul doar cu valori nevide — ce lipsește la TMDB nu șterge ce avem.
 export async function syncEpisodeDetails(opts: {
   parentId: number;
   all?: boolean;
-  // Câte o linie per episod schimbat, pentru jurnalul reîmprospătării.
-  // `firstFill`: episodul n-avea încă niciun detaliu (tocmai creat) — prima
-  // completare, nu o reîmprospătare.
+  // O linie per episod schimbat, pentru jurnal. `firstFill`: prima completare
+  // a unui episod tocmai creat, nu o actualizare.
   onEpisodeChange?: (line: string, firstFill: boolean) => void;
 }): Promise<number> {
   const db = getDb();
@@ -825,8 +706,7 @@ export async function syncEpisodeDetails(opts: {
             poster_path = COALESCE(NULLIF(?, ''), poster_path)
       WHERE id = ?`,
   );
-  // Toate rândurile sunt ale aceluiași serial, deci o singură cerere TMDB
-  // (sezoanele deținute, prin append_to_response).
+  // Un singur serial, deci o singură cerere TMDB.
   const seasons = [...new Set(rows.map((r) => r.season))].sort((a, b) => a - b);
   const schema = await getTmdbAllSeasonsInternal(rows[0].tmdb_id, seasons, {
     details: true,
@@ -844,18 +724,13 @@ export async function syncEpisodeDetails(opts: {
     let title: string | null = found.title;
     if (GENERIC_EPISODE_TITLE.test(found.title)) {
       if (r.episode_title) {
-        // Avem deja un nume (real sau placeholder acceptat) — un placeholder
-        // nou nu-l înlocuiește.
+        // Un nume existent nu e înlocuit de un placeholder.
         title = null;
       } else {
-        // "Episodul 8" e placeholder-ul pe care TMDB îl întoarce cât timp
-        // n-are încă titlul real — frecvent în primele ore după difuzare,
-        // dar și permanent pentru emisiuni ale căror episoade n-au titluri
-        // (reality show-uri, televiziune locală). Pentru un episod difuzat
-        // recent îl lăsăm gol, ca reîmprospătarea să reîncerce; pentru unul
-        // difuzat demult (sau fără dată la TMDB) îl acceptăm — nu mai are
-        // rost să-l așteptăm (găsit la "Insula Iubirii" S10, unde TMDB n-are
-        // titluri deloc). UI-ul ascunde oricum numele generice.
+        // „Episodul 8” e și placeholder temporar (primele ore după difuzare),
+        // și permanent (reality show-uri fără titluri, ca Insula Iubirii).
+        // Recent → gol, ca să se reîncerce; vechi → acceptat. UI-ul ascunde
+        // oricum numele generice.
         const stillWorthWaiting =
           found.airDate != null &&
           Date.now() - new Date(found.airDate).getTime() <= PLACEHOLDER_GRACE_MS;
@@ -895,16 +770,10 @@ export async function syncEpisodeDetails(opts: {
   return changed;
 }
 
-// Detaliile episoadelor unui serial, imediat după ce i s-a scris un episod
-// nou (descărcare pornită din wizard, căutare manuală sau urmărire;
-// desfacerea unui pachet de sezon). Rulează în fundal: descărcarea nu
-// așteaptă după TMDB, iar o eroare aici nu contează — reîmprospătarea de 12
-// ore reîncearcă oricum.
-//
-// Ce schimbă la episoadele mai vechi (un nume „Episodul 4” devenit „Prima
-// flacără”, fiindcă nu aveau încă imagine și intră și ele în rulare) ajunge în
-// jurnalul de metadate, ca la reîmprospătarea de 12h. Episoadele tocmai create
-// nu: prima lor completare nu e o actualizare (decizia userului, 27 sept. 2026).
+// Detaliile episoadelor unui serial imediat după ce i s-a scris un episod nou,
+// în fundal (o eroare se reia la 12h). Schimbările la episoadele mai vechi
+// ajung în jurnalul de metadate; prima completare a celor noi nu (decizia
+// userului, 27 sept. 2026).
 export function syncEpisodeDetailsForShow(parentId: number | null): void {
   if (parentId == null) return;
   syncAndLogEpisodeDetails(parentId).catch((e) =>
@@ -931,20 +800,13 @@ export async function syncAndLogEpisodeDetails(parentId: number): Promise<void> 
 // Reîmprospătarea metadatelor de serial
 // ---------------------------------------------------------------------------
 
-// 12h per titlu, fără limită pe rulare: TMDB are limite generoase, iar o
-// limită ar întârzia corecțiile la o bibliotecă mare (decizia userului, 26 sept.
-// 2026). Aceeași cadență și pentru filme (movie-metadata.ts).
+// 12h per titlu, fără limită pe rulare (decizia userului, 26 sept. 2026); la
+// fel pentru filme (movie-metadata.ts).
 export const META_INTERVAL_MS = 12 * 60 * 60 * 1000;
 
-// Ține la zi tv_status, următorul episod și detaliile (titluri, an,
-// descriere, genuri, poster — vezi writeShowMeta) pentru TOATE serialele, nu
-// doar pentru cele urmărite.
-//
-// tv_status era scris o singură dată, la prima descărcare, și rămânea așa pe
-// veci. Conta: panoul de urmărire se ascunde exact pe `tv_status === 'Ended'`,
-// deci un serial reînnoit după ce fusese marcat încheiat nu mai arăta
-// niciodată butonul — adică fix pentru serialele NEurmărite era cel mai
-// important să fie corect.
+// Statusul, următorul episod și detaliile pentru TOATE serialele, nu doar cele
+// urmărite: butonul de urmărire se ascunde pe `tv_status === 'Ended'`, deci un
+// serial reînnoit trebuie să-l primească înapoi.
 export async function refreshShowMetadata(report?: MetaReport): Promise<number> {
   const db = getDb();
   const due = db
@@ -960,15 +822,8 @@ export async function refreshShowMetadata(report?: MetaReport): Promise<number> 
     imdb_id: string | null;
   }>;
 
-  // Marchează încercarea chiar și când TMDB n-a răspuns. `meta_refreshed_at`
-  // se scrie altfel doar în writeShowMeta, deci un serial al cărui tmdb_id nu
-  // mai rezolvă (șters de pe TMDB, id greșit) ar fi fost reîncercat la fiecare
-  // rulare, adică la 10 minute, la nesfârșit. (Pe vremea limitei de 5 pe
-  // rulare era mai rău: cinci astfel de seriale ocupau permanent tot LIMIT-ul
-  // și blocau împrospătarea pentru toate celelalte.)
-  //
-  // Costul e că o pană TMDB trecătoare amână serialele atinse cu încă 12h.
-  // Acceptabil: cadența nu e critică.
+  // Încercarea se marchează și fără răspuns TMDB — un tmdb_id mort ar fi fost
+  // reîncercat la fiecare 10 minute. Costul: o pană trecătoare amână cu 12h.
   const touch = db.prepare("UPDATE media SET meta_refreshed_at = datetime('now') WHERE id = ?");
 
   let refreshed = 0;

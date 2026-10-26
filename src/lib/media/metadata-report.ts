@@ -1,18 +1,12 @@
 // ---------------------------------------------------------------------------
-// Jurnalul reîmprospătării metadatelor (seriale, episoade, filme).
+// Jurnalul reîmprospătării metadatelor (seriale, episoade, filme). Înainte se
+// vedea doar în journalctl, ca număr — un bug din 26 sept. 2026 (episoadele
+// serialelor urmărite nu se mai reîmprospătau) a stat nedescoperit de-asta.
 //
-// Până acum reîmprospătarea de 12h lăsa urme doar în journalctl, ca număr
-// („pentru 9 seriale”), deci din aplicație nu se vedea nici când a rulat,
-// nici ce a adus. Bug-ul din 26 sept. 2026 (serialele urmărite nu mai primeau
-// deloc reîmprospătarea episoadelor) a stat nedescoperit tocmai de-asta.
-//
-// O rulare = o intrare în jurnal, scrisă doar dacă a adus schimbări reale sau
-// a avut titluri eșuate. Rulările „nimic nou” (cam 50 pe zi: detaliile se
-// împrospătează pe rând, câteva titluri la 10 minute) nu se mai scriu — doar
-// împingeau afară din istoric ce conta.
-// „Ce s-a schimbat” e comparat explicit, valoare cu valoare, înainte și după:
-// SQLite numără un rând ca modificat și când valorile scrise sunt identice,
-// deci `changes` n-ar deosebi „nimic nou” de o schimbare reală.
+// O rulare = o intrare, scrisă doar cu schimbări reale sau titluri eșuate
+// (rulările „nimic nou”, ~50/zi, împingeau afară ce conta). Schimbările se
+// compară valoare cu valoare: SQLite numără ca modificat și un rând rescris
+// cu aceleași valori.
 // ---------------------------------------------------------------------------
 
 import { pluralRo } from "../format";
@@ -39,9 +33,8 @@ export function newMetaReport(): MetaReport {
 
 type Row = Record<string, unknown>;
 
-// Diferențele dintre două citiri ale aceluiași rând. `verbose`: coloanele
-// scurte la care arătăm și valorile (titluri, nume) — la descrieri sau
-// postere, doar faptul că s-au schimbat.
+// Diferențele dintre două citiri ale aceluiași rând. `verbose`: coloanele la
+// care arătăm și valorile; la descrieri și postere, doar faptul schimbării.
 export function diffFields(
   before: Row | undefined,
   after: Row | undefined,
@@ -122,7 +115,7 @@ export async function logMetaReport(r: MetaReport): Promise<void> {
     shows: r.shows,
     movies: r.movies,
     failed: r.failed,
-    // Obiecte plate (vezi ActivityMetaValue): listele devin text pe linii.
+    // Obiecte plate (ActivityMetaValue): listele devin text pe linii.
     items: r.changes.map((c) => ({
       title: c.title,
       kind: c.kind,
@@ -132,10 +125,8 @@ export async function logMetaReport(r: MetaReport): Promise<void> {
   });
 }
 
-// Episoadele mai vechi actualizate de completarea de după o descărcare
-// (syncAndLogEpisodeDetails din show-watch.ts). Aceeași formă ca o rulare de
-// 12h, ca detaliile să se deschidă în același panou; scrisă doar când s-a
-// schimbat ceva — completarea rulează la fiecare episod descărcat.
+// Episoadele mai vechi actualizate după o descărcare (syncAndLogEpisodeDetails)
+// — aceeași formă ca o rulare de 12h, scrisă doar cu schimbări.
 export function buildEpisodeUpdateMessage(title: string, episodes: number): string {
   return `Metadate: ${title} · ${pluralRo(episodes, "episod actualizat", "episoade actualizate")}`;
 }

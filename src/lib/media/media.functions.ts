@@ -1,33 +1,21 @@
 // ---------------------------------------------------------------------------
-// Server functions pentru `media`, separate intenționat de media.ts.
-//
-// media.ts are `import { getDb } from "../db"` static la vârf, iar db.ts
-// conține schema SQLite completă și hashing-ul de parole. Cât timp componente
-// client importau server functions DIN media.ts, tot graful ajungea în
-// bundle-ul public: /assets/db-*.js era servit cu 200 către orice browser
-// (verificat — fără valori secrete din .env, care sunt înlocuite la build, dar
-// cu schema și structura internă la vedere).
-//
-// Fișierul ăsta e subțire și fără importuri server statice: corpul unui
-// handler de server function e eliminat din bundle-ul de client, deci
-// `await import("./media")` de mai jos rămâne exclusiv pe server.
-//
-// Regulă generală: orice modul importat de componente client trebuie să nu
-// aibă importuri statice server-only.
+// Server functions pentru `media`, separate de media.ts: componentele client
+// care importau server functions din media.ts trăgeau db.ts în bundle-ul
+// public (schema la vedere în /assets/db-*.js). Aici nu există importuri
+// server statice — `await import()` din handler rămâne pe server.
 // ---------------------------------------------------------------------------
 
 import { createServerFn } from "@tanstack/react-start";
 
 import { isUnauthorizedError } from "../auth/unauthorized";
 
-// Doar tipuri — se șterg la compilare, nu trag nimic în bundle.
+// Doar tipuri — nu trag nimic în bundle.
 export type { LibraryTitleMatch, DownloadingMediaEntry } from "./media";
 import type { LibraryTitleMatch } from "./media";
 export type { ShowWatchOutcome, SetShowWatchInput } from "./show-watch";
 import type { ShowWatchOutcome, SetShowWatchInput } from "./show-watch";
 
-// Căutare de titluri deja existente în bibliotecă (rânduri-rădăcină, fără
-// parent_id) — folosită la descărcarea manuală de pe Filelist.
+// Titluri existente în bibliotecă, pentru descărcarea manuală de pe Filelist.
 export const searchLibraryTitles = createServerFn({ method: "GET" })
   .validator((data: { query: string }) => data)
   .handler(async ({ data }): Promise<LibraryTitleMatch[]> => {
@@ -41,9 +29,7 @@ export const searchLibraryTitles = createServerFn({ method: "GET" })
 // Urmărirea serialelor (vezi show-watch.ts)
 // ---------------------------------------------------------------------------
 
-// Aceeași regulă de permisiune ca la ștergere/corectare din drawer: cine a
-// adăugat serialul, sau un admin. Urmărirea pornește descărcări reale, deci
-// n-are ce căuta la îndemâna oricui e logat.
+// Cine a adăugat serialul, sau un admin — urmărirea pornește descărcări reale.
 async function requireShowManage(mediaId: number) {
   const { requireAuth, isAdminOrOwner } = await import("../auth/admin.server");
   const session = await requireAuth();
@@ -64,7 +50,7 @@ export const setShowWatch = createServerFn({ method: "POST" })
       await requireShowManage(data.mediaId);
       const { setShowWatchCore } = await import("./show-watch");
       await setShowWatchCore(data);
-      // Prima verificare a serialului acum, nu la următorul ciclu de 10 minute.
+      // Prima verificare acum, nu la următorul ciclu.
       if (data.enabled) {
         const { pokeWatcher } = await import("../watcher/poke");
         pokeWatcher("show-watch");
@@ -75,9 +61,8 @@ export const setShowWatch = createServerFn({ method: "POST" })
     }
   });
 
-// "Verifică acum" din drawer — ignoră cadența (1–3 ore) pentru serialul
-// deschis. Depanarea tipică e "de ce n-a descărcat episodul?", iar fără
-// butonul ăsta răspunsul ar fi "așteaptă 3 ore și vezi".
+// „Verifică acum” — ignoră cadența pentru serialul deschis, ca „de ce n-a
+// descărcat?” să nu aibă răspunsul „așteaptă 3 ore”.
 export const checkShowNow = createServerFn({ method: "POST" })
   .validator((data: { mediaId: number }) => data)
   .handler(
@@ -94,10 +79,8 @@ export const checkShowNow = createServerFn({ method: "POST" })
     },
   );
 
-// Serialele urmărite, pentru Watcher → Seriale și filme: ce urmează la
-// fiecare și când a fost verificat ultima dată. Ora verificării vine din
-// `media`, nu din jurnal — o verificare care n-a găsit nimic nu loghează nimic
-// (altfel ar umple jurnalul la fiecare 3 ore).
+// Serialele urmărite, pentru Watcher → Seriale și filme. Ora verificării vine
+// din `media` — o verificare fără rezultat nu scrie în jurnal.
 export interface WatchedShowSummary {
   mediaId: number;
   title: string;
@@ -148,10 +131,7 @@ import type {
   WantedMovieDetail,
 } from "./movie-watch";
 
-// Cine poate opri o urmărire de film: cel care a pornit-o, sau un admin —
-// aceeași regulă ca la ștergerea unui titlu din bibliotecă (isAdminOrOwner).
-// Pornirea nu trece pe aici: e deschisă oricui e logat, fiindcă un film
-// așteptat nu ocupă nimic până când chiar apare.
+// Cine poate opri urmărirea unui film: cel care a pornit-o, sau un admin.
 async function requireMovieWatchOwner(where: { tmdbId: number } | { mediaId: number }) {
   const { requireAuth, isAdminOrOwner } = await import("../auth/admin.server");
   const session = await requireAuth();
@@ -165,19 +145,15 @@ async function requireMovieWatchOwner(where: { tmdbId: number } | { mediaId: num
       : db.prepare("SELECT requested_by_user_id FROM media WHERE id = ? AND media_type = 'movie'")
   ).get("tmdbId" in where ? where.tmdbId : where.mediaId) as
     { requested_by_user_id: number | null } | undefined;
-  // Rând inexistent: lăsăm să treacă. Oprirea unei urmăriri care oricum nu mai
-  // există e un no-op în setMovieWatchCore, iar un mesaj de "n-ai drepturi"
-  // aici ar fi și fals, și derutant.
+  // Rând inexistent: oprirea e oricum un no-op, iar „n-ai drepturi” ar fi fals.
   if (!row) return;
   if (!isAdminOrOwner(session, row.requested_by_user_id)) {
     throw new Error("Urmărirea a fost pornită de altcineva");
   }
 }
 
-// Pornirea e deschisă oricui e logat — un film așteptat nu consumă nimic până
-// când apare, iar descărcarea pe care o declanșează atunci e exact ce a cerut
-// utilizatorul. Oprirea, în schimb, ar putea anula așteptarea altcuiva, deci
-// trece prin verificarea de proprietate.
+// Pornirea e deschisă oricui e logat (un film așteptat nu consumă nimic);
+// oprirea ar putea anula așteptarea altcuiva, deci cere proprietatea.
 export const setMovieWatch = createServerFn({ method: "POST" })
   .validator((data: SetMovieWatchInput) => data)
   .handler(async ({ data }): Promise<{ ok: true } | { ok: false; error: string }> => {
@@ -187,16 +163,14 @@ export const setMovieWatch = createServerFn({ method: "POST" })
       if (!data.enabled) await requireMovieWatchOwner({ tmdbId: data.tmdbId });
       const { setMovieWatchCore } = await import("./movie-watch");
       await setMovieWatchCore({ ...data, requestedByUserId: session.data.userId ?? null });
-      // Prima căutare peste un minut (vezi checkNewMovies): destul cât să nu
-      // repete căutarea tocmai făcută în wizard.
+      // Prima căutare peste un minut, ca să nu repete căutarea din wizard.
       if (data.enabled) {
         const { pokeWatcher } = await import("../watcher/poke");
         pokeWatcher("show-watch", 65_000);
       }
       return { ok: true };
     } catch (e) {
-      // Sesiunea expirată merge mai departe ca eroare (redirect spre login),
-      // nu ca mesaj „Neautorizat" într-un toast.
+      // Sesiunea expirată merge mai departe ca eroare (redirect spre login).
       if (isUnauthorizedError(e)) throw e;
       return { ok: false, error: e instanceof Error ? e.message : String(e) };
     }
@@ -207,10 +181,8 @@ export const listWantedMovies = createServerFn({ method: "GET" }).handler(
     const { requireAuth, isAdminOrOwner } = await import("../auth/admin.server");
     const session = await requireAuth();
     const { listWantedMoviesCore } = await import("./movie-watch");
-    // canManage se calculează aici, nu în stratul de DB: sesiunea e cunoscută
-    // doar la nivelul ăsta. Clientul primește un boolean gata decis, ca la
-    // titlurile din bibliotecă — nu-i trimitem id-uri de utilizator ca să
-    // compare el.
+    // canManage se calculează aici, unde e sesiunea; clientul primește un
+    // boolean, nu id-uri de comparat.
     return listWantedMoviesCore().map((m) => ({
       ...m,
       canManage: isAdminOrOwner(session, m.requestedByUserId),
@@ -218,9 +190,7 @@ export const listWantedMovies = createServerFn({ method: "GET" }).handler(
   },
 );
 
-// "Verifică acum" pentru un film urmărit — ignoră cadența de 12 ore. Aceeași
-// nevoie ca la checkShowNow: fără el, răspunsul la "de ce n-a descărcat?" ar
-// fi "așteaptă 12 ore și vezi".
+// „Verifică acum” pentru un film — ignoră cadența de 12h.
 export const checkMovieNow = createServerFn({ method: "POST" })
   .validator((data: { mediaId: number }) => data)
   .handler(
@@ -237,8 +207,7 @@ export const checkMovieNow = createServerFn({ method: "POST" })
     },
   );
 
-// Detaliile unui film așteptat, pentru drawer. canManage se calculează aici,
-// ca la listă — clientul primește un boolean gata decis.
+// Detaliile unui film așteptat, pentru drawer (canManage calculat aici).
 export const getWantedMovieDetail = createServerFn({ method: "GET" })
   .validator((data: { mediaId: number }) => data)
   .handler(async ({ data }): Promise<(WantedMovieDetail & { canManage: boolean }) | null> => {

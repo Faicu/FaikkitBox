@@ -1,16 +1,8 @@
 // ---------------------------------------------------------------------------
-// Reconciliere periodică: titluri descărcate complet, dar nelegate încă la Plex.
-//
-// În primele 30 de minute după terminare, legarea o încearcă sarcina
-// „downloads” a Watcher-ului, la fiecare 10s. Ce rămâne nelegat după asta —
-// fișier întârziat în scanarea Plex, Plex oprit o vreme — e reîncercat aici, la
-// 10 minute, până la 72h.
-//
-// Istoric: înainte de Watcher, legarea era o buclă de 30 de minute în memorie,
-// iar un restart în fereastra ei lăsa rândul permanent cu plex_rating_key NULL,
-// blocat pe "Se procesează în Plex" în Bibliotecă. Jobul de aici a apărut ca
-// plasă de siguranță pentru asta; acum fereastra scurtă stă și ea în DB, deci
-// rămâne plasă doar pentru titlurile care întârzie în Plex.
+// Reconcilierea: titluri terminate de peste 30 de minute, dar nelegate încă la
+// Plex (scanare întârziată, Plex oprit o vreme) — reîncercate la 10 minute de
+// sarcina „downloads”, până la 72h. Altfel ar rămâne pe „Se procesează în
+// Plex” la nesfârșit.
 // ---------------------------------------------------------------------------
 
 import { getDb } from "../db";
@@ -20,12 +12,10 @@ import {
   repairLinkedMovieQuality,
 } from "./media";
 
-// Cât timp după completare mai merită reîncercat. Peste asta, fie fișierul nu a
-// ajuns niciodată în bibliotecă (șters manual, mutat, respins de Plex), fie e
-// nevoie de intervenție — reîncercarea la nesfârșit ar fi doar zgomot.
+// Peste 72h, fișierul n-a ajuns în bibliotecă (șters, mutat, respins) sau e
+// nevoie de intervenție — reîncercarea ar fi doar zgomot.
 const MAX_AGE_HOURS = 72;
-// Primele 30 de minute după terminare sunt ale sarcinii „downloads”, care
-// încearcă legarea la fiecare 10s (vezi listRecentlyCompletedUnlinked).
+// Primele 30 de minute sunt ale sarcinii „downloads” (la 10s).
 export const RECENT_LINK_MINUTES = 30;
 
 export interface ReconcileResult {
@@ -36,10 +26,8 @@ export interface ReconcileResult {
 export async function reconcilePlexLinks(): Promise<ReconcileResult> {
   const db = getDb();
 
-  // Un hash poate acoperi mai multe rânduri (pachet de sezon), de aceea DISTINCT
-  // — funcțiile de legare lucrează oricum la nivel de hash.
-  // Filmele legate corect, dar fără calitate (nu s-a putut decide care versiune
-  // Plex e a noastră) — altă stare decât „nelegat", deci altă interogare.
+  // DISTINCT: un pachet are mai multe rânduri pe același hash, iar legarea
+  // lucrează pe hash. Filmele legate, dar fără calitate, sunt altă interogare.
   const repaired = await repairLinkedMovieQuality(MAX_AGE_HOURS).catch((e) => {
     console.warn("[plex-reconcile] Eroare la completarea calităților:", e);
     return 0;
@@ -77,9 +65,8 @@ export async function reconcilePlexLinks(): Promise<ReconcileResult> {
     }
   }
 
-  // rows.length > 0 e garantat aici (ieșirea devreme de mai sus acoperă
-  // restul), deci logăm doar când chiar s-a legat ceva — altfel linia asta
-  // apărea la fiecare 10 minute cât timp exista măcar un titlu în așteptare.
+  // Logat doar când s-a legat ceva — altfel ar apărea la 10 minute cât un
+  // titlu așteaptă.
   if (linked > 0) {
     console.log(
       `[plex-reconcile] ${rows.length} titluri nelegate verificate, ${linked} legate acum`,

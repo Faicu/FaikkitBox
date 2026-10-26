@@ -1,19 +1,10 @@
 // ---------------------------------------------------------------------------
-// Reîmprospătarea metadatelor de film.
+// Reîmprospătarea metadatelor de film, la 12h. Detaliile se scriau o singură
+// dată, la adăugare: un film adăugat înainte de traducerea românească rămânea
+// pe veci „Mutiny” în loc de „Trădare la nivel înalt” (26 sept. 2026).
 //
-// Detaliile unui film (titlu, an, descriere, genuri, poster) se scriau o
-// singură dată, la adăugare, și rămâneau înghețate. Un film adăugat înainte ca
-// TMDB să aibă traducerea românească rămânea pe veci cu titlul original —
-// „Mutiny" în loc de „Trădare la nivel înalt" (găsit 26 sept. 2026, alături de
-// alte cinci filme). Serialele aveau deja reîmprospătare (refreshShowMetadata
-// din show-watch.ts); filmele n-au fost incluse niciodată.
-//
-// Detaliile se cer în română la fiecare trecere (getTmdbDetailsInternal, cu
-// engleza ca rezervă pentru ce lipsește), deci un câmp încă neromânesc se
-// corectează singur la cel mult 12 ore după ce apare traducerea pe TMDB.
-// Posterul la fel: la o cerere ro-RO, TMDB întoarce posterul românesc când
-// există. Fiecare câmp se scrie separat și doar cu o valoare nevidă — ce
-// lipsește la TMDB nu șterge ce avem.
+// Cerute în română la fiecare trecere, cu engleza ca rezervă; fiecare câmp se
+// scrie doar cu o valoare nevidă — ce lipsește la TMDB nu șterge ce avem.
 // ---------------------------------------------------------------------------
 
 import { getDb } from "../db";
@@ -35,13 +26,12 @@ export async function refreshMovieMetadata(report?: MetaReport): Promise<number>
   }>;
   if (due.length === 0) return 0;
 
-  // Un film poate avea mai multe rânduri (versiuni în calități diferite) —
-  // TMDB se întreabă o singură dată per film.
+  // Mai multe rânduri (versiuni) per film — TMDB se întreabă o singură dată.
   const byTmdb = new Map<number, number[]>();
   for (const r of due) byTmdb.set(r.tmdb_id, [...(byTmdb.get(r.tmdb_id) ?? []), r.id]);
 
-  // Încercarea se marchează și când TMDB n-a răspuns — altfel un tmdb_id care
-  // nu mai rezolvă ar fi reîncercat la fiecare rulare (vezi refreshShowMetadata).
+  // Încercarea se marchează și fără răspuns — un tmdb_id mort nu se reîncearcă
+  // la fiecare rulare.
   const touch = db.prepare("UPDATE media SET meta_refreshed_at = datetime('now') WHERE id = ?");
   const update = db.prepare(
     `UPDATE media
@@ -64,8 +54,7 @@ export async function refreshMovieMetadata(report?: MetaReport): Promise<number>
   const { getTmdbDetailsInternal } = await import("../tmdb/tmdb.functions");
   let refreshed = 0;
   for (const [tmdbId, ids] of byTmdb) {
-    // getTmdbDetailsInternal nu aruncă la o eroare TMDB: întoarce un obiect
-    // cu titlul gol. Tratat ca eșec — nimic de scris.
+    // getTmdbDetailsInternal nu aruncă: titlul gol înseamnă eșec.
     const details = await getTmdbDetailsInternal(tmdbId, "movie").catch(() => null);
     if (!details?.title) {
       for (const id of ids) touch.run(id);
@@ -74,8 +63,7 @@ export async function refreshMovieMetadata(report?: MetaReport): Promise<number>
     }
     const year = details.releaseDate ? Number(details.releaseDate.slice(0, 4)) : null;
     const genres = (details.genres ?? []).length > 0 ? JSON.stringify(details.genres) : null;
-    // Versiunile aceluiași film primesc aceleași valori — jurnalul compară
-    // doar primul rând, ca filmul să apară o dată, nu o dată per versiune.
+    // Jurnalul compară doar primul rând, ca filmul să apară o dată.
     const before = readMovie.get(ids[0]) as Record<string, unknown> | undefined;
     for (const id of ids) {
       update.run(

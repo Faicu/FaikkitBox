@@ -1,16 +1,9 @@
 // ---------------------------------------------------------------------------
-// Ștergerea programată a unui titlu.
-//
-// Filelist socotește hit and run un torrent șters în primele DELETE_DELAY_HOURS
-// de la descărcare și penalizează contul de pe care s-a descărcat. Cererea de
-// ștergere (sau de anulare) din primele 24 h nu se refuză, ci se amână: se
-// scrie pe rândurile torrentului momentul împlinirii celor 24 h, iar pasul
-// „Ștergeri programate” din Watcher o execută atunci. Până la ea,
-// torrentul continuă să se descarce și să facă seed, iar oricine poate
-// renunța la ștergere — devenind proprietarul titlului.
-//
-// Totul stă în DB, nu într-un cronometru în memorie, ca o repornire sau un
-// deploy să nu piardă ștergerea: o programare restantă se execută la pornire.
+// Ștergerea programată a unui titlu. Filelist socotește hit and run un torrent
+// șters în primele DELETE_DELAY_HOURS de la descărcare, deci cererea din acest
+// interval se amână: termenul se scrie pe rândurile torrentului, iar sarcina
+// „Ștergeri programate” o execută atunci. Până la termen oricine poate renunța,
+// devenind proprietarul titlului. Totul în DB: un restart nu pierde ștergerea.
 // ---------------------------------------------------------------------------
 
 import { getDb } from "../db";
@@ -19,10 +12,8 @@ export const DELETE_DELAY_HOURS = 24;
 
 const sqliteMs = (v: string) => new Date(`${v.replace(" ", "T")}Z`).getTime();
 
-// Momentul (formatul SQLite, UTC) până la care o cerere de ștergere se
-// programează în loc să se execute, sau null dacă cele 24 h au trecut.
-// MIN(added_at) pe tot hash-ul: un pachet de sezon e un singur torrent,
-// ștergerea îl ia întreg.
+// Termenul (SQLite, UTC) până la care o ștergere se programează, sau null după
+// 24 h. MIN(added_at) pe hash: un pachet de sezon se șterge întreg.
 export function deleteDelayedUntil(torrentHash: string, nowMs = Date.now()): string | null {
   const row = getDb()
     .prepare(
@@ -51,8 +42,7 @@ export function scheduledDeletion(torrentHash: string): ScheduledDeletion | null
   return row?.at ? { at: row.at, byUserId: row.by } : null;
 }
 
-// Programează ștergerea pe toate rândurile torrentului. O programare deja
-// existentă rămâne neatinsă (termenul e oricum același, cel de la adăugare).
+// Programează ștergerea pe toate rândurile torrentului; una existentă rămâne.
 export function scheduleDeletion(
   torrentHash: string,
   at: string,
@@ -68,10 +58,8 @@ export function scheduleDeletion(
   return { at, byUserId };
 }
 
-// Renunțarea la ștergere: golește programarea și, dacă știm cine a renunțat,
-// îl face proprietarul titlului — l-a salvat, deci răspunde de el. Întoarce
-// false dacă nu era nimic programat (ștergerea s-a produs deja sau a anulat-o
-// altcineva între timp).
+// Renunțarea: golește programarea și îl face pe cel care a renunțat
+// proprietarul titlului. false = nimic programat (deja șters sau anulat).
 export function cancelScheduledDeletion(torrentHash: string, byUserId: number | null): boolean {
   const db = getDb();
   const res = db
@@ -84,8 +72,7 @@ export function cancelScheduledDeletion(torrentHash: string, byUserId: number | 
   return Number(res.changes) > 0;
 }
 
-// Termenul celei mai apropiate ștergeri programate (ms), sau null dacă nu e
-// nimic programat — Watcher-ul rulează sarcina exact atunci.
+// Termenul celei mai apropiate ștergeri (ms), sau null — ora sarcinii.
 export function nextScheduledDeletionAt(): number | null {
   const row = getDb()
     .prepare(

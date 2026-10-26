@@ -1,24 +1,13 @@
 // ---------------------------------------------------------------------------
 // Urmărirea filmelor: descărcarea automată a unui film care încă nu există pe
-// Filelist la calitatea cerută.
+// Filelist la calitatea cerută. Simetric cu show-watch.ts, dar mult mai mic:
+// un film e o singură întrebare, pusă periodic — „a apărut?”.
 //
-// Simetric cu show-watch.ts, dar deliberat modul separat și mult mai mic. La
-// seriale complexitatea vine din episoade — diferența cu TMDB, pachetele de
-// sezon, punctul de pornire, cadența per serial. Aici nu există niciuna: un
-// film e o singură întrebare, pusă periodic, „a apărut?".
-//
-// Două diferențe de fond față de seriale, ambele intenționate:
-//
-// 1. Urmărirea unui serial e permanentă (mereu vor apărea episoade noi), pe
-//    când urmărirea unui film se stinge singură la prima descărcare reușită.
-//    Altfel ar căuta la nesfârșit un film pe care deja îl ai.
-//
-// 2. Un film urmărit nu e un film pe care îl deții. Rândul lui din `media` n-are
-//    torrent_hash și n-are plex_rating_key, iar asta îl face invizibil peste
-//    tot în rest fără nicio modificare: Biblioteca cere explicit una dintre
-//    cele două coloane (plex-browse.ts), la fel reconcilierea Plex
-//    (plex-link-reconciler.ts) și reluarea descărcărilor întrerupte. Nu poate
-//    fi confundat cu un film pe care chiar îl ai.
+// Diferențe față de seriale, intenționate:
+// 1. Urmărirea se stinge singură la prima descărcare reușită.
+// 2. Rândul unui film așteptat n-are torrent_hash și nici plex_rating_key,
+//    deci e invizibil în Bibliotecă, reconciliere și descărcări fără nicio
+//    excepție în cod — nu poate fi confundat cu un film pe care îl ai.
 // ---------------------------------------------------------------------------
 
 import {
@@ -30,10 +19,8 @@ import {
 import { getDb } from "../db";
 import { rankTorrents, type RankableTorrent } from "./torrent-rank";
 
-// 12h, nu 3h ca la seriale. Un episod are oră de difuzare anunțată și apare pe
-// Filelist în câteva ore, deci acolo o cadență scurtă chiar prinde ceva. Un
-// film poate sta luni întregi, iar fiecare verificare e o căutare pe Filelist —
-// bătută la 3 ore n-ar găsi nimic în plus, ar consuma doar cereri.
+// 12h, nu 3h ca la seriale: un film poate lipsi luni întregi, iar fiecare
+// verificare e o căutare pe Filelist.
 const ITEM_INTERVAL_MS = 12 * 60 * 60 * 1000;
 
 export interface MovieWatchOutcome {
@@ -61,13 +48,8 @@ interface MovieRow {
   requested_by_user_id: number | null;
 }
 
-// Poarta pe data de lansare: înainte de premieră nu POATE exista un release,
-// deci căutarea e sigur irosită. Filmul apare pe Filelist mult mai târziu
-// (după lansarea digitală), deci asta nu e o predicție a disponibilității — e
-// doar limita de jos sub care nu are rost să întrebăm.
-//
-// Fără dată în TMDB căutăm oricum: o dată lipsă nu e o dovadă că filmul n-a
-// apărut, iar a refuza să căutăm ar bloca urmărirea la nesfârșit.
+// Înainte de premieră nu poate exista un release, deci nu căutăm. Fără dată în
+// TMDB căutăm oricum — altfel urmărirea s-ar bloca la nesfârșit.
 function hasReleased(releaseDate: string | null, now: Date = new Date()): boolean {
   if (!releaseDate) return true;
   const released = new Date(`${releaseDate}T00:00:00`);
@@ -75,12 +57,9 @@ function hasReleased(releaseDate: string | null, now: Date = new Date()): boolea
   return released.getTime() <= now.getTime();
 }
 
-// Candidații pentru un film urmărit: potriviți pe IMDb de Filelist, exact la
-// calitatea cerută, fără cei excluși, cel mai bun primul (torrent-rank.ts).
-//
-// Calitate exactă, nu „cel puțin": aceeași semantică cu urmărirea serialelor
-// (show-watch.ts), unde e tot `detectTorrentQuality(...) === calitatea cerută`.
-// Dacă ai cerut 1080p, un 4K de 60GB n-ar fi o surpriză plăcută.
+// Candidații: potriviți pe IMDb, exact la calitatea cerută (ca la seriale — un
+// 4K de 60 GB nu e o surpriză plăcută când ai cerut 1080p), fără cei excluși,
+// cel mai bun primul (torrent-rank.ts).
 function pickCandidates<T extends RankableTorrent & { matchedByImdb?: boolean }>(
   torrents: T[],
   wantedQuality: string,
@@ -94,9 +73,8 @@ function pickCandidates<T extends RankableTorrent & { matchedByImdb?: boolean }>
   );
 }
 
-// Gardă per film, ca la checkShow: „Verifică acum" din UI și Watcher-ul
-// pot cădea pe același film în același moment, iar două rulări paralele ar
-// porni de două ori același torrent.
+// Gardă per film: „Verifică acum” și Watcher-ul pe același film ar porni de
+// două ori același torrent.
 const inProgress = new Set<number>();
 
 export async function checkMovie(movieId: number): Promise<MovieWatchOutcome> {
@@ -124,9 +102,8 @@ async function checkMovieInner(movieId: number): Promise<MovieWatchOutcome> {
     )
     .get(movieId) as unknown as MovieRow | undefined;
 
-  // datetime('now'), nu ISO — vezi nota din show-watch.ts: restul coloanelor de
-  // timp din `media` sunt în formatul SQLite, iar comparația din
-  // checkDueMovies e pe șiruri.
+  // datetime('now'), nu ISO — comparația din checkDueMovies e pe șiruri (vezi
+  // show-watch.ts).
   const stamp = () =>
     db
       .prepare("UPDATE media SET watch_last_checked_at = datetime('now') WHERE id = ?")
@@ -142,8 +119,7 @@ async function checkMovieInner(movieId: number): Promise<MovieWatchOutcome> {
     skipped: null,
   };
 
-  // Căutarea pe Filelist e strict pe IMDb (fallback-ul pe titlu a fost eliminat
-  // definitiv, confirmat de suportul Filelist), deci fără id n-avem ce face.
+  // Căutarea pe Filelist e strict după IMDb (confirmat de suport).
   if (!row.imdb_id) {
     stamp();
     result.skipped = "lipsește imdb_id";
@@ -178,9 +154,8 @@ async function checkMovieInner(movieId: number): Promise<MovieWatchOutcome> {
   const { detectTorrentQuality } = await import("./torrent-quality");
   let candidates = pickCandidates(search.torrents, wantedQuality, detectTorrentQuality);
 
-  // Calitatea de rezervă (vezi fallback-quality.ts): doar dacă principala
-  // lipsește. Prima dată se notează și se așteaptă; se descarcă abia la o
-  // verificare de peste cel puțin 3 ore, dacă principala tot lipsește.
+  // Rezerva doar dacă principala lipsește; se descarcă la o verificare de peste
+  // cel puțin 3h (fallback-quality.ts).
   const fallbackQuality = effectiveFallback(wantedQuality, row.auto_download_fallback_quality);
   const saveFallbackSeen = (seen: FallbackSeen) =>
     db
@@ -209,9 +184,8 @@ async function checkMovieInner(movieId: number): Promise<MovieWatchOutcome> {
       usingFallback = true;
     }
   }
-  // Principala a apărut, sau nu mai e nici rezerva: nimic de așteptat. Când
-  // se folosește rezerva, notița rămâne: la o descărcare eșuată, verificarea
-  // următoare o ia din nou fără să mai aștepte.
+  // Principala a apărut sau nu mai e nici rezerva: nimic de așteptat. Notița
+  // rezervei folosite rămâne — după o descărcare eșuată se reia fără așteptare.
   if (!usingFallback) saveFallbackSeen({});
 
   if (candidates.length === 0) {
@@ -256,19 +230,13 @@ async function checkMovieInner(movieId: number): Promise<MovieWatchOutcome> {
     return result;
   }
 
-  // Rândul de așteptare și-a făcut treaba: downloadFilelistCore a creat deja
-  // rândul real prin upsertMediaEntry. Nu e un update, ci un rând nou —
-  // findExistingDownloadRow potrivește exclusiv pe torrent_hash, iar rândul de
-  // așteptare n-are niciunul, deci n-avea cum să fie reutilizat. Fără ștergerea
-  // asta ar rămâne două rânduri pentru același film.
-  //
-  // Condiția pe torrent_hash IS NULL nu e decorativă: e garanția că ștergem
-  // exact rândul-fantomă, niciodată filmul proaspăt descărcat.
+  // Rândul de așteptare și-a făcut treaba: downloadFilelistCore a creat rândul
+  // real (rândul de așteptare n-are hash, deci n-a putut fi refolosit). Fără
+  // ștergere ar rămâne două rânduri. `torrent_hash IS NULL` garantează că
+  // ștergem doar fantoma.
   db.prepare("DELETE FROM media WHERE id = ? AND torrent_hash IS NULL").run(movieId);
 
-  // Fără notificare proprie: downloadFilelistCore loghează torrent_added și
-  // trimite push-ul, iar addedVia "auto" îi pune titlul „🤖 Descărcare
-  // Automată". Un push în plus de aici ar dubla fiecare film.
+  // Fără notificare aici: downloadFilelistCore trimite deja push-ul.
   result.downloaded = usingFallback ? `${best.name} (${fallbackQuality}, rezervă)` : best.name;
   return result;
 }
@@ -282,19 +250,10 @@ function safeGenres(raw: string): string[] {
   }
 }
 
-// Prima verificare a unui film abia adăugat, la un minut după adăugare —
-// primul pas al sarcinii „Seriale și filme” din Watcher, trezită de
-// setMovieWatch exact atunci (pokeWatcher).
-//
-// Separată de verificarea de 12h din cauza ritmului: fără ea, un film nou
-// aștepta până la 10 minute (ciclul sarcinii) și rândul arăta „neverificat"
-// tot timpul ăsta, ca și cum urmărirea ar fi moartă. (Cache-ul Filelist al
-// wizard-ului nu mai e o problemă: urmărirea nu-l citește niciodată — vezi
-// checkFilelistForItemInternal.)
-//
-// Minutul de așteptare nu e arbitrar: e cât să nu repetăm căutarea wizard-ului
-// în aceeași suflare, dar destul de scurt cât rândul să se completeze cât încă
-// te uiți la el.
+// Prima căutare a unui film abia adăugat — pasul „Filme noi” al sarcinii
+// „Seriale și filme”, trezită de setMovieWatch după un minut. Fără ea, rândul
+// ar arăta „neverificat” până la 10 minute. Minutul evită repetarea căutării
+// tocmai făcute în wizard.
 export async function checkNewMovies(): Promise<void> {
   const db = getDb();
   const fresh = db
@@ -319,13 +278,9 @@ export async function checkNewMovies(): Promise<void> {
   }
 }
 
-// Bucla periodică, analog cu checkDueShows. Cadența e persistată în
-// watch_last_checked_at, nu într-un timer în memorie, ca să supraviețuiască
-// restartului serviciului.
-//
-// Rândurile cu watch_last_checked_at NULL sunt lăsate intenționat pe seama lui
-// checkNewMovies: dacă ar intra și aici, un poll care se nimerește la câteva
-// secunde după adăugare ar face verificarea prea devreme.
+// Filmele cu cadența expirată, ținută în watch_last_checked_at. Cele încă
+// neverificate (NULL) sunt ale lui checkNewMovies — aici ar fi verificate
+// prea devreme.
 export async function checkDueMovies(): Promise<void> {
   const db = getDb();
   const due = db
@@ -360,11 +315,9 @@ export interface SetMovieWatchInput {
   tmdbId: number;
   enabled: boolean;
   quality?: string;
-  // Calitatea de rezervă (vezi fallback-quality.ts). `undefined` = lasă
-  // neschimbată; `null` = fără rezervă.
+  // Calitatea de rezervă: `undefined` = neschimbată; `null` = fără.
   fallbackQuality?: string | null;
-  // Metadatele vin de la apelant (wizard-ul le are deja din TMDB) și se
-  // folosesc doar la crearea rândului.
+  // Metadatele vin de la wizard și se folosesc doar la crearea rândului.
   imdbId?: string | null;
   title?: string;
   originalTitle?: string | null;
@@ -390,9 +343,8 @@ export async function setMovieWatchCore(input: SetMovieWatchInput): Promise<void
 
   if (!input.enabled) {
     if (!existing) return;
-    // Un rând de așteptare abandonat nu are ce lăsa în urmă: n-are fișier,
-    // n-are torrent și e invizibil peste tot, deci l-am păstra doar ca gunoi.
-    // Un film real, în schimb, se atinge cât mai puțin — doar steagul.
+    // Un rând de așteptare abandonat e doar gunoi; la un film real schimbăm
+    // doar steagul.
     if (isWantedRow) {
       db.prepare("DELETE FROM media WHERE id = ? AND torrent_hash IS NULL").run(existing.id);
     } else {
@@ -401,9 +353,7 @@ export async function setMovieWatchCore(input: SetMovieWatchInput): Promise<void
     return;
   }
 
-  // Filmul e deja descărcat sau deja în Plex — nu are ce urmări. Aruncăm, nu
-  // ignorăm în tăcere: e o stare pe care UI-ul trebuie s-o arate, nu una care
-  // să pară că a mers.
+  // Filmul există deja — aruncăm, ca UI-ul s-o arate, nu să pară că a mers.
   if (existing && !isWantedRow) {
     throw new Error("Filmul există deja în bibliotecă");
   }
@@ -411,10 +361,8 @@ export async function setMovieWatchCore(input: SetMovieWatchInput): Promise<void
   const quality = input.quality ?? "1080p";
 
   if (isWantedRow) {
-    // Deja urmărit: singurul lucru care se schimbă e calitatea. Cadența se
-    // resetează, ca schimbarea să fie verificată la următorul ciclu și nu
-    // peste 12 ore.
-    // Notițele rezervei se golesc: erau despre perechea veche de calități.
+    // Deja urmărit: se schimbă calitatea, iar cadența se resetează ca
+    // schimbarea să se verifice imediat. Notițele rezervei se golesc.
     db.prepare(
       `UPDATE media SET auto_download = 1, auto_download_quality = ?,
               auto_download_fallback_quality = CASE WHEN ? THEN ? ELSE auto_download_fallback_quality END,
@@ -465,10 +413,8 @@ export interface WantedMovie {
   addedAt: string;
   lastCheckedAt: string | null;
   requestedByUserId: number | null;
-  // true doar pentru cel care a pornit urmărirea sau pentru un admin — la fel
-  // ca la titlurile din bibliotecă (vezi canManage din plex-browse.ts). Se
-  // calculează în server function, unde există sesiunea; aici, în stratul de
-  // DB, n-avem cine e cel care întreabă.
+  // true pentru cel care a pornit urmărirea sau un admin — calculat în server
+  // function, unde există sesiunea.
   canManage: boolean;
 }
 
@@ -508,9 +454,8 @@ export function listWantedMoviesCore(): Omit<WantedMovie, "canManage">[] {
   }));
 }
 
-// Detaliile unui film așteptat, pentru drawer. Separat de listă intenționat:
-// descrierea, genurile și numele celui care a pornit urmărirea se văd doar la
-// deschidere, deci n-are rost cărate pentru toate rândurile.
+// Detaliile unui film așteptat, pentru drawer — separat de listă, ca să nu
+// cărăm descrierea și genurile pentru toate rândurile.
 export interface WantedMovieDetail {
   mediaId: number;
   tmdbId: number | null;
@@ -522,14 +467,13 @@ export interface WantedMovieDetail {
   overview: string | null;
   genres: string[];
   quality: string;
-  // Calitatea de rezervă; null = fără (vezi fallback-quality.ts).
+  // Calitatea de rezervă; null = fără.
   fallbackQuality: string | null;
   addedAt: string;
   lastCheckedAt: string | null;
   requestedByUserId: number | null;
-  // Numele contului care a pornit urmărirea. Null când rândul e mai vechi
-  // decât urmărirea per utilizator, sau când contul a fost șters între timp —
-  // de-aia LEFT JOIN, nu JOIN: altfel rândul ar dispărea cu totul din drawer.
+  // Contul care a pornit urmărirea; null pentru rânduri vechi sau conturi
+  // șterse (de-aia LEFT JOIN — altfel rândul ar dispărea din drawer).
   requestedByUsername: string | null;
 }
 

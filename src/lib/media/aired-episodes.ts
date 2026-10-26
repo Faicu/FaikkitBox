@@ -1,26 +1,14 @@
-// Ce episoade consideră urmărirea serialelor (show-watch.ts) ca apărute —
-// separat ca funcție pură, ca regula să poată fi testată fără TMDB.
+// Ce episoade consideră urmărirea ca apărute — funcție pură, testabilă fără TMDB.
 //
-// `aired` din TMDB înseamnă „data difuzării e STRICT înainte de azi" (TMDB
-// dă doar data, fără oră). Pentru decizia de descărcare e prea strict: un
-// episod lansat azi la 15:00 apare pe Filelist în aceeași zi, dar ar fi
-// devenit „apărut" abia a doua zi, deci descărcat cu o zi întârziere
-// (MobLand S02E02, 25 sept. 2026). Cu `includeUpcoming`, ziua lansării intră
-// și ea; dacă torrentul nu e încă pe Filelist, căutarea nu găsește nimic și
-// verificarea de peste 3 ore reîncearcă.
+// `aired` din TMDB înseamnă „data e strict înainte de azi”, prea strict: un
+// episod lansat azi apare pe Filelist azi, dar s-ar fi descărcat mâine (MobLand,
+// 25 sept. 2026). Fereastra e „azi + mâine”: Amazon publică MobLand cu o zi
+// înaintea datei din TMDB. Descărcarea cere oricum IMDb-ul și S/E-ul exact.
+// Nu mai larg: un serial în desfășurare ar avea mereu ceva „lipsă” și Filelist
+// ar fi întrebat la fiecare ciclu, consumând limita orară a contului.
 //
-// Din 8 oct. 2026 fereastra e „azi + mâine": Amazon publică MobLand cu o zi
-// înaintea datei din TMDB (S02E03 urcat pe Filelist pe 1 oct., S02E04 pe
-// 8 oct., ambele datate de TMDB a doua zi), deci chiar și cu ziua lansării
-// inclusă descărcarea venea cu o zi întârziere. Nu se descarcă nimic greșit — descărcarea cere în
-// continuare un torrent cu IMDb-ul și S/E-ul exact. Fereastra rămâne scurtă
-// intenționat: cu toate episoadele anunțate, orice serial în desfășurare ar
-// avea mereu ceva „lipsă" și Filelist ar fi întrebat la fiecare ciclu,
-// consumând limita orară a contului.
-//
-// Poziția de start la activarea urmăririi rămâne pe regula strictă: acolo
-// „apărut" înseamnă „deja trecut, nu-l mai descărca", iar un episod de azi
-// ar fi fost sărit dacă urmărirea se pornea chiar în ziua lui.
+// Poziția de start la activare rămâne pe regula strictă — altfel un episod de
+// azi ar fi sărit dacă urmărirea pornește chiar în ziua lui.
 
 import type { EpisodeKey } from "./watch-position";
 

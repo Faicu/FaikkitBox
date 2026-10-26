@@ -1,16 +1,8 @@
 // ---------------------------------------------------------------------------
-// Ora exactă a următorului episod: TVmaze, dar doar dacă e același episod.
-//
-// TMDB dă următorul episod cu dată, fără oră; ora o luăm de la TVmaze, după
-// același cod SxxEyy. Numai că cele două numerotează uneori diferit. Găsit pe
-// 28 sept. 2026 la Insula Iubirii: TMDB avea S10E08 pe 3 octombrie, iar
-// „S10E08” al TVmaze era episodul din 26 septembrie — ora TVmaze are prioritate
-// la afișare, deci drawer-ul arăta „Urmează S10E08 · sâmbătă, 26 septembrie”,
-// o dată deja trecută.
-//
-// Ora e acceptată doar când ziua ei cade la cel mult o zi de data TMDB. Ziua
-// de toleranță acoperă fusul orar: un episod american difuzat seara are, în
-// UTC, deja data de a doua zi.
+// Ora exactă a următorului episod: de la TVmaze (TMDB dă doar data), dar doar
+// dacă e același episod — cele două numerotează uneori diferit (Insula
+// Iubirii, 28 sept. 2026: drawer-ul arăta o dată deja trecută). Acceptată doar
+// la cel mult o zi de data TMDB; ziua de toleranță acoperă fusul orar.
 // ---------------------------------------------------------------------------
 
 const DAY_MS = 24 * 60 * 60 * 1000;
