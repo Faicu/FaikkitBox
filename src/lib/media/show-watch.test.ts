@@ -408,3 +408,63 @@ describe("checkShow — calitatea de rezervă", () => {
     ).toBe("1080p HDR");
   });
 });
+
+describe("checkDueShows — cadența", () => {
+  // Ziua locală, ca în SQL-ul din checkDueShows (nu UTC, ca TODAY de sus).
+  const localDay = (n: number) =>
+    (db.prepare("SELECT date('now', 'localtime', ?) AS d").get(`${n} days`) as { d: string }).d;
+
+  function setShow(checkedHoursAgo: number, next: string | null, last: string | null): void {
+    db.prepare(
+      `UPDATE media SET watch_last_checked_at = datetime('now', ?),
+                        next_episode_air_date = ?, last_episode_air_date = ?
+        WHERE id = ?`,
+    ).run(`-${checkedHoursAgo} hours`, next, last, showId);
+  }
+
+  const wasChecked = () => tmdb.details.mock.calls.length > 0;
+
+  beforeEach(() => {
+    tmdbSeason2(daysAgo(7));
+    onFilelist();
+  });
+
+  it("în afara ferestrei: nu verifică după 2 ore", async () => {
+    setShow(2, localDay(5), localDay(-6));
+    await watch.checkDueShows();
+    expect(wasChecked()).toBe(false);
+  });
+
+  it("în afara ferestrei: verifică după 3 ore", async () => {
+    setShow(3, localDay(5), localDay(-6));
+    await watch.checkDueShows();
+    expect(wasChecked()).toBe(true);
+  });
+
+  it.each([-1, 0, 1])("episodul următor la %i zile: verifică după o oră", async (d) => {
+    setShow(1, localDay(d), null);
+    await watch.checkDueShows();
+    expect(wasChecked()).toBe(true);
+  });
+
+  it("ziua de după lansare, cu next_episode mutat deja pe săptămâna viitoare", async () => {
+    setShow(1, localDay(6), localDay(-1));
+    await watch.checkDueShows();
+    expect(wasChecked()).toBe(true);
+  });
+
+  it("în fereastră, dar verificat acum o jumătate de oră: încă nu", async () => {
+    db.prepare(
+      `UPDATE media SET watch_last_checked_at = datetime('now', '-30 minutes'),
+                        next_episode_air_date = ? WHERE id = ?`,
+    ).run(localDay(0), showId);
+    await watch.checkDueShows();
+    expect(wasChecked()).toBe(false);
+  });
+
+  it("fără dată anunțată: rămâne la 3 ore", async () => {
+    setShow(2, null, null);
+    await watch.checkDueShows();
+    expect(wasChecked()).toBe(false);
+  });
+});

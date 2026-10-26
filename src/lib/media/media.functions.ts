@@ -70,7 +70,7 @@ export const setShowWatch = createServerFn({ method: "POST" })
     }
   });
 
-// "Verifică acum" din drawer — ignoră cadența de 3 ore pentru serialul
+// "Verifică acum" din drawer — ignoră cadența (1–3 ore) pentru serialul
 // deschis. Depanarea tipică e "de ce n-a descărcat episodul?", iar fără
 // butonul ăsta răspunsul ar fi "așteaptă 3 ore și vezi".
 export const checkShowNow = createServerFn({ method: "POST" })

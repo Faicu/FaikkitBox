@@ -304,8 +304,8 @@ export const networkLinkQuery = queryOptions({
 });
 
 // Starea urmăririi serialelor, pentru panoul "Plugin-uri active" din Tehnic.
-// Ritm lent: plugin-ul verifică oricum o dată la 3 ore per serial, deci n-are
-// rost un puls mai des decât atât.
+// Ritm lent: plugin-ul verifică oricum cel mult o dată pe oră per serial (la 3
+// ore în afara zilelor de lansare), deci n-are rost un puls mai des decât atât.
 export const showWatchStatusQuery = queryOptions({
   queryKey: ["showWatchStatus"],
   queryFn: () => getShowWatchStatus(),

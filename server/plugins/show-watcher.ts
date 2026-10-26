@@ -3,9 +3,10 @@
 // lipsesc din bibliotecă și le descarcă (vezi src/lib/media/show-watch.ts
 // pentru logica propriu-zisă și pentru ce a mers prost la prima încercare).
 //
-// Bucla de aici rulează des, dar cadența reală per serial (3 ore) e ținută în
-// DB, pe `media.watch_last_checked_at` — nu într-un timer în memorie, care
-// s-ar reseta la fiecare restart al serviciului.
+// Bucla de aici rulează des, dar cadența reală per serial (3 ore; 1 oră în
+// zilele de lansare, vezi checkDueShows) e ținută în DB, pe
+// `media.watch_last_checked_at` — nu într-un timer în memorie, care s-ar
+// reseta la fiecare restart al serviciului.
 //
 // Plugin explicit, nu efect secundar de modul: aceeași lecție ca la
 // server-lifecycle.ts și download-recovery.ts — munca de la pornire făcută

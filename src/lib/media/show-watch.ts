@@ -47,6 +47,12 @@ import {
 } from "./metadata-report";
 
 const ITEM_INTERVAL_MS = 3 * 60 * 60 * 1000; // 3 ore — cadența reală per serial
+// În fereastra lansării — ziua episodului următor sau a ultimului difuzat, ±1
+// zi — verificarea e orară: torrentul apare de obicei în primele ore de după
+// difuzare, iar 3 ore de așteptare acolo înseamnă episod descărcat mult mai
+// târziu. Ultimul episod difuzat contează fiindcă TMDB mută next_episode pe
+// episodul următor imediat după difuzare, deci fără el „+1 zi” s-ar pierde.
+const RELEASE_WINDOW_INTERVAL_MS = 60 * 60 * 1000;
 // Câte descărcări pornim cel mult într-o rulare per serial. Un serial abia
 // activat cu multe episoade lipsă nu trebuie să arunce 30 de torrente în
 // qBittorrent deodată; restul vin la ciclurile următoare.
@@ -205,6 +211,7 @@ async function writeShowMeta(
             next_episode = ?,
             next_episode_air_date = ?,
             next_episode_airstamp = ?,
+            last_episode_air_date = COALESCE(?, last_episode_air_date),
             meta_refreshed_at = CASE WHEN ? THEN datetime('now') ELSE meta_refreshed_at END
       WHERE id = ?`,
   ).run(
@@ -219,6 +226,7 @@ async function writeShowMeta(
     next ? formatEpisodeKey({ season: next.seasonNumber, episode: next.episodeNumber }) : null,
     next?.airDate ?? null,
     airstamp,
+    details.lastEpisodeAirDate ?? null,
     opts.markRefreshed ? 1 : 0,
     showId,
   );
@@ -606,10 +614,15 @@ async function checkShowInner(showId: number): Promise<ShowWatchOutcome> {
   return result;
 }
 
-// Bucla periodică: verifică serialele urmărite cărora le-a expirat cadența
-// de 3 ore. Cadența e persistată în DB (watch_last_checked_at), nu într-un
-// timer în memorie — altfel fiecare restart al serviciului ar reporni
-// numărătoarea de la zero.
+// Bucla periodică: verifică serialele urmărite cărora le-a expirat cadența —
+// 1 oră în fereastra lansării (vezi RELEASE_WINDOW_INTERVAL_MS), 3 ore în rest.
+// Cadența e persistată în DB (watch_last_checked_at), nu într-un timer în
+// memorie — altfel fiecare restart al serviciului ar reporni numărătoarea de
+// la zero.
+//
+// Ziua de azi e cea locală (serverul e pe ora României): datele TMDB sunt
+// ale difuzării americane, deci un episod de duminică seara acolo apare luni
+// dimineața aici — exact ce acoperă marja de ±1 zi.
 export async function checkDueShows(): Promise<void> {
   const db = getDb();
   const due = db
@@ -617,9 +630,15 @@ export async function checkDueShows(): Promise<void> {
       `SELECT id FROM media
          WHERE media_type = 'tv_show' AND auto_download = 1
            AND (watch_last_checked_at IS NULL
-                OR watch_last_checked_at <= datetime('now', ?))`,
+                OR watch_last_checked_at <= datetime('now', ?)
+                OR (watch_last_checked_at <= datetime('now', ?)
+                    AND (ABS(julianday(next_episode_air_date) - julianday(date('now', 'localtime'))) <= 1
+                         OR ABS(julianday(last_episode_air_date) - julianday(date('now', 'localtime'))) <= 1)))`,
     )
-    .all(`-${Math.round(ITEM_INTERVAL_MS / 1000)} seconds`) as unknown as Array<{ id: number }>;
+    .all(
+      `-${Math.round(ITEM_INTERVAL_MS / 1000)} seconds`,
+      `-${Math.round(RELEASE_WINDOW_INTERVAL_MS / 1000)} seconds`,
+    ) as unknown as Array<{ id: number }>;
 
   for (const { id } of due) {
     try {

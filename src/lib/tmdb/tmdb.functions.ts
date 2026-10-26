@@ -62,6 +62,7 @@ interface TmdbApiTvShow {
     episode_number?: number;
     air_date?: string | null;
   } | null;
+  last_episode_to_air?: { air_date?: string | null } | null;
   seasons?: TmdbApiSeasonSummary[];
   alternative_titles?: { results?: TmdbApiAlternativeTitle[] };
   genres?: TmdbApiGenre[];
@@ -179,6 +180,8 @@ export interface TmdbDetails {
   // wizard să nu mai spună generic "încă în producție" pentru un serial al
   // cărui ultim sezon cunoscut e deja lansat complet, fără nimic anunțat.
   nextEpisode: { seasonNumber: number; episodeNumber: number; airDate: string } | null;
+  // Data ultimului episod difuzat — fereastra orară a urmăririi (show-watch.ts).
+  lastEpisodeAirDate?: string | null;
   seasons: Array<{ seasonNumber: number; episodeCount: number; airDate: string | null }>;
   // Rezumat scurt — în română când TMDB are traducerea disponibilă, altfel
   // cade pe engleză (multe producții mai puțin populare n-au overview RO).
@@ -293,6 +296,7 @@ export async function getTmdbDetailsInternal(
                 airDate: show.next_episode_to_air.air_date,
               }
             : null,
+        lastEpisodeAirDate: show.last_episode_to_air?.air_date || null,
         seasons,
         overview,
         genres: (show.genres ?? []).map((g) => g.name ?? "").filter(Boolean),

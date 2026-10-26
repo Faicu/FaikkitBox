@@ -229,6 +229,10 @@ export function getDb(): DatabaseSync {
       -- adesea (serial necunoscut de TVmaze), iar atunci tot vrem data.
       next_episode_air_date TEXT,
       next_episode_airstamp TEXT,
+      -- Data ultimului episod difuzat (TMDB last_episode_to_air). Ține
+      -- fereastra de verificare orară a urmăririi și în ziua de DUPĂ lansare,
+      -- când TMDB a mutat deja next_episode pe episodul următor.
+      last_episode_air_date TEXT,
       meta_refreshed_at TEXT,
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
@@ -1256,6 +1260,18 @@ function applyCleanups(database: DatabaseSync): void {
       }
       console.log("[db] Migrare v41: adăugat media.delete_scheduled_at/_by");
       database.exec("PRAGMA user_version = 41");
+    }
+
+    if (version < 42) {
+      // v42: data ultimului episod difuzat — fereastra orară a urmăririi
+      // (vezi checkDueShows în show-watch.ts).
+      try {
+        database.exec("ALTER TABLE media ADD COLUMN last_episode_air_date TEXT");
+      } catch {
+        // coloana există deja (bază nouă, creată direct cu schema curentă)
+      }
+      console.log("[db] Migrare v42: adăugat media.last_episode_air_date");
+      database.exec("PRAGMA user_version = 42");
     }
   }
 }

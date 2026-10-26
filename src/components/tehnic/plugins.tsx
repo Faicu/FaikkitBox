@@ -73,11 +73,12 @@ export const PLUGINS: PluginInfo[] = [
     steps: [
       {
         title: "Episoade noi",
-        cadence: "la 3h / serial",
+        cadence: "la 3h / serial, la 1h în jurul lansării",
         summary: "Aduce de pe Filelist episoadele difuzate care lipsesc din bibliotecă.",
         points: [
           "Compară ce s-a difuzat (TMDB, inclusiv episodul lansat azi) cu ce ai deja în bibliotecă și aduce diferența.",
           "Caută strict după IMDb ID, întrebând mereu Filelist direct, fără cache.",
+          "Din oră în oră în ziua lansării episodului următor (sau a ultimului difuzat) ±1 zi; în rest, la 3 ore.",
           "Nu ține minte ce a văzut ultima dată: întreabă de fiecare dată realitatea, deci se poate relua oricând, se repară singur după un restart și nu poate descărca de două ori.",
           "După fiecare descărcare, poziția de start avansează peste episoadele aduse (fără să sară vreunul lipsă), ca un episod văzut și șters din Bibliotecă să nu revină.",
           "Dacă ai ales o calitate de rezervă, ea se ia doar când principala lipsește la două verificări, la cel puțin 3 ore distanță.",
