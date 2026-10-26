@@ -75,7 +75,9 @@ export function getDb(): DatabaseSync {
       user TEXT NOT NULL,
       title TEXT NOT NULL,
       grandparent_title TEXT,
-      rating_key TEXT
+      rating_key TEXT,
+      -- Verificări la rând în care sesiunea a lipsit (vezi trackPlexSessions).
+      missed INTEGER NOT NULL DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS error_log (
@@ -1331,6 +1333,20 @@ function applyCleanups(database: DatabaseSync): void {
         .run();
       console.log(`[db] Migrare v44: ${removed.changes} reîmprospătări „nimic nou” șterse`);
       database.exec("PRAGMA user_version = 44");
+    }
+
+    if (version < 45) {
+      // v45: sesiunile Plex se verifică la 10s, iar o vizionare e oprită abia
+      // după două verificări la rând fără ea — câte a lipsit stă aici.
+      try {
+        database.exec(
+          "ALTER TABLE plex_active_sessions ADD COLUMN missed INTEGER NOT NULL DEFAULT 0",
+        );
+      } catch {
+        // coloana există deja (bază nouă, creată direct cu schema curentă)
+      }
+      console.log("[db] Migrare v45: adăugat plex_active_sessions.missed");
+      database.exec("PRAGMA user_version = 45");
     }
   }
 }

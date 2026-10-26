@@ -50,6 +50,7 @@ export const WATCHER_TASK_INFO: Record<string, WatcherTaskInfo> = {
     points: [
       "De aici vin secțiunea „Se vizionează acum” de pe Acasă și istoricul „cine a văzut” din Bibliotecă.",
       "Tot de aici se adună dovezile despre HDR-ul dispozitivelor (redare directă a unui fișier HDR).",
+      "Începutul unei vizionări apare în cel mult 10 secunde. Oprirea, abia după două verificări la rând fără ea (10–20 de secunde): Plex „pierde” uneori o sesiune pentru o clipă, la derulare, iar o singură lipsă ar da o oprire falsă, cu două notificări.",
       "Cât Plex e oprit sau nu răspunde, sesiunile rămân cum erau — nu se închid pe baza unei erori.",
     ],
     icon: <PlayCircle className="h-3.5 w-3.5 text-amber-400" />,

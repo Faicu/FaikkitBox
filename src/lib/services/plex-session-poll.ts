@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// Sesiunile Plex active — sarcina „plex-sessions” din Watcher, la 30s:
+// Sesiunile Plex active — sarcina „plex-sessions” din Watcher, la 10s:
 // începutul și sfârșitul fiecărei vizionări, în jurnal (trackPlexSessions din
 // activity-log.ts), plus ce se vede despre HDR-ul dispozitivelor
 // (recordDeviceSessions). Garda de suprapunere e a Watcher-ului: două
@@ -78,7 +78,7 @@ export async function pollPlexSessions(): Promise<void> {
   } catch {
     // Plex poate fi offline (sau n-a răspuns la timp) — sesiunile rămân
     // cum erau, nu le închidem pe baza unei erori. Nici nu o raportăm ca
-    // eroare a sarcinii: din 30 în 30 de secunde, cât Plex e oprit, ar umple
+    // eroare a sarcinii: din 10 în 10 secunde, cât Plex e oprit, ar umple
     // istoricul și „Erori aplicație” cu același lucru.
   }
 }

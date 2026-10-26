@@ -278,7 +278,7 @@ transversale, fără un singur domeniu clar.
 | `shared.ts`                   | Helpere HTTP comune (fetch cu timeout, tipuri de status partajate).                                                                                                                                                                                                                                                                                                                                                                                                               | Restul `services/*`.                                                      |
 | `plex-shared.ts`              | Tipuri + helpere partajate între modulele Plex (discover URL, calitate media, subtitrare încorporată RO). Extras din fostul `plex.ts` monolitic. Aici stau și cele trei funcții pe care se sprijină versiunile multiple ale unui film: `plexQualitiesFromItem` (TOATE calitățile unui item, nu doar `Media[0]`), `plexMediaForPath` (alege versiunea corectă după calea fișierului) și `mediaIsHdr` (HDR-ul citit din `colorTrc`/`DOVIPresent`, nu ghicit din numele fișierului). | `plex.ts`, `plex-library.ts`, `plex-browse.ts`.                           |
 | `plex.ts`                     | Status Plex principal — sesiuni active, biblioteci, istoric vizionări per user.                                                                                                                                                                                                                                                                                                                                                                                                   | `routes/index.tsx`.                                                       |
-| `plex-session-poll.ts`        | Sesiunile Plex active, la 30s (sarcina `plex-sessions` din Watcher): start/stop vizionări în jurnal și dovezile HDR ale dispozitivelor.                                                                                                                                                                                                                                                                                                                                           | `watcher/tasks.ts`.                                                       |
+| `plex-session-poll.ts`        | Sesiunile Plex active, la 10s (sarcina `plex-sessions` din Watcher): start/stop vizionări în jurnal — oprirea confirmată abia la două verificări la rând fără sesiune (`plex_active_sessions.missed`) — și dovezile HDR ale dispozitivelor.                                                                                                                                                                                                                                       | `watcher/tasks.ts`.                                                       |
 | `plex-library.ts`             | Căutarea titlurilor/episoadelor în biblioteca Plex **după ID-ul TMDB** (`findItem`, parametru `PlexLookup`; `tmdb://` din Guid, cu `includeGuids=1`) — pentru wizard (`checkPlexHasTitleInternal`, `getPlexEpisodesInSeasonInternal`) și pentru legarea unui rând `media` de item-ul lui Plex (`findPlexMovieLink`, `findPlexEpisodeLink`, `findPlexSeasonLinks`, `versionLinkFromItem`). Biblioteca Plex e în română, deci titlul nu e un reper.                                 | `wizard-check.functions.ts`, `media.ts`.                                  |
 | `plex-library-match.test.ts`  | Teste pe potrivirea după ID-ul TMDB, cu un `fetch` fals care răspunde doar la rutele Plex știute.                                                                                                                                                                                                                                                                                                                                                                                 | —                                                                         |
 | `plex-browse.ts`              | Date pentru pagina Bibliotecă — listă + detalii per titlu, citite exclusiv din `media` (zero cereri Plex/TMDB live la navigare).                                                                                                                                                                                                                                                                                                                                                  | `routes/biblioteca.tsx`, `BibliotecaList.tsx`, `TitleDetailDrawer.tsx`.   |
@@ -476,7 +476,7 @@ funcții numite, fan-in rezolvat prin importurile `@/` și relative, inclusiv
 `import()` dinamic). Tabelul e integral generat — nu are rânduri actualizate
 manual, deci nu poate fi parțial vechi.
 
-**Total: 280 fișiere, ~48 380 linii, ~1 127 funcții**
+**Total: 281 fișiere, ~48 471 linii, ~1 128 funcții**
 
 (numărătoare aproximativă — funcții numite, `const x = (...) =>` și
 `createServerFn`, fără metode de clasă sau funcții anonime inline)
@@ -486,7 +486,7 @@ manual, deci nu poate fi parțial vechi.
 | Zonă                                | Fișiere |  Linii |
 | ----------------------------------- | ------: | -----: |
 | `src/routes/` (pagini)              |      12 |  3 284 |
-| `src/lib/` (rădăcină, transversale) |      19 |  3 992 |
+| `src/lib/` (rădăcină, transversale) |      20 |  4 079 |
 | `src/lib/auth/`                     |      11 |  1 101 |
 | `src/lib/tmdb/`                     |       9 |  1 390 |
 | `src/lib/media/`                    |      32 |  7 000 |
@@ -496,21 +496,21 @@ manual, deci nu poate fi parțial vechi.
 | `src/lib/filelist/`                 |      38 |  6 795 |
 | `src/lib/services/`                 |      20 |  4 997 |
 | `src/lib/tvmaze/`                   |       1 |     46 |
-| `src/components/` (toate)           |      85 | 13 523 |
+| `src/components/` (toate)           |      85 | 13 524 |
 | `src/hooks/`                        |       5 |    325 |
 | `server/plugins/`                   |       2 |     90 |
 | `server/routes/api/`                |       3 |    230 |
-| altele                              |      16 |  2 829 |
+| altele                              |      16 |  2 832 |
 
 ### Fișiere-hub (fan-in mare)
 
 | Fișier                                      | Fan-in | Linii |
 | ------------------------------------------- | -----: | ----: |
 | `src/start.ts`                              |     61 |    26 |
-| `src/lib/db.ts`                             |     51 |  1349 |
+| `src/lib/db.ts`                             |     52 |  1365 |
 | `src/server.ts`                             |     40 |    72 |
 | `src/lib/auth/admin.server.ts`              |     31 |   153 |
-| `src/lib/filelist/log.ts`                   |     30 |   139 |
+| `src/lib/filelist/log.ts`                   |     31 |   139 |
 | `src/components/tehnic/utils.ts`            |     29 |    28 |
 | `src/lib/utils.ts`                          |     29 |     7 |
 | `src/components/biblioteca/utils.ts`        |     28 |   199 |
@@ -519,11 +519,11 @@ manual, deci nu poate fi parțial vechi.
 | `src/components/principala/wizard/types.ts` |     27 |    39 |
 | `src/lib/filelist/types.ts`                 |     27 |    56 |
 
-### Tabel complet, toate cele 280 de fișiere
+### Tabel complet, toate cele 281 de fișiere
 
 | Fișier                                                        | Linii | Funcții | Fan-in |
 | ------------------------------------------------------------- | ----: | ------: | -----: |
-| `src/lib/db.ts`                                               |  1349 |       6 |     51 |
+| `src/lib/db.ts`                                               |  1365 |       6 |     52 |
 | `src/components/biblioteca/TitleDetailDrawer.tsx`             |  1124 |      13 |      1 |
 | `src/lib/services/plex-browse.ts`                             |  1088 |      12 |      6 |
 | `src/lib/media/media.ts`                                      |  1065 |      24 |     21 |
@@ -532,7 +532,7 @@ manual, deci nu poate fi parțial vechi.
 | `src/lib/services/plex.ts`                                    |   721 |      16 |     15 |
 | `src/lib/filelist/download.ts`                                |   691 |      12 |     13 |
 | `src/lib/contributions/contributions.functions.ts`            |   690 |      25 |      3 |
-| `src/lib/activity-log.ts`                                     |   668 |      17 |     21 |
+| `src/lib/activity-log.ts`                                     |   682 |      17 |     22 |
 | `src/lib/filelist/subtitles.ts`                               |   614 |       9 |      2 |
 | `src/lib/media/movie-watch.ts`                                |   585 |      12 |      4 |
 | `src/lib/tmdb/tmdb.functions.ts`                              |   537 |      11 |     21 |
@@ -552,7 +552,7 @@ manual, deci nu poate fi parțial vechi.
 | `src/components/tehnic/SubtitleFixDrawer.tsx`                 |   396 |      10 |      2 |
 | `src/lib/queries.ts`                                          |   395 |       4 |     28 |
 | `src/lib/services/plex-shared.ts`                             |   392 |      10 |      7 |
-| `src/lib/watcher/tasks.ts`                                    |   385 |       3 |      3 |
+| `src/lib/watcher/tasks.ts`                                    |   388 |       3 |      3 |
 | `src/components/tehnic/sections/ActivityLogSection.tsx`       |   371 |       4 |      1 |
 | `src/lib/system/service-jobs.ts`                              |   357 |      14 |      3 |
 | `src/routes/users.tsx`                                        |   348 |       7 |      9 |
@@ -639,10 +639,10 @@ manual, deci nu poate fi parțial vechi.
 | `src/components/tehnic/CommitDrawer.tsx`                      |   145 |       4 |      2 |
 | `src/components/biblioteca/EpisodeList.tsx`                   |   144 |       3 |      1 |
 | `src/components/descopera/SceneViewer.tsx`                    |   144 |       1 |      2 |
-| `src/components/tehnic/plugins.tsx`                           |   143 |       0 |      2 |
+| `src/components/tehnic/plugins.tsx`                           |   144 |       0 |      2 |
 | `src/lib/services/recent-watch-merge.test.ts`                 |   142 |       3 |      0 |
 | `src/components/tehnic/sections/NetworkLinkCard.tsx`          |   139 |       2 |      1 |
-| `src/lib/filelist/log.ts`                                     |   139 |       2 |     30 |
+| `src/lib/filelist/log.ts`                                     |   139 |       2 |     31 |
 | `src/components/biblioteca/ScheduledDelete.tsx`               |   137 |       6 |      3 |
 | `src/lib/filelist/top-torrents.test.ts`                       |   136 |       3 |      0 |
 | `src/lib/plex-refresh.ts`                                     |   136 |       7 |      4 |
@@ -668,7 +668,7 @@ manual, deci nu poate fi parțial vechi.
 | `src/lib/filelist/subtitle-verify.test.ts`                    |   113 |       4 |      0 |
 | `src/components/descopera/TopTorrentsGrid.tsx`                |   112 |       2 |      1 |
 | `src/lib/media/movie-metadata.ts`                             |   112 |       1 |      2 |
-| `src/lib/notifications/push.ts`                               |   112 |       3 |      8 |
+| `src/lib/notifications/push.ts`                               |   112 |       3 |      9 |
 | `src/lib/filelist/categories.ts`                              |   111 |       4 |      6 |
 | `src/lib/media/device-hdr.test.ts`                            |   110 |       1 |      0 |
 | `src/components/filelist/use-download.ts`                     |   109 |       3 |      2 |
@@ -717,6 +717,7 @@ manual, deci nu poate fi parțial vechi.
 | `src/components/descopera/PosterCard.tsx`                     |    58 |       1 |      2 |
 | `src/lib/media/aired-episodes.test.ts`                        |    58 |       0 |      0 |
 | `src/routes/descopera.tsx`                                    |    58 |       1 |      3 |
+| `src/lib/activity-log-plex-stop.test.ts`                      |    57 |       1 |      0 |
 | `src/lib/system/speedtest.functions.ts`                       |    57 |       4 |      3 |
 | `src/components/sistem/RefreshRateCard.tsx`                   |    56 |       1 |      1 |
 | `src/components/tehnic/sections/PluginStatusSection.tsx`      |    56 |       1 |      1 |

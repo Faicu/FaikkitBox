@@ -203,6 +203,8 @@ function fmtProgress(viewOffsetMs: number, durationMs: number): string {
   return ` · ${watched}/${total} min (${pct}%)`;
 }
 
+const MISSES_TO_STOP = 2;
+
 export async function trackPlexSessions(
   sessions: Array<{
     user: string;
@@ -241,6 +243,7 @@ export async function trackPlexSessions(
     title: string;
     grandparent_title: string | null;
     rating_key: string | null;
+    missed: number;
   }>;
   const storedMap = new Map(stored.map((r) => [r.key, r]));
 
@@ -250,10 +253,12 @@ export async function trackPlexSessions(
     const key = sessionKey(s.user, s.title, s.grandparentTitle);
     currentKeys.add(key);
     if (storedMap.has(key)) {
-      // Actualizăm progresul în DB
+      // Actualizăm progresul în DB; sesiunea e din nou aici, deci lipsurile
+      // anterioare nu mai contează.
       const prev = storedMap.get(key)!;
       db.prepare(
-        `UPDATE plex_active_sessions SET last_view_offset_ms = ?, duration_ms = ? WHERE key = ?`,
+        `UPDATE plex_active_sessions SET last_view_offset_ms = ?, duration_ms = ?, missed = 0
+          WHERE key = ?`,
       ).run(s.viewOffsetMs ?? prev.last_view_offset_ms, s.durationMs ?? prev.duration_ms, key);
     }
   }
@@ -263,6 +268,15 @@ export async function trackPlexSessions(
   const MIN_PROGRESS_MS = 60_000;
   for (const [key, row] of storedMap.entries()) {
     if (!currentKeys.has(key)) {
+      // Plex „pierde” uneori o sesiune pentru o clipă (la derulare, când
+      // pornește din nou conversia video). Cu verificarea la 10s, o singură
+      // lipsă ar însemna o oprire falsă, cu pereche oprire/pornire și două
+      // notificări — deci o vizionare e oprită abia după MISSES_TO_STOP
+      // verificări la rând fără ea (10–20s după oprirea reală).
+      if (row.missed + 1 < MISSES_TO_STOP) {
+        db.prepare("UPDATE plex_active_sessions SET missed = missed + 1 WHERE key = ?").run(key);
+        continue;
+      }
       db.prepare("DELETE FROM plex_active_sessions WHERE key = ?").run(key);
       const what = row.grandparent_title ? `${row.grandparent_title} — ${row.title}` : row.title;
       const progress = fmtProgress(row.last_view_offset_ms, row.duration_ms);

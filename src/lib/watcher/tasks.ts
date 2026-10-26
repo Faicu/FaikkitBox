@@ -96,12 +96,15 @@ export const WATCHER_TASKS: WatcherTask[] = [
   },
 
   // -------------------------------------------------------------------------
-  // Sesiunile Plex active — vezi src/lib/services/plex-session-poll.ts.
+  // Sesiunile Plex active — vezi src/lib/services/plex-session-poll.ts. La
+  // 10s (era 30s): începutul unei vizionări apare în cel mult 10s; oprirea
+  // se confirmă la două verificări la rând fără sesiune (trackPlexSessions),
+  // ca o sesiune pierdută o clipă de Plex să nu dea o oprire falsă.
   {
     id: "plex-sessions",
     label: "Sesiuni Plex",
-    delayMs: 30 * SEC,
-    everyMs: 30 * SEC,
+    delayMs: 10 * SEC,
+    everyMs: 10 * SEC,
     controllable: true,
     async run() {
       const { pollPlexSessions } = await import("../services/plex-session-poll");
