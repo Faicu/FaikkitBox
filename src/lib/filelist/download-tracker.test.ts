@@ -70,10 +70,12 @@ describe("trackDownloads", () => {
       { hash: "busy1", progress: 0.4, state: "downloading" },
     );
 
-    const summary = await tracker.trackDownloads();
+    const { summary, nextAt } = await tracker.trackDownloads();
     expect(qbitGet).toHaveBeenCalledTimes(1);
     expect(finalized).toEqual(["done1"]);
     expect(summary).toBe("terminat: done1");
+    // Ceva în curs: ritmul obișnuit (10s).
+    expect(nextAt).toBeNull();
     expect(tracker.finalizingHashes().has("done1")).toBe(true);
   });
 
@@ -86,10 +88,16 @@ describe("trackDownloads", () => {
     expect(tracker.finalizingHashes().has("done1")).toBe(false);
   });
 
-  it("fără nimic neterminat, nu întreabă qBittorrent", async () => {
-    db.prepare("UPDATE media SET completed_at = datetime('now', '-3 hours')").run();
-    // Terminate de peste 30 de minute: nici legarea nu mai e treaba sarcinii.
-    expect(await tracker.trackDownloads()).toBeNull();
+  it("fără nimic de urmărit, nu întreabă qBittorrent și doarme", async () => {
+    // Totul terminat și legat la Plex.
+    db.prepare(
+      "UPDATE media SET completed_at = datetime('now', '-3 hours'), plex_rating_key = 'k' || id",
+    ).run();
+    const before = Date.now();
+    const { summary, nextAt } = await tracker.trackDownloads();
+    expect(summary).toBeNull();
     expect(qbitGet).not.toHaveBeenCalled();
+    // Doarme până la verificarea de siguranță (o oră) — o descărcare nouă o trezește.
+    expect(nextAt).toBeGreaterThanOrEqual(before + 60 * 60_000);
   });
 });

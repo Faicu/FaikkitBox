@@ -206,6 +206,12 @@ export const setMovieWatch = createServerFn({ method: "POST" })
       if (!data.enabled) await requireMovieWatchOwner({ tmdbId: data.tmdbId });
       const { setMovieWatchCore } = await import("./movie-watch");
       await setMovieWatchCore({ ...data, requestedByUserId: session.data.userId ?? null });
+      // Prima căutare peste un minut (vezi checkNewMovies): destul cât să nu
+      // repete căutarea tocmai făcută în wizard.
+      if (data.enabled) {
+        const { pokeWatcher } = await import("../watcher/poke");
+        pokeWatcher("show-watch", 65_000);
+      }
       return { ok: true };
     } catch (e) {
       // Sesiunea expirată merge mai departe ca eroare (redirect spre login),

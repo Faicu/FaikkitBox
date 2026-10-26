@@ -1,14 +1,12 @@
 import type { ReactNode } from "react";
 import {
   PlayCircle,
-  Link2,
   Download,
   DatabaseBackup,
   Upload,
   Wrench,
   ArrowUpCircle,
   Tv,
-  Film,
   Star,
   Captions,
   Trash2,
@@ -59,11 +57,12 @@ export const WATCHER_TASK_INFO: Record<string, WatcherTaskInfo> = {
   downloads: {
     summary: "Urmărește descărcările până la final și le leagă la Plex.",
     points: [
-      "La fiecare 10 secunde, o singură cerere către qBittorrent pentru toate descărcările neterminate pornite din aplicație.",
+      "O singură cerere către qBittorrent pentru toate descărcările neterminate pornite din aplicație.",
       "Un torrent terminat primește ID-ul IMDb în numele fișierelor, notificarea, subtitrarea română și refresh-ul Plex. Partea asta rulează separat, deci o subtitrare care durează minute nu le ține pe loc pe celelalte.",
-      "În primele 30 de minute după terminare încearcă legarea la Plex la fiecare 10 secunde; după aceea preia „Legare Plex”. Cele două nu rulează niciodată deodată, ca un pachet de sezon să nu fie legat de două ori.",
+      "Leagă titlul la Plex: în primele 30 de minute după terminare la fiecare rulare, apoi la 10 minute, până la 72h. Ce rămâne nelegat (Plex oprit, scanare întârziată) ar sta altfel blocat pe „se procesează”. Completează și calitatea filmelor la care nu s-a putut decide care versiune din Plex e a noastră.",
+      "Ritmul: la 10 secunde cât se descarcă, se finalizează sau se leagă ceva; la 10 minute cât rămân doar titluri nelegate mai vechi; altfel doarme. O descărcare nouă o trezește imediat, iar o verificare din oră în oră rămâne plasă de siguranță.",
       "Urmărește o descărcare cel mult 14 zile de la adăugare.",
-      "Totul se citește din baza de date la fiecare tact, deci un restart nu întrerupe nimic. Înainte, fiecare descărcare avea propria buclă în memorie, pe care fiecare deploy o omora și care trebuia reluată la pornire.",
+      "Totul se citește din baza de date, deci un restart nu întrerupe nimic. Înainte, fiecare descărcare avea propria buclă în memorie, pe care fiecare deploy o omora.",
     ],
     icon: <Download className="h-3.5 w-3.5 text-blue-400" />,
   },
@@ -72,8 +71,8 @@ export const WATCHER_TASK_INFO: Record<string, WatcherTaskInfo> = {
     points: [
       "Filelist consideră hit and run un torrent șters în primele 24 de ore de la descărcare. Cererea se acceptă, dar ștergerea se programează pentru împlinirea celor 24 h.",
       "Până atunci torrentul continuă să se descarce și să facă seed, iar titlul apare în Bibliotecă cu un timer. Oricine poate renunța la ștergere și devine astfel proprietarul titlului. Adminul poate ocoli programarea cu „Șterge acum”.",
-      "Termenul stă în baza de date: o ștergere ratată cât serverul a fost oprit se face la pornirea următoare.",
-      "Un torrent care tocmai s-a terminat și își primește încă subtitrarea e lăsat pentru minutul următor, ca să nu fie șters exact cât i se scriu fișierele.",
+      "Rulează exact la termenul celei mai apropiate ștergeri; fără nimic programat doarme, iar o programare nouă o trezește. Termenul stă în baza de date: o ștergere ratată cât serverul a fost oprit se face la pornirea următoare.",
+      "Un torrent care tocmai s-a terminat și își primește încă subtitrarea, sau o ștergere eșuată, se reîncearcă peste un minut.",
       "Programarea, renunțarea și ștergerea efectivă apar în jurnal (filtrul Torrente), fără notificare push.",
     ],
     icon: <Trash2 className="h-3.5 w-3.5 text-red-400" />,
@@ -83,30 +82,13 @@ export const WATCHER_TASK_INFO: Record<string, WatcherTaskInfo> = {
     points: [
       "Episoade noi, la 3h / serial (la 1h în ziua lansării ±1 zi): compară ce s-a difuzat (TMDB, inclusiv episodul lansat azi) cu ce ai deja și aduce diferența, căutând strict după IMDb ID, fără cache.",
       "Nu ține minte ce a văzut ultima dată: întreabă de fiecare dată realitatea, deci se poate relua oricând și nu poate descărca de două ori. După fiecare descărcare, poziția de start avansează peste episoadele aduse, ca un episod văzut și șters să nu revină.",
-      "Filme așteptate, la 12h / film: înainte de data lansării nici nu se caută; urmărirea se stinge singură la prima descărcare reușită.",
+      "Filme așteptate, la 12h / film: înainte de data lansării nici nu se caută; urmărirea se stinge singură la prima descărcare reușită. Un film abia adăugat e căutat prima dată la un minut după adăugare — destul cât să nu repete căutarea tocmai făcută în wizard.",
       "Calitatea de rezervă se ia doar când principala lipsește la două verificări, la cel puțin 3 ore distanță.",
       "Detalii seriale și filme, la 12h: status, titlurile română/original, anul, descrierea, genurile, posterul, episoadele — cerute în română, cu engleza ca rezervă. Statusul contează și la serialele neurmărite: decide dacă ți se oferă butonul de urmărire.",
       "Un pas eșuat nu-i oprește pe ceilalți; rularea apare atunci ca eșuată, cu numele pasului.",
-      "Nu rulează niciodată deodată cu „Filme abia adăugate”: ambele caută pe Filelist, iar căutările de fundal se fac pe rând.",
+      "Pornirea urmăririi unui serial îl verifică imediat, nu la următorul ciclu de 10 minute.",
     ],
     icon: <Tv className="h-3.5 w-3.5 text-blue-400" />,
-  },
-  "new-movies": {
-    summary: "Prima verificare a unui film abia adăugat, la un minut după adăugare.",
-    points: [
-      "Un singur SELECT care, în marea majoritate a cazurilor, nu întoarce nimic — de-aia poate rula des.",
-      "Cât rulează „Seriale și filme”, așteaptă: ambele caută pe Filelist, iar căutările de fundal nu se fac niciodată deodată.",
-    ],
-    icon: <Film className="h-3.5 w-3.5 text-amber-400" />,
-  },
-  "plex-link": {
-    summary: "Leagă la Plex titlurile descărcate, dar rămase nelegate.",
-    points: [
-      "Primele 30 de minute după terminare sunt ale sarcinii „Descărcări”. Ce rămâne nelegat după asta (Plex oprit, scanare întârziată) ar sta altfel blocat pe „se procesează” la nesfârșit.",
-      "Reîncearcă pentru tot ce s-a terminat în ultimele 72h și n-are încă legătură. Nu atinge Plex decât dacă chiar există ceva nelegat.",
-      "Completează și calitatea filmelor legate corect, dar la care nu s-a putut decide care versiune din Plex e a noastră.",
-    ],
-    icon: <Link2 className="h-3.5 w-3.5 text-emerald-400" />,
   },
   "immich-uploads": {
     summary: "Pozele și clipurile încărcate în Immich, trecute în jurnal.",

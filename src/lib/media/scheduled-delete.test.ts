@@ -148,6 +148,8 @@ describe("runDueDeletions (sarcina din Watcher)", () => {
     expect(done).toBe(1);
     const left = db.prepare("SELECT DISTINCT torrent_hash AS h FROM media ORDER BY h").all();
     expect(left).toEqual([{ h: "later" }, { h: "none" }]);
+    // Watcher-ul doarme până la următorul termen.
+    expect(sched.nextScheduledDeletionAt()).toBe(new Date("2026-10-27T12:00:00Z").getTime());
     expect(logActivity).toHaveBeenCalledWith(
       "title_delete",
       "Șters la termen: Dune S01E01 (programat de ana)",

@@ -35,9 +35,9 @@ const NEXT_MAX_MS = 25 * 60 * 60 * 1000;
 
 const running = new Map<string, number>();
 const nextAt = new Map<string, number>();
-// Sarcinile chemate cu pokeWatcher cât rulau deja — pornesc din nou imediat
-// după, ca semnalul să nu se piardă.
-const poked = new Set<string>();
+// Sarcinile chemate cu pokeWatcher cât rulau deja, cu ora cerută — rularea
+// următoare vine cel târziu atunci, ca semnalul să nu se piardă.
+const poked = new Map<string, number>();
 
 interface ControlRow {
   id: string;
@@ -168,10 +168,14 @@ async function execute(task: WatcherTask, manual: boolean): Promise<void> {
   // întâietate față de interval; o rulare eșuată revine la interval, ca să se
   // reîncerce la ritmul obișnuit.
   let next: number | null = null;
-  if (poked.delete(task.id)) next = finished;
-  else if (ok && requestedNext !== null)
+  if (ok && requestedNext !== null)
     next = Math.min(Math.max(requestedNext, finished + NEXT_MIN_MS), finished + NEXT_MAX_MS);
   else if (task.everyMs !== null) next = finished + task.everyMs;
+  const pokedAt = poked.get(task.id);
+  if (pokedAt !== undefined) {
+    poked.delete(task.id);
+    next = Math.min(next ?? Infinity, Math.max(pokedAt, finished));
+  }
   if (next === null) nextAt.delete(task.id);
   else nextAt.set(task.id, next);
   running.delete(task.id);
@@ -247,18 +251,30 @@ export function tick(): void {
 
 declare global {
   var __faikkitboxWatcherStarted: boolean | undefined;
-  var __faikkitboxWatcherPoke: ((taskId: string) => void) | undefined;
+  var __faikkitboxWatcherPoke: ((taskId: string, delayMs?: number) => void) | undefined;
 }
 
-// Pornește o sarcină la tactul următor, fără să mai aștepte intervalul — de
-// exemplu urmărirea serialelor, imediat după ce pornești urmărirea unuia.
-// Chemată prin globalThis (vezi poke.ts): server functions rulează în altă
-// copie a modulelor, dar în același proces. Nu e „Rulează acum”: respectă
-// pauza și nu apare ca manuală în istoric.
-export function poke(taskId: string): void {
+// Aduce rularea unei sarcini cel târziu la `delayMs` de acum, fără să mai
+// aștepte intervalul — de exemplu urmărirea serialelor, imediat după ce
+// pornești urmărirea unuia, sau descărcările, care dorm cât nu e nimic de
+// urmărit. Nu amână niciodată o rulare deja mai apropiată. Chemată prin
+// globalThis (vezi poke.ts): server functions rulează în altă copie a
+// modulelor, dar în același proces. Nu e „Rulează acum”: respectă pauza și
+// nu apare ca manuală în istoric.
+export function poke(taskId: string, delayMs = 0): void {
   if (!WATCHER_TASKS.some((t) => t.id === taskId)) return;
-  if (running.has(taskId)) poked.add(taskId);
-  else nextAt.set(taskId, Date.now());
+  const at = Date.now() + delayMs;
+  if (running.has(taskId)) {
+    poked.set(taskId, Math.min(poked.get(taskId) ?? Infinity, at));
+    return;
+  }
+  const next = Math.min(nextAt.get(taskId) ?? Infinity, at);
+  nextAt.set(taskId, next);
+  try {
+    getDb().prepare("UPDATE watcher_tasks SET next_run_at = ? WHERE id = ?").run(next, taskId);
+  } catch {
+    // Doar afișarea orei următoare rămâne în urmă; rularea vine oricum.
+  }
 }
 
 export function startWatcher(): void {

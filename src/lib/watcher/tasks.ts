@@ -111,30 +111,26 @@ export const WATCHER_TASKS: WatcherTask[] = [
   },
 
   // -------------------------------------------------------------------------
-  // Descărcările pornite din aplicație, până la final: torrentele terminate în
-  // qBittorrent primesc ID-ul IMDb în nume, completed_at, notificare,
-  // subtitrare RO și refresh Plex, apoi legarea la Plex în primele 30 de
-  // minute. Vezi src/lib/filelist/download-tracker.ts.
+  // Descărcările pornite din aplicație, până la titlul gata în Plex: torrentele
+  // terminate în qBittorrent primesc ID-ul IMDb în nume, completed_at,
+  // notificare, subtitrare RO și refresh Plex, apoi legarea la Plex — în
+  // primele 30 de minute la fiecare rulare, apoi prin reconciliere la 10
+  // minute, până la 72h. Vezi src/lib/filelist/download-tracker.ts.
   //
-  // Înlocuiește buclele per torrent din memorie (30s, până la 48h) și reluarea
-  // lor după restart: totul se citește acum din `media` la fiecare tact, deci
-  // un restart nu mai are ce întrerupe. Bucla veche murea și în tăcere după
-  // 48h, iar rândul rămânea neterminat până la următoarea repornire.
+  // Înlocuiește buclele per torrent din memorie (30s, până la 48h), reluarea
+  // lor după restart și fosta sarcină „Legare Plex”: totul se citește din
+  // `media`, deci un restart nu mai are ce întrerupe.
   //
-  // La 15s după pornire: serverul a pornit, qBittorrent e gata.
-  //
-  // Grupul „plex-link”, cu reconcilierea: cele două leagă la Plex titluri din
-  // ferestre disjuncte (sub / peste 30 de minute de la terminare), dar exact
-  // la graniță ar putea prinde același titlu în aceeași secundă — iar două
-  // legări simultane ale unui pachet de sezon îi dublează rândurile de
-  // episod. Finalizarea (subtitrare etc.) rulează în afara sarcinii, deci nu
-  // ține grupul ocupat.
+  // Ritmul îl cere sarcina: 10s cât e ceva în curs, 10 minute cât rămân doar
+  // titluri nelegate mai vechi, altfel o oră — o descărcare nouă o trezește
+  // imediat (pokeWatcher în finishFilelistDownload). La 15s după pornire:
+  // serverul a pornit, qBittorrent e gata.
   {
     id: "downloads",
     label: "Descărcări",
+    cadenceLabel: "la 10s cât se descarcă",
     delayMs: 15 * SEC,
     everyMs: 10 * SEC,
-    group: "plex-link",
     controllable: true,
     async run() {
       const { trackDownloads } = await import("../filelist/download-tracker");
@@ -146,21 +142,29 @@ export const WATCHER_TASKS: WatcherTask[] = [
   // Ștergerile programate (src/lib/media/scheduled-delete.ts). Un titlu cerut
   // spre ștergere în primele 24 h de la descărcare (hit and run pe Filelist)
   // se șterge abia la împlinirea lor; termenul stă în `media`, deci o ștergere
-  // ratată cât serverul a fost oprit se face la pornirea următoare. Interogarea
-  // e una singură, ieftină — de-aia minutul, ca timerul din Bibliotecă să fie
-  // ținut aproape exact. La 30s: qBittorrent e gata. Un torrent încă în
-  // finalizare (redenumire, subtitrare) e lăsat pentru minutul următor —
-  // vezi finalizingHashes în download-tracker.ts.
+  // ratată cât serverul a fost oprit se face la pornirea următoare.
+  //
+  // Sarcina rulează exact la termenul celei mai apropiate ștergeri (timerul
+  // din Bibliotecă e ținut la secundă), iar fără nimic programat doarme — o
+  // programare nouă o trezește (pokeWatcher în log.ts); verificarea din oră în
+  // oră e plasă de siguranță. O ștergere eșuată, sau un torrent încă în
+  // finalizare (vezi finalizingHashes în download-tracker.ts), rămâne scadentă
+  // și se reîncearcă la minut. La 30s după pornire: qBittorrent e gata.
   {
     id: "scheduled-delete",
     label: "Ștergeri programate",
+    cadenceLabel: "la termenul ștergerii",
     delayMs: 30 * SEC,
     everyMs: MIN,
     controllable: true,
     async run() {
       const { runDueDeletions } = await import("../filelist/delete-title");
+      const { nextScheduledDeletionAt } = await import("../media/scheduled-delete");
       const n = await runDueDeletions();
-      return n > 0 ? plural(n, "titlu șters", "titluri șterse") : null;
+      return {
+        summary: n > 0 ? plural(n, "titlu șters", "titluri șterse") : null,
+        nextAt: nextScheduledDeletionAt() ?? Date.now() + HOUR,
+      };
     },
   },
 
@@ -173,24 +177,33 @@ export const WATCHER_TASKS: WatcherTask[] = [
   // La 45s după pornire: după primul tact al descărcărilor (15s), ca
   // torrentele terminate cât serverul a fost oprit să fie deja marcate.
   //
-  // Grupul „filelist”: o rulare caută pe Filelist pentru mai multe titluri,
-  // iar două căutări de fundal simultane ar deschide sesiuni concurente acolo.
+  // Un film adăugat la urmărire trezește sarcina după un minut (pokeWatcher
+  // în setMovieWatch): destul cât să nu repete căutarea tocmai făcută în
+  // wizard, destul de repede cât rândul să se completeze cât te uiți la el.
+  // Pornirea urmăririi unui serial o trezește imediat (setShowWatch).
   {
     id: "show-watch",
     label: "Seriale și filme",
     cadenceLabel: "la 3h / serial",
     delayMs: 45 * SEC,
     everyMs: 10 * MIN,
-    group: "filelist",
     controllable: true,
     async run() {
       const failed: string[] = [];
       // Descărcările întâi — sunt motivul pentru care există sarcina, iar
       // fiecare verificare își cere singură detaliile de care are nevoie.
-      // Filmele așteptate, la coadă și în aceeași rulare: ambele caută pe
-      // Filelist, deci rămân strict secvențiale.
+      // Filmele, la coadă și în aceeași rulare: toate caută pe Filelist, deci
+      // rămân strict secvențiale. „Filme noi” = prima verificare a unui film
+      // abia adăugat la urmărire (era o sarcină separată, la 30s).
       await steps(
         [
+          [
+            "Filme noi",
+            async () => {
+              const { checkNewMovies } = await import("../media/movie-watch");
+              await checkNewMovies();
+            },
+          ],
           [
             "Episoade noi",
             async () => {
@@ -241,50 +254,6 @@ export const WATCHER_TASKS: WatcherTask[] = [
       return hasMetaNews(report)
         ? buildMetaRefreshMessage(report).replace(/^Metadate: /, "")
         : null;
-    },
-  },
-
-  // -------------------------------------------------------------------------
-  // Prima verificare a filmelor abia adăugate: filmul se verifică la un minut
-  // după adăugare (condiția e în SQL), iar tactul de 30s face ca asta să se
-  // întâmple între minutul 1 și 1:30. Separat de „show-watch”, unde se
-  // împrospătează metadate și se verifică seriale — muncă prea grea pentru
-  // fiecare jumătate de minut; aici e un singur SELECT care, în marea
-  // majoritate a cazurilor, nu întoarce nimic. Același grup: cât rulează
-  // ciclul mare, așteaptă.
-  {
-    id: "new-movies",
-    label: "Filme abia adăugate",
-    delayMs: 30 * SEC,
-    everyMs: 30 * SEC,
-    group: "filelist",
-    controllable: true,
-    async run() {
-      const { checkNewMovies } = await import("../media/movie-watch");
-      await checkNewMovies();
-      return null;
-    },
-  },
-
-  // -------------------------------------------------------------------------
-  // Legarea la Plex a titlurilor terminate de peste 30 de minute, dar rămase
-  // fără plex_rating_key (primele 30 de minute sunt ale sarcinii „downloads”)
-  // — altfel blocate pe „se procesează” în Bibliotecă. Vezi
-  // src/lib/media/plex-link-reconciler.ts. La 45s (Plex a avut timp să
-  // răspundă), apoi la 10 minute; interogarea nu atinge Plex decât dacă chiar
-  // există rânduri nelegate.
-  {
-    id: "plex-link",
-    label: "Legare Plex",
-    delayMs: 45 * SEC,
-    everyMs: 10 * MIN,
-    group: "plex-link",
-    controllable: true,
-    async run() {
-      const { reconcilePlexLinks } = await import("../media/plex-link-reconciler");
-      const r = await reconcilePlexLinks();
-      if (r.checked === 0) return null;
-      return `${plural(r.checked, "nelegat verificat", "nelegate verificate")}, ${r.linked} legate`;
     },
   },
 

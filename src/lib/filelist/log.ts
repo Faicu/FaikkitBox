@@ -69,6 +69,10 @@ export const deleteMediaEntry = createServerFn({ method: "POST" })
             session.data.userId ?? null,
           );
           if (!already) {
+            // Watcher-ul doarme cât nu e nimic programat — îl trezim, ca
+            // să-și ia ora noii ștergeri.
+            const { pokeWatcher } = await import("../watcher/poke");
+            pokeWatcher("scheduled-delete");
             await logActivity(
               "title_delete",
               `${who} a programat ștergerea: ${label} — se șterge la ${formatDeleteTime(scheduled.at)}`,

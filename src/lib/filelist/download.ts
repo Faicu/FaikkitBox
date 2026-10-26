@@ -501,8 +501,11 @@ async function finishFilelistDownload(ctx: {
 
   // 8. Urmărirea până la final o face sarcina „downloads” a Watcher-ului,
   // care citește din `media` torrentele neterminate — rândul scris mai sus
-  // ajunge, fără nicio buclă pornită de aici.
-  if (!torrentHash) {
+  // ajunge. Sarcina doarme cât nu e nimic de urmărit, deci o trezim.
+  if (torrentHash) {
+    const { pokeWatcher } = await import("../watcher/poke");
+    pokeWatcher("downloads");
+  } else {
     console.warn("[filelist] Hash nedisponibil — descărcarea nu poate fi urmărită până la final");
   }
 }

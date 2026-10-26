@@ -84,6 +84,18 @@ export function cancelScheduledDeletion(torrentHash: string, byUserId: number | 
   return Number(res.changes) > 0;
 }
 
+// Termenul celei mai apropiate ștergeri programate (ms), sau null dacă nu e
+// nimic programat — Watcher-ul rulează sarcina exact atunci.
+export function nextScheduledDeletionAt(): number | null {
+  const row = getDb()
+    .prepare(
+      `SELECT MIN(delete_scheduled_at) AS at FROM media
+        WHERE delete_scheduled_at IS NOT NULL AND torrent_hash IS NOT NULL`,
+    )
+    .get() as { at: string | null } | undefined;
+  return row?.at ? sqliteMs(row.at) : null;
+}
+
 // Torrentele cu termenul de ștergere atins — câte unul, cu primul lui rând.
 export function listDueDeletions(
   nowMs = Date.now(),

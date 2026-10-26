@@ -241,4 +241,19 @@ describe("Watcher", () => {
     await flush();
     expect(calls).toContainEqual({ id: "clock", manual: false });
   });
+
+  it("poke cu întârziere aduce rularea, dar nu o amână niciodată", async () => {
+    at(50_430_000);
+    // Următoarea era peste 14h; cerută peste 65s.
+    runner.poke("clock", 65_000);
+    expect(row("clock").next_run_at).toBe(T0 + 50_430_000 + 65_000);
+    // O cerere mai târzie nu mută ora deja mai apropiată.
+    runner.poke("clock", 600_000);
+    expect(row("clock").next_run_at).toBe(T0 + 50_430_000 + 65_000);
+    calls.length = 0;
+    at(50_430_000 + 65_000);
+    runner.tick();
+    await flush();
+    expect(calls).toContainEqual({ id: "clock", manual: false });
+  });
 });
