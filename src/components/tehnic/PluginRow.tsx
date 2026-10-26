@@ -1,7 +1,7 @@
 import { ChevronRight } from "lucide-react";
 
 import { relativeTime } from "./utils";
-import type { PluginInfo } from "./plugins";
+import type { ReactNode } from "react";
 
 // Un rând de plugin, în lista din Tehnic.
 export function PluginRow({
@@ -10,7 +10,7 @@ export function PluginRow({
   lastTs,
   onOpen,
 }: {
-  plugin: Pick<PluginInfo, "icon" | "label" | "description">;
+  plugin: { icon: ReactNode; label: string; description: string };
   description?: string;
   lastTs: string | null;
   onOpen: () => void;

@@ -3,13 +3,10 @@ import {
   PlayCircle,
   Link2,
   Download,
-  Power,
-  PlugZap,
   DatabaseBackup,
   Upload,
   Wrench,
   ArrowUpCircle,
-  Bug,
   Tv,
   Film,
   Star,
@@ -19,39 +16,11 @@ import {
   Sparkles,
 } from "lucide-react";
 
-// Catalogul din Tehnic → „Plugin-uri active”. Pe server mai sunt doar două
-// plugin-uri: Watcher-ul (toate sarcinile de fundal, sub un singur tact — vezi
-// src/lib/watcher/) și server-lifecycle, care nu e o sarcină periodică, ci
-// pornirea și oprirea procesului. Ritmul sarcinilor vine de la server, din
-// registru; aici stă doar ce nu ține de rulare: iconița și explicația.
-export interface PluginInfo {
-  // Identic cu numele fișierului din server/plugins/, fără extensie.
-  id: string;
-  label: string;
-  description: string;
-  cadence: string;
-  // De ce există plugin-ul, pe scurt — aproape toate au apărut ca reacție la
-  // un bug concret, iar contextul ăla e cel mai util lucru de citit când te
-  // întrebi peste un an de ce e acolo.
-  details: string;
-  // Pentru plugin-urile care fac mai multe lucruri distincte: fiecare parte
-  // cu ritmul și explicația ei, afișate pliat în drawer — un singur bloc de
-  // text lung nu se mai citea.
-  steps?: PluginStep[];
-  icon: ReactNode;
-  // Tipul de intrare din jurnal care dovedește că a făcut ceva.
-  activityType: string | null;
-}
-
-export interface PluginStep {
-  title: string;
-  cadence: string;
-  // O frază, vizibilă mereu; `points` apar doar la deschidere.
-  summary: string;
-  points: string[];
-  icon: ReactNode;
-}
-
+// Catalogul Watcher-ului din Tehnic → „Plugin-uri active”: iconița și
+// explicațiile. Ritmul sarcinilor vine de la server, din registru
+// (src/lib/watcher/tasks.ts). Celălalt plugin de pe server, server-lifecycle
+// (pornirea și oprirea procesului), nu mai apare în Tehnic: nu are nimic de
+// urmărit sau de controlat.
 export const WATCHER_PLUGIN = {
   id: "watcher",
   label: "Watcher",
@@ -185,48 +154,6 @@ export const WATCHER_TASK_INFO: Record<string, WatcherTaskInfo> = {
     ],
     icon: <Captions className="h-3.5 w-3.5 text-teal-400" />,
   },
-};
-
-export const SERVER_LIFECYCLE_PLUGIN: PluginInfo = {
-  id: "server-lifecycle",
-  label: "Pornire și Oprire",
-  description: "Jurnalul pornirilor/opririlor, oprire curată, captura erorilor",
-  cadence: "la pornire și la oprire",
-  details:
-    "Tot ce ține de procesul serverului în sine, nu de vreun serviciu — de-aia nu e o sarcină a Watcher-ului.",
-  steps: [
-    {
-      title: "Jurnal pornire/oprire",
-      cadence: "la pornire",
-      summary: "Scrie în jurnal fiecare pornire și oprire, cu cauza ei.",
-      points: [
-        "Rula ca efect secundar de modul, deci se executa abia la prima cerere HTTP: după un restart, jurnalul rămânea gol până deschidea cineva aplicația, iar atunci „Serverul a pornit” se scria cu ora greșită și cu cauza greșită.",
-        "Dacă serviciul era oprit înainte de vreo cerere, oprirea nu se loga deloc.",
-      ],
-      icon: <PlugZap className="h-3.5 w-3.5 text-sky-400" />,
-    },
-    {
-      title: "Oprire controlată",
-      cadence: "la oprire",
-      summary: "Închide curat la SIGTERM, înainte ca systemd să dea SIGKILL.",
-      points: [
-        "Fără ea, oprirea aștepta drenarea tuturor conexiunilor HTTP — inclusiv SSE-ul de auto-reload, deschis cât timp orice tab are dashboard-ul deschis.",
-        "Asta depășea mereu TimeoutStopSec=5, iar systemd termina procesul cu SIGKILL, fără nicio șansă pentru logarea opririi. Acum logarea are o fereastră scurtă, apoi procesul iese controlat.",
-      ],
-      icon: <Power className="h-3.5 w-3.5 text-rose-400" />,
-    },
-    {
-      title: "Captura erorilor",
-      cadence: "la pornire",
-      summary: "Trimite erorile și avertismentele din consolă în „Erori aplicație”.",
-      points: [
-        "Prinde tot ce ajunge în console.error/console.warn pe server — server functions și sarcinile Watcher-ului — nu doar ce e logat explicit.",
-      ],
-      icon: <Bug className="h-3.5 w-3.5 text-amber-400" />,
-    },
-  ],
-  icon: <PlugZap className="h-4 w-4 text-sky-400" />,
-  activityType: "server_start",
 };
 
 export const FALLBACK_TASK_ICON = <Sparkles className="h-3.5 w-3.5 text-muted-foreground" />;

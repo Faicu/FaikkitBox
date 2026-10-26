@@ -2,21 +2,17 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Box } from "lucide-react";
 
-import { activityLogQuery, watcherStatusQuery } from "@/lib/queries";
-import { SERVER_LIFECYCLE_PLUGIN, WATCHER_PLUGIN } from "../plugins";
-import { PluginDetailDrawer } from "../PluginDetailDrawer";
+import { watcherStatusQuery } from "@/lib/queries";
+import { WATCHER_PLUGIN } from "../plugins";
 import { PluginRow } from "../PluginRow";
 import { WatcherDrawer } from "../WatcherDrawer";
 
-// Două plugin-uri pe server: Watcher-ul (toate sarcinile de fundal) și
-// pornirea/oprirea procesului. Ultima activitate a Watcher-ului e cea mai
+// Watcher-ul (toate sarcinile de fundal). Ultima activitate a Watcher-ului e cea mai
 // recentă rulare terminată a oricărei sarcini — vine din watcher_tasks, nu
 // din jurnal sau din tabelele proprii ale fiecărei sarcini, ca înainte.
 export function PluginStatusSection() {
-  const { data: log } = useQuery(activityLogQuery);
   const { data: tasks } = useQuery(watcherStatusQuery);
   const [watcherOpen, setWatcherOpen] = useState(false);
-  const [lifecycleOpen, setLifecycleOpen] = useState(false);
 
   const list = tasks ?? [];
   const lastWatcherTs =
@@ -33,10 +29,6 @@ export function PluginStatusSection() {
   if (running) parts.push(`${running} în curs`);
   if (errors) parts.push(`${errors} cu eroare`);
   if (paused) parts.push(`${paused} pe pauză`);
-
-  const lifecycleTs = Array.isArray(log)
-    ? (log.find((e) => e.type === SERVER_LIFECYCLE_PLUGIN.activityType)?.timestamp ?? null)
-    : null;
 
   return (
     <section className="space-y-2">
@@ -55,19 +47,9 @@ export function PluginStatusSection() {
           lastTs={lastWatcherTs}
           onOpen={() => setWatcherOpen(true)}
         />
-        <PluginRow
-          plugin={SERVER_LIFECYCLE_PLUGIN}
-          lastTs={lifecycleTs}
-          onOpen={() => setLifecycleOpen(true)}
-        />
       </div>
 
       <WatcherDrawer open={watcherOpen} onClose={() => setWatcherOpen(false)} />
-      <PluginDetailDrawer
-        plugin={lifecycleOpen ? SERVER_LIFECYCLE_PLUGIN : null}
-        lastTs={lifecycleTs}
-        onClose={() => setLifecycleOpen(false)}
-      />
     </section>
   );
 }

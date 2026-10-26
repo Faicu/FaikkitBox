@@ -381,29 +381,28 @@ are legătură cu fostul sistem de fixare/urmărire (eliminat complet).
 
 ### src/components/tehnic/
 
-| Fișier                                  | Ce conține                                                                                                                                                                                                                                        |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `TehnicSubNav.tsx`                      | Navigare între sub-secțiunile paginii Tehnic.                                                                                                                                                                                                     |
-| `CommitDrawer.tsx`                      | Drawer detalii commit (local sau GitHub).                                                                                                                                                                                                         |
-| `SubtitleFixDrawer.tsx`                 | Drawer rezultat corectare subtitrare.                                                                                                                                                                                                             |
-| `plugins.tsx`                           | Catalogul din „Plugin-uri active”: `WATCHER_PLUGIN`, explicația fiecărei sarcini a Watcher-ului (`WATCHER_TASK_INFO`, după id-ul din `src/lib/watcher/tasks.ts`) și `SERVER_LIFECYCLE_PLUGIN`. Ritmul sarcinilor vine de la server, din registru. |
-| `PluginDetailDrawer.tsx`                | Drawer generic de plugin (azi doar „Pornire și Oprire”) — cadență, ultima activitate, părțile pliate (`PluginSteps`).                                                                                                                             |
-| `PluginRow.tsx`                         | Rândul unui plugin din lista din Tehnic.                                                                                                                                                                                                          |
-| `WatcherDrawer.tsx`                     | Drawer-ul Watcher: operațiunile în curs (live, la 2s cât e deschis), apoi sarcinile ca acordeon — explicație, ultima/următoarea rulare, eroare, „Rulează acum”, Pauză/Reia, istoric și cardurile proprii (seriale, subtitrări, Immich).           |
-| `watcher-cards.tsx`                     | Cardurile cu datele proprii ale unor sarcini (seriale urmărite, filme așteptate, istoric metadate, subtitrări, încărcări Immich) + `Row`/`FlashValue`.                                                                                            |
-| `MetaRefreshDetails.tsx`                | Detaliile unei intrări `metadata_refresh` (inline și ca drawer din jurnal). `meta-items.ts` — forma lui `meta.items`.                                                                                                                             |
-| `UserDetailDrawer.tsx`                  | Drawer detalii cont — contact, Plex, descărcări, istoric autentificări.                                                                                                                                                                           |
-| `Metric.tsx`, `StatCell.tsx`            | Piese mici de afișare valoare+etichetă.                                                                                                                                                                                                           |
-| `utils.ts`                              | Formatare dată/oră completă RO, `relativeTime`.                                                                                                                                                                                                   |
-| `sections/ActivityLogSection.tsx`       | Timeline activitate + commit-uri, cu filtre pe categorie.                                                                                                                                                                                         |
-| `sections/CommitStatsSection.tsx`       | Statistici commit-uri, listă commit-uri locale nepublicate, buton push manual.                                                                                                                                                                    |
-| `sections/ErrorLogSection.tsx`          | Listă erori capturate automat.                                                                                                                                                                                                                    |
-| `sections/PlexServiceCard.tsx`          | Control serviciu Plex (Restart/Update, prin `ServiceHeaderActions`).                                                                                                                                                                              |
-| `sections/PluginStatusSection.tsx`      | „Plugin-uri active”: Watcher (sarcini, în curs, erori, pauze) → `WatcherDrawer`; Pornire și Oprire → `PluginDetailDrawer`.                                                                                                                        |
-| `sections/PushSubscriptionsSection.tsx` | Abonamentele push înregistrate — dispozitiv identificat, dată, ștergere.                                                                                                                                                                          |
-| `sections/SpeedtestChart.tsx`           | Grafic istoric speedtest.                                                                                                                                                                                                                         |
-| `sections/DbBackupCard.tsx`             | Starea backup-urilor bazei (vechimea ultimei copii, număr, spațiu); backup-ul manual e în Watcher. Verde/chihlimbariu după 36h de la ultima copie.                                                                                                |
-| `sections/NetworkLinkCard.tsx`          | În drawer-ul Speedtest: viteza negociată a legăturii Ethernet (badge verde/chihlimbariu) + buton de renegociere. Rezolvă cazul recurent în care atingerea fizică a cablului lasă legătura pe 100 Mb/s.                                            |
+| Fișier                                  | Ce conține                                                                                                                                                                                                                              |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TehnicSubNav.tsx`                      | Navigare între sub-secțiunile paginii Tehnic.                                                                                                                                                                                           |
+| `CommitDrawer.tsx`                      | Drawer detalii commit (local sau GitHub).                                                                                                                                                                                               |
+| `SubtitleFixDrawer.tsx`                 | Drawer rezultat corectare subtitrare.                                                                                                                                                                                                   |
+| `plugins.tsx`                           | Catalogul Watcher-ului din „Plugin-uri active”: `WATCHER_PLUGIN` și explicația fiecărei sarcini (`WATCHER_TASK_INFO`, după id-ul din `src/lib/watcher/tasks.ts`). `server-lifecycle` nu apare în Tehnic.                                |
+| `PluginRow.tsx`                         | Rândul unui plugin din lista din Tehnic.                                                                                                                                                                                                |
+| `WatcherDrawer.tsx`                     | Drawer-ul Watcher: operațiunile în curs (live, la 2s cât e deschis), apoi sarcinile ca acordeon — explicație, ultima/următoarea rulare, eroare, „Rulează acum”, Pauză/Reia, istoric și cardurile proprii (seriale, subtitrări, Immich). |
+| `watcher-cards.tsx`                     | Cardurile cu datele proprii ale unor sarcini (seriale urmărite, filme așteptate, istoric metadate, subtitrări, încărcări Immich) + `Row`/`FlashValue`.                                                                                  |
+| `MetaRefreshDetails.tsx`                | Detaliile unei intrări `metadata_refresh` (inline și ca drawer din jurnal). `meta-items.ts` — forma lui `meta.items`.                                                                                                                   |
+| `UserDetailDrawer.tsx`                  | Drawer detalii cont — contact, Plex, descărcări, istoric autentificări.                                                                                                                                                                 |
+| `Metric.tsx`, `StatCell.tsx`            | Piese mici de afișare valoare+etichetă.                                                                                                                                                                                                 |
+| `utils.ts`                              | Formatare dată/oră completă RO, `relativeTime`.                                                                                                                                                                                         |
+| `sections/ActivityLogSection.tsx`       | Timeline activitate + commit-uri, cu filtre pe categorie.                                                                                                                                                                               |
+| `sections/CommitStatsSection.tsx`       | Statistici commit-uri, listă commit-uri locale nepublicate, buton push manual.                                                                                                                                                          |
+| `sections/ErrorLogSection.tsx`          | Listă erori capturate automat.                                                                                                                                                                                                          |
+| `sections/PlexServiceCard.tsx`          | Control serviciu Plex (Restart/Update, prin `ServiceHeaderActions`).                                                                                                                                                                    |
+| `sections/PluginStatusSection.tsx`      | „Plugin-uri active”: rândul Watcher (sarcini, în curs, erori, pauze) → `WatcherDrawer`.                                                                                                                                                 |
+| `sections/PushSubscriptionsSection.tsx` | Abonamentele push înregistrate — dispozitiv identificat, dată, ștergere.                                                                                                                                                                |
+| `sections/SpeedtestChart.tsx`           | Grafic istoric speedtest.                                                                                                                                                                                                               |
+| `sections/DbBackupCard.tsx`             | Starea backup-urilor bazei (vechimea ultimei copii, număr, spațiu); backup-ul manual e în Watcher. Verde/chihlimbariu după 36h de la ultima copie.                                                                                      |
+| `sections/NetworkLinkCard.tsx`          | În drawer-ul Speedtest: viteza negociată a legăturii Ethernet (badge verde/chihlimbariu) + buton de renegociere. Rezolvă cazul recurent în care atingerea fizică a cablului lasă legătura pe 100 Mb/s.                                  |
 
 ### src/components/sistem/
 
@@ -477,7 +476,7 @@ funcții numite, fan-in rezolvat prin importurile `@/` și relative, inclusiv
 `import()` dinamic). Tabelul e integral generat — nu are rânduri actualizate
 manual, deci nu poate fi parțial vechi.
 
-**Total: 281 fișiere, ~48 511 linii, ~1 128 funcții**
+**Total: 280 fișiere, ~48 258 linii, ~1 126 funcții**
 
 (numărătoare aproximativă — funcții numite, `const x = (...) =>` și
 `createServerFn`, fără metode de clasă sau funcții anonime inline)
@@ -497,7 +496,7 @@ manual, deci nu poate fi parțial vechi.
 | `src/lib/filelist/`                 |      38 |  6 743 |
 | `src/lib/services/`                 |      20 |  4 997 |
 | `src/lib/tvmaze/`                   |       1 |     46 |
-| `src/components/` (toate)           |      86 | 13 821 |
+| `src/components/` (toate)           |      85 | 13 568 |
 | `src/hooks/`                        |       5 |    325 |
 | `server/plugins/`                   |       2 |     90 |
 | `server/routes/api/`                |       3 |    230 |
@@ -510,17 +509,17 @@ manual, deci nu poate fi parțial vechi.
 | `src/start.ts`                              |     61 |    26 |
 | `src/lib/db.ts`                             |     51 |  1324 |
 | `src/server.ts`                             |     40 |    72 |
-| `src/components/tehnic/utils.ts`            |     31 |    28 |
 | `src/lib/auth/admin.server.ts`              |     31 |   153 |
-| `src/lib/utils.ts`                          |     31 |     7 |
-| `src/components/biblioteca/utils.ts`        |     30 |   199 |
+| `src/components/tehnic/utils.ts`            |     30 |    28 |
 | `src/lib/filelist/log.ts`                   |     30 |   135 |
+| `src/lib/utils.ts`                          |     30 |     7 |
+| `src/components/biblioteca/utils.ts`        |     29 |   199 |
 | `src/lib/queries.ts`                        |     28 |   395 |
 | `src/components/filelist/types.ts`          |     27 |    17 |
 | `src/components/principala/wizard/types.ts` |     27 |    39 |
 | `src/lib/filelist/types.ts`                 |     27 |    56 |
 
-### Tabel complet, toate cele 281 de fișiere
+### Tabel complet, toate cele 280 de fișiere
 
 | Fișier                                                        | Linii | Funcții | Fan-in |
 | ------------------------------------------------------------- | ----: | ------: | -----: |
@@ -547,7 +546,7 @@ manual, deci nu poate fi parțial vechi.
 | `src/components/tehnic/WatcherDrawer.tsx`                     |   443 |      10 |      1 |
 | `src/components/tehnic/UserDetailDrawer.tsx`                  |   435 |       4 |      1 |
 | `src/lib/filelist/subtitle-pipeline.ts`                       |   412 |       2 |      1 |
-| `src/components/tehnic/watcher-cards.tsx`                     |   407 |      10 |      2 |
+| `src/components/tehnic/watcher-cards.tsx`                     |   407 |      10 |      1 |
 | `src/components/principala/wizard/WizardControls.tsx`         |   403 |       9 |      4 |
 | `src/lib/watcher/tasks.ts`                                    |   399 |       3 |      3 |
 | `src/lib/services/plex-library.ts`                            |   397 |      15 |      6 |
@@ -589,7 +588,6 @@ manual, deci nu poate fi parțial vechi.
 | `src/lib/errors/error-log.ts`                                 |   239 |      10 |      5 |
 | `src/lib/watcher/runner.test.ts`                              |   235 |       6 |      0 |
 | `src/components/principala/wizard/derive-seasons.test.ts`     |   234 |       6 |      0 |
-| `src/components/tehnic/plugins.tsx`                           |   233 |       0 |      4 |
 | `src/lib/media/device-hdr.ts`                                 |   232 |       8 |      2 |
 | `src/lib/filelist/release-scoring.ts`                         |   230 |       6 |      3 |
 | `src/components/principala/wizard/state.ts`                   |   229 |       1 |      6 |
@@ -604,7 +602,7 @@ manual, deci nu poate fi parțial vechi.
 | `src/lib/media/torrent-rank.test.ts`                          |   203 |       1 |      0 |
 | `src/lib/services/device-hdr.server.ts`                       |   203 |       8 |      2 |
 | `src/lib/media/plex-link-by-hash.test.ts`                     |   201 |       2 |      0 |
-| `src/components/biblioteca/utils.ts`                          |   199 |      18 |     30 |
+| `src/components/biblioteca/utils.ts`                          |   199 |      18 |     29 |
 | `src/components/principala/wizard/selection.ts`               |   198 |      13 |      5 |
 | `src/components/descopera/FeedView.tsx`                       |   195 |       2 |      1 |
 | `src/lib/filelist/subtitle-outcomes.ts`                       |   195 |       2 |     10 |
@@ -626,8 +624,8 @@ manual, deci nu poate fi parțial vechi.
 | `src/lib/system/network-link.ts`                              |   165 |       6 |      1 |
 | `src/lib/system/service-jobs.test.ts`                         |   165 |       2 |      0 |
 | `src/lib/system/versions.ts`                                  |   163 |       8 |      5 |
-| `src/components/tehnic/PluginDetailDrawer.tsx`                |   162 |       2 |      1 |
 | `src/components/AppHeader.tsx`                                |   160 |       4 |      1 |
+| `src/components/tehnic/plugins.tsx`                           |   160 |       0 |      2 |
 | `src/lib/media/unfinished-torrents.test.ts`                   |   160 |       1 |      0 |
 | `src/lib/wizard-check.functions.ts`                           |   157 |       1 |      1 |
 | `src/components/principala/wizard/use-wizard-download.ts`     |   156 |       4 |      1 |
@@ -681,7 +679,7 @@ manual, deci nu poate fi parțial vechi.
 | `src/lib/github-commits.server.ts`                            |    99 |       4 |      1 |
 | `src/components/principala/wizard/use-wizard-data.ts`         |    98 |       3 |      1 |
 | `src/lib/filelist/download-tracker.test.ts`                   |    96 |       2 |      0 |
-| `src/components/ui/drawer.tsx`                                |    94 |       2 |     12 |
+| `src/components/ui/drawer.tsx`                                |    94 |       2 |     11 |
 | `src/components/biblioteca/WantedMoviesSection.tsx`           |    93 |       2 |      1 |
 | `src/components/tehnic/activity-timeline.test.ts`             |    91 |       2 |      0 |
 | `src/lib/filelist/download-tracker.ts`                        |    90 |       2 |      3 |
@@ -704,11 +702,10 @@ manual, deci nu poate fi parțial vechi.
 | `src/components/principala/wizard/SearchStep.tsx`             |    76 |       1 |      1 |
 | `src/lib/services/recent-watch-cache.ts`                      |    76 |       2 |      2 |
 | `src/lib/format.ts`                                           |    75 |       8 |     20 |
-| `src/components/tehnic/sections/PluginStatusSection.tsx`      |    74 |       1 |      1 |
 | `src/server.ts`                                               |    72 |       2 |     40 |
 | `server/routes/api/github-webhook.ts`                         |    72 |       0 |      0 |
 | `src/components/ui/dialog.tsx`                                |    70 |       1 |      3 |
-| `server/plugins/server-lifecycle.ts`                          |    70 |       4 |      1 |
+| `server/plugins/server-lifecycle.ts`                          |    70 |       4 |      0 |
 | `src/lib/filelist/disk-cleanup.test.ts`                       |    69 |       0 |      0 |
 | `src/components/tehnic/sections/DbBackupCard.tsx`             |    65 |       1 |      1 |
 | `src/lib/filelist/release-scoring.test.ts`                    |    64 |       0 |      0 |
@@ -723,6 +720,7 @@ manual, deci nu poate fi parțial vechi.
 | `src/routes/descopera.tsx`                                    |    58 |       1 |      3 |
 | `src/lib/system/speedtest.functions.ts`                       |    57 |       4 |      3 |
 | `src/components/sistem/RefreshRateCard.tsx`                   |    56 |       1 |      1 |
+| `src/components/tehnic/sections/PluginStatusSection.tsx`      |    56 |       1 |      1 |
 | `src/lib/filelist/types.ts`                                   |    56 |       0 |     27 |
 | `src/router.tsx`                                              |    55 |       2 |     22 |
 | `src/components/Meter.tsx`                                    |    54 |       1 |      2 |
@@ -770,7 +768,7 @@ manual, deci nu poate fi parțial vechi.
 | `src/lib/activity-log.functions.ts`                           |    30 |       1 |      8 |
 | `src/lib/tmdb/search-merge.ts`                                |    30 |       3 |      2 |
 | `src/hooks/use-flash-on-change.ts`                            |    29 |       1 |      4 |
-| `src/components/tehnic/utils.ts`                              |    28 |       2 |     31 |
+| `src/components/tehnic/utils.ts`                              |    28 |       2 |     30 |
 | `src/lib/errors/error-capture.ts`                             |    28 |       2 |      2 |
 | `src/lib/media/next-episode-airstamp.ts`                      |    28 |       1 |      2 |
 | `src/components/principala/UserAvatar.tsx`                    |    27 |       1 |      2 |
@@ -803,7 +801,7 @@ manual, deci nu poate fi parțial vechi.
 | `src/lib/system/versions.functions.ts`                        |    13 |       1 |      2 |
 | `src/components/BorderFlowSweep.tsx`                          |    10 |       1 |      6 |
 | `src/lib/services.functions.ts`                               |     9 |       0 |      4 |
-| `src/lib/utils.ts`                                            |     7 |       1 |     31 |
+| `src/lib/utils.ts`                                            |     7 |       1 |     30 |
 | `src/lib/watcher/poke.ts`                                     |     7 |       1 |      1 |
 
 ---
