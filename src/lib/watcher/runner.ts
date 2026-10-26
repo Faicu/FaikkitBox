@@ -4,12 +4,11 @@
 //
 // Tactul doar verifică — nu așteaptă nicio sarcină. Fiecare sarcină pornită
 // devine o operațiune independentă, deci una lentă (subtitrări cu ffmpeg,
-// minute întregi) nu le ține pe loc pe celelalte (sesiunile Plex, la 30s).
+// minute întregi) nu le ține pe loc pe celelalte (sesiunile Plex, la 10s).
 //
 // La fiecare tact, pentru fiecare sarcină:
 // - rulează deja → sare (garda de suprapunere, comună tuturor);
 // - pe pauză → sare, cu excepția unei rulări cerute manual;
-// - grupul ei e ocupat → rămâne scadentă și încearcă la tactul următor;
 // - altfel, dacă e scadentă sau cerută manual → pornește.
 //
 // Starea stă în watcher_tasks (vezi db.ts): server functions din Tehnic o
@@ -232,9 +231,6 @@ export function tick(): void {
   }
 
   const now = Date.now();
-  const busyGroups = new Set(
-    WATCHER_TASKS.filter((t) => t.group && running.has(t.id)).map((t) => t.group),
-  );
 
   for (const task of WATCHER_TASKS) {
     if (running.has(task.id)) continue;
@@ -243,8 +239,6 @@ export function tick(): void {
     const at = nextAt.get(task.id);
     const due = at !== undefined && now >= at && !(task.controllable && c?.paused);
     if (!manual && !due) continue;
-    if (task.group && busyGroups.has(task.group)) continue;
-    if (task.group) busyGroups.add(task.group);
     void execute(task, manual);
   }
 }

@@ -19,7 +19,7 @@
 //   server functions (pentru listă), care n-au nevoie de modulele grele.
 // ---------------------------------------------------------------------------
 
-export interface WatcherRunContext {
+interface WatcherRunContext {
   // Pornită cu „Rulează acum” din Tehnic. Sarcinile cu ceas global (backup,
   // actualizări, IMDb) îl ocolesc atunci; cele cu ceas per element rămân pe
   // ceasul lor — „acum” înseamnă „verifică acum ce e scadent”.
@@ -38,9 +38,6 @@ export interface WatcherTask {
   // atât după TERMINAREA celei curente, nu după pornire: o rulare de 8 minute
   // pe un interval de 10 nu pornește iar imediat.
   everyMs: number | null;
-  // Sarcinile din același grup nu rulează niciodată simultan. Una ținută pe
-  // loc de grup rămâne scadentă și pornește la primul tact cu grupul liber.
-  group?: string;
   // Ritmul afișat în Tehnic, când diferă de interval: la sarcinile cu ceas
   // propriu sau per titlu, intervalul e doar tactul (ori ritmul de
   // reîncercare), nu cât de des se întâmplă ceva.

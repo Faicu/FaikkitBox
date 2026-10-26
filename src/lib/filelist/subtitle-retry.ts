@@ -109,7 +109,7 @@ export async function retryMissingSubtitles(): Promise<{ checked: number; found:
 }
 
 // ---------------------------------------------------------------------------
-// Starea, pentru Tehnic → Plugin-uri și pentru drawer-ul din Bibliotecă.
+// Starea, pentru Tehnic → Watcher și pentru drawer-ul din Bibliotecă.
 // ---------------------------------------------------------------------------
 
 export interface SubtitleRetryTitle {

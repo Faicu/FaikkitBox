@@ -14,14 +14,13 @@ process.env.FAIKKITBOX_DB_PATH = dbFile;
 const pending = new Map<string, Array<(v: string | null) => void>>();
 const calls: Array<{ id: string; manual: boolean }> = [];
 let clockHint = () => Date.now() + 14 * 3_600_000;
-function fake(id: string, delayMs: number, everyMs: number | null, extra = {}) {
+function fake(id: string, delayMs: number, everyMs: number | null) {
   return {
     id,
     label: id,
     delayMs,
     everyMs,
     controllable: everyMs !== null,
-    ...extra,
     run: ({ manual }: { manual: boolean }) => {
       calls.push({ id, manual });
       return new Promise<string | null>((res) => {
@@ -34,8 +33,7 @@ vi.mock("./tasks", () => ({
   WATCHER_TASKS: [
     fake("once", 0, null),
     fake("fast", 10_000, 30_000),
-    fake("big", 45_000, 600_000, { group: "filelist" }),
-    fake("small", 30_000, 30_000, { group: "filelist" }),
+    fake("big", 45_000, 600_000),
     {
       id: "boom",
       label: "boom",
@@ -144,27 +142,13 @@ describe("Watcher", () => {
     expect(runs("fast")).toHaveLength(1);
   });
 
-  it("două sarcini din același grup nu rulează niciodată deodată", async () => {
-    // La tactul de la 50s, big (45s) și small (30s) erau ambele scadente:
-    // big a pornit, small a rămas pe loc.
+  it("o rulare cu rezumat intră în stare și în istoric", async () => {
+    // big (45s) a pornit la tactul de la 50s.
     expect(row("big").running_since).not.toBeNull();
-    expect(row("small").running_since).toBeNull();
-    at(60_000);
-    runner.tick();
-    expect(calls.map((c) => c.id)).not.toContain("small");
-
     finish("big", "2 seriale împrospătate");
     await flush();
     expect(row("big").last_summary).toBe("2 seriale împrospătate");
-    // Sarcină rară: intră în istoric chiar și fără erori.
     expect(runs("big")).toHaveLength(1);
-
-    // Grupul s-a eliberat: small, scadentă de mult, pornește la tactul următor.
-    at(61_000);
-    runner.tick();
-    expect(calls.map((c) => c.id)).toContain("small");
-    finish("small");
-    await flush();
   });
 
   it("pauza oprește rulările automate, dar nu și „Rulează acum”", async () => {
@@ -172,9 +156,6 @@ describe("Watcher", () => {
     at(400_000);
     runner.tick();
     expect(calls.map((c) => c.id)).not.toContain("fast");
-    finish("small");
-    await flush();
-
     db.prepare("UPDATE watcher_tasks SET run_requested_at = ? WHERE id = 'fast'").run(Date.now());
     runner.tick();
     expect(calls).toContainEqual({ id: "fast", manual: true });

@@ -435,8 +435,8 @@ export function TitleDetailDrawer({
                   )}
                 </div>
               )}
-              {/* Reîncercarea zilnică a subtitrării (Tehnic → Plugin-uri →
-                  Reîncercare Subtitrări): dacă titlul e în căutare și până
+              {/* Reîncercarea zilnică a subtitrării (Tehnic → Watcher →
+                  Reîncercare subtitrări): dacă titlul e în căutare și până
                   când, sau că fereastra de 14 zile s-a încheiat. */}
               {d && d.subtitleRetry && d.status !== "downloading" && (
                 <SubtitleRetryLine retry={d.subtitleRetry} />

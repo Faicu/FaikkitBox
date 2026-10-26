@@ -198,9 +198,7 @@ function LiveOperations({ tasks, now }: { tasks: WatcherTaskStatus[]; now: numbe
             <div key={t.id} className="flex items-center gap-2 rounded-lg bg-muted/40 px-2 py-1.5">
               <Clock3 className="h-3 w-3 shrink-0 text-muted-foreground" />
               <span className="min-w-0 flex-1 truncate font-medium">{t.label}</span>
-              <span className="shrink-0 text-muted-foreground">
-                {t.group ? "cerută, așteaptă grupul" : "cerută"}
-              </span>
+              <span className="shrink-0 text-muted-foreground">cerută</span>
             </div>
           ))}
         </div>

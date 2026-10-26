@@ -298,15 +298,15 @@ Toate sarcinile de fundal, pornite de `server/plugins/watcher.ts`. Plugin-ul și
 server functions rulează în copii separate ale modulelor, deci starea comună
 stă în DB (`watcher_tasks`, `watcher_runs`).
 
-| Fișier                 | Ce conține                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `tasks.ts`             | Registrul: fiecare sarcină cu întârzierea de pornire, intervalul (numărat de la terminare), grupul de excludere (`filelist`), dacă se poate controla manual și funcția care întoarce rezumatul rulării. Istoria fiecărei sarcini stă în comentariul ei.                                                                                                                                                                        |
-| `runner.ts`            | Motorul: tact la 1s care pornește sarcinile scadente ca operațiuni independente; gardă de suprapunere, grupuri, pauză și „Rulează acum” citite din DB; `next_run_at` păstrat peste restart; ora următoare poate fi cerută de sarcină (`nextAt`, ex. backup peste 23h); `poke` pentru pornire imediată; istoric de 20 de rulări relevante (au făcut ceva, au eșuat, manuale); aceeași eroare repetată raportată o singură dată. |
-| `runner.test.ts`       | Teste pe motor, cu sarcini false: ora de pornire, grupuri, pauză + rulare manuală, erori, rulări întrerupte de restart.                                                                                                                                                                                                                                                                                                        |
-| `poke.ts`              | `pokeWatcher(id, delayMs?)` — aduce rularea unei sarcini cel târziu la `delayMs` de acum, din orice server function (prin `globalThis`): descărcare nouă, ștergere programată, urmărire pornită pentru un serial (imediat) sau un film (peste un minut).                                                                                                                                                                       |
-| `watcher.server.ts`    | Citirea stării/istoricului și scrierea pauzei și a cererilor manuale, pentru Tehnic.                                                                                                                                                                                                                                                                                                                                           |
-| `watcher.functions.ts` | `getWatcherStatus` / `getWatcherHistory` / `runWatcherTaskNow` / `setWatcherTaskPaused` (admin).                                                                                                                                                                                                                                                                                                                               |
-| `types.ts`             | Tipurile trimise clientului, fără importuri.                                                                                                                                                                                                                                                                                                                                                                                   |
+| Fișier                 | Ce conține                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tasks.ts`             | Registrul: fiecare sarcină cu întârzierea de pornire, intervalul (numărat de la terminare), ritmul afișat (`cadenceLabel`), dacă se poate controla manual și funcția care întoarce rezumatul rulării. Istoria fiecărei sarcini stă în comentariul ei.                                                                                                                                                                 |
+| `runner.ts`            | Motorul: tact la 1s care pornește sarcinile scadente ca operațiuni independente; gardă de suprapunere, pauză și „Rulează acum” citite din DB; `next_run_at` păstrat peste restart; ora următoare poate fi cerută de sarcină (`nextAt`, ex. backup peste 23h); `poke` pentru pornire imediată; istoric de 20 de rulări relevante (au făcut ceva, au eșuat, manuale); aceeași eroare repetată raportată o singură dată. |
+| `runner.test.ts`       | Teste pe motor, cu sarcini false: ora de pornire, pauză + rulare manuală, erori (și cele repetate), ora cerută de sarcină, poke, rulări întrerupte de restart.                                                                                                                                                                                                                                                        |
+| `poke.ts`              | `pokeWatcher(id, delayMs?)` — aduce rularea unei sarcini cel târziu la `delayMs` de acum, din orice server function (prin `globalThis`): descărcare nouă, ștergere programată, urmărire pornită pentru un serial (imediat) sau un film (peste un minut).                                                                                                                                                              |
+| `watcher.server.ts`    | Citirea stării/istoricului și scrierea pauzei și a cererilor manuale, pentru Tehnic.                                                                                                                                                                                                                                                                                                                                  |
+| `watcher.functions.ts` | `getWatcherStatus` / `getWatcherHistory` / `runWatcherTaskNow` / `setWatcherTaskPaused` (admin).                                                                                                                                                                                                                                                                                                                      |
+| `types.ts`             | Tipurile trimise clientului, fără importuri.                                                                                                                                                                                                                                                                                                                                                                          |
 
 ### src/lib/tvmaze/
 
@@ -476,7 +476,7 @@ funcții numite, fan-in rezolvat prin importurile `@/` și relative, inclusiv
 `import()` dinamic). Tabelul e integral generat — nu are rânduri actualizate
 manual, deci nu poate fi parțial vechi.
 
-**Total: 281 fișiere, ~48 471 linii, ~1 128 funcții**
+**Total: 281 fișiere, ~48 418 linii, ~1 128 funcții**
 
 (numărătoare aproximativă — funcții numite, `const x = (...) =>` și
 `createServerFn`, fără metode de clasă sau funcții anonime inline)
@@ -489,18 +489,18 @@ manual, deci nu poate fi parțial vechi.
 | `src/lib/` (rădăcină, transversale) |      20 |  4 079 |
 | `src/lib/auth/`                     |      11 |  1 101 |
 | `src/lib/tmdb/`                     |       9 |  1 390 |
-| `src/lib/media/`                    |      32 |  7 000 |
+| `src/lib/media/`                    |      32 |  6 983 |
 | `src/lib/notifications/`            |       3 |    469 |
 | `src/lib/errors/`                   |       7 |    520 |
 | `src/lib/system/`                   |      17 |  1 789 |
 | `src/lib/filelist/`                 |      38 |  6 795 |
 | `src/lib/services/`                 |      20 |  4 997 |
 | `src/lib/tvmaze/`                   |       1 |     46 |
-| `src/components/` (toate)           |      85 | 13 524 |
+| `src/components/` (toate)           |      85 | 13 523 |
 | `src/hooks/`                        |       5 |    325 |
 | `server/plugins/`                   |       2 |     90 |
 | `server/routes/api/`                |       3 |    230 |
-| altele                              |      16 |  2 832 |
+| altele                              |      16 |  2 797 |
 
 ### Fișiere-hub (fan-in mare)
 
@@ -534,7 +534,7 @@ manual, deci nu poate fi parțial vechi.
 | `src/lib/contributions/contributions.functions.ts`            |   690 |      25 |      3 |
 | `src/lib/activity-log.ts`                                     |   682 |      17 |     22 |
 | `src/lib/filelist/subtitles.ts`                               |   614 |       9 |      2 |
-| `src/lib/media/movie-watch.ts`                                |   585 |      12 |      4 |
+| `src/lib/media/movie-watch.ts`                                |   587 |      12 |      4 |
 | `src/lib/tmdb/tmdb.functions.ts`                              |   537 |      11 |     21 |
 | `src/components/principala/SupportWidget.tsx`                 |   517 |      12 |      2 |
 | `src/components/principala/PlexWidget.tsx`                    |   507 |      17 |      1 |
@@ -552,7 +552,7 @@ manual, deci nu poate fi parțial vechi.
 | `src/components/tehnic/SubtitleFixDrawer.tsx`                 |   396 |      10 |      2 |
 | `src/lib/queries.ts`                                          |   395 |       4 |     28 |
 | `src/lib/services/plex-shared.ts`                             |   392 |      10 |      7 |
-| `src/lib/watcher/tasks.ts`                                    |   388 |       3 |      3 |
+| `src/lib/watcher/tasks.ts`                                    |   385 |       3 |      3 |
 | `src/components/tehnic/sections/ActivityLogSection.tsx`       |   371 |       4 |      1 |
 | `src/lib/system/service-jobs.ts`                              |   357 |      14 |      3 |
 | `src/routes/users.tsx`                                        |   348 |       7 |      9 |
@@ -567,7 +567,7 @@ manual, deci nu poate fi parțial vechi.
 | `src/components/filelist/FilelistSection.tsx`                 |   309 |       2 |      1 |
 | `src/lib/filelist/subtitle-verify.ts`                         |   298 |      12 |      3 |
 | `src/lib/services/qbittorrent.ts`                             |   296 |       3 |      1 |
-| `src/lib/watcher/runner.ts`                                   |   296 |       8 |      2 |
+| `src/lib/watcher/runner.ts`                                   |   290 |       8 |      2 |
 | `src/lib/system/speedtest.ts`                                 |   289 |       8 |      3 |
 | `src/routes/__root.tsx`                                       |   287 |      10 |      1 |
 | `src/routeTree.gen.ts`                                        |   284 |       0 |      1 |
@@ -577,15 +577,15 @@ manual, deci nu poate fi parțial vechi.
 | `src/components/biblioteca/WantedMovieDrawer.tsx`             |   272 |       5 |      1 |
 | `src/components/filelist/DownloadConfirmDialog.tsx`           |   272 |       3 |      2 |
 | `src/lib/filelist/subtitle-checks.ts`                         |   272 |      18 |      8 |
-| `src/lib/media/media.functions.ts`                            |   271 |      10 |      9 |
 | `src/components/ServiceHeaderActions.tsx`                     |   268 |       7 |      4 |
-| `src/lib/watcher/runner.test.ts`                              |   260 |       6 |      0 |
 | `src/lib/filelist/subsro-client.ts`                           |   254 |      12 |      4 |
+| `src/lib/media/media.functions.ts`                            |   252 |      10 |      9 |
 | `src/lib/filelist/opensubtitles-client.ts`                    |   250 |       9 |      3 |
 | `src/lib/services/immich.ts`                                  |   250 |       4 |     13 |
 | `src/lib/filelist/subtitle-apply.ts`                          |   248 |       7 |      2 |
 | `src/lib/notifications/notifications.ts`                      |   242 |      10 |      5 |
 | `src/routes/immich.tsx`                                       |   242 |       2 |     13 |
+| `src/lib/watcher/runner.test.ts`                              |   241 |       6 |      0 |
 | `src/lib/errors/error-log.ts`                                 |   239 |      10 |      5 |
 | `src/components/principala/wizard/derive-seasons.test.ts`     |   234 |       6 |      0 |
 | `src/lib/media/device-hdr.ts`                                 |   232 |       8 |      2 |
@@ -639,7 +639,7 @@ manual, deci nu poate fi parțial vechi.
 | `src/components/tehnic/CommitDrawer.tsx`                      |   145 |       4 |      2 |
 | `src/components/biblioteca/EpisodeList.tsx`                   |   144 |       3 |      1 |
 | `src/components/descopera/SceneViewer.tsx`                    |   144 |       1 |      2 |
-| `src/components/tehnic/plugins.tsx`                           |   144 |       0 |      2 |
+| `src/components/tehnic/plugins.tsx`                           |   143 |       0 |      2 |
 | `src/lib/services/recent-watch-merge.test.ts`                 |   142 |       3 |      0 |
 | `src/components/tehnic/sections/NetworkLinkCard.tsx`          |   139 |       2 |      1 |
 | `src/lib/filelist/log.ts`                                     |   139 |       2 |     31 |
@@ -658,11 +658,11 @@ manual, deci nu poate fi parțial vechi.
 | `src/lib/filelist/top-torrents.ts`                            |   124 |       5 |      5 |
 | `src/lib/system/update-check.test.ts`                         |   120 |       3 |      0 |
 | `src/lib/filelist/subtitle-encoding.ts`                       |   118 |       6 |      3 |
-| `src/lib/watcher/watcher.server.ts`                           |   118 |       6 |      1 |
 | `src/components/descopera/DiscoverGrid.tsx`                   |   117 |       3 |      1 |
 | `src/lib/media/torrent-rank.ts`                               |   117 |       9 |      5 |
 | `src/routes/login.tsx`                                        |   116 |       1 |      8 |
 | `src/lib/notifications/push.functions.ts`                     |   115 |       6 |      3 |
+| `src/lib/watcher/watcher.server.ts`                           |   115 |       6 |      1 |
 | `server/routes/api/plex-thumb.ts`                             |   115 |       1 |      0 |
 | `src/lib/prefetch.ts`                                         |   114 |       1 |      1 |
 | `src/lib/filelist/subtitle-verify.test.ts`                    |   113 |       4 |      0 |
@@ -747,11 +747,11 @@ manual, deci nu poate fi parțial vechi.
 | `src/lib/services/device-hdr.functions.ts`                    |    43 |       2 |      2 |
 | `src/lib/system/network-link.functions.ts`                    |    43 |       2 |      2 |
 | `server/routes/api/deploy-sha.ts`                             |    43 |       2 |      1 |
-| `src/lib/watcher/types.ts`                                    |    41 |       0 |     27 |
 | `src/components/principala/wizard/types.ts`                   |    39 |       0 |     27 |
 | `src/components/useServiceRecovery.ts`                        |    39 |       2 |      3 |
 | `src/lib/system/service-meta.ts`                              |    39 |       2 |      4 |
 | `src/components/ServicePill.tsx`                              |    37 |       1 |      3 |
+| `src/lib/watcher/types.ts`                                    |    37 |       0 |     27 |
 | `src/components/PageShell.tsx`                                |    36 |       1 |     11 |
 | `src/hooks/use-count-up.ts`                                   |    36 |       2 |      1 |
 | `src/components/StatCard.tsx`                                 |    35 |       1 |      3 |
@@ -785,7 +785,7 @@ manual, deci nu poate fi parțial vechi.
 | `src/components/tehnic/Metric.tsx`                            |    23 |       1 |      1 |
 | `src/lib/auth/session-compat.test.ts`                         |    23 |       0 |      0 |
 | `src/lib/client-ip.server.test.ts`                            |    20 |       0 |      0 |
-| `server/plugins/watcher.ts`                                   |    20 |       0 |      1 |
+| `server/plugins/watcher.ts`                                   |    20 |       0 |      0 |
 | `src/lib/services/recent-watch-types.ts`                      |    19 |       0 |      4 |
 | `src/lib/system/ubuntu-status.test.ts`                        |    19 |       0 |      0 |
 | `src/components/tehnic/StatCell.tsx`                          |    18 |       1 |      1 |

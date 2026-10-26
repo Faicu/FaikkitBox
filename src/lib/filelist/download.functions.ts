@@ -74,7 +74,7 @@ export const deleteSubtitleForMedia = createServerFn({ method: "POST" })
     return deleteSubtitleForMediaCore(session, data);
   });
 
-// Tehnic → Plugin-uri → Reîncercare subtitrări.
+// Tehnic → Watcher → Reîncercare subtitrări.
 export const getSubtitleRetryStatus = createServerFn({ method: "GET" }).handler(
   async (): Promise<SubtitleRetryStatus> => {
     const { requireAuth } = await import("../auth/admin.server");

@@ -6,22 +6,18 @@ export interface WatcherTaskStatus {
   label: string;
   delayMs: number;
   everyMs: number | null;
-  group: string | null;
   cadenceLabel: string | null;
   controllable: boolean;
   paused: boolean;
-  // „Rulează acum” cerut, încă nepreluat de tact (sarcina rulează deja sau
-  // grupul ei e ocupat).
+  // „Rulează acum” cerut, încă nepreluat de tact (sarcina rulează deja).
   requestedAt: string | null;
   runningSince: string | null;
   runningManual: boolean;
   nextRunAt: string | null;
-  lastStartedAt: string | null;
   lastFinishedAt: string | null;
   lastDurationMs: number | null;
   lastOk: boolean | null;
   lastError: string | null;
-  lastSummary: string | null;
   // Ultima rulare care a făcut efectiv ceva (din istoric) — rândul din Tehnic
   // o arată pe ea, nu ultima rulare, care la sarcinile dese e mereu „acum”.
   lastActionAt: string | null;

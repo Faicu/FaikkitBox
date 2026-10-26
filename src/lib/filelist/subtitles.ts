@@ -529,7 +529,7 @@ export async function logSubtitleRun(
   items: SubtitleRunItem[],
   trigger: SubtitleRunTrigger,
   // `via: "retry"` — găsită de reîncercarea zilnică (subtitle-retry.ts);
-  // lista „Găsite" din Tehnic → Plugin-uri se citește după marcajul ăsta.
+  // lista „Găsite" din Tehnic → Watcher se citește după marcajul ăsta.
   extra?: { via?: "retry" },
 ): Promise<void> {
   if (!items.length) return;

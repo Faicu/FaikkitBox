@@ -164,7 +164,7 @@ async function importInto(tmpFile: string, body: ReadableStream<Uint8Array>, eta
 // pentru rezumatul din Watcher.
 let running = false;
 
-export type ImdbRefreshResult = "skipped" | "unchanged" | { imported: number };
+type ImdbRefreshResult = "skipped" | "unchanged" | { imported: number };
 
 export async function refreshImdbRatingsIfDue(
   opts: { force?: boolean } = {},

@@ -274,7 +274,7 @@ export function Row({
 }
 
 // Aceeași idee ca `Row`, dar pentru o valoare dintr-un rând de text liber.
-export function FlashValue({
+function FlashValue({
   flashKey,
   children,
 }: {

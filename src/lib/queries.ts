@@ -324,9 +324,9 @@ export const watcherHistoryQuery = (taskId: string) =>
     ...keepPrev,
   });
 
-// Starea urmăririi serialelor, pentru Watcher (Tehnic).
-// Ritm lent: plugin-ul verifică oricum cel mult o dată pe oră per serial (la 3
-// ore în afara zilelor de lansare), deci n-are rost un puls mai des decât atât.
+// Serialele urmărite, pentru Watcher → Seriale și filme (Tehnic). Ritm lent:
+// Watcher-ul verifică oricum cel mult o dată pe oră per serial (la 3 ore în
+// afara zilelor de lansare), deci n-are rost un puls mai des decât atât.
 export const showWatchStatusQuery = queryOptions({
   queryKey: ["showWatchStatus"],
   queryFn: () => getShowWatchStatus(),
@@ -334,9 +334,9 @@ export const showWatchStatusQuery = queryOptions({
   refetchInterval: 120_000,
 });
 
-// Reîncercarea zilnică a subtitrărilor, pentru „Plugin-uri active" din
-// Tehnic. Puls lent: plugin-ul are tic din oră în oră, iar fiecare titlu e
-// căutat o dată pe zi.
+// Reîncercarea zilnică a subtitrărilor, pentru Watcher → Reîncercare
+// subtitrări (Tehnic). Puls lent: sarcina rulează din oră în oră, iar fiecare
+// titlu e căutat o dată pe zi.
 export const subtitleRetryStatusQuery = queryOptions({
   queryKey: ["subtitleRetryStatus"],
   queryFn: () => getSubtitleRetryStatus(),

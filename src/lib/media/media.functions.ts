@@ -94,11 +94,10 @@ export const checkShowNow = createServerFn({ method: "POST" })
     },
   );
 
-// Starea urmăririi, pentru panoul "Plugin-uri active" din Tehnic: câte
-// seriale sunt urmărite și când a verificat plugin-ul ultima dată. Timestamp-ul
-// vine din `media`, nu din jurnalul de activitate — o verificare care n-a găsit
-// nimic nu loghează nimic (corect, altfel ar umple jurnalul la fiecare 3 ore),
-// deci jurnalul n-ar arăta niciodată că plugin-ul e viu.
+// Serialele urmărite, pentru Watcher → Seriale și filme: ce urmează la
+// fiecare și când a fost verificat ultima dată. Ora verificării vine din
+// `media`, nu din jurnal — o verificare care n-a găsit nimic nu loghează nimic
+// (altfel ar umple jurnalul la fiecare 3 ore).
 export interface WatchedShowSummary {
   mediaId: number;
   title: string;
@@ -111,11 +110,7 @@ export interface WatchedShowSummary {
 }
 
 export const getShowWatchStatus = createServerFn({ method: "GET" }).handler(
-  async (): Promise<{
-    lastCheckedAt: string | null;
-    lastMetaRefreshAt: string | null;
-    shows: WatchedShowSummary[];
-  }> => {
+  async (): Promise<{ shows: WatchedShowSummary[] }> => {
     const { requireAuth } = await import("../auth/admin.server");
     await requireAuth();
     const { getDb } = await import("../db");
@@ -132,21 +127,7 @@ export const getShowWatchStatus = createServerFn({ method: "GET" }).handler(
       )
       .all() as unknown as WatchedShowSummary[];
 
-    // Seriale și filme — reîmprospătarea le acoperă pe amândouă.
-    const meta = db
-      .prepare(
-        "SELECT MAX(meta_refreshed_at) AS last FROM media WHERE media_type IN ('tv_show', 'movie')",
-      )
-      .get() as { last: string | null };
-
-    return {
-      lastCheckedAt: shows.reduce<string | null>(
-        (max, s) => (s.lastCheckedAt && (!max || s.lastCheckedAt > max) ? s.lastCheckedAt : max),
-        null,
-      ),
-      lastMetaRefreshAt: meta?.last ?? null,
-      shows,
-    };
+    return { shows };
   },
 );
 

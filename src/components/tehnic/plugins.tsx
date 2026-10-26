@@ -20,7 +20,6 @@ import {
 // (pornirea și oprirea procesului), nu mai apare în Tehnic: nu are nimic de
 // urmărit sau de controlat.
 export const WATCHER_PLUGIN = {
-  id: "watcher",
   label: "Watcher",
   details:
     "Un singur tact, la fiecare secundă, care pornește sarcinile de fundal când le vine rândul. Fiecare rulează ca operațiune separată, deci una lentă nu le ține pe loc pe celelalte; două sarcini din același grup (căutările pe Filelist) nu rulează niciodată deodată. Cadențele per titlu — serialul la 3 ore, subtitrarea o dată pe zi — stau în baza de date, iar sarcina decide singură ce e scadent, deci o rulare în plus nu strică nimic.",
@@ -29,7 +28,7 @@ export const WATCHER_PLUGIN = {
 
 // Explicația fiecărei sarcini, după id-ul din src/lib/watcher/tasks.ts. Un id
 // nou fără intrare aici apare oricum în listă, doar fără explicație.
-export interface WatcherTaskInfo {
+interface WatcherTaskInfo {
   summary: string;
   points: string[];
   icon: ReactNode;

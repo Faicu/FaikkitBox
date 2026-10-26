@@ -94,7 +94,7 @@ function pickCandidates<T extends RankableTorrent & { matchedByImdb?: boolean }>
   );
 }
 
-// Gardă per film, ca la checkShow: „Verifică acum" din UI și bucla plugin-ului
+// Gardă per film, ca la checkShow: „Verifică acum" din UI și Watcher-ul
 // pot cădea pe același film în același moment, iar două rulări paralele ar
 // porni de două ori același torrent.
 const inProgress = new Set<number>();
@@ -282,13 +282,15 @@ function safeGenres(raw: string): string[] {
   }
 }
 
-// Prima verificare a unui film abia adăugat, la un minut după adăugare.
+// Prima verificare a unui film abia adăugat, la un minut după adăugare —
+// primul pas al sarcinii „Seriale și filme” din Watcher, trezită de
+// setMovieWatch exact atunci (pokeWatcher).
 //
-// Separată de bucla de 12h din cauza ritmului: fără ea, un film nou aștepta
-// până la 10 minute (cadența de poll a plugin-ului) și rândul arăta
-// „neverificat" tot timpul ăsta, ca și cum urmărirea ar fi moartă. (Cache-ul
-// Filelist al wizard-ului nu mai e o problemă: urmărirea nu-l citește
-// niciodată — vezi checkFilelistForItemInternal.)
+// Separată de verificarea de 12h din cauza ritmului: fără ea, un film nou
+// aștepta până la 10 minute (ciclul sarcinii) și rândul arăta „neverificat"
+// tot timpul ăsta, ca și cum urmărirea ar fi moartă. (Cache-ul Filelist al
+// wizard-ului nu mai e o problemă: urmărirea nu-l citește niciodată — vezi
+// checkFilelistForItemInternal.)
 //
 // Minutul de așteptare nu e arbitrar: e cât să nu repetăm căutarea wizard-ului
 // în aceeași suflare, dar destul de scurt cât rândul să se completeze cât încă
