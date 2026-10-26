@@ -26,12 +26,10 @@ import { relativeTime, formatDateTime } from "./utils";
 import { useFlashOnChange } from "@/hooks/use-flash-on-change";
 import { nextEpisodeWhen } from "@/components/biblioteca/utils";
 
-// Cardurile cu datele proprii ale unor sarcini din Watcher, afișate sub
-// sarcina deschisă (WatcherDrawer). Fiecare își cere singur datele, deci se
-// încarcă doar când sarcina lui e deschisă.
+// Cardurile proprii ale unor sarcini, sub sarcina deschisă — își cer singure
+// datele, doar când sarcina e deschisă.
 
-// Seriale urmărite, filme așteptate și istoricul reîmprospătării de metadate —
-// sarcina show-watch.
+// Seriale urmărite, filme așteptate și istoricul metadatelor — „Seriale și filme”.
 export function ShowWatchCards() {
   const { data: watch } = useQuery(showWatchStatusQuery);
   const { data: wanted } = useQuery(wantedMoviesQuery);
@@ -41,9 +39,7 @@ export function ShowWatchCards() {
   if (!watch) return null;
   return (
     <>
-      {/* Numere goale ("Seriale urmărite: 2") nu spun nimic util —
-            întrebarea firească e "care?". Aceleași date, doar
-            desfășurate. */}
+      {/* Nu „Seriale urmărite: 2”, ci care. */}
       <div className="rounded-2xl glass-card p-3 text-xs">
         <div className="mb-2 flex items-center gap-1.5 text-muted-foreground">
           <Orb state="searching" px={14} /> Seriale urmărite
@@ -87,8 +83,7 @@ export function ShowWatchCards() {
         )}
       </div>
 
-      {/* Simetric cu serialele urmărite de deasupra. Aceeași
-            întrebare, alt tip de titlu: „ce aștept și de când?". */}
+      {/* Simetric: „ce aștept și de când?”. */}
       <div className="rounded-2xl glass-card p-3 text-xs">
         <div className="mb-2 flex items-center gap-1.5 text-muted-foreground">
           <Orb state="searching" px={14} /> Filme așteptate
@@ -141,8 +136,7 @@ export function ImmichUploadsSection() {
   );
 }
 
-// Ultimele încărcări Immich, din jurnal, plus cea încă în desfășurare (nescrisă
-// în jurnal până nu se termină — vezi src/lib/services/immich-uploads.ts).
+// Ultimele încărcări din jurnal, plus cea în desfășurare (scrisă abia la final).
 function ImmichUploadsCard({ uploads }: { uploads: ActivityEntry[] }) {
   const { data: tracker } = useQuery(immichTrackerQuery);
   const inProgress = tracker?.inProgress ?? 0;
@@ -182,10 +176,8 @@ function ImmichUploadsCard({ uploads }: { uploads: ActivityEntry[] }) {
   );
 }
 
-// Ultimele reîmprospătări de metadate cu schimbări reale, din jurnal — singurul
-// istoric al sarcinii „Seriale și filme” în Watcher. Inline, nu un
-// drawer peste drawer (overlay-urile imbricate îngheață ecranul — vezi
-// commit c76ce30); câte o rulare deschisă odată.
+// Reîmprospătările cu schimbări reale — istoricul sarcinii. Inline, nu drawer
+// peste drawer (c76ce30); câte una deschisă.
 function MetaRefreshHistory({ entries }: { entries: ActivityEntry[] }) {
   const [open, setOpen] = useState<string | null>(null);
   return (
@@ -242,10 +234,8 @@ function MetaRefreshHistory({ entries }: { entries: ActivityEntry[] }) {
   );
 }
 
-// `flashKey`: când valoarea afișată se schimbă (ex. "acum 1h" → "acum 2h",
-// după un refetch), valoarea clipește scurt. Animația stă pe cifre, unde
-// înseamnă ceva — "asta tocmai s-a actualizat" — nu pe blocuri de text
-// statice, unde ar fi doar decor.
+// `flashKey`: valoarea clipește scurt când se schimbă — pe cifre, unde înseamnă
+// „tocmai s-a actualizat”.
 export function Row({
   icon,
   label,
@@ -273,7 +263,7 @@ export function Row({
   );
 }
 
-// Aceeași idee ca `Row`, dar pentru o valoare dintr-un rând de text liber.
+// Ca `Row`, pentru o valoare dintr-un text liber.
 function FlashValue({
   flashKey,
   children,
@@ -290,11 +280,9 @@ const sqliteDate = (v: string) => new Date(`${v.replace(" ", "T")}Z`);
 const shortDay = (v: string) =>
   sqliteDate(v).toLocaleDateString("ro-RO", { day: "numeric", month: "short" });
 
-// Reîncercarea subtitrărilor: ce se caută acum și până când, ce s-a încheiat
-// fără rezultat și ce a găsit (când a rulat ultima dată și cu ce rezultat
-// arată Watcher-ul, deasupra). O căutare fără
-// rezultat nu scrie în jurnal (ar fi zilnic „tot nimic"), deci locul ăsta e
-// singura dovadă că lucrează.
+// Reîncercarea subtitrărilor: ce se caută, ce s-a încheiat fără rezultat și ce
+// a găsit. O căutare fără rezultat nu scrie în jurnal, deci aici e dovada că
+// lucrează.
 export function SubtitleRetryCards() {
   const { data } = useQuery(subtitleRetryStatusQuery);
   if (!data) return null;

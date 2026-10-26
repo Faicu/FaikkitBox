@@ -17,16 +17,15 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
 }
 
 /**
- * Contextul în care rulează pagina în momentul abonării. Pe Android, PWA-ul
- * instalat (WebAPK) trimite exact același user-agent ca Chrome, deci UA-ul nu
- * poate deosebi cele două — `display-mode` e singurul semnal de încredere.
+ * Contextul paginii la abonare: pe Android PWA-ul și Chrome au același
+ * user-agent, deci `display-mode` e singurul semnal de încredere.
  */
 function currentDisplayMode(): string {
   if (typeof window === "undefined" || !window.matchMedia) return "unknown";
   for (const mode of ["standalone", "fullscreen", "minimal-ui"]) {
     if (window.matchMedia(`(display-mode: ${mode})`).matches) return mode;
   }
-  // iOS Safari nu suportă display-mode; expune în schimb navigator.standalone
+  // iOS Safari n-are display-mode, dar are navigator.standalone.
   if ((window.navigator as { standalone?: boolean }).standalone) return "standalone";
   return "browser";
 }
@@ -42,17 +41,13 @@ export function usePushNotifications() {
   const getKey = useServerFn(getVapidPublicKey);
   const checkRegistered = useServerFn(isPushEndpointRegistered);
 
-  // `useServerFn` întoarce o funcție nouă la fiecare randare, deci nu poate sta
-  // în lista de dependențe: efectul ar rula la fiecare randare, iar
-  // reconcilierea (care poate chema `unsubscribe()`) s-ar suprapune peste
-  // `pushManager.subscribe()` declanșat de buton. Două operații concurente pe
-  // aceeași înregistrare fac Chrome să arunce
-  // "Registration failed - push service error". O ținem într-un ref și rulăm
-  // efectul o singură dată.
+  // Server function-ul stă într-un ref și efectul rulează o singură dată:
+  // reconcilierea (care poate chema `unsubscribe()`) nu are voie să se
+  // suprapună peste `subscribe()` din buton — Chrome aruncă atunci
+  // „Registration failed - push service error”.
   const checkRef = useRef(checkRegistered);
   checkRef.current = checkRegistered;
-  // Cât timp utilizatorul are o acțiune în curs, reconcilierea nu are voie să
-  // atingă abonamentul.
+  // Cât utilizatorul are o acțiune în curs, reconcilierea nu atinge abonamentul.
   const busyRef = useRef(false);
 
   useEffect(() => {
@@ -69,14 +64,13 @@ export function usePushNotifications() {
         setState(Notification.permission === "denied" ? "denied" : "unsubscribed");
         return;
       }
-      // Abonamentul local nu e suficient: rândul de pe server poate fi șters
-      // din Tehnic sau expirat (410). Fără verificarea asta, interfața arăta
-      // "activat" pentru un abonament la care nu mai putea ajunge nimic.
+      // Rândul de pe server poate fi șters sau expirat (410) — altfel interfața
+      // arăta „activat” pentru un abonament mort.
       let registered: boolean;
       try {
         ({ registered } = await checkRef.current({ data: { endpoint: sub.endpoint } }));
       } catch {
-        // server indisponibil — nu presupunem că e dezabonat, lăsăm starea locală
+        // Server indisponibil — nu presupunem dezabonarea.
         if (!cancelled) setState("subscribed");
         return;
       }
@@ -85,7 +79,7 @@ export function usePushNotifications() {
         setState("subscribed");
         return;
       }
-      // Curățăm și local, ca butonul de activare să poată crea un abonament nou.
+      // Curățat și local, ca activarea să poată crea unul nou.
       await sub.unsubscribe().catch(() => {});
       if (!cancelled) setState(Notification.permission === "denied" ? "denied" : "unsubscribed");
     });
@@ -103,16 +97,12 @@ export function usePushNotifications() {
       const { publicKey } = await getKey();
       if (!publicKey) throw new Error("Lipsește cheia VAPID de pe server");
 
-      // Dacă browserul are deja un abonament, îl refolosim în loc să chemăm
-      // `subscribe()` din nou: un al doilea apel peste un abonament existent
-      // eșuează cu "Registration failed - push service error" (mai ales dacă
-      // vechiul abonament a fost creat cu altă cheie VAPID). Cazul apare des
-      // după ce rândul a fost șters de pe server, dar abonamentul local a
-      // rămas — atunci tot ce lipsește e reînregistrarea la noi în DB.
+      // Un abonament existent se refolosește: un al doilea `subscribe()` eșuează
+      // („push service error”), mai ales cu altă cheie VAPID. Frecvent după
+      // ștergerea rândului de pe server — lipsește doar reînregistrarea.
       let sub = await reg.pushManager.getSubscription();
       if (sub) {
-        // Cheia veche poate diferi de cea curentă; dacă diferă, abonamentul e
-        // inutilizabil și trebuie înlocuit, nu refolosit.
+        // Cu altă cheie, abonamentul e inutilizabil — se înlocuiește.
         const current = urlBase64ToUint8Array(publicKey);
         const existing = sub.options?.applicationServerKey;
         const sameKey =

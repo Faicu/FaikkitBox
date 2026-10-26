@@ -22,8 +22,7 @@ export function AddMediaWizard({
 }: {
   open: boolean;
   onClose: () => void;
-  // Sare peste pasul de căutare — folosit când wizard-ul e deschis direct
-  // dintr-un titlu deja identificat (ex. butonul "Adaugă" din Descoperă).
+  // Sare peste căutare — wizard deschis dintr-un titlu identificat (Descoperă).
   initialItem?: TmdbSearchResult | null;
 }) {
   const { data: adminData } = useQuery(adminStatusQuery);
@@ -31,13 +30,11 @@ export function AddMediaWizard({
 
   const [state, dispatch] = useReducer(wizardReducer, initialWizardState);
 
-  // Doar ce folosește chiar shell-ul: restul stării ajunge la pași prin
-  // `state`, pe care fiecare îl citește cât îi trebuie.
+  // Doar ce folosește shell-ul; pașii citesc restul din `state`.
   const { flow, query, results, searching, selected, checkResult, busy } = state;
 
   const step = flow.step;
-  // Pasul de alegere rămâne în indicator și în timpul confirmării, dacă de
-  // acolo s-a ajuns — de-asta se citește și din `back`.
+  // Alegerea rămâne în indicator și în confirmare, dacă de acolo s-a ajuns (`back`).
   const hasPickStep =
     flow.step === "pick" || (flow.step === "confirm" && flow.back.step === "pick");
   const confirmTorrent = flow.step === "confirm" ? flow.target : null;
@@ -45,10 +42,8 @@ export function AddMediaWizard({
 
   const isTv = selected?.mediaType === "tv";
 
-  // Hook-urile stau înaintea efectelor care le folosesc: `selectItem` e
-  // chemat din efectul de deschidere prefill, iar o declarație de după s-ar
-  // fi bazat pe faptul că efectul rulează oricum mai târziu — adevărat, dar
-  // fragil de citit.
+  // Hook-urile înaintea efectelor care le folosesc (`selectItem`, în efectul
+  // de deschidere prefill).
   const { onQueryChange, selectItem } = useWizardData(dispatch);
   const { downloadOne, toggleMovieWatch } = useWizardDownload({ state, dispatch, isTv });
 
@@ -57,8 +52,7 @@ export function AddMediaWizard({
     onClose();
   }
 
-  // Deschis direct dintr-un titlu deja identificat (ex. Descoperă) — sare
-  // peste pasul de căutare și pornește direct verificarea.
+  // Deschis dintr-un titlu identificat — direct la verificare.
   useEffect(() => {
     if (open && initialItem) {
       selectItem(initialItem);
@@ -66,14 +60,9 @@ export function AddMediaWizard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialItem?.id, initialItem?.mediaType]);
 
-  // Navigare "înapoi" reală — revine la căutare, păstrând rezultatele deja
-  // încărcate acolo unde are sens. Destinația nu mai e ghicită aici: reducer-ul
-  // o citește din `flow.back` pentru confirmare (deci întoarcerea regăsește
-  // exact lista de candidați din care venise) și o știe din pas pentru rest.
+  // „Înapoi” real: destinația o știe reducer-ul (`flow.back` la confirmare).
   function goBack() {
-    // Singura decizie care depinde de props, nu de stare: când wizard-ul e
-    // deschis prefill (din Descoperă), nu există pas de căutare la care să te
-    // întorci, deci "înapoi" din rezultat închide.
+    // Deschis prefill, nu există pas de căutare — „înapoi” din rezultat închide.
     if (step === "result" && initialItem) {
       handleClose();
       return;
@@ -81,10 +70,8 @@ export function AddMediaWizard({
     dispatch({ type: "BACK" });
   }
 
-  // Pașii afișați în indicatorul de progres — sărim peste "Căutare" când
-  // wizard-ul a fost deschis prefill, la fel cum sărim peste "Alege torrent"
-  // când nu există de fapt o alegere de făcut (utilizator obișnuit, sau
-  // admin cu un singur candidat) — apare doar când chiar se ajunge acolo.
+  // Pașii din indicator: fără „Căutare” la prefill, iar „Alege torrent” doar
+  // când chiar se ajunge acolo.
   const stepperSteps: Array<{ key: Step; label: string }> = [
     ...(initialItem ? [] : [{ key: "search" as Step, label: "Căutare" }]),
     { key: "checking", label: "Verificare" },
@@ -196,11 +183,8 @@ export function AddMediaWizard({
                 onCancel={goBack}
                 onDeclineHdr={(quality) => dispatch({ type: "DECLINE_HDR", quality })}
                 onConfirm={() =>
-                  // Fără curățare aici: `downloadOne` schimbă pasul pe "done"
-                  // DOAR la succes, iar dacă goleam ținta înainte de a ști
-                  // rezultatul, o descărcare eșuată lăsa pasul "confirm" fără
-                  // țintă — un corp de dialog gol. Acum ținta E pasul, deci
-                  // starea aia nici nu e reprezentabilă.
+                  // Fără curățare aici: pasul devine "done" doar la succes, iar o
+                  // țintă golită înainte lăsa, la eșec, un dialog gol.
                   downloadOne(confirmTorrent.torrent, {
                     season: confirmTorrent.season ?? null,
                     episode: confirmTorrent.episode ?? null,

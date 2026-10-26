@@ -77,8 +77,7 @@ export function BibliotecaList({
       return;
     }
     queryClient.invalidateQueries({ queryKey: ["plexLibraryBrowse"] });
-    // În primele 24 h ștergerea doar s-a programat: titlul rămâne, cu timer,
-    // deci drawer-ul rămâne deschis și își reîncarcă detaliile.
+    // În primele 24 h ștergerea doar s-a programat — titlul rămâne, cu timer.
     if (res.scheduledAt) {
       queryClient.invalidateQueries({ queryKey: ["plexTitleDetail"] });
       toast.success(
@@ -114,9 +113,8 @@ export function BibliotecaList({
     return <div className="text-sm text-red-400 px-1">{browse.data.error}</div>;
   }
   if (allItems.length === 0) {
-    // Filmele așteptate se arată și aici: o bibliotecă goală în care aștepți
-    // ceva nu e același lucru cu una goală de tot, iar altfel n-ai avea de
-    // unde opri o urmărire pornită greșit.
+    // Filmele așteptate se arată și aici: altfel n-ai de unde opri o urmărire
+    // pornită greșit.
     return (
       <div className="space-y-3">
         <WantedMoviesSection />
@@ -125,8 +123,7 @@ export function BibliotecaList({
     );
   }
 
-  // Un singur fel de rând, pentru filme și seriale deopotrivă — episoadele nu
-  // mai apar aici, ci doar în drawer-ul serialului.
+  // Un singur fel de rând pentru filme și seriale; episoadele, doar în drawer.
   function renderRow(item: PlexBrowseItem) {
     const isShow = item.type === "tv_show";
     return (
@@ -192,8 +189,7 @@ export function BibliotecaList({
             <AlertTriangle className="h-2.5 w-2.5" />
           </span>
         )}
-        {/* Pentru un serial, o bifă simplă "văzut" ar fi înșelătoare (ai văzut
-            un episod din 36?) — arătăm câte din câte. */}
+        {/* La un serial, „văzut” ar fi înșelător (un episod din 36?) — câte din câte. */}
         {isShow && item.watchedEpisodes > 0 ? (
           <span className="flex shrink-0 items-center gap-0.5 text-[10px] text-emerald-400">
             <Eye className="h-3 w-3" />
@@ -229,19 +225,16 @@ export function BibliotecaList({
         </select>
       </div>
 
-      {/* Deasupra listei, dar sub căutare: filmele așteptate nu sunt titluri
-          pe care le ai, deci n-au ce căuta nici în rezultatele căutării, nici
-          în sortări. Componenta se ascunde singură când lista e goală. */}
+      {/* Filmele așteptate nu sunt titluri pe care le ai — în afara căutării și
+          sortării. Se ascunde singură când e goală. */}
       <WantedMoviesSection />
 
       {filtered.length === 0 ? (
         <div className="text-sm text-muted-foreground px-1">Niciun rezultat.</div>
       ) : (
         <div className="glass-card rounded-2xl p-3">
-          {/* `key` doar pe sortMode: schimbarea sortării chiar reordonează lista,
-              deci merită reanimată. Dacă `query` ar face parte din key, fiecare
-              tastă ar remonta containerul și ar reporni stagger-ul de la
-              opacity: 0 — lista pâlpâia la fiecare caracter tastat. */}
+          {/* `key` doar pe sortMode: cu `query` în key, fiecare tastă ar remonta
+              lista și ar reporni stagger-ul (pâlpâia). */}
           <div key={sortMode} className="space-y-1 stagger-in-fast">
             {filtered.map((item) => renderRow(item))}
           </div>
@@ -254,13 +247,9 @@ export function BibliotecaList({
         onRequestDelete={(info) => setConfirmDeleteTitle(info)}
       />
 
-      {/* Overlay simplu (fără AlertDialog/focus-trap Radix) — peste
-          TitleDetailDrawer (deja deschis) a fost un risc de îngheț identic
-          cu bug-ul reparat în AddMediaWizard, vezi commit c76ce30. Portalat
-          direct în body — fără portal, ancestorii cu transform (animația
-          stagger-in din PageShell) devin containing block pentru "fixed" și
-          overlay-ul apare decupat/în spatele conținutului, poate bloca
-          click-ul pe butoane. */}
+      {/* Overlay simplu, nu AlertDialog Radix — peste drawer ar îngheța ecranul
+          (c76ce30). Portalat în body: un ancestor cu transform (stagger-in) ar
+          deveni containing block pentru „fixed” și l-ar decupa. */}
       {confirmDeleteTitle &&
         createPortal(
           <div

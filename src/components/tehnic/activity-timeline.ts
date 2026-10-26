@@ -1,11 +1,6 @@
-// Construirea cronologiei din Jurnalul de activitate: evenimentele brute din
-// `activity` + commit-urile, cu două comasări făcute doar la afișare (baza
-// rămâne cu rândurile originale):
-//
-// - vizionările Plex: "început" + "încheiat" pentru aceeași sesiune devin un
-//   singur rând, cu intervalul orar și progresul;
-// - deploy-urile: "oprit" + "pornit (deploy)" la câteva secunde distanță devin
-//   un singur rând, cu durata opririi.
+// Cronologia jurnalului: evenimentele + commit-urile, cu două comasări doar la
+// afișare — „început” + „încheiat” ale aceleiași vizionări devin un rând, la
+// fel „oprit” + „pornit (deploy)” la câteva secunde distanță.
 
 import type { ActivityEntry } from "@/lib/activity-log.functions";
 import type { GitHubCommit } from "@/lib/github.functions";
@@ -23,11 +18,9 @@ export type TimelineItem =
     }
   | { kind: "deploy"; ts: number; stop: ActivityEntry; start: ActivityEntry };
 
-// O sesiune începută acum mai mult de atât, fără "încheiat", nu mai e
-// prezentată ca "în curs" — oprirea s-a pierdut (ex. baza restaurată).
+// Peste atât, o sesiune fără „încheiat” nu mai e „în curs” — oprirea s-a pierdut.
 const ONGOING_MAX_MS = 6 * 60 * 60 * 1000;
-// Între oprirea pentru deploy și pornirea de după trec de obicei 5-15 s
-// (build-ul rulează cu serviciul oprit, deci uneori ~1 min).
+// Între oprirea pentru deploy și pornire trec 5–15 s (uneori ~1 min, cu build-ul).
 const DEPLOY_GAP_MAX_MS = 10 * 60 * 1000;
 
 const ts = (e: ActivityEntry) => new Date(e.timestamp).getTime();
@@ -42,9 +35,8 @@ export function buildTimeline(
   commits: GitHubCommit[],
   now = Date.now(),
 ): TimelineItem[] {
-  // Cronologic crescător, ca fiecare "încheiat" să-și găsească "începutul"
-  // deja văzut. Serverul le dă descrescător (cu rowid la egalitate), deci
-  // inversarea + sortarea stabilă păstrează ordinea de scriere.
+  // Crescător, ca fiecare „încheiat” să-și găsească începutul; inversarea +
+  // sortarea stabilă păstrează ordinea de scriere.
   const asc = [...log].reverse().sort((a, b) => ts(a) - ts(b));
   const items: TimelineItem[] = [];
   const openPlex = new Map<string, ActivityEntry>();
@@ -97,8 +89,7 @@ export function buildTimeline(
   for (const commit of commits) {
     items.push({ kind: "commit", ts: new Date(commit.date).getTime(), commit });
   }
-  // La aceeași secundă (episodul următor pornit odată cu oprirea celui
-  // curent), ce s-a adăugat mai târziu e mai nou — inversare + sortare stabilă.
+  // La aceeași secundă, ce s-a scris mai târziu e mai nou.
   return items.reverse().sort((a, b) => b.ts - a.ts);
 }
 
@@ -116,8 +107,7 @@ export function itemType(item: TimelineItem): string {
   }
 }
 
-// Progresul e scris în mesajul de "încheiat" de fmtProgress (activity-log.ts):
-// " · 58/180 min (32%)".
+// Progresul, din mesajul de „încheiat” (fmtProgress): " · 58/180 min (32%)".
 const PROGRESS_RE = / · (\d+\/\d+ min \(\d+%\))$/;
 
 export function plexParts(item: Extract<TimelineItem, { kind: "plex" }>): {
@@ -143,8 +133,7 @@ export function searchText(item: TimelineItem): string {
   }
 }
 
-// Fără diacritice și majuscule: "insula" găsește "Insula", "subtitrari"
-// găsește "subtitrări".
+// Fără diacritice și majuscule: „subtitrari” găsește „subtitrări”.
 export function normalizeSearch(s: string): string {
   return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 }

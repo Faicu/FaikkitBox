@@ -1,9 +1,5 @@
-// Transformarea datelor brute (TMDB + Plex + Filelist + TVMaze) în rândurile
-// afișate de acordeonul de sezoane.
-//
-// Pure, fără React: intră date, ies date. Stăteau în corpul componentei, unde
-// nu puteau fi verificate decât randând tot wizard-ul — deși aici se decide
-// exact ce ți se oferă pe ecran pentru fiecare episod.
+// Datele brute (TMDB, Plex, Filelist, TVMaze) → rândurile acordeonului de
+// sezoane. Funcții pure, testabile fără să randezi wizard-ul.
 
 import { emptyQualitySet } from "@/components/filelist/quality-utils";
 import type { SeasonGroup } from "@/components/filelist/types";
@@ -53,14 +49,9 @@ export function deriveSeasonRows(input: DeriveSeasonsInput): SeasonRowData[] {
         .map((a) => [a.episodeNum, a.airstamp]),
     );
     const filelistEpNums = Array.from(group?.episodes.keys() ?? []).sort((a, b) => a - b);
-    // Sezon complet fără nicio urmă nicăieri (nici TMDB, nici Filelist, nici
-    // pachet) — anunțat doar cu un număr de episoade planificate
-    // (episodeCount din rezumatul serialului). Sintetizăm acele "sloturi" ca
-    // nelansate, fără dată — altfel sezonul ar arăta gol/"—", indistigabil de
-    // o eroare, deși chiar urmează să apară. Dacă există fie episoade TMDB,
-    // fie ceva pe Filelist (episoade sau pachet), NU sintetizăm nimic —
-    // folosim datele reale, ca să nu ascundem un pachet deja disponibil sub
-    // un fals "nelansat".
+    // Sezon anunțat doar cu numărul de episoade (fără nimic în TMDB sau pe
+    // Filelist): sloturi „nelansat”, fără dată — altfel ar părea o eroare. Cu
+    // date reale nu sintetizăm, ca să nu ascundem un pachet disponibil.
     const seasonHasNoData =
       tmdbEpisodes.length === 0 && filelistEpNums.length === 0 && packCandidates.length === 0;
     const episodeNums =
@@ -86,10 +77,9 @@ export function deriveSeasonRows(input: DeriveSeasonsInput): SeasonRowData[] {
         "tv",
       );
 
-      // Ordinea contează: prima stare adevărată câștigă. "În Plex" bate
-      // orice, "se descarcă" bate disponibilitatea, iar "nelansat" se
-      // verifică abia la final, ca un episod deja apărut pe Filelist să nu
-      // fie ascuns sub o dată de difuzare viitoare.
+      // Prima stare adevărată câștigă: „în Plex”, apoi „se descarcă”, apoi
+      // disponibilitatea; „nelansat” la final, ca un episod apărut pe Filelist
+      // să nu fie ascuns de o dată viitoare.
       let availability: EpisodeAvailability;
       if (plexEp) {
         availability = { kind: "in_plex", quality: plexEp.quality };
@@ -117,10 +107,8 @@ export function deriveSeasonRows(input: DeriveSeasonsInput): SeasonRowData[] {
       return { episodeNum: epNum, title, availability };
     });
 
-    // Episoade lipsă fără niciun torrent la calitatea aleasă: dacă exact
-    // ele (sau pachetul sezonului) există la alta, o spunem — altfel
-    // „Indisponibil" ar părea definitiv. Doar episoadele lipsă contează: un
-    // E01 la 720p nu ajută când lipsesc E09–E10.
+    // Lipsă la calitatea aleasă, dar exact ele (sau pachetul) există la alta —
+    // spus explicit, altfel „Indisponibil” pare definitiv.
     const missingNums = episodes
       .filter((e) => e.availability.kind === "unavailable")
       .map((e) => e.episodeNum);

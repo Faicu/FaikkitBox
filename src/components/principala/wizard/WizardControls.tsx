@@ -22,10 +22,7 @@ import type { FilelistTorrent } from "@/lib/filelist.functions";
 import { RO_DUBBED_CATEGORY } from "@/lib/filelist/categories";
 import type { Quality } from "./types";
 
-// ---------------------------------------------------------------------------
-// Piese mici, fără stare proprie (cu excepția QualitySelector) — reutilizate
-// în pașii wizard-ului.
-// ---------------------------------------------------------------------------
+// Piese mici, fără stare proprie (în afară de QualitySelector).
 
 const QUALITY_STYLES: Record<Quality, { active: string; inactive: string }> = {
   "720p": {
@@ -39,8 +36,7 @@ const QUALITY_STYLES: Record<Quality, { active: string; inactive: string }> = {
     inactive:
       "border-blue-500/40 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 hover:text-blue-300",
   },
-  // Cyan, între albastrul lui 1080p și violetul lui 4K: aceeași rezoluție ca
-  // 1080p, dar peste el.
+  // Cyan, între albastrul lui 1080p și violetul lui 4K.
   "1080p HDR": {
     active: "border-cyan-400/70 bg-cyan-500/30 text-cyan-200 shadow-sm shadow-cyan-500/30",
     inactive:
@@ -83,13 +79,9 @@ function QualityButton({
 
 const OTHER_QUALITIES: Quality[] = ["720p", "1080p HDR", "4K", "4K HDR"];
 
-// Selectorul de calitate — 1080p implicit, pe același rând cu eticheta;
-// celelalte calități stau sub „Vrei altă calitate?", ca ecranul să rămână
-// curat în cazul comun. Schimbarea calității nu cere nimic de la server:
-// torrentele titlului sunt deja aduse, doar se filtrează altfel.
-//
-// Deschiderea rămâne și când calitatea vine din altă parte (butoanele
-// „Disponibil la"), altfel calitatea activă n-ar fi vizibilă nicăieri.
+// Selectorul de calitate: 1080p implicit, restul sub „Vrei altă calitate?”.
+// Fără cereri la server — torrentele sunt deja aduse, doar se filtrează.
+// Rămâne deschis și când calitatea vine din „Disponibil la”, ca s-o vezi.
 export function QualitySelector({
   quality,
   onChange,
@@ -134,9 +126,8 @@ export function QualitySelector({
   );
 }
 
-// Indiciul „Există și în HDR" — „1080p" și „4K" înseamnă fără HDR, deci
-// varianta HDR (adesea cea mai bună de pe Filelist) nu apare în lista lor;
-// fără rândul ăsta afli de ea doar dacă deschizi singur selectorul.
+// „Există și în HDR”: „1080p” și „4K” = fără HDR, deci varianta HDR (adesea
+// cea mai bună) n-ar fi altfel vizibilă.
 export function HdrHint({
   quality,
   detail,
@@ -164,9 +155,8 @@ export function HdrHint({
   );
 }
 
-// Întrebarea explicită de dinaintea unei descărcări (sau urmăriri) HDR: pe
-// un ecran fără HDR, fișierul iese spălăcit sau e convertit de Plex, deci
-// alegerea trebuie făcută știind asta, nu din reflexul „HDR sună mai bine".
+// Întrebarea dinaintea unei descărcări/urmăriri HDR: pe un ecran fără HDR,
+// fișierul iese spălăcit sau convertit — alegere știută, nu din reflex.
 export function HdrQuestion({
   quality,
   sdrQuality,
@@ -196,8 +186,8 @@ export function HdrQuestion({
           Ai ales {quality}. Ecranul pe care te vei uita trebuie să suporte HDR — altfel imaginea
           iese spălăcită sau mai slabă decât varianta fără HDR.
         </p>
-        {/* Regulile generale nu mai spun nimic nou când dispozitivul obișnuit e
-            sigur (confirmat sau dovedit) — rândul din indiciu ține locul lor. */}
+        {/* Cu dispozitivul obișnuit sigur (confirmat sau dovedit), regulile
+            generale nu mai spun nimic nou. */}
         {!usual?.sure && (
           <ul className="list-disc space-y-0.5 pl-4">
             <li>TV 4K fabricat după 2017 — majoritatea au</li>
@@ -261,8 +251,7 @@ export function ActionButton({
   );
 }
 
-// Numele lansării nu spune că e dublată (ex. „Ferdinand.2017.1080p.WEBRip"),
-// deci categoria se arată explicit oriunde alegi un torrent.
+// Numele nu spune că e dublată, deci categoria se arată explicit.
 function DubbedBadge({ torrent }: { torrent: FilelistTorrent }) {
   if (torrent.category !== RO_DUBBED_CATEGORY) return null;
   return (
@@ -278,10 +267,8 @@ function uploadDate(t: FilelistTorrent): string | null {
   return d.toLocaleDateString("ro-RO", { day: "numeric", month: "short", year: "numeric" });
 }
 
-// Alegere manuală între torrente când sunt mai multe la aceeași calitate
-// (admin) — nu se arată pentru un singur candidat, ca să nu aglomerăm pasul
-// în cazul comun. Ordinea e cea din clasament (torrent-rank.ts); badge-urile
-// arată criteriile lui.
+// Alegerea manuală (admin) când sunt mai multe torrente la aceeași calitate,
+// în ordinea clasamentului; badge-urile arată criteriile.
 export function TorrentPicker({
   matches,
   selectedId,

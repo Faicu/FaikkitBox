@@ -20,13 +20,9 @@ import type { ServiceVersion } from "@/lib/system/versions.functions";
 import { ServicePill } from "@/components/ServicePill";
 import { formatDateTime, relativeTime } from "@/components/tehnic/utils";
 
-// Butoanele Restart / Update ale unui serviciu — același mecanism pentru
-// Plex, Immich, qBittorrent și Ubuntu (vezi src/lib/system/service-jobs.ts):
-//   Restart — Plex, Immich, qBittorrent mereu (la qBittorrent, și golirea
-//             cache-ului DNS); Ubuntu doar când sistemul cere repornire.
-//   Update  — doar când chiar există o actualizare; qBittorrent niciodată.
-// Toate cer confirmare, rulează în fundal pe server și se scriu în jurnal de
-// acolo. O singură acțiune odată, pe toate serviciile.
+// Restart / Update pentru Plex, Immich, qBittorrent și Ubuntu (service-jobs.ts):
+// Restart mereu (Ubuntu doar când cere repornire), Update doar când există
+// (qBittorrent niciodată). Cu confirmare, în fundal pe server, câte una odată.
 
 function confirmText(service: ServiceKey, kind: JobKind, v?: ServiceVersion): string {
   if (kind === "restart") {
@@ -86,22 +82,18 @@ type Props = {
   status: "ok" | "error" | "loading";
   // Pentru mesajul „se repornește…” al paginii (useServiceRecovery).
   onRestart?: () => void;
-  // Înlocuiește bulina de stare (pagina Sistem o folosește pentru
-  // „Repornit recent”).
+  // Înlocuiește bulina de stare (Sistem: „Repornit recent”).
   statusSlot?: React.ReactNode;
 };
 
-// Header-ul ține doar Restart (iconiță) + starea, pe un singur rând;
-// actualizarea are bannerul ei în pagină (ServiceUpdateBanner).
+// În header doar Restart + starea; actualizarea are bannerul ei.
 export function ServiceHeaderActions({ service, status, onRestart, statusSlot }: Props) {
   const qc = useQueryClient();
   const { v, busy, busyTitle, run, spinning, latest } = useServiceAction(service, onRestart);
 
-  // Finalul unei acțiuni pornite de oriunde (și din alt tab): anunț +
-  // versiunile recitite, ca bannerul de Update să dispară singur. A doua
-  // recitire, după 90s: Plex își instalează versiunea nouă abia după pornirea
-  // containerului, iar Immich răspunde abia după ce a pornit — la final încă
-  // ar raporta versiunea veche.
+  // La finalul unei acțiuni (și din alt tab): anunț + versiuni recitite. A doua
+  // recitire după 90s — Plex se instalează abia după pornirea containerului, iar
+  // Immich răspunde cu versiunea nouă abia după ce a pornit.
   const seen = useRef<{ id: number; status: string } | null>(null);
   useEffect(() => {
     if (!latest) return;
@@ -144,8 +136,8 @@ export function ServiceHeaderActions({ service, status, onRestart, statusSlot }:
   );
 }
 
-// Actualizarea disponibilă: versiunea curentă → nouă (sau pachetele Ubuntu),
-// changelog și butonul de pornire. Rămâne vizibil și cât rulează, cu spinner.
+// Actualizarea disponibilă (versiuni sau pachete Ubuntu), changelog și butonul;
+// vizibilă și cât rulează.
 export function ServiceUpdateBanner({
   service,
   onRestart,
@@ -203,9 +195,8 @@ export function ServiceUpdateBanner({
   );
 }
 
-// Ieșirea ultimei acțiuni a serviciului: live cât rulează, apoi încă 30 de
-// minute (sau până o închizi). Citită din DB, deci supraviețuiește unui
-// refresh de pagină.
+// Ieșirea ultimei acțiuni: live cât rulează, apoi încă 30 de minute. Din DB,
+// deci supraviețuiește unui refresh.
 export function ServiceJobOutput({ service }: { service: ServiceKey }) {
   const jobs = useQuery(serviceJobsQuery);
   const [dismissed, setDismissed] = useState<number | null>(null);

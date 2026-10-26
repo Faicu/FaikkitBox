@@ -1,15 +1,7 @@
 // ---------------------------------------------------------------------------
-// Interpolează local poziția de redare a sesiunilor Plex, ca ceasul h:m:s să
-// avanseze în fiecare secundă.
-//
-// Plex nu raportează progresul continuu: clienții trimit actualizări la
-// intervale proprii (tipic ~10s), deci `viewOffset` din /status/sessions se
-// schimbă în trepte, oricât de des am întreba noi. Rezultatul era un ceas care
-// "sărea" din 10 în 10 secunde.
-//
-// Fiindcă e doar un timp care curge, nu trebuie cerut de la server: reținem
-// valoarea primită și momentul primirii, apoi adăugăm timpul scurs local. La
-// fiecare valoare nouă de la server ne resincronizăm — deci nu putem devia.
+// Poziția de redare Plex, interpolată local ca ceasul să avanseze la fiecare
+// secundă: clienții Plex raportează în trepte (~10s). Reținem ultima valoare și
+// momentul ei și adăugăm timpul scurs; fiecare valoare nouă resincronizează.
 // Zero cereri în plus.
 // ---------------------------------------------------------------------------
 
@@ -27,8 +19,7 @@ export function useLiveViewOffsets<T extends LiveSession>(sessions: T[] | undefi
   const [, tick] = useState(0);
 
   const list = sessions ?? [];
-  // Cheia unei sesiuni în hartă e indexul ei — suficient, fiindcă lista se
-  // reconstruiește la fiecare răspuns și e afișată în aceeași ordine.
+  // Cheia e indexul — lista se reconstruiește la fiecare răspuns, în aceeași ordine.
   for (let i = 0; i < list.length; i++) {
     const prev = anchors.current.get(i);
     if (!prev || prev.offset !== list[i].viewOffsetMs) {
@@ -50,8 +41,7 @@ export function useLiveViewOffsets<T extends LiveSession>(sessions: T[] | undefi
   return list.map((s, i) => {
     const a = anchors.current.get(i);
     if (!a) return s.viewOffsetMs;
-    // Pe pauză poziția nu avansează; la redare adăugăm timpul scurs de la
-    // ultima valoare de la server, plafonat la durata totală.
+    // Pe pauză nu avansează; la redare, timpul scurs, plafonat la durată.
     if (s.playerState !== "playing") return a.offset;
     const projected = a.offset + (Date.now() - a.at);
     return s.durationMs > 0 ? Math.min(projected, s.durationMs) : projected;

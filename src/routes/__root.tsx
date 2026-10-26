@@ -94,11 +94,9 @@ function ErrorComponent({ error, reset }: { error: unknown; reset: () => void })
 }
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
-  // Precompletează statusul de admin pe server și îl transportă către client
-  // prin dehydrate/HydrationBoundary — fără asta, BottomNav randează pe
-  // server lista de admin (3-4 iteme), iar clientul pornește cu cache gol
-  // și randează inițial doar "Acasă", mismatch de hidratare pe orice rută
-  // (eroarea React #418 vedea pe toate paginile, nu doar Descoperă).
+  // Statusul de admin, precompletat pe server și transportat prin dehydrate —
+  // altfel BottomNav randa lista de admin pe server și doar „Acasă” în client
+  // (eroarea de hidratare React #418 pe toate paginile).
   loader: async ({ context }) => {
     await context.queryClient.ensureQueryData(adminStatusQuery);
     return { dehydratedState: dehydrate(context.queryClient) };
@@ -187,8 +185,7 @@ function RootComponent() {
   );
 }
 
-// Datele și codul tuturor paginilor se cer în fundal imediat ce se știe cine e logat
-// (vezi lib/prefetch.ts), ca fiecare pagină să se deschidă direct cu ele.
+// Datele și codul paginilor se cer în fundal imediat după login (prefetch.ts).
 function AppPrefetch() {
   const queryClient = useQueryClient();
   const router = useRouter();
@@ -206,9 +203,7 @@ function AutoReloadWatcher() {
 
   useEffect(() => {
     if ("serviceWorker" in navigator) {
-      // updateViaCache: "none" — sw.js e verificat mereu la sursă, nu din
-      // cache-ul HTTP. Fără el, o versiune nouă a service worker-ului (deci și
-      // a iconițelor de notificare) poate întârzia până la 24h pe telefon.
+      // updateViaCache: "none" — altfel un sw.js nou putea întârzia 24h pe telefon.
       navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" }).catch(() => {});
     }
   }, []);
@@ -220,11 +215,8 @@ function AutoReloadWatcher() {
       logClientError({ data: { message, stack } }).catch(() => {});
     };
     const onError = (event: ErrorEvent) => {
-      // Scripturi de pe alte origini (ex. beacon-ul de analytics injectat de
-      // Cloudflare la nivel de proxy, static.cloudflareinsights.com) produc
-      // erori complet în afara controlului nostru — logarea lor umple
-      // "Erori aplicație" cu zgomot nefolositor, fără nicio linie de cod
-      // proprie de reparat.
+      // Scripturile de pe alte origini (beacon-ul Cloudflare) dau erori pe care
+      // nu le putem repara — doar zgomot în „Erori aplicație”.
       if (event.filename && new URL(event.filename, location.href).origin !== location.origin)
         return;
       reportError(event.error ?? event.message);
@@ -233,10 +225,7 @@ function AutoReloadWatcher() {
     window.addEventListener("error", onError);
     window.addEventListener("unhandledrejection", onRejection);
 
-    // Captează și orice console.warn/console.error explicit din cod client
-    // (nu doar excepțiile neprinse de mai sus) — ex. cereri eșuate tratate
-    // cu try/catch + console.warn, care altfel nu ajung niciodată în
-    // "Erori aplicație".
+    // Și console.warn/error explicite din client, nu doar excepțiile neprinse.
     const restoreConsole = installClientErrorCapture();
 
     return () => {

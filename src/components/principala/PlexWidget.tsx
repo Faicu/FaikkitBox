@@ -24,8 +24,8 @@ export function PlexWidget({
   onOpenViews: () => void;
   onOpenUsers: () => void;
 }) {
-  // Ceasul de redare avansează local în fiecare secundă — Plex raportează
-  // progresul în trepte de ~10s, deci fără asta cifra "sărea". Vezi hook-ul.
+  // Ceasul de redare avansează local la fiecare secundă — Plex raportează în
+  // trepte de ~10s.
   const liveOffsets = useLiveViewOffsets(sessions);
   const status = isLoading ? "loading" : (data?.status ?? "error");
   const ok = data?.status === "ok";
@@ -137,9 +137,8 @@ export function PlexWidget({
   );
 }
 
-// Rândul „în redare”: fundalul e imaginea titlului, estompată, cu posterul și
-// detaliile deasupra. Rândul e copil direct de `stagger-in`, deci nimic din el
-// nu pune `animation` pe elementul rădăcină.
+// Rândul „în redare”: fundalul e imaginea titlului, estompată. Copil direct de
+// `stagger-in`, deci rădăcina lui nu pune `animation`.
 function SessionRow({ session: s, offsetMs }: { session: PlexSession; offsetMs: number }) {
   const pct = s.durationMs > 0 ? Math.min(100, Math.round((offsetMs / s.durationMs) * 100)) : 0;
   const isEpisode = !!s.grandparentTitle;
@@ -229,14 +228,11 @@ function SessionRow({ session: s, offsetMs }: { session: PlexSession; offsetMs: 
 
         {s.durationMs > 0 && (
           <div className="space-y-1">
-            {/* Punctul luminos e frate al barei, nu copil: `progress-flow` are
-                overflow-hidden (taie strălucirea), iar punctul iese jumătate în
-                afara barei. Fără tranziție pe lățime: ceasul avansează în
-                fiecare secundă, deci tranziția n-ar mai fi stat niciodată —
-                recalculare de layout la fiecare cadru, pentru ~0,01%/s. */}
+            {/* Punctul e frate al barei, nu copil (`progress-flow` are
+                overflow-hidden). Fără tranziție pe lățime: ceasul avansează la
+                fiecare secundă, deci ar recalcula layout-ul la fiecare cadru. */}
             <div className="relative h-1.5 w-full rounded-full bg-white/10">
-              {/* Strălucirea alunecă doar cât rulează — la pauză bara rămâne
-                  plată, ca să se vadă dintr-o privire. */}
+              {/* Strălucirea doar cât rulează — pauza se vede dintr-o privire. */}
               <div
                 className={`h-full rounded-full ${
                   paused ? "bg-amber-400/70" : "progress-flow progress-flow-amber"
@@ -273,9 +269,8 @@ const STAT_TONES = {
   },
 } as const;
 
-// Caseta cu cifra zilei. `translate`/`scale` din Tailwind 4 sunt proprietăți
-// separate de `transform`, deci ridicarea la hover merge și pe copiii unui
-// `stagger-in` cât timp rulează animația de intrare (care scrie `transform`).
+// Caseta cu cifra zilei. `translate`/`scale` din Tailwind 4 sunt separate de
+// `transform`, deci ridicarea la hover merge și în timpul intrării `stagger-in`.
 function StatTile({
   label,
   value,
@@ -371,16 +366,14 @@ function LibraryTile({
   );
 }
 
-// Cifra urcă animat la afișare și la schimbare; la schimbare face și flash —
-// aceeași convenție ca la StatCard.
+// Cifra urcă animat și face flash la schimbare (ca la StatCard).
 function AnimatedNumber({ value, className }: { value: number; className?: string }) {
   const shown = useCountUp(value);
   const flash = useFlashOnChange(value);
   return <div className={`${className ?? ""} ${flash ? "tick-flash" : ""}`}>{shown}</div>;
 }
 
-// Forma cardului Plex cât vine primul răspuns: un rând de redare, cele două
-// casete de azi, bibliotecile — ca să nu sară layout-ul la sosirea datelor.
+// Forma cardului până la primul răspuns, ca layout-ul să nu sară.
 function PlexSkeleton() {
   return (
     <div className="space-y-3">
@@ -398,9 +391,8 @@ function PlexSkeleton() {
   );
 }
 
-// Mărimea cerută Plex-ului (latura mică, px) — vezi THUMB_WIDTHS din
-// api/plex-thumb.ts. Posterul de 56px lățime ×3 pentru ecrane dense = 180;
-// fundalul e estompat, deci 240 ajunge cu prisosință.
+// Mărimea cerută Plex-ului (latura mică, px; THUMB_WIDTHS din api/plex-thumb.ts):
+// poster 56px ×3 = 180; fundalul e estompat, 240 ajunge.
 function thumbSrc(path: string, width: 180 | 240): string {
   return `/api/plex-thumb?path=${encodeURIComponent(path)}&w=${width}`;
 }
@@ -423,8 +415,7 @@ function qualityLabel(s: PlexSession): string | null {
   return stream;
 }
 
-// Eticheta principală: rezoluția livrată + modul de redare, ca să se vadă
-// dintr-o privire că un „1080p" e totuși transcodat („1080p · Transcodare HW").
+// Rezoluția livrată + modul de redare — un „1080p” poate fi totuși transcodat.
 function playbackLabel(s: PlexSession): string {
   const mode =
     s.playbackMode === "transcode"
@@ -444,8 +435,8 @@ function videoCodecChanged(s: PlexSession): boolean {
   );
 }
 
-// Subtitrarea arsă e singura cauză evidentă când video-ul se re-encodează fără
-// să-și schimbe nici rezoluția, nici codecul — Plex n-o poate desena altfel.
+// Subtitrarea arsă: singura cauză evidentă a unei re-encodări fără schimbare de
+// rezoluție sau codec.
 function burnIsReason(s: PlexSession): boolean {
   if (s.playbackMode !== "transcode" || !s.burnedSubtitle || videoCodecChanged(s)) return false;
   return !s.sourceQuality || !s.streamQuality || s.sourceQuality === s.streamQuality;
