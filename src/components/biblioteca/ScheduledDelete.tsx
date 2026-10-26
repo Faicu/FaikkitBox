@@ -99,9 +99,7 @@ export function ScheduledDeleteCard({
           </div>
           <div className="mt-0.5 text-[11px] text-muted-foreground">
             {isCancel ? "Anulare" : "Ștergere"} programată
-            {byUsername ? ` de ${byUsername}` : ""} pentru {deleteTimeLabel(at)} — Filelist
-            consideră hit and run un torrent șters în primele 24 de ore. Până atunci torrentul
-            continuă să se descarce și să facă seed.
+            {byUsername ? ` de ${byUsername}` : ""} pentru {deleteTimeLabel(at)}.
           </div>
         </div>
       </div>

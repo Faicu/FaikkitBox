@@ -280,19 +280,14 @@ export function BibliotecaList({
                 (confirmDeleteTitle.alreadyScheduled ? (
                   <p className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs leading-snug text-red-400">
                     {confirmDeleteTitle.isCancel ? "Anularea" : "Ștergerea"} e deja programată
-                    pentru {deleteTimeLabel(confirmDeleteTitle.delayedUntil)}. Ștergerea pe loc
-                    ocolește regula: Filelist consideră hit and run un torrent șters în primele 24
-                    de ore.
+                    pentru {deleteTimeLabel(confirmDeleteTitle.delayedUntil)}. O faci acum?
                   </p>
                 ) : (
                   <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-snug text-amber-400">
-                    Descărcarea a început acum mai puțin de 24 de ore, iar Filelist consideră hit
-                    and run un torrent șters mai devreme.{" "}
-                    {confirmDeleteTitle.isCancel ? "Anularea" : "Ștergerea"} se programează pentru{" "}
-                    {deleteTimeLabel(confirmDeleteTitle.delayedUntil)}; până atunci torrentul
-                    continuă să se descarce și să facă seed, iar oricine poate renunța la ea.
-                    {confirmDeleteTitle.canDeleteImmediately &&
-                      " Ca admin, poți șterge și pe loc — cu riscul ca Filelist s-o considere hit and run."}
+                    {confirmDeleteTitle.isCancel
+                      ? "Descărcarea nu poate fi anulată pe loc în primele 24 de ore. Se va anula automat pe "
+                      : "Titlul nu poate fi șters pe loc în primele 24 de ore de la descărcare. Se va șterge automat pe "}
+                    {deleteTimeLabel(confirmDeleteTitle.delayedUntil)}.
                   </p>
                 ))}
               <p className="whitespace-pre-line text-sm text-muted-foreground">
