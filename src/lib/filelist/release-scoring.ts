@@ -106,11 +106,23 @@ export function releaseNameOf(name: string): string {
   return file.replace(PLEX_ID_HINT_RE, "").trim();
 }
 
+// Grup lipit de codec la coada numelui, fără cratimă: „…H.265FLUX" (subs.ro,
+// A Haunting in Venice, 26 oct. 2026). Fără despărțire nu se recunoșteau nici
+// codecul, nici grupul — varianta ieșea 3/5 în loc de 5/5. Doar la sfârșitul
+// numelui și doar după un codec, ca să nu prindă cuvinte obișnuite.
+const GLUED_CODEC_GROUP_RE =
+  /((?:^|[.\s_-])(?:H[.\s_]?26[45]|x26[45]|HEVC|AV1|XviD|DivX))([A-Za-z][A-Za-z0-9]*)$/i;
+
+// „MA" din „DTS-HD.MA" e Master Audio (codec audio), nu platforma Movies
+// Anywhere — altfel orice release BluRay cu DTS-HD MA lua punctele de
+// platformă la un fișier MA WEB-DL.
+const DTS_MASTER_AUDIO_RE = /(DTS(?:[.\s_-]?HD)?)[.\s_-]MA(?=[.\s_-]|$)/gi;
+
 function extractTags(rawName: string): ReleaseTags {
-  const name = releaseNameOf(rawName);
+  const name = releaseNameOf(rawName).replace(GLUED_CODEC_GROUP_RE, "$1-$2");
   const resolution = findTag(name, RESOLUTION_TAGS);
   const acquisition = findTag(name, ACQUISITION_TAGS);
-  const platform = findTag(name, PLATFORM_TAGS);
+  const platform = findTag(name.replace(DTS_MASTER_AUDIO_RE, "$1"), PLATFORM_TAGS);
   const codec = findCodecTag(name);
   const groupMatch = name.match(/-([A-Za-z0-9]+)$/);
   const group = groupMatch ? groupMatch[1].toLowerCase() : null;

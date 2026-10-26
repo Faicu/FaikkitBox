@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { pickBestByRelease, releaseNameOf } from "./release-scoring";
+import { pickBestByRelease, rankByRelease, releaseNameOf } from "./release-scoring";
 
 describe("releaseNameOf / scorarea subtitrărilor", () => {
   it("scoate folderul, extensia, limba și ID-ul Plex", () => {
@@ -41,5 +41,23 @@ describe("releaseNameOf / scorarea subtitrărilor", () => {
       "The.Invite.2026.1080p.AMZN.WEB-DL.DDP5.1.H.264-BYNDR.mkv",
     );
     expect(best?.candidate).toContain("WEB-DL The.Invite");
+  });
+
+  it("grupul lipit de codec și MA din DTS-HD MA (A Haunting in Venice, 26 oct. 2026)", () => {
+    const target = "A.Haunting.in.Venice.2023.2160p.MA.WEB-DL.DDP5.1.Atmos.DoVi.HDR.H.265-FLUX";
+    const ranked = rankByRelease(
+      [
+        "BluRay A.Haunting.in.Venice.2023.BluRay.1080p.DTS-HD.MA.7.1.x264-MTeam",
+        "WEB-DL 2 variante A.Haunting.in.Venice.2023.2160p.AMZN.WEB-DL.DDP5.1.HDR.H.265-B00TiFUL",
+        "WEB-DL 2 variante A.Haunting.in.Venice.2023.2160p.MA.WEBDL.DDP5.1.Atmos.DV.HDR.H.265FLUX",
+      ],
+      (r) => r,
+      () => 0,
+      target,
+    );
+    expect(ranked[0].candidate).toContain("H.265FLUX");
+    expect(ranked[0].matchedCriteria).toBe(5);
+    const bluray = ranked.find((r) => r.candidate.includes("MTeam"));
+    expect(bluray?.matchedCriteria).toBe(0);
   });
 });
