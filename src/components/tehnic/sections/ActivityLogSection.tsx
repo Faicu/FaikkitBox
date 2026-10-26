@@ -15,7 +15,6 @@ import {
   AlertTriangle,
   Captions,
   UserPlus,
-  DatabaseZap,
   ArrowUpCircle,
   Search,
   ChevronRight,
@@ -28,8 +27,6 @@ import type { ActivityEntry } from "@/lib/activity-log.functions";
 import type { GitHubCommit } from "@/lib/github.functions";
 import { CommitDrawer } from "../CommitDrawer";
 import { SubtitleFixDrawer } from "../SubtitleFixDrawer";
-import { MetaRefreshDrawer } from "../MetaRefreshDetails";
-import { metaItems } from "../meta-items";
 import { relativeTime } from "../utils";
 import {
   buildTimeline,
@@ -50,7 +47,6 @@ const FILTER_GROUPS: { key: string; label: string }[] = [
   { key: "plex", label: "Plex" },
   { key: "torrente", label: "Torrente" },
   { key: "subtitrari", label: "Subtitrări" },
-  { key: "metadate", label: "Metadate" },
   { key: "immich", label: "Immich" },
   { key: "updates", label: "Updates" },
   { key: "commits", label: "Commits" },
@@ -88,7 +84,6 @@ export function ActivityLogSection() {
   const [filter, setFilter] = useState("all");
   const [selectedCommit, setSelectedCommit] = useState<GitHubCommit | null>(null);
   const [selectedSubtitleEntry, setSelectedSubtitleEntry] = useState<ActivityEntry | null>(null);
-  const [selectedMetaEntry, setSelectedMetaEntry] = useState<ActivityEntry | null>(null);
 
   const iconMap: Record<string, React.ReactNode> = {
     server_start: <Server className="h-3.5 w-3.5 text-emerald-400" />,
@@ -105,7 +100,6 @@ export function ActivityLogSection() {
     subtitle_fix: <Captions className="h-3.5 w-3.5 text-teal-400" />,
     app_error: <AlertTriangle className="h-3.5 w-3.5 text-red-400" />,
     account_request: <UserPlus className="h-3.5 w-3.5 text-amber-400" />,
-    metadata_refresh: <DatabaseZap className="h-3.5 w-3.5 text-emerald-400" />,
     update_available: <ArrowUpCircle className="h-3.5 w-3.5 text-amber-400" />,
     contribution: <HandCoins className="h-3.5 w-3.5 text-emerald-400" />,
     title_delete: <Trash2 className="h-3.5 w-3.5 text-red-400" />,
@@ -130,8 +124,9 @@ export function ActivityLogSection() {
       ? // "Toate" exclude intenționat evenimentele de server (pornire/oprire):
         // se produc la fiecare deploy, deci ar îneca activitatea reală
         // (vizionări, torrente, conturi) în zgomot. Rămân disponibile pe
-        // tab-ul lor dedicat, "Server". La fel reîmprospătările de metadate:
-        // rulează de mai multe ori pe zi, singure — tab-ul "Metadate".
+        // tab-ul lor dedicat, "Server". Reîmprospătările de metadate nu
+        // apar deloc în jurnal (n-au tab): se văd în Watcher → Seriale și
+        // filme, cu detalii.
         timeline.filter(
           (item) =>
             item.kind === "commit" ||
@@ -235,22 +230,19 @@ export function ActivityLogSection() {
         entry.type === "subtitle_fix" &&
         Array.isArray(entry.meta?.items) &&
         (entry.meta.items as unknown[]).length > 0;
-      const hasMetaDetails = entry.type === "metadata_refresh" && metaItems(entry).length > 0;
       // Torrentele duc la titlul lor din Bibliotecă (mediaId rezolvat de
       // server; lipsește dacă titlul a fost șters).
       const mediaId = entry.mediaId;
-      const clickable = hasSubtitleDetails || hasMetaDetails || mediaId != null;
+      const clickable = hasSubtitleDetails || mediaId != null;
       const Row = clickable ? "button" : "div";
       return (
         <Row
           onClick={
             hasSubtitleDetails
               ? () => setSelectedSubtitleEntry(entry)
-              : hasMetaDetails
-                ? () => setSelectedMetaEntry(entry)
-                : mediaId != null
-                  ? () => navigate({ to: "/biblioteca", search: { titlu: mediaId } })
-                  : undefined
+              : mediaId != null
+                ? () => navigate({ to: "/biblioteca", search: { titlu: mediaId } })
+                : undefined
           }
           className={`${rowClass} ${clickable ? clickableClass : ""}`}
         >
@@ -372,9 +364,6 @@ export function ActivityLogSection() {
           entry={selectedSubtitleEntry}
           onClose={() => setSelectedSubtitleEntry(null)}
         />
-      )}
-      {selectedMetaEntry && (
-        <MetaRefreshDrawer entry={selectedMetaEntry} onClose={() => setSelectedMetaEntry(null)} />
       )}
     </>
   );

@@ -1,19 +1,11 @@
 import { Film, Tv } from "lucide-react";
 
-import {
-  Drawer,
-  DrawerContent,
-  DrawerHeader,
-  DrawerTitle,
-  DrawerDescription,
-} from "@/components/ui/drawer";
 import type { ActivityEntry } from "@/lib/activity-log.functions";
-import { formatDateTime } from "./utils";
 import { metaItems } from "./meta-items";
 
 // O intrare `metadata_refresh` din jurnal (vezi src/lib/media/metadata-report.ts):
-// ce titluri s-au schimbat și cum. Folosit inline în drawer-ul plugin-ului și
-// în drawer-ul deschis din Jurnalul de activitate.
+// ce titluri s-au schimbat și cum. Folosit inline în drawer-ul Watcher
+// (Seriale și filme); în Jurnalul de activitate nu mai apare.
 export function MetaRefreshDetails({ entry }: { entry: ActivityEntry }) {
   const items = metaItems(entry);
   if (items.length === 0) {
@@ -48,29 +40,5 @@ export function MetaRefreshDetails({ entry }: { entry: ActivityEntry }) {
         </div>
       ))}
     </div>
-  );
-}
-
-export function MetaRefreshDrawer({
-  entry,
-  onClose,
-}: {
-  entry: ActivityEntry;
-  onClose: () => void;
-}) {
-  return (
-    <Drawer open onOpenChange={(o) => !o && onClose()}>
-      <DrawerContent className="max-h-[85vh]">
-        <DrawerHeader className="pb-2 text-left">
-          <DrawerTitle className="text-base">Reîmprospătare metadate</DrawerTitle>
-          <DrawerDescription className="text-left">
-            {entry.message.replace(/^Metadate: /, "")} · {formatDateTime(entry.timestamp)}
-          </DrawerDescription>
-        </DrawerHeader>
-        <div className="max-h-[65vh] overflow-y-auto overscroll-contain px-4 pb-6">
-          <MetaRefreshDetails entry={entry} />
-        </div>
-      </DrawerContent>
-    </Drawer>
   );
 }
