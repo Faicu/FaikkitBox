@@ -1,16 +1,15 @@
-// Starea backup-urilor bazei de date + buton de backup manual.
+// Starea backup-urilor bazei de date. Un backup manual se face din Watcher
+// (sarcina „Backup bază de date” → Rulează acum), nu de aici — un singur
+// buton pentru același lucru.
 //
 // Backup-ul rulează singur (sarcina db-backup din Watcher), deci cardul nu e
 // despre a-l declanșa, ci despre a răspunde la o singură întrebare: "chiar
 // se face?". De-asta vârful cardului e vechimea ultimei copii, nu lista.
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
+import { useQuery } from "@tanstack/react-query";
 import { DatabaseBackup, ShieldAlert, ShieldCheck } from "lucide-react";
-import { toast } from "sonner";
 
 import { dbBackupQuery } from "@/lib/queries";
-import { runDbBackupNow } from "@/lib/system/db-backup.functions";
 import { formatBytes } from "@/lib/format";
 import { relativeTime } from "../utils";
 
@@ -19,24 +18,7 @@ import { relativeTime } from "../utils";
 const STALE_MS = 36 * 60 * 60 * 1000;
 
 export function DbBackupCard() {
-  const qc = useQueryClient();
   const status = useQuery(dbBackupQuery);
-  const backupNow = useServerFn(runDbBackupNow);
-
-  const run = useMutation({
-    mutationFn: () => backupNow(),
-    onSuccess: (res) => {
-      if (!res.ok) {
-        toast.error(res.error ?? "Backup-ul a eșuat");
-        return;
-      }
-      toast.success("Backup făcut", {
-        description: `${res.file.name} · ${formatBytes(res.file.size)}`,
-      });
-      qc.invalidateQueries({ queryKey: ["dbBackup"] });
-    },
-    onError: (e) => toast.error((e as Error).message),
-  });
 
   const d = status.data;
   const lastAt = d?.lastAt ?? null;
@@ -70,14 +52,6 @@ export function DbBackupCard() {
               </div>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => run.mutate()}
-            disabled={run.isPending}
-            className="shrink-0 rounded-lg bg-primary/15 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/25 disabled:opacity-50"
-          >
-            {run.isPending ? "Se face…" : "Backup acum"}
-          </button>
         </div>
 
         {/* Calea contează: backup-ul stă lângă bază, pe același disc — bun

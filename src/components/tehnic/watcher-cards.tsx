@@ -9,8 +9,6 @@ import {
   Captions,
   CaptionsOff,
   CheckCircle2,
-  Search,
-  RefreshCw,
 } from "lucide-react";
 import { Orb } from "@/components/ui/orb";
 
@@ -130,20 +128,6 @@ export function ShowWatchCards() {
       <MetaRefreshHistory
         entries={entries.filter((e) => e.type === "metadata_refresh").slice(0, 10)}
       />
-
-      <div className="rounded-2xl glass-card divide-y divide-border/50 text-xs">
-        <Row
-          icon={<RefreshCw className="h-3.5 w-3.5" />}
-          label="Metadate împrospătate"
-          flashKey={watch.lastMetaRefreshAt}
-        >
-          {watch.lastMetaRefreshAt ? (
-            relativeTime(`${watch.lastMetaRefreshAt.replace(" ", "T")}Z`)
-          ) : (
-            <span className="text-muted-foreground">încă niciodată</span>
-          )}
-        </Row>
-      </div>
     </>
   );
 }
@@ -305,7 +289,8 @@ const shortDay = (v: string) =>
   sqliteDate(v).toLocaleDateString("ro-RO", { day: "numeric", month: "short" });
 
 // Reîncercarea subtitrărilor: ce se caută acum și până când, ce s-a încheiat
-// fără rezultat, ce a găsit și când a rulat ultima dată. O căutare fără
+// fără rezultat și ce a găsit (când a rulat ultima dată și cu ce rezultat
+// arată Watcher-ul, deasupra). O căutare fără
 // rezultat nu scrie în jurnal (ar fi zilnic „tot nimic"), deci locul ăsta e
 // singura dovadă că lucrează.
 export function SubtitleRetryCards() {
@@ -314,30 +299,9 @@ export function SubtitleRetryCards() {
   const now = Date.now();
   const daysLeft = (until: string) =>
     Math.max(0, Math.ceil((sqliteDate(until).getTime() - now) / (24 * 60 * 60 * 1000)));
-  const lastCheck = data.lastCheckAt ? `${data.lastCheckAt.replace(" ", "T")}Z` : null;
 
   return (
     <>
-      <div className="rounded-2xl glass-card divide-y divide-border/50 text-xs">
-        <Row
-          icon={<Search className="h-3.5 w-3.5" />}
-          label="Ultima căutare"
-          flashKey={data.lastCheckAt}
-        >
-          {lastCheck ? (
-            <span title={formatDateTime(lastCheck)}>
-              {relativeTime(lastCheck)} · {data.lastChecked}{" "}
-              {data.lastChecked === 1 ? "titlu" : "titluri"},{" "}
-              {data.lastFound === 0
-                ? "nimic găsit"
-                : `${data.lastFound} ${data.lastFound === 1 ? "găsită" : "găsite"}`}
-            </span>
-          ) : (
-            <span className="text-muted-foreground">încă niciuna</span>
-          )}
-        </Row>
-      </div>
-
       <div className="rounded-2xl glass-card p-3 text-xs">
         <div className="mb-2 flex items-center gap-1.5 text-muted-foreground">
           <Captions className="h-3.5 w-3.5" /> În căutare acum

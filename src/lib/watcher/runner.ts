@@ -19,16 +19,25 @@
 // ---------------------------------------------------------------------------
 
 import { getDb } from "../db";
-import { WATCHER_TASKS, type WatcherTask } from "./tasks";
+import { WATCHER_TASKS, type WatcherOutcome, type WatcherTask } from "./tasks";
 
 const TICK_MS = 1000;
+// Istoricul păstrează ultimele 20 de rulări care au făcut ceva, au eșuat sau
+// au fost pornite manual. Rulările fără nimic de făcut se văd doar în starea
+// sarcinii („Ultima rulare”) — altfel ar împinge afară din istoric tot ce
+// contează: la sarcinile dese, 20 de rânduri ar acoperi câteva minute.
 const HISTORY_KEEP = 20;
-// La sarcinile mai dese de atât, istoricul păstrează doar rulările care au
-// făcut ceva, au eșuat sau au fost pornite manual.
-const FREQUENT_MS = 60_000;
+// Limitele orei cerute de o sarcină (WatcherOutcome.nextAt): nu mai devreme
+// de un minut — o sarcină care cere mereu „acum” n-ar face altceva — și nu
+// mai târziu de 25h, ca o oră greșită să nu oprească sarcina pe termen lung.
+const NEXT_MIN_MS = 60_000;
+const NEXT_MAX_MS = 25 * 60 * 60 * 1000;
 
 const running = new Map<string, number>();
 const nextAt = new Map<string, number>();
+// Sarcinile chemate cu pokeWatcher cât rulau deja — pornesc din nou imediat
+// după, ca semnalul să nu se piardă.
+const poked = new Set<string>();
 
 interface ControlRow {
   id: string;
@@ -127,10 +136,17 @@ async function execute(task: WatcherTask, manual: boolean): Promise<void> {
 
   let ok = true;
   let summary: string | null = null;
+  let requestedNext: number | null = null;
   let error: string | null = null;
   let repeated = false;
   try {
-    summary = await task.run({ manual });
+    const out: WatcherOutcome = await task.run({ manual });
+    if (out !== null && typeof out === "object") {
+      summary = out.summary;
+      requestedNext = out.nextAt;
+    } else {
+      summary = out;
+    }
   } catch (e) {
     ok = false;
     error = errorText(e);
@@ -145,7 +161,14 @@ async function execute(task: WatcherTask, manual: boolean): Promise<void> {
   }
 
   const finished = Date.now();
-  const next = task.everyMs === null ? null : finished + task.everyMs;
+  // Ora cerută de sarcină (backup-ul știe că următorul e peste 14h) are
+  // întâietate față de interval; o rulare eșuată revine la interval, ca să se
+  // reîncerce la ritmul obișnuit.
+  let next: number | null = null;
+  if (poked.delete(task.id)) next = finished;
+  else if (ok && requestedNext !== null)
+    next = Math.min(Math.max(requestedNext, finished + NEXT_MIN_MS), finished + NEXT_MAX_MS);
+  else if (task.everyMs !== null) next = finished + task.everyMs;
   if (next === null) nextAt.delete(task.id);
   else nextAt.set(task.id, next);
   running.delete(task.id);
@@ -159,8 +182,7 @@ async function execute(task: WatcherTask, manual: boolean): Promise<void> {
        WHERE id = ?`,
     ).run(next, started, finished, finished - started, ok ? 1 : 0, error, summary, task.id);
 
-    const frequent = task.everyMs !== null && task.everyMs <= FREQUENT_MS;
-    if (!repeated && (!frequent || manual || !ok || summary !== null)) {
+    if (!repeated && (manual || !ok || summary !== null)) {
       db.prepare(
         `INSERT INTO watcher_runs (task_id, started_at, finished_at, duration_ms, ok, manual, summary, error)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -185,7 +207,7 @@ async function execute(task: WatcherTask, manual: boolean): Promise<void> {
 // dată pe minut, nu de 60 de ori.
 let lastTickWarn = 0;
 
-// Exportată (ca și boot) pentru teste — runner.test.ts.
+// Exportată (ca și boot și poke) pentru teste — runner.test.ts.
 export function tick(): void {
   let control: Map<string, ControlRow>;
   try {
@@ -222,6 +244,18 @@ export function tick(): void {
 
 declare global {
   var __faikkitboxWatcherStarted: boolean | undefined;
+  var __faikkitboxWatcherPoke: ((taskId: string) => void) | undefined;
+}
+
+// Pornește o sarcină la tactul următor, fără să mai aștepte intervalul — de
+// exemplu urmărirea serialelor, imediat după ce pornești urmărirea unuia.
+// Chemată prin globalThis (vezi poke.ts): server functions rulează în altă
+// copie a modulelor, dar în același proces. Nu e „Rulează acum”: respectă
+// pauza și nu apare ca manuală în istoric.
+export function poke(taskId: string): void {
+  if (!WATCHER_TASKS.some((t) => t.id === taskId)) return;
+  if (running.has(taskId)) poked.add(taskId);
+  else nextAt.set(taskId, Date.now());
 }
 
 export function startWatcher(): void {
@@ -236,6 +270,7 @@ export function startWatcher(): void {
     const now = Date.now();
     for (const t of WATCHER_TASKS) nextAt.set(t.id, now + t.delayMs);
   }
+  globalThis.__faikkitboxWatcherPoke = poke;
   tick();
   setInterval(tick, TICK_MS).unref?.();
 }

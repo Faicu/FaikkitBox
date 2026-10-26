@@ -72,13 +72,6 @@ export function approximateEpisodeKeys(torrentHash: string): ReadonlySet<string>
 // Întoarce câte titluri au fost scadente și câte au primit subtitrare —
 // rezumatul rulării, afișat în Watcher.
 export async function retryMissingSubtitles(): Promise<{ checked: number; found: number }> {
-  const db = getDb();
-  // Tic-ul se notează mereu — e dovada că plugin-ul rulează, chiar și în
-  // orele în care n-are nimic de căutat.
-  db.prepare(
-    `INSERT INTO subtitle_retry_state (id, last_tick_at) VALUES (1, datetime('now'))
-       ON CONFLICT(id) DO UPDATE SET last_tick_at = excluded.last_tick_at`,
-  ).run();
   const due = listTorrentsDueForSubtitleRetry();
   if (due.length === 0) return { checked: 0, found: 0 };
   const { checkSubtitleForTorrent } = await import("./download");
@@ -111,11 +104,7 @@ export async function retryMissingSubtitles(): Promise<{ checked: number; found:
       console.warn(`[subtitle-retry] „${t.torrent_name}" — eroare:`, e);
     }
   }
-  db.prepare(
-    `UPDATE subtitle_retry_state
-        SET last_check_at = datetime('now'), last_checked = ?, last_found = ?
-      WHERE id = 1`,
-  ).run(due.length, found);
+
   return { checked: due.length, found };
 }
 
@@ -141,10 +130,6 @@ export interface SubtitleRetryTitle {
 }
 
 export interface SubtitleRetryStatus {
-  lastTickAt: string | null;
-  lastCheckAt: string | null;
-  lastChecked: number;
-  lastFound: number;
   // În fereastra de 14 zile, căutate zilnic.
   searching: SubtitleRetryTitle[];
   // Tot fără subtitrare, dar fereastra s-a încheiat în ultimele 30 de zile —
@@ -158,18 +143,6 @@ const ENDED_SHOWN_DAYS = 30;
 
 export function getSubtitleRetryStatus(): SubtitleRetryStatus {
   const db = getDb();
-  const state = db
-    .prepare(
-      "SELECT last_tick_at, last_check_at, last_checked, last_found FROM subtitle_retry_state WHERE id = 1",
-    )
-    .get() as
-    | {
-        last_tick_at: string | null;
-        last_check_at: string | null;
-        last_checked: number;
-        last_found: number;
-      }
-    | undefined;
 
   // Un rând per torrent (un pachet are câte un rând per episod; „missing"
   // cât timp măcar unul e fără subtitrare). Titlul afișat: serialul
@@ -243,10 +216,6 @@ export function getSubtitleRetryStatus(): SubtitleRetryStatus {
   ).map((e) => ({ id: String(e.id), timestamp: e.timestamp, message: e.message }));
 
   return {
-    lastTickAt: state?.last_tick_at ?? null,
-    lastCheckAt: state?.last_check_at ?? null,
-    lastChecked: state?.last_checked ?? 0,
-    lastFound: state?.last_found ?? 0,
     searching: rows.filter((r) => r.until > now).map(toItem),
     // Aproximativele ieșite din fereastră au totuși subtitrare — nu le
     // trecem la „fără subtitrare".

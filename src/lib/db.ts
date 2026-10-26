@@ -328,18 +328,6 @@ export function getDb(): DatabaseSync {
       pending TEXT NOT NULL DEFAULT '{}'
     );
 
-    -- Reîncercarea zilnică a subtitrărilor (src/lib/filelist/subtitle-retry.ts).
-    -- Doar pentru afișare (Tehnic → Plugin-uri): ultimul tic al plugin-ului
-    -- (dovada că rulează, din oră în oră) și ultima verificare care chiar a
-    -- avut ce căuta. Cadența per titlu stă pe media.subtitle_checked_at.
-    CREATE TABLE IF NOT EXISTS subtitle_retry_state (
-      id INTEGER PRIMARY KEY CHECK (id = 1),
-      last_tick_at TEXT,
-      last_check_at TEXT,
-      last_checked INTEGER NOT NULL DEFAULT 0,
-      last_found INTEGER NOT NULL DEFAULT 0
-    );
-
     -- Watcher-ul (src/lib/watcher/): starea fiecărei sarcini de fundal.
     -- next_run_at (ms) stă aici ca un deploy să nu repornească ceasurile;
     -- paused și run_requested_at sunt scrise de butoanele din Tehnic și citite
@@ -1309,6 +1297,15 @@ function applyCleanups(database: DatabaseSync): void {
       }
       console.log("[db] Migrare v42: adăugat media.last_episode_air_date");
       database.exec("PRAGMA user_version = 42");
+    }
+
+    if (version < 43) {
+      // v43: subtitle_retry_state ținea ultimul tic și ultima căutare a
+      // reîncercării subtitrărilor, doar pentru afișare. Le ține acum Watcher-ul
+      // (watcher_tasks: ultima rulare, cu rezumatul ei).
+      database.exec("DROP TABLE IF EXISTS subtitle_retry_state");
+      console.log("[db] Migrare v43: subtitle_retry_state eliminat (starea e în Watcher)");
+      database.exec("PRAGMA user_version = 43");
     }
   }
 }

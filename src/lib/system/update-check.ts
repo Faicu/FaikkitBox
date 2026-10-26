@@ -51,6 +51,14 @@ export function summarizeUpdates(v: {
 }
 
 // `now` și `readVersions` sunt parametri doar pentru teste.
+// Când devine scadentă următoarea verificare — Watcher-ul o programează exact
+// atunci. Null = încă niciuna.
+export function nextUpdateCheckAt(): number | null {
+  const last = getDb().prepare("SELECT checked_at FROM update_check WHERE id = 1").get() as
+    { checked_at: string } | undefined;
+  return last ? new Date(last.checked_at).getTime() + CHECK_INTERVAL_MS : null;
+}
+
 export async function checkForUpdates(
   opts: {
     now?: number;

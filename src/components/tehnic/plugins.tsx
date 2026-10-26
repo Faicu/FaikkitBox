@@ -117,6 +117,7 @@ export const WATCHER_TASK_INFO: Record<string, WatcherTaskInfo> = {
       "Calitatea de rezervă se ia doar când principala lipsește la două verificări, la cel puțin 3 ore distanță.",
       "Detalii seriale și filme, la 12h: status, titlurile română/original, anul, descrierea, genurile, posterul, episoadele — cerute în română, cu engleza ca rezervă. Statusul contează și la serialele neurmărite: decide dacă ți se oferă butonul de urmărire.",
       "Un pas eșuat nu-i oprește pe ceilalți; rularea apare atunci ca eșuată, cu numele pasului.",
+      "Nu rulează niciodată deodată cu „Filme abia adăugate”: ambele caută pe Filelist, iar căutările de fundal se fac pe rând.",
     ],
     icon: <Tv className="h-3.5 w-3.5 text-blue-400" />,
   },
@@ -140,7 +141,7 @@ export const WATCHER_TASK_INFO: Record<string, WatcherTaskInfo> = {
   "immich-uploads": {
     summary: "Pozele și clipurile încărcate în Immich, trecute în jurnal.",
     points: [
-      "Scrie câte fotografii și videoclipuri a încărcat fiecare utilizator, cu notificare push. O încărcare întreagă devine o singură intrare: se scrie când o verificare nu mai găsește nimic nou, deci apare în jurnal la cel mult ~10 minute după ce se termină. Un Live Photo se numără o dată, ca în galerie.",
+      "Scrie câte fotografii și videoclipuri a încărcat fiecare utilizator, cu notificare push. O încărcare întreagă devine o singură intrare: se scrie când o verificare nu mai găsește nimic nou, deci apare în jurnal la cel mult ~4 minute după ce se termină. Un Live Photo se numără o dată, ca în galerie.",
       "Punctul de plecare stă în baza de date, așa că o repornire nu pierde nimic. Varianta veche rula doar cât era deschisă pagina Immich: în septembrie 2026, 285 de încărcări într-o lună, zero intrări în jurnal.",
     ],
     icon: <Upload className="h-3.5 w-3.5 text-purple-400" />,
@@ -150,7 +151,7 @@ export const WATCHER_TASK_INFO: Record<string, WatcherTaskInfo> = {
     points: [
       "Baza ține tot ce știe aplicația — bibliotecă, conturi, jurnal, abonamente push.",
       "Copia se face cu VACUUM INTO, nu cu o copiere de fișier: baza rulează în mod WAL, deci un `cp` poate da o copie coruptă.",
-      "O copie se face doar dacă cea mai recentă e mai veche de 23h; ceasul e data ultimei copii de pe disc, deci deploy-urile nu-l resetează. „Rulează acum” face copia oricum.",
+      "O copie la 23h după cea mai recentă de pe disc — Watcher-ul o programează exact atunci, iar deploy-urile nu resetează ceasul. „Rulează acum” face copia oricum; un backup eșuat se reîncearcă peste o oră.",
       "Copiile stau lângă bază, pe același disc: te apără de o stricăciune logică, nu de un disc mort.",
     ],
     icon: <DatabaseBackup className="h-3.5 w-3.5 text-teal-400" />,
@@ -158,7 +159,7 @@ export const WATCHER_TASK_INFO: Record<string, WatcherTaskInfo> = {
   "imdb-ratings": {
     summary: "Datasetul oficial IMDb cu notele și voturile, pentru Descoperă.",
     points: [
-      "Sursa e title.ratings.tsv.gz (~1,7 milioane de titluri), regenerat de IMDb zilnic. Efectiv o dată la 23h; „Rulează acum” verifică oricum.",
+      "Sursa e title.ratings.tsv.gz (~1,7 milioane de titluri), regenerat de IMDb zilnic. O verificare la 23h după cea precedentă; „Rulează acum” verifică oricum.",
       "Stă într-o bază separată, data/imdb-ratings.db (~35 MB), ca să nu umfle backup-urile.",
       "Dacă datasetul nu s-a schimbat (același ETag), nu se descarcă nimic.",
     ],
@@ -168,7 +169,7 @@ export const WATCHER_TASK_INFO: Record<string, WatcherTaskInfo> = {
     summary: "Plex (beta), Immich, pachete Ubuntu și cererea de repornire.",
     points: [
       "Aceleași verificări ca butoanele Update. Dacă găsește ceva, scrie în jurnal (filtrul Updates) și trimite o notificare push.",
-      "Efectiv o dată la 24h, cu ceasul în baza de date; cât timp ceva rămâne neinstalat, reamintirea vine zilnic. „Rulează acum” verifică oricum.",
+      "O dată la 24h, cu ceasul în baza de date; cât timp ceva rămâne neinstalat, reamintirea vine zilnic. „Rulează acum” verifică oricum.",
       "Dacă nicio sursă nu răspunde (fără rețea), rularea apare eșuată și se reia peste o oră.",
     ],
     icon: <ArrowUpCircle className="h-3.5 w-3.5 text-sky-400" />,

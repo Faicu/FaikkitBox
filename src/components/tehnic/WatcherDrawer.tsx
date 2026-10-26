@@ -5,13 +5,12 @@ import {
   AlertTriangle,
   ChevronDown,
   Clock3,
-  FileCode2,
+  CircleHelp,
   History,
   Loader2,
   Pause,
   Play,
   Timer,
-  Users,
   Zap,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -90,7 +89,14 @@ export function WatcherDrawer({ open, onClose }: { open: boolean; onClose: () =>
     if (!open) setOpenId(null);
   }, [open]);
 
-  const list = tasks ?? [];
+  const [showAbout, setShowAbout] = useState(false);
+  useEffect(() => {
+    if (!open) setShowAbout(false);
+  }, [open]);
+
+  // Rulările unice de la pornire (nu se pot controla) la coadă — se uită
+  // cineva la ele doar dacă au eșuat.
+  const list = [...(tasks ?? [])].sort((a, b) => Number(!a.controllable) - Number(!b.controllable));
   const errors = list.filter((t) => t.lastOk === false).length;
 
   return (
@@ -102,6 +108,15 @@ export function WatcherDrawer({ open, onClose }: { open: boolean; onClose: () =>
               {WATCHER_PLUGIN.icon}
             </span>
             {WATCHER_PLUGIN.label}
+            <button
+              type="button"
+              onClick={() => setShowAbout((v) => !v)}
+              aria-expanded={showAbout}
+              aria-label="Cum funcționează"
+              className="text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <CircleHelp className="h-4 w-4" />
+            </button>
             <span className="live-dot ml-auto" />
           </DrawerTitle>
           <DrawerDescription className="text-left">
@@ -111,9 +126,11 @@ export function WatcherDrawer({ open, onClose }: { open: boolean; onClose: () =>
         </DrawerHeader>
 
         <div className="max-h-[65vh] space-y-2.5 overflow-y-auto overscroll-contain px-4 pb-6 stagger-in">
-          <div className="rounded-2xl glass-card p-3 text-xs leading-relaxed text-muted-foreground">
-            {WATCHER_PLUGIN.details}
-          </div>
+          {showAbout && (
+            <div className="rounded-2xl glass-card p-3 text-xs leading-relaxed text-muted-foreground">
+              {WATCHER_PLUGIN.details}
+            </div>
+          )}
 
           <LiveOperations tasks={list} now={now} />
 
@@ -127,12 +144,6 @@ export function WatcherDrawer({ open, onClose }: { open: boolean; onClose: () =>
                 onToggle={() => setOpenId(openId === t.id ? null : t.id)}
               />
             ))}
-          </div>
-
-          <div className="rounded-2xl glass-card divide-y divide-border/50 text-xs">
-            <Row icon={<FileCode2 className="h-3.5 w-3.5" />} label="Registru">
-              <code className="text-[11px]">src/lib/watcher/tasks.ts</code>
-            </Row>
           </div>
         </div>
       </DrawerContent>
@@ -269,6 +280,7 @@ function TaskDetails({ task, now }: { task: WatcherTaskStatus; now: number }) {
   const runNow = useServerFn(runWatcherTaskNow);
   const setPaused = useServerFn(setWatcherTaskPaused);
   const refresh = () => qc.invalidateQueries({ queryKey: ["watcherStatus"] });
+  const [showWhy, setShowWhy] = useState(false);
 
   const run = useMutation({
     mutationFn: () => runNow({ data: { taskId: task.id } }),
@@ -299,17 +311,6 @@ function TaskDetails({ task, now }: { task: WatcherTaskStatus; now: number }) {
 
   return (
     <div className="space-y-2.5 px-3 pb-3">
-      {info && (
-        <ul className="space-y-1.5 pl-[2.125rem] leading-relaxed text-muted-foreground">
-          {info.points.map((pt) => (
-            <li key={pt} className="relative pl-3">
-              <span className="absolute top-[0.55em] left-0 h-1 w-1 rounded-full bg-muted-foreground/60" />
-              {pt}
-            </li>
-          ))}
-        </ul>
-      )}
-
       <div className="rounded-xl bg-muted/30 divide-y divide-border/50">
         <Row
           icon={<History className="h-3.5 w-3.5" />}
@@ -328,11 +329,6 @@ function TaskDetails({ task, now }: { task: WatcherTaskStatus; now: number }) {
         <Row icon={<Timer className="h-3.5 w-3.5" />} label="Următoarea">
           {next}
         </Row>
-        {task.group && (
-          <Row icon={<Users className="h-3.5 w-3.5" />} label="Grup">
-            {task.group} · nu rulează deodată cu alta din grup
-          </Row>
-        )}
       </div>
 
       {task.lastOk === false && task.lastError && (
@@ -369,19 +365,44 @@ function TaskDetails({ task, now }: { task: WatcherTaskStatus; now: number }) {
       {task.id === "show-watch" && <ShowWatchCards />}
       {task.id === "subtitle-retry" && <SubtitleRetryCards />}
       {task.id === "immich-uploads" && <ImmichUploadsSection />}
+
+      {info && (
+        <div>
+          <button
+            type="button"
+            onClick={() => setShowWhy((v) => !v)}
+            aria-expanded={showWhy}
+            className="inline-flex items-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <CircleHelp className="h-3 w-3" /> De ce există
+            <ChevronDown
+              className={`h-3 w-3 transition-transform duration-200 ${showWhy ? "rotate-180" : ""}`}
+            />
+          </button>
+          {showWhy && (
+            <ul className="mt-1.5 space-y-1.5 leading-relaxed text-muted-foreground">
+              {info.points.map((pt) => (
+                <li key={pt} className="relative pl-3">
+                  <span className="absolute top-[0.55em] left-0 h-1 w-1 rounded-full bg-muted-foreground/60" />
+                  {pt}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
-// Ultimele 20 de rulări. La sarcinile de un minut sau mai dese, doar cele care
-// au făcut ceva, au eșuat sau au fost pornite manual (vezi runner.ts).
+// Ultimele 20 de rulări care au făcut ceva, au eșuat sau au fost pornite
+// manual (vezi runner.ts).
 function TaskHistory({ task }: { task: WatcherTaskStatus }) {
   const { data: runs, refetch } = useQuery(watcherHistoryQuery(task.id));
   // O rulare nouă terminată = istoric nou.
   useEffect(() => {
     void refetch();
   }, [task.lastFinishedAt, refetch]);
-  const frequent = task.everyMs !== null && task.everyMs <= 60_000;
 
   return (
     <div className="rounded-xl bg-muted/30 p-2.5">
@@ -390,9 +411,8 @@ function TaskHistory({ task }: { task: WatcherTaskStatus }) {
       </div>
       {!runs || runs.length === 0 ? (
         <div className="text-muted-foreground">
-          {frequent
-            ? "Nimic de arătat: aici apar doar rulările care au făcut ceva, au eșuat sau au fost pornite manual."
-            : "Nicio rulare încă."}
+          Nimic încă. Aici apar doar rulările care au făcut ceva, au eșuat sau au fost pornite
+          manual.
         </div>
       ) : (
         <div className="space-y-1">

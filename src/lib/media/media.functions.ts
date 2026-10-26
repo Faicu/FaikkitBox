@@ -64,6 +64,11 @@ export const setShowWatch = createServerFn({ method: "POST" })
       await requireShowManage(data.mediaId);
       const { setShowWatchCore } = await import("./show-watch");
       await setShowWatchCore(data);
+      // Prima verificare a serialului acum, nu la următorul ciclu de 10 minute.
+      if (data.enabled) {
+        const { pokeWatcher } = await import("../watcher/poke");
+        pokeWatcher("show-watch");
+      }
       return { ok: true };
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : String(e) };

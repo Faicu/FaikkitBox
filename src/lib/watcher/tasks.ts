@@ -26,6 +26,8 @@ export interface WatcherRunContext {
   manual: boolean;
 }
 
+export type WatcherOutcome = string | null | { summary: string | null; nextAt: number | null };
+
 export interface WatcherTask {
   id: string;
   label: string;
@@ -43,8 +45,11 @@ export interface WatcherTask {
   // „Acțiuni întrerupte” ar marca drept întreruptă o acțiune care chiar
   // rulează acum.
   controllable: boolean;
-  // Textul scurt din istoric („2 legate la Plex”). Null = n-a avut ce face.
-  run(ctx: WatcherRunContext): Promise<string | null>;
+  // Textul scurt din istoric („2 legate la Plex”). Null = n-a avut ce face
+  // (rularea nu intră în istoric). Varianta cu `nextAt`: sarcina știe singură
+  // când îi vine rândul (backup-ul, peste 23h de la ultima copie) — vezi
+  // runner.ts pentru limite.
+  run(ctx: WatcherRunContext): Promise<WatcherOutcome>;
 }
 
 const SEC = 1000;
@@ -273,14 +278,15 @@ export const WATCHER_TASKS: WatcherTask[] = [
   // -------------------------------------------------------------------------
   // Încărcările în Immich, trecute în Jurnalul de activitate (vezi
   // src/lib/services/immich-uploads.ts — varianta veche rula doar cât era
-  // deschisă pagina Immich și pierdea totul la repornire). La 5 minute: o
-  // încărcare apare în jurnal la cel mult ~10 minute după ce se termină. La
+  // deschisă pagina Immich și pierdea totul la repornire). La 2 minute: o
+  // încărcare apare în jurnal la cel mult ~4 minute după ce se termină (o
+  // verificare care o prinde + una care nu mai găsește nimic nou). La
   // 60s după pornire: Immich (container separat) poate răspunde încă lent.
   {
     id: "immich-uploads",
     label: "Încărcări Immich",
     delayMs: 60 * SEC,
-    everyMs: 5 * MIN,
+    everyMs: 2 * MIN,
     controllable: true,
     async run() {
       const { checkImmichUploads } = await import("../services/immich-uploads");
@@ -290,11 +296,11 @@ export const WATCHER_TASKS: WatcherTask[] = [
   },
 
   // -------------------------------------------------------------------------
-  // Backup-ul bazei (src/lib/system/db-backup.ts), din oră în oră, dar copia
-  // se face doar dacă cea mai recentă e mai veche de 23h — deci efectiv o
-  // dată pe zi, iar un server repornit de cinci ori pe zi nu face cinci copii
-  // identice care să împingă afară din rotație istoricul chiar util. 23h, nu
-  // 24h: cu verificare din oră în oră, pauza reală e cel mult 24h.
+  // Backup-ul bazei (src/lib/system/db-backup.ts): o copie la 23h după cea
+  // mai recentă — sarcina își cere singură ora următoare, deci nu mai rulează
+  // degeaba din oră în oră. Un server repornit de cinci ori pe zi nu face
+  // cinci copii identice care să împingă afară din rotație istoricul chiar
+  // util. Ora (1h) rămâne ritmul de reîncercare după un backup eșuat.
   //
   // Ceasul e data celui mai nou fișier din data/backups/, nu un interval în
   // memorie. Varianta veche (24h, pornit la fiecare boot) se reseta la fiecare
@@ -309,22 +315,22 @@ export const WATCHER_TASKS: WatcherTask[] = [
     async run({ manual }) {
       const { getBackupStatus, runDbBackup } = await import("../system/db-backup");
       const last = getBackupStatus().lastAt;
-      if (!manual && last && Date.now() - new Date(last).getTime() < 23 * HOUR) {
-        return "nu e încă scadent";
-      }
+      const due = last ? new Date(last).getTime() + 23 * HOUR : 0;
+      if (!manual && Date.now() < due) return { summary: null, nextAt: due };
       const result = runDbBackup();
       if (!result.ok) throw new Error(result.error ?? "backup eșuat");
       const mb = (result.file.size / 1024 / 1024).toFixed(1);
       const line = `${result.file.name} (${mb} MB)`;
       console.log(`[backup] ${line}${result.removed ? ` · ${result.removed} vechi șterse` : ""}`);
-      return line;
+      return { summary: line, nextAt: Date.now() + 23 * HOUR };
     },
   },
 
   // -------------------------------------------------------------------------
-  // Rating-urile IMDb pentru Descoperă (src/lib/imdb/imdb-ratings.ts), din oră
-  // în oră, efectiv o dată la 23h, cu ceasul în baza rating-urilor; un
-  // dataset neschimbat costă doar o cerere 304.
+  // Rating-urile IMDb pentru Descoperă (src/lib/imdb/imdb-ratings.ts), o dată
+  // la 23h, cu ceasul în baza rating-urilor (ora următoare o cere sarcina; ora
+  // din registru e doar ritmul de reîncercare după o eroare); un dataset
+  // neschimbat costă doar o cerere 304.
   {
     id: "imdb-ratings",
     label: "Rating-uri IMDb",
@@ -332,20 +338,24 @@ export const WATCHER_TASKS: WatcherTask[] = [
     everyMs: HOUR,
     controllable: true,
     async run({ manual }) {
-      const { refreshImdbRatingsIfDue } = await import("../imdb/imdb-ratings");
+      const { refreshImdbRatingsIfDue, nextImdbCheckAt } = await import("../imdb/imdb-ratings");
       const r = await refreshImdbRatingsIfDue({ force: manual });
-      if (r === "skipped") return "nu e încă scadent";
-      if (r === "unchanged") return "dataset neschimbat";
-      return `${r.imported.toLocaleString("ro-RO")} rating-uri importate`;
+      const summary =
+        r === "skipped"
+          ? null
+          : r === "unchanged"
+            ? "dataset neschimbat"
+            : `${r.imported.toLocaleString("ro-RO")} rating-uri importate`;
+      return { summary, nextAt: nextImdbCheckAt() };
     },
   },
 
   // -------------------------------------------------------------------------
   // Actualizările disponibile (Plex, Immich, Ubuntu, cererea de repornire —
-  // src/lib/system/update-check.ts), din oră în oră, efectiv o dată la 24h,
-  // cu ceasul în DB. La 5 minute după pornire: Plex și Immich au timp să
-  // răspundă. Dacă nicio sursă nu răspunde, verificarea nu se marchează și
-  // se reia peste o oră.
+  // src/lib/system/update-check.ts), o dată la 24h, cu ceasul în DB — ora
+  // următoare o cere sarcina; ora din registru e ritmul de reîncercare. La 5
+  // minute după pornire: Plex și Immich au timp să răspundă. Dacă nicio sursă
+  // nu răspunde, verificarea nu se marchează și se reia peste o oră.
   {
     id: "update-check",
     label: "Actualizări disponibile",
@@ -353,11 +363,12 @@ export const WATCHER_TASKS: WatcherTask[] = [
     everyMs: HOUR,
     controllable: true,
     async run({ manual }) {
-      const { checkForUpdates } = await import("../system/update-check");
+      const { checkForUpdates, nextUpdateCheckAt } = await import("../system/update-check");
       const r = await checkForUpdates({ force: manual });
       if (r === "failed") throw new Error("nicio sursă n-a răspuns, se reia peste o oră");
-      if (r === "skipped") return "nu e încă scadent";
-      return r === "notified" ? "actualizări anunțate" : "nimic nou";
+      const summary =
+        r === "skipped" ? null : r === "notified" ? "actualizări anunțate" : "nimic nou";
+      return { summary, nextAt: nextUpdateCheckAt() };
     },
   },
 
@@ -376,7 +387,7 @@ export const WATCHER_TASKS: WatcherTask[] = [
     async run() {
       const { retryMissingSubtitles } = await import("../filelist/subtitle-retry");
       const r = await retryMissingSubtitles();
-      if (r.checked === 0) return "nimic de căutat";
+      if (r.checked === 0) return null;
       return `${plural(r.checked, "titlu căutat", "titluri căutate")}, ${r.found} găsite`;
     },
   },

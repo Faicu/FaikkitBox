@@ -5,7 +5,7 @@
 import { createServerFn } from "@tanstack/react-start";
 
 export type { BackupFile, BackupStatus, BackupResult } from "./db-backup";
-import type { BackupStatus, BackupResult } from "./db-backup";
+import type { BackupStatus } from "./db-backup";
 
 export const getDbBackupStatus = createServerFn({ method: "GET" }).handler(
   async (): Promise<BackupStatus> => {
@@ -13,14 +13,5 @@ export const getDbBackupStatus = createServerFn({ method: "GET" }).handler(
     await requireAdmin();
     const { getBackupStatus } = await import("./db-backup");
     return getBackupStatus();
-  },
-);
-
-export const runDbBackupNow = createServerFn({ method: "POST" }).handler(
-  async (): Promise<BackupResult> => {
-    const { requireAdmin } = await import("../auth/admin.server");
-    await requireAdmin();
-    const { runDbBackup } = await import("./db-backup");
-    return runDbBackup();
   },
 );

@@ -95,6 +95,13 @@ function lastCheckedAt(): number | null {
   }
 }
 
+// Când devine scadentă următoarea verificare — Watcher-ul o programează exact
+// atunci, nu din oră în oră. Null = încă niciuna, deci acum.
+export function nextImdbCheckAt(): number | null {
+  const last = lastCheckedAt();
+  return last === null ? null : last + IMPORT_MIN_AGE_MS;
+}
+
 async function importInto(tmpFile: string, body: ReadableStream<Uint8Array>, etag: string) {
   rmSync(tmpFile, { force: true });
   const out = new DatabaseSync(tmpFile);

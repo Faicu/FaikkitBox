@@ -13,6 +13,7 @@ process.env.FAIKKITBOX_DB_PATH = dbFile;
 // terminăm noi, ca să putem vedea ce se întâmplă cât timp „rulează”.
 const pending = new Map<string, Array<(v: string | null) => void>>();
 const calls: Array<{ id: string; manual: boolean }> = [];
+let clockHint = () => Date.now() + 14 * 3_600_000;
 function fake(id: string, delayMs: number, everyMs: number | null, extra = {}) {
   return {
     id,
@@ -42,6 +43,18 @@ vi.mock("./tasks", () => ({
       everyMs: 60_000,
       controllable: true,
       run: () => Promise.reject(new Error("Plex nu răspunde")),
+    },
+    // Sarcină cu ceas propriu (ca backup-ul): își cere singură ora următoare.
+    {
+      id: "clock",
+      label: "clock",
+      delayMs: 6_000_000,
+      everyMs: 3_600_000,
+      controllable: true,
+      run: async () => {
+        calls.push({ id: "clock", manual: false });
+        return { summary: null, nextAt: clockHint() };
+      },
     },
   ],
 }));
@@ -186,5 +199,36 @@ describe("Watcher", () => {
     expect(runs("boom")).toHaveLength(1);
     expect(warn).toHaveBeenCalledTimes(1);
     warn.mockRestore();
+  });
+
+  it("o sarcină cu ceas propriu rulează la ora cerută, nu la interval", async () => {
+    at(6_000_000);
+    runner.tick();
+    await flush();
+    expect(row("clock").next_run_at).toBe(T0 + 6_000_000 + 14 * 3_600_000);
+    // Fără nimic de făcut: nu intră în istoric.
+    expect(runs("clock")).toHaveLength(0);
+
+    // O oră cerută în trecut nu duce la rulări în buclă: cel puțin un minut.
+    clockHint = () => Date.now() - 1000;
+    db.prepare("UPDATE watcher_tasks SET run_requested_at = ? WHERE id = 'clock'").run(Date.now());
+    runner.tick();
+    await flush();
+    expect(row("clock").next_run_at).toBe(T0 + 6_000_000 + 60_000);
+  });
+
+  it("poke pornește sarcina la tactul următor", async () => {
+    clockHint = () => Date.now() + 14 * 3_600_000;
+    at(6_010_000);
+    runner.tick();
+    await flush();
+    calls.length = 0;
+    at(6_020_000);
+    runner.tick();
+    expect(calls.map((c) => c.id)).not.toContain("clock");
+    runner.poke("clock");
+    runner.tick();
+    await flush();
+    expect(calls).toContainEqual({ id: "clock", manual: false });
   });
 });

@@ -235,7 +235,7 @@ transversale, fără un singur domeniu clar.
 | `versions.ts`               | Versiunea curentă și cea disponibilă: Plex pe canalul beta (cel instalat de container), Immich din GitHub, Ubuntu din `ubuntu-status.ts`. Un minut în cache, golit după orice acțiune pe servicii. Server-only.                                                                                    | `versions.functions.ts`, `update-check.ts`.                       |
 | `network-link.ts`           | Starea legăturii Ethernet (interfața rutei implicite, viteză negociată, maximul posibil pe ambele capete) + renegociere prin `ethtool -r`, rulat detașat fiindcă legătura cade câteva secunde. Server-only.                                                                                        | `network-link.functions.ts`.                                      |
 | `db-backup.ts`              | Backup-ul bazei — `runDbBackup` (VACUUM INTO + rotație la 14), `getBackupStatus`, `listBackups`. Server-only.                                                                                                                                                                                      | `db-backup.functions.ts`, `server/plugins/maintenance.ts`.        |
-| `db-backup.functions.ts`    | `getDbBackupStatus` / `runDbBackupNow` (admin).                                                                                                                                                                                                                                                    | `queries.ts`, `tehnic/sections/DbBackupCard.tsx`.                 |
+| `db-backup.functions.ts`    | `getDbBackupStatus` (admin). Backup-ul manual: din Watcher, „Rulează acum”.                                                                                                                                                                                                                        | `queries.ts`, `tehnic/sections/DbBackupCard.tsx`.                 |
 | `network-link.functions.ts` | `getNetworkLink` / `renegotiateNetworkLink`.                                                                                                                                                                                                                                                       | `queries.ts`, `tehnic/sections/NetworkLinkCard.tsx`.              |
 | `speedtest.ts`              | Implementarea speedtest-ului, server-only (`node:child_process`, `node:crypto`, DB). Rularea e DECUPLATĂ de cererea HTTP care o pornește — starea trăiește în modul, nu în request, ca minimizarea aplicației pe telefon să nu anuleze testul.                                                     | `speedtest.functions.ts`.                                         |
 | `speedtest.functions.ts`    | Server functions subțiri peste `speedtest.ts` (pornire, stare, istoric).                                                                                                                                                                                                                           | `queries.ts`, `tehnic/sections/SpeedtestChart.tsx`.               |
@@ -298,14 +298,15 @@ Toate sarcinile de fundal, pornite de `server/plugins/watcher.ts`. Plugin-ul și
 server functions rulează în copii separate ale modulelor, deci starea comună
 stă în DB (`watcher_tasks`, `watcher_runs`).
 
-| Fișier                 | Ce conține                                                                                                                                                                                                                                                    |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tasks.ts`             | Registrul: fiecare sarcină cu întârzierea de pornire, intervalul (numărat de la terminare), grupul de excludere (`filelist`), dacă se poate controla manual și funcția care întoarce rezumatul rulării. Istoria fiecărei sarcini stă în comentariul ei.       |
-| `runner.ts`            | Motorul: tact la 1s care pornește sarcinile scadente ca operațiuni independente; gardă de suprapunere, grupuri, pauză și „Rulează acum” citite din DB; `next_run_at` păstrat peste restart; istoric de 20 de rulări (la sarcinile dese, doar cele relevante). |
-| `runner.test.ts`       | Teste pe motor, cu sarcini false: ora de pornire, grupuri, pauză + rulare manuală, erori, rulări întrerupte de restart.                                                                                                                                       |
-| `watcher.server.ts`    | Citirea stării/istoricului și scrierea pauzei și a cererilor manuale, pentru Tehnic.                                                                                                                                                                          |
-| `watcher.functions.ts` | `getWatcherStatus` / `getWatcherHistory` / `runWatcherTaskNow` / `setWatcherTaskPaused` (admin).                                                                                                                                                              |
-| `types.ts`             | Tipurile trimise clientului, fără importuri.                                                                                                                                                                                                                  |
+| Fișier                 | Ce conține                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `tasks.ts`             | Registrul: fiecare sarcină cu întârzierea de pornire, intervalul (numărat de la terminare), grupul de excludere (`filelist`), dacă se poate controla manual și funcția care întoarce rezumatul rulării. Istoria fiecărei sarcini stă în comentariul ei.                                                                                                                                                                        |
+| `runner.ts`            | Motorul: tact la 1s care pornește sarcinile scadente ca operațiuni independente; gardă de suprapunere, grupuri, pauză și „Rulează acum” citite din DB; `next_run_at` păstrat peste restart; ora următoare poate fi cerută de sarcină (`nextAt`, ex. backup peste 23h); `poke` pentru pornire imediată; istoric de 20 de rulări relevante (au făcut ceva, au eșuat, manuale); aceeași eroare repetată raportată o singură dată. |
+| `runner.test.ts`       | Teste pe motor, cu sarcini false: ora de pornire, grupuri, pauză + rulare manuală, erori, rulări întrerupte de restart.                                                                                                                                                                                                                                                                                                        |
+| `poke.ts`              | `pokeWatcher(id)` — pornește o sarcină la tactul următor, din orice server function (prin `globalThis`); folosit la pornirea urmăririi unui serial.                                                                                                                                                                                                                                                                            |
+| `watcher.server.ts`    | Citirea stării/istoricului și scrierea pauzei și a cererilor manuale, pentru Tehnic.                                                                                                                                                                                                                                                                                                                                           |
+| `watcher.functions.ts` | `getWatcherStatus` / `getWatcherHistory` / `runWatcherTaskNow` / `setWatcherTaskPaused` (admin).                                                                                                                                                                                                                                                                                                                               |
+| `types.ts`             | Tipurile trimise clientului, fără importuri.                                                                                                                                                                                                                                                                                                                                                                                   |
 
 ### src/lib/tvmaze/
 
@@ -401,7 +402,7 @@ are legătură cu fostul sistem de fixare/urmărire (eliminat complet).
 | `sections/PluginStatusSection.tsx`      | „Plugin-uri active”: Watcher (sarcini, în curs, erori, pauze) → `WatcherDrawer`; Pornire și Oprire → `PluginDetailDrawer`.                                                                                                                        |
 | `sections/PushSubscriptionsSection.tsx` | Abonamentele push înregistrate — dispozitiv identificat, dată, ștergere.                                                                                                                                                                          |
 | `sections/SpeedtestChart.tsx`           | Grafic istoric speedtest.                                                                                                                                                                                                                         |
-| `sections/DbBackupCard.tsx`             | Starea backup-urilor bazei (vechimea ultimei copii, număr, spațiu) + buton de backup manual. Verde/chihlimbariu după 36h de la ultima copie.                                                                                                      |
+| `sections/DbBackupCard.tsx`             | Starea backup-urilor bazei (vechimea ultimei copii, număr, spațiu); backup-ul manual e în Watcher. Verde/chihlimbariu după 36h de la ultima copie.                                                                                                |
 | `sections/NetworkLinkCard.tsx`          | În drawer-ul Speedtest: viteza negociată a legăturii Ethernet (badge verde/chihlimbariu) + buton de renegociere. Rezolvă cazul recurent în care atingerea fizică a cablului lasă legătura pe 100 Mb/s.                                            |
 
 ### src/components/sistem/
@@ -471,12 +472,12 @@ fost eliminate 2026-08-16, nefolosite niciodată.
 
 ## Analiză cantitativă
 
-Regenerată cu `node scripts/structure-stats.mjs --write` pe 2026-10-24 (linii,
+Regenerată cu `node scripts/structure-stats.mjs --write` pe 2026-10-26 (linii,
 funcții numite, fan-in rezolvat prin importurile `@/` și relative, inclusiv
 `import()` dinamic). Tabelul e integral generat — nu are rânduri actualizate
 manual, deci nu poate fi parțial vechi.
 
-**Total: 259 fișiere, ~44 844 linii, ~1 029 funcții**
+**Total: 281 fișiere, ~48 511 linii, ~1 128 funcții**
 
 (numărătoare aproximativă — funcții numite, `const x = (...) =>` și
 `createServerFn`, fără metode de clasă sau funcții anonime inline)
@@ -485,195 +486,210 @@ manual, deci nu poate fi parțial vechi.
 
 | Zonă                                | Fișiere |  Linii |
 | ----------------------------------- | ------: | -----: |
-| `src/routes/` (pagini)              |      12 |  3 760 |
-| `src/lib/` (rădăcină, transversale) |      19 |  3 855 |
+| `src/routes/` (pagini)              |      12 |  3 284 |
+| `src/lib/` (rădăcină, transversale) |      19 |  3 967 |
 | `src/lib/auth/`                     |      11 |  1 101 |
-| `src/lib/tmdb/`                     |       9 |  1 386 |
-| `src/lib/media/`                    |      28 |  6 135 |
-| `src/lib/notifications/`            |       3 |    465 |
+| `src/lib/tmdb/`                     |       9 |  1 390 |
+| `src/lib/media/`                    |      32 |  6 958 |
+| `src/lib/notifications/`            |       3 |    469 |
 | `src/lib/errors/`                   |       7 |    520 |
-| `src/lib/system/`                   |      17 |  1 786 |
-| `src/lib/filelist/`                 |      35 |  6 564 |
-| `src/lib/services/`                 |      17 |  4 603 |
+| `src/lib/system/`                   |      17 |  1 789 |
+| `src/lib/filelist/`                 |      38 |  6 743 |
+| `src/lib/services/`                 |      20 |  4 997 |
 | `src/lib/tvmaze/`                   |       1 |     46 |
-| `src/components/` (toate)           |      77 | 11 946 |
-| `src/hooks/`                        |       4 |    289 |
-| `server/plugins/`                   |       7 |    521 |
-| `server/routes/api/`                |       3 |    206 |
-| altele                              |       9 |  1 661 |
+| `src/components/` (toate)           |      86 | 13 821 |
+| `src/hooks/`                        |       5 |    325 |
+| `server/plugins/`                   |       2 |     90 |
+| `server/routes/api/`                |       3 |    230 |
+| altele                              |      16 |  2 781 |
 
 ### Fișiere-hub (fan-in mare)
 
-| Fișier                               | Fan-in | Linii |
-| ------------------------------------ | -----: | ----: |
-| `src/start.ts`                       |     56 |    26 |
-| `src/lib/db.ts`                      |     43 |  1238 |
-| `src/server.ts`                      |     37 |    72 |
-| `src/lib/auth/admin.server.ts`       |     29 |   153 |
-| `src/components/tehnic/utils.ts`     |     28 |    28 |
-| `src/lib/filelist/log.ts`            |     28 |   152 |
-| `src/lib/utils.ts`                   |     28 |     7 |
-| `src/components/biblioteca/utils.ts` |     27 |   189 |
-| `src/lib/queries.ts`                 |     27 |   374 |
-| `src/components/ui/sonner.tsx`       |     23 |    25 |
-| `src/router.tsx`                     |     22 |    55 |
-| `src/components/filelist/types.ts`   |     21 |    17 |
+| Fișier                                      | Fan-in | Linii |
+| ------------------------------------------- | -----: | ----: |
+| `src/start.ts`                              |     61 |    26 |
+| `src/lib/db.ts`                             |     51 |  1324 |
+| `src/server.ts`                             |     40 |    72 |
+| `src/components/tehnic/utils.ts`            |     31 |    28 |
+| `src/lib/auth/admin.server.ts`              |     31 |   153 |
+| `src/lib/utils.ts`                          |     31 |     7 |
+| `src/components/biblioteca/utils.ts`        |     30 |   199 |
+| `src/lib/filelist/log.ts`                   |     30 |   135 |
+| `src/lib/queries.ts`                        |     28 |   395 |
+| `src/components/filelist/types.ts`          |     27 |    17 |
+| `src/components/principala/wizard/types.ts` |     27 |    39 |
+| `src/lib/filelist/types.ts`                 |     27 |    56 |
 
-### Tabel complet, toate cele 259 de fișiere
+### Tabel complet, toate cele 281 de fișiere
 
 | Fișier                                                        | Linii | Funcții | Fan-in |
 | ------------------------------------------------------------- | ----: | ------: | -----: |
-| `src/lib/db.ts`                                               |  1238 |       6 |     43 |
-| `src/components/biblioteca/TitleDetailDrawer.tsx`             |  1107 |      14 |      1 |
-| `src/lib/media/media.ts`                                      |  1065 |      24 |     19 |
-| `src/lib/services/plex-browse.ts`                             |  1061 |      12 |      6 |
-| `src/lib/media/show-watch.ts`                                 |   991 |      17 |      8 |
-| `src/lib/filelist/download.ts`                                |   833 |      13 |     12 |
+| `src/lib/db.ts`                                               |  1324 |       6 |     51 |
+| `src/components/biblioteca/TitleDetailDrawer.tsx`             |  1124 |      13 |      1 |
+| `src/lib/services/plex-browse.ts`                             |  1088 |      12 |      6 |
+| `src/lib/media/media.ts`                                      |  1063 |      24 |     21 |
+| `src/lib/media/show-watch.ts`                                 |  1010 |      17 |     10 |
 | `src/routes/contributii.tsx`                                  |   732 |      10 |      5 |
-| `src/lib/services/plex.ts`                                    |   703 |      16 |     14 |
+| `src/lib/services/plex.ts`                                    |   721 |      16 |     15 |
 | `src/lib/contributions/contributions.functions.ts`            |   690 |      25 |      3 |
-| `src/lib/activity-log.ts`                                     |   665 |      17 |     18 |
-| `src/routes/index.tsx`                                        |   640 |      16 |      1 |
+| `src/lib/filelist/download.ts`                                |   688 |      12 |     13 |
+| `src/lib/activity-log.ts`                                     |   668 |      17 |     21 |
 | `src/lib/filelist/subtitles.ts`                               |   614 |       9 |      2 |
-| `src/components/tehnic/PluginDetailDrawer.tsx`                |   601 |      10 |      2 |
 | `src/lib/media/movie-watch.ts`                                |   585 |      12 |      4 |
-| `src/lib/tmdb/tmdb.functions.ts`                              |   533 |      11 |     21 |
+| `src/lib/tmdb/tmdb.functions.ts`                              |   537 |      11 |     21 |
 | `src/components/principala/SupportWidget.tsx`                 |   517 |      12 |      2 |
+| `src/components/principala/PlexWidget.tsx`                    |   507 |      17 |      1 |
 | `src/lib/github.functions.ts`                                 |   493 |      14 |      6 |
 | `src/routes/qbit.tsx`                                         |   486 |       3 |     11 |
 | `src/lib/media/metadata-refresh.test.ts`                      |   482 |       7 |      0 |
+| `src/lib/media/show-watch.test.ts`                            |   471 |      14 |      0 |
+| `src/components/principala/wizard/ResultStep.tsx`             |   454 |       6 |      1 |
+| `src/components/tehnic/WatcherDrawer.tsx`                     |   443 |      10 |      1 |
 | `src/components/tehnic/UserDetailDrawer.tsx`                  |   435 |       4 |      1 |
-| `src/lib/media/show-watch.test.ts`                            |   411 |      11 |      0 |
-| `src/lib/filelist/subtitle-pipeline.ts`                       |   410 |       2 |      1 |
+| `src/lib/filelist/subtitle-pipeline.ts`                       |   412 |       2 |      1 |
+| `src/components/tehnic/watcher-cards.tsx`                     |   407 |      10 |      2 |
+| `src/components/principala/wizard/WizardControls.tsx`         |   403 |       9 |      4 |
+| `src/lib/watcher/tasks.ts`                                    |   399 |       3 |      3 |
 | `src/lib/services/plex-library.ts`                            |   397 |      15 |      6 |
 | `src/components/tehnic/SubtitleFixDrawer.tsx`                 |   396 |      10 |      2 |
-| `src/components/tehnic/sections/ActivityLogSection.tsx`       |   379 |       4 |      1 |
-| `src/lib/queries.ts`                                          |   374 |       3 |     27 |
-| `src/lib/services/plex-shared.ts`                             |   374 |      10 |      5 |
-| `src/components/principala/wizard/ResultStep.tsx`             |   369 |       5 |      1 |
+| `src/lib/queries.ts`                                          |   395 |       4 |     28 |
+| `src/lib/services/plex-shared.ts`                             |   392 |      10 |      7 |
+| `src/components/tehnic/sections/ActivityLogSection.tsx`       |   382 |       4 |      1 |
 | `src/lib/system/service-jobs.ts`                              |   357 |      14 |      3 |
-| `src/routes/users.tsx`                                        |   348 |       7 |      8 |
-| `src/components/tehnic/plugins.tsx`                           |   342 |       0 |      4 |
+| `src/routes/users.tsx`                                        |   348 |       7 |      9 |
+| `src/components/biblioteca/BibliotecaList.tsx`                |   342 |       3 |      1 |
 | `src/lib/auth/users.functions.ts`                             |   338 |       6 |      3 |
 | `src/lib/services/plex-library-match.test.ts`                 |   338 |       8 |      0 |
 | `src/routes/sistem.tsx`                                       |   333 |       2 |      5 |
 | `src/lib/media/season-pack-link.test.ts`                      |   327 |       9 |      0 |
-| `src/lib/filelist/filelist-client.ts`                         |   322 |       9 |      9 |
+| `src/lib/filelist/filelist-client.ts`                         |   319 |       8 |      9 |
 | `src/lib/filelist/subtitle-retry.test.ts`                     |   319 |       6 |      0 |
 | `src/lib/tmdb/tmdb-title-lookup.ts`                           |   310 |       7 |      8 |
 | `src/components/filelist/FilelistSection.tsx`                 |   309 |       2 |      1 |
-| `src/lib/filelist/subtitle-verify.ts`                         |   300 |      12 |      3 |
+| `src/lib/filelist/subtitle-verify.ts`                         |   298 |      12 |      3 |
 | `src/lib/services/qbittorrent.ts`                             |   296 |       3 |      1 |
-| `src/components/biblioteca/BibliotecaList.tsx`                |   295 |       3 |      1 |
-| `src/components/principala/wizard/WizardControls.tsx`         |   295 |       7 |      2 |
 | `src/lib/system/speedtest.ts`                                 |   289 |       8 |      3 |
 | `src/routes/__root.tsx`                                       |   287 |      10 |      1 |
 | `src/routeTree.gen.ts`                                        |   284 |       0 |      1 |
 | `src/components/principala/wizard/SeasonAccordion.tsx`        |   277 |       7 |      2 |
+| `src/lib/watcher/runner.ts`                                   |   277 |       8 |      2 |
+| `src/routes/tehnic.tsx`                                       |   276 |       1 |      6 |
 | `src/lib/services/host.ts`                                    |   275 |       3 |      2 |
-| `src/routes/tehnic.tsx`                                       |   274 |       1 |      6 |
+| `src/components/biblioteca/WantedMovieDrawer.tsx`             |   272 |       5 |      1 |
+| `src/components/filelist/DownloadConfirmDialog.tsx`           |   272 |       3 |      2 |
 | `src/lib/filelist/subtitle-checks.ts`                         |   272 |      18 |      8 |
-| `src/routes/immich.tsx`                                       |   272 |       2 |     13 |
-| `src/components/biblioteca/WantedMovieDrawer.tsx`             |   270 |       5 |      1 |
 | `src/components/ServiceHeaderActions.tsx`                     |   268 |       7 |      4 |
-| `src/lib/media/media.functions.ts`                            |   260 |      10 |      9 |
-| `src/lib/filelist/subtitle-retry.ts`                          |   257 |       5 |      6 |
+| `src/lib/media/media.functions.ts`                            |   265 |      10 |      9 |
 | `src/lib/filelist/subsro-client.ts`                           |   254 |      12 |      4 |
 | `src/lib/filelist/opensubtitles-client.ts`                    |   250 |       9 |      3 |
 | `src/lib/services/immich.ts`                                  |   250 |       4 |     13 |
-| `src/components/filelist/DownloadConfirmDialog.tsx`           |   249 |       3 |      2 |
 | `src/lib/filelist/subtitle-apply.ts`                          |   248 |       7 |      2 |
+| `src/lib/notifications/notifications.ts`                      |   242 |      10 |      5 |
+| `src/routes/immich.tsx`                                       |   242 |       2 |     13 |
 | `src/lib/errors/error-log.ts`                                 |   239 |      10 |      5 |
-| `src/lib/notifications/notifications.ts`                      |   238 |      10 |      5 |
+| `src/lib/watcher/runner.test.ts`                              |   235 |       6 |      0 |
+| `src/components/principala/wizard/derive-seasons.test.ts`     |   234 |       6 |      0 |
+| `src/components/tehnic/plugins.tsx`                           |   233 |       0 |      4 |
+| `src/lib/media/device-hdr.ts`                                 |   232 |       8 |      2 |
+| `src/lib/filelist/release-scoring.ts`                         |   230 |       6 |      3 |
+| `src/components/principala/wizard/state.ts`                   |   229 |       1 |      6 |
 | `src/components/tehnic/sections/ErrorLogSection.tsx`          |   229 |       2 |      1 |
-| `src/components/principala/wizard/state.ts`                   |   223 |       1 |      6 |
-| `src/lib/filelist/release-scoring.ts`                         |   218 |       6 |      3 |
-| `src/lib/qbit-client.ts`                                      |   218 |      12 |     13 |
+| `src/lib/filelist/subtitle-retry.ts`                          |   229 |       5 |      5 |
+| `src/components/principala/RecentWatchesWidget.tsx`           |   226 |       5 |      1 |
+| `src/lib/imdb/imdb-ratings.ts`                                |   221 |      10 |      3 |
+| `src/components/principala/AddMediaWizard.tsx`                |   220 |       3 |      3 |
+| `src/lib/qbit-client.ts`                                      |   218 |      12 |     16 |
 | `src/lib/media/episode-details.test.ts`                       |   212 |       4 |      0 |
-| `src/components/principala/AddMediaWizard.tsx`                |   211 |       3 |      3 |
-| `src/components/principala/wizard/derive-seasons.test.ts`     |   208 |       5 |      0 |
-| `src/lib/imdb/imdb-ratings.ts`                                |   207 |       9 |      2 |
 | `src/components/tehnic/sections/PushSubscriptionsSection.tsx` |   206 |       3 |      1 |
+| `src/lib/media/torrent-rank.test.ts`                          |   203 |       1 |      0 |
+| `src/lib/services/device-hdr.server.ts`                       |   203 |       8 |      2 |
 | `src/lib/media/plex-link-by-hash.test.ts`                     |   201 |       2 |      0 |
+| `src/components/biblioteca/utils.ts`                          |   199 |      18 |     30 |
+| `src/components/principala/wizard/selection.ts`               |   198 |      13 |      5 |
 | `src/components/descopera/FeedView.tsx`                       |   195 |       2 |      1 |
 | `src/lib/filelist/subtitle-outcomes.ts`                       |   195 |       2 |     10 |
+| `src/components/principala/wizard/selection.test.ts`          |   193 |       1 |      0 |
 | `src/lib/tmdb/tmdb.discover.functions.ts`                     |   193 |       6 |     10 |
-| `src/components/biblioteca/utils.ts`                          |   189 |      17 |     27 |
+| `src/routes/index.tsx`                                        |   192 |       1 |      1 |
+| `src/components/principala/wizard/state.test.ts`              |   187 |       2 |      0 |
 | `src/components/tehnic/activity-timeline.ts`                  |   187 |      11 |      2 |
 | `src/lib/filelist/subtitle-checks.test.ts`                    |   187 |       2 |      0 |
-| `src/lib/services/immich-uploads.ts`                          |   182 |       5 |      3 |
+| `src/lib/services/immich-uploads.ts`                          |   182 |       5 |      5 |
 | `src/routes/register.tsx`                                     |   181 |       1 |      3 |
 | `src/hooks/use-push-notifications.ts`                         |   174 |       5 |      1 |
-| `src/components/principala/wizard/state.test.ts`              |   172 |       2 |      0 |
 | `src/lib/tmdb/tmdb-details.test.ts`                           |   172 |       2 |      0 |
 | `src/lib/contributions/months.ts`                             |   171 |      12 |      4 |
 | `src/lib/filelist/plex-id-hint.ts`                            |   170 |       6 |      2 |
 | `src/lib/media/movie-watch.test.ts`                           |   168 |       3 |      0 |
 | `src/lib/auth/admin.functions.ts`                             |   167 |       5 |      5 |
+| `src/lib/media/scheduled-delete.test.ts`                      |   166 |       2 |      0 |
 | `src/lib/system/network-link.ts`                              |   165 |       6 |      1 |
 | `src/lib/system/service-jobs.test.ts`                         |   165 |       2 |      0 |
 | `src/lib/system/versions.ts`                                  |   163 |       8 |      5 |
+| `src/components/tehnic/PluginDetailDrawer.tsx`                |   162 |       2 |      1 |
 | `src/components/AppHeader.tsx`                                |   160 |       4 |      1 |
 | `src/lib/media/unfinished-torrents.test.ts`                   |   160 |       1 |      0 |
 | `src/lib/wizard-check.functions.ts`                           |   157 |       1 |      1 |
 | `src/components/principala/wizard/use-wizard-download.ts`     |   156 |       4 |      1 |
-| `src/lib/auth/admin.server.ts`                                |   153 |      10 |     29 |
-| `src/lib/filelist/log.ts`                                     |   152 |       1 |     28 |
+| `src/lib/auth/admin.server.ts`                                |   153 |      10 |     31 |
 | `src/components/descopera/FilterTabs.tsx`                     |   151 |       2 |      1 |
 | `src/lib/media/plex-link-reconciler.test.ts`                  |   151 |       2 |      0 |
-| `src/components/principala/wizard/selection.test.ts`          |   149 |       1 |      0 |
-| `src/lib/media/torrent-rank.test.ts`                          |   146 |       1 |      0 |
+| `src/components/principala/wizard/derive-seasons.ts`          |   149 |       1 |      2 |
+| `src/lib/filelist/delete-title.ts`                            |   148 |       2 |      3 |
+| `src/lib/media/scheduled-delete.ts`                           |   148 |      10 |      6 |
+| `src/components/biblioteca/QualityChecklist.tsx`              |   146 |       4 |      2 |
 | `src/components/tehnic/CommitDrawer.tsx`                      |   145 |       4 |      2 |
 | `src/lib/media/metadata-report.ts`                            |   145 |       6 |      4 |
-| `src/components/principala/wizard/derive-seasons.ts`          |   143 |       1 |      2 |
-| `src/components/principala/wizard/selection.ts`               |   143 |       8 |      3 |
-| `src/components/biblioteca/EpisodeList.tsx`                   |   142 |       3 |      1 |
-| `src/components/descopera/SceneViewer.tsx`                    |   142 |       1 |      2 |
+| `src/components/biblioteca/EpisodeList.tsx`                   |   144 |       3 |      1 |
+| `src/components/descopera/SceneViewer.tsx`                    |   144 |       1 |      2 |
 | `src/lib/services/recent-watch-merge.test.ts`                 |   142 |       3 |      0 |
 | `src/components/tehnic/sections/NetworkLinkCard.tsx`          |   139 |       2 |      1 |
+| `src/components/biblioteca/ScheduledDelete.tsx`               |   137 |       6 |      3 |
 | `src/lib/filelist/top-torrents.test.ts`                       |   136 |       3 |      0 |
-| `src/lib/plex-refresh.ts`                                     |   136 |       7 |      3 |
+| `src/lib/plex-refresh.ts`                                     |   136 |       7 |      4 |
 | `src/lib/services/immich-uploads.test.ts`                     |   136 |       3 |      0 |
+| `src/lib/filelist/log.ts`                                     |   135 |       2 |     30 |
 | `src/components/tehnic/sections/CommitStatsSection.tsx`       |   133 |       1 |      1 |
-| `src/lib/services/shared.ts`                                  |   133 |       7 |     16 |
+| `src/lib/services/shared.ts`                                  |   133 |       7 |     18 |
 | `src/lib/filelist/top-torrents.functions.ts`                  |   130 |       4 |      1 |
-| `src/lib/system/db-backup.ts`                                 |   127 |       8 |      2 |
+| `src/components/principala/wizard/ConfirmStep.tsx`            |   128 |       1 |      1 |
+| `src/lib/system/db-backup.ts`                                 |   127 |       8 |      3 |
 | `src/lib/filelist/subtitle-sources.ts`                        |   125 |       2 |      3 |
 | `src/lib/services/plex-quality.test.ts`                       |   125 |       0 |      0 |
 | `src/lib/filelist/top-torrents.ts`                            |   124 |       5 |      5 |
 | `src/lib/system/update-check.test.ts`                         |   120 |       3 |      0 |
 | `src/lib/filelist/subtitle-encoding.ts`                       |   118 |       6 |      3 |
 | `src/components/descopera/DiscoverGrid.tsx`                   |   117 |       3 |      1 |
-| `server/plugins/maintenance.ts`                               |   117 |       4 |      2 |
+| `src/lib/media/torrent-rank.ts`                               |   117 |       9 |      5 |
 | `src/routes/login.tsx`                                        |   116 |       1 |      8 |
 | `src/lib/notifications/push.functions.ts`                     |   115 |       6 |      3 |
-| `server/plugins/show-watcher.ts`                              |   114 |       3 |      3 |
+| `server/routes/api/plex-thumb.ts`                             |   115 |       1 |      0 |
+| `src/lib/prefetch.ts`                                         |   114 |       1 |      1 |
 | `src/lib/filelist/subtitle-verify.test.ts`                    |   113 |       4 |      0 |
 | `src/components/descopera/TopTorrentsGrid.tsx`                |   112 |       2 |      1 |
 | `src/lib/media/movie-metadata.ts`                             |   112 |       1 |      2 |
 | `src/lib/notifications/push.ts`                               |   112 |       3 |      8 |
-| `src/lib/prefetch.ts`                                         |   112 |       1 |      1 |
+| `src/lib/filelist/categories.ts`                              |   111 |       4 |      6 |
+| `src/lib/media/device-hdr.test.ts`                            |   110 |       1 |      0 |
 | `src/components/filelist/use-download.ts`                     |   109 |       3 |      2 |
-| `src/components/biblioteca/QualityChecklist.tsx`              |   106 |       3 |      2 |
 | `src/lib/filelist/filelist-cache.test.ts`                     |   105 |       2 |      0 |
+| `src/lib/watcher/watcher.server.ts`                           |   105 |       6 |      1 |
 | `src/lib/contributions/months.test.ts`                        |   103 |       0 |      0 |
-| `src/lib/filelist/categories.ts`                              |   103 |       4 |      6 |
 | `src/lib/media/watch-position.test.ts`                        |   103 |       1 |      0 |
-| `src/components/tehnic/sections/PluginStatusSection.tsx`      |   101 |       6 |      1 |
+| `src/lib/system/update-check.ts`                              |   103 |       3 |      3 |
+| `src/components/principala/wizard/HdrDeviceHint.tsx`          |   100 |       4 |      1 |
 | `src/lib/github-commits.server.ts`                            |    99 |       4 |      1 |
 | `src/components/principala/wizard/use-wizard-data.ts`         |    98 |       3 |      1 |
-| `src/components/ui/drawer.tsx`                                |    94 |       2 |     11 |
+| `src/lib/filelist/download-tracker.test.ts`                   |    96 |       2 |      0 |
+| `src/components/ui/drawer.tsx`                                |    94 |       2 |     12 |
 | `src/components/biblioteca/WantedMoviesSection.tsx`           |    93 |       2 |      1 |
 | `src/components/tehnic/activity-timeline.test.ts`             |    91 |       2 |      0 |
-| `src/components/tehnic/sections/DbBackupCard.tsx`             |    91 |       1 |      1 |
-| `src/lib/media/torrent-rank.ts`                               |    91 |       8 |      4 |
-| `src/lib/system/update-check.ts`                              |    91 |       2 |      2 |
-| `server/routes/api/plex-thumb.ts`                             |    91 |       1 |      0 |
-| `src/lib/media/plex-link-reconciler.ts`                       |    88 |       1 |      2 |
+| `src/lib/filelist/download-tracker.ts`                        |    90 |       2 |      3 |
+| `src/lib/media/plex-link-reconciler.ts`                       |    90 |       1 |      3 |
 | `src/lib/filelist/download.functions.ts`                      |    86 |       4 |      2 |
 | `src/lib/errors/console-capture.ts`                           |    85 |       5 |      3 |
+| `src/lib/services/plex-session-poll.ts`                       |    85 |       1 |      1 |
 | `src/lib/auth/account-status.test.ts`                         |    84 |       1 |      0 |
-| `server/plugins/plex-session-tracker.ts`                      |    84 |       1 |      1 |
 | `src/lib/services/recent-watch-merge.ts`                      |    83 |       3 |      2 |
 | `src/lib/auth/plex-users.server.ts`                           |    82 |       5 |      1 |
 | `src/lib/filelist/disk-cleanup.ts`                            |    81 |       3 |      2 |
@@ -687,13 +703,15 @@ manual, deci nu poate fi parțial vechi.
 | `src/lib/filelist/subtitle-sources.test.ts`                   |    77 |       2 |      0 |
 | `src/components/principala/wizard/SearchStep.tsx`             |    76 |       1 |      1 |
 | `src/lib/services/recent-watch-cache.ts`                      |    76 |       2 |      2 |
-| `src/lib/format.ts`                                           |    75 |       8 |     19 |
-| `src/server.ts`                                               |    72 |       2 |     37 |
+| `src/lib/format.ts`                                           |    75 |       8 |     20 |
+| `src/components/tehnic/sections/PluginStatusSection.tsx`      |    74 |       1 |      1 |
+| `src/server.ts`                                               |    72 |       2 |     40 |
 | `server/routes/api/github-webhook.ts`                         |    72 |       0 |      0 |
 | `src/components/ui/dialog.tsx`                                |    70 |       1 |      3 |
 | `server/plugins/server-lifecycle.ts`                          |    70 |       4 |      1 |
 | `src/lib/filelist/disk-cleanup.test.ts`                       |    69 |       0 |      0 |
-| `server/plugins/download-recovery.ts`                         |    69 |       2 |      1 |
+| `src/components/tehnic/sections/DbBackupCard.tsx`             |    65 |       1 |      1 |
+| `src/lib/filelist/release-scoring.test.ts`                    |    64 |       0 |      0 |
 | `src/lib/errors/client-error-capture.ts`                      |    63 |       3 |      1 |
 | `src/components/filelist/quality-utils.test.ts`               |    62 |       0 |      0 |
 | `src/lib/filelist/plex-id-hint.test.ts`                       |    62 |       0 |      0 |
@@ -705,7 +723,7 @@ manual, deci nu poate fi parțial vechi.
 | `src/routes/descopera.tsx`                                    |    58 |       1 |      3 |
 | `src/lib/system/speedtest.functions.ts`                       |    57 |       4 |      3 |
 | `src/components/sistem/RefreshRateCard.tsx`                   |    56 |       1 |      1 |
-| `src/lib/filelist/types.ts`                                   |    56 |       0 |     21 |
+| `src/lib/filelist/types.ts`                                   |    56 |       0 |     27 |
 | `src/router.tsx`                                              |    55 |       2 |     22 |
 | `src/components/Meter.tsx`                                    |    54 |       1 |      2 |
 | `src/lib/activity-log.test.ts`                                |    54 |       1 |      0 |
@@ -719,69 +737,74 @@ manual, deci nu poate fi parțial vechi.
 | `src/lib/tmdb/poster.test.ts`                                 |    50 |       0 |      0 |
 | `src/lib/filelist/subtitle-apply.test.ts`                     |    48 |       1 |      0 |
 | `src/lib/client-ip.server.ts`                                 |    47 |       4 |      4 |
-| `src/components/tehnic/PluginRow.tsx`                         |    46 |       1 |      2 |
+| `src/lib/watcher/watcher.functions.ts`                        |    47 |       4 |      2 |
+| `src/components/tehnic/PluginRow.tsx`                         |    46 |       1 |      1 |
 | `src/lib/auth/admin-route-guard.ts`                           |    46 |       3 |      8 |
-| `src/lib/filelist/release-scoring.test.ts`                    |    46 |       0 |      0 |
 | `src/lib/system/service-jobs.functions.ts`                    |    46 |       3 |      2 |
 | `src/lib/tmdb/search-merge.test.ts`                           |    46 |       1 |      0 |
 | `src/lib/tvmaze/tvmaze.functions.ts`                          |    46 |       1 |      6 |
 | `src/components/principala/wizard/PickStep.tsx`               |    45 |       1 |      1 |
 | `src/lib/errors/error-log.functions.ts`                       |    43 |       3 |      4 |
+| `src/lib/services/device-hdr.functions.ts`                    |    43 |       2 |      2 |
 | `src/lib/system/network-link.functions.ts`                    |    43 |       2 |      2 |
 | `server/routes/api/deploy-sha.ts`                             |    43 |       2 |      1 |
-| `src/components/principala/wizard/types.ts`                   |    39 |       0 |     21 |
+| `src/components/principala/wizard/types.ts`                   |    39 |       0 |     27 |
 | `src/components/useServiceRecovery.ts`                        |    39 |       2 |      3 |
 | `src/lib/system/service-meta.ts`                              |    39 |       2 |      4 |
 | `src/components/ServicePill.tsx`                              |    37 |       1 |      3 |
 | `src/components/PageShell.tsx`                                |    36 |       1 |     11 |
+| `src/hooks/use-count-up.ts`                                   |    36 |       2 |      1 |
+| `src/lib/watcher/types.ts`                                    |    36 |       0 |     27 |
 | `src/components/StatCard.tsx`                                 |    35 |       1 |      3 |
 | `src/lib/filelist/download-quality.ts`                        |    35 |       2 |      3 |
-| `src/components/principala/wizard/ConfirmStep.tsx`            |    34 |       1 |      1 |
 | `src/components/principala/wizard/DoneStep.tsx`               |    34 |       1 |      1 |
 | `src/components/tehnic/TehnicSubNav.tsx`                      |    34 |       1 |      6 |
 | `src/lib/media/next-episode-airstamp.test.ts`                 |    34 |       0 |      0 |
-| `src/lib/tmdb/poster.ts`                                      |    34 |       2 |      7 |
-| `server/plugins/subtitle-retry.ts`                            |    34 |       1 |      5 |
+| `src/lib/tmdb/poster.ts`                                      |    34 |       2 |      8 |
 | `src/components/biblioteca/StatusBadge.tsx`                   |    33 |       1 |      2 |
 | `src/hooks/use-live-counter.ts`                               |    33 |       1 |      1 |
 | `src/routes/biblioteca.tsx`                                   |    33 |       1 |      6 |
-| `server/plugins/immich-upload-tracker.ts`                     |    33 |       1 |      2 |
 | `src/lib/errors/error-log.test.ts`                            |    31 |       1 |      0 |
 | `src/lib/errors/error-page.ts`                                |    31 |       1 |      2 |
 | `src/lib/filelist/subtitle-outcomes.test.ts`                  |    31 |       0 |      0 |
 | `src/lib/activity-log.functions.ts`                           |    30 |       1 |      8 |
 | `src/lib/tmdb/search-merge.ts`                                |    30 |       3 |      2 |
 | `src/hooks/use-flash-on-change.ts`                            |    29 |       1 |      4 |
-| `src/components/tehnic/utils.ts`                              |    28 |       2 |     28 |
+| `src/components/tehnic/utils.ts`                              |    28 |       2 |     31 |
 | `src/lib/errors/error-capture.ts`                             |    28 |       2 |      2 |
 | `src/lib/media/next-episode-airstamp.ts`                      |    28 |       1 |      2 |
+| `src/components/principala/UserAvatar.tsx`                    |    27 |       1 |      2 |
 | `src/lib/auth/unauthorized.ts`                                |    27 |       2 |      3 |
 | `src/lib/format.test.ts`                                      |    27 |       0 |      0 |
-| `src/lib/system/db-backup.functions.ts`                       |    27 |       2 |      2 |
 | `src/components/ui/progress.tsx`                              |    26 |       0 |      1 |
-| `src/lib/media/torrent-quality.ts`                            |    26 |       2 |      5 |
-| `src/start.ts`                                                |    26 |       0 |     56 |
-| `src/components/ui/orb.tsx`                                   |    25 |       1 |      9 |
-| `src/components/ui/sonner.tsx`                                |    25 |       1 |     23 |
+| `src/lib/media/torrent-quality.ts`                            |    26 |       2 |      6 |
+| `src/start.ts`                                                |    26 |       0 |     61 |
+| `src/components/principala/wizard/useHdrDeviceHint.ts`        |    25 |       2 |      2 |
+| `src/components/ui/orb.tsx`                                   |    25 |       1 |      8 |
+| `src/components/ui/sonner.tsx`                                |    25 |       1 |     24 |
 | `src/lib/auth/password.ts`                                    |    24 |       2 |      8 |
 | `src/components/tehnic/Metric.tsx`                            |    23 |       1 |      1 |
 | `src/lib/auth/session-compat.test.ts`                         |    23 |       0 |      0 |
 | `src/lib/client-ip.server.test.ts`                            |    20 |       0 |      0 |
-| `src/lib/services/recent-watch-types.ts`                      |    19 |       0 |      3 |
+| `server/plugins/watcher.ts`                                   |    20 |       0 |      1 |
+| `src/lib/services/recent-watch-types.ts`                      |    19 |       0 |      4 |
 | `src/lib/system/ubuntu-status.test.ts`                        |    19 |       0 |      0 |
 | `src/components/tehnic/StatCell.tsx`                          |    18 |       1 |      1 |
 | `src/lib/filelist/download-quality.test.ts`                   |    18 |       1 |      0 |
+| `src/lib/system/db-backup.functions.ts`                       |    18 |       1 |      1 |
 | `src/lib/tmdb/tmdb-client.ts`                                 |    18 |       2 |      5 |
-| `src/components/filelist/types.ts`                            |    17 |       0 |     21 |
+| `src/components/filelist/types.ts`                            |    17 |       0 |     27 |
 | `src/lib/media/torrent-name-parse.ts`                         |    17 |       1 |      7 |
 | `src/components/tehnic/meta-items.ts`                         |    15 |       1 |      3 |
 | `src/components/ErrorCard.tsx`                                |    14 |       1 |      3 |
 | `src/lib/system/update-signal.ts`                             |    14 |       2 |      3 |
-| `src/lib/filelist.functions.ts`                               |    13 |       0 |     21 |
+| `src/lib/filelist.functions.ts`                               |    13 |       0 |     22 |
 | `src/lib/services/immich-uploads.functions.ts`                |    13 |       1 |      1 |
 | `src/lib/system/versions.functions.ts`                        |    13 |       1 |      2 |
+| `src/components/BorderFlowSweep.tsx`                          |    10 |       1 |      6 |
 | `src/lib/services.functions.ts`                               |     9 |       0 |      4 |
-| `src/lib/utils.ts`                                            |     7 |       1 |     28 |
+| `src/lib/utils.ts`                                            |     7 |       1 |     31 |
+| `src/lib/watcher/poke.ts`                                     |     7 |       1 |      1 |
 
 ---
 
