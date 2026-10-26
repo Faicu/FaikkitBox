@@ -20,6 +20,7 @@ import {
   Search,
   ChevronRight,
   HandCoins,
+  Trash2,
 } from "lucide-react";
 
 import { activityLogQuery, recentCommitsQuery, commitsFromDbQuery } from "@/lib/queries";
@@ -76,6 +77,7 @@ const TYPE_TO_GROUP: Record<string, string> = {
   metadata_refresh: "metadate",
   update_available: "updates",
   contribution: "contributii",
+  title_delete: "torrente",
 };
 
 export function ActivityLogSection() {
@@ -106,6 +108,7 @@ export function ActivityLogSection() {
     metadata_refresh: <DatabaseZap className="h-3.5 w-3.5 text-emerald-400" />,
     update_available: <ArrowUpCircle className="h-3.5 w-3.5 text-amber-400" />,
     contribution: <HandCoins className="h-3.5 w-3.5 text-emerald-400" />,
+    title_delete: <Trash2 className="h-3.5 w-3.5 text-red-400" />,
   };
 
   const [query, setQuery] = useState("");

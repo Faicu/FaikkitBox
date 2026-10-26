@@ -186,3 +186,13 @@ export function lastCheckedLabel(sqliteUtc: string | null): string {
   if (Number.isNaN(ms)) return "Încă neverificat";
   return `Verificat ${dayTimeLabel(Math.floor(ms / 1000))}`;
 }
+
+// Data SQLite (UTC) → „27 oct., 14:05” — termenul unei ștergeri programate.
+export function deleteTimeLabel(at: string): string {
+  return new Date(`${at.replace(" ", "T")}Z`).toLocaleString("ro-RO", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}

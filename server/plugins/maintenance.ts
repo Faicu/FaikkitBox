@@ -1,8 +1,8 @@
 // ---------------------------------------------------------------------------
 // Plugin: întreținerea sistemului — acțiunile pe servicii, backup-ul bazei,
-// actualizările și rating-urile IMDb.
+// actualizările, rating-urile IMDb și ștergerile programate.
 //
-// Patru pași independenți, fiecare cu ritmul și try/catch-ul lui: un backup
+// Cinci pași independenți, fiecare cu ritmul și try/catch-ul lui: un backup
 // ratat nu trebuie să oprească verificarea actualizărilor, nici invers.
 //
 // 1. La pornire, imediat: închide acțiunile Restart/Update rămase „în curs”
@@ -31,6 +31,13 @@
 // 4. Rating-urile IMDb pentru Descoperă (src/lib/imdb/imdb-ratings.ts), la
 //    +2 min, apoi din oră în oră. Efectiv o dată la 23h, cu ceasul în baza
 //    rating-urilor; un dataset neschimbat costă doar o cerere 304.
+//
+// 5. Ștergerile programate (src/lib/media/scheduled-delete.ts), la +30s,
+//    apoi la fiecare minut. Un titlu cerut spre ștergere în primele 24 h de
+//    la descărcare (hit and run pe Filelist) se șterge abia la împlinirea
+//    lor; termenul stă în `media`, deci o ștergere ratată cât serverul a fost
+//    oprit se face la pornirea următoare. Interogarea e una singură, ieftină
+//    — de-aia minutul, ca timerul din Bibliotecă să fie ținut aproape exact.
 // ---------------------------------------------------------------------------
 
 const BACKUP_DELAY_MS = 90_000;
@@ -45,6 +52,10 @@ const UPDATE_CHECK_INTERVAL_MS = 60 * 60_000;
 
 const IMDB_DELAY_MS = 2 * 60_000;
 const IMDB_CHECK_INTERVAL_MS = 60 * 60_000;
+
+// qBittorrent e gata (vezi download-recovery.ts).
+const SCHEDULED_DELETE_DELAY_MS = 30_000;
+const SCHEDULED_DELETE_INTERVAL_MS = 60_000;
 
 async function closeInterruptedJobs(): Promise<void> {
   try {
@@ -101,6 +112,23 @@ async function refreshImdbRatings(): Promise<void> {
   }
 }
 
+// Gardă de suprapunere: o ștergere atinge qBittorrent și Plex, iar mai multe
+// deodată pot depăși minutul.
+let deleting = false;
+
+async function runScheduledDeletions(): Promise<void> {
+  if (deleting) return;
+  deleting = true;
+  try {
+    const { runDueDeletions } = await import("../../src/lib/filelist/delete-title");
+    await runDueDeletions();
+  } catch (e) {
+    console.warn("[scheduled-delete] Rulare eșuată:", e);
+  } finally {
+    deleting = false;
+  }
+}
+
 export default function () {
   // Imediat: până nu se curăță, butoanele ar refuza orice acțiune nouă.
   void closeInterruptedJobs();
@@ -113,4 +141,7 @@ export default function () {
 
   setTimeout(() => void refreshImdbRatings(), IMDB_DELAY_MS);
   setInterval(() => void refreshImdbRatings(), IMDB_CHECK_INTERVAL_MS);
+
+  setTimeout(() => void runScheduledDeletions(), SCHEDULED_DELETE_DELAY_MS);
+  setInterval(() => void runScheduledDeletions(), SCHEDULED_DELETE_INTERVAL_MS);
 }

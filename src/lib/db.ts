@@ -168,6 +168,12 @@ export function getDb(): DatabaseSync {
       -- varianta aleasă și cele respinse, afișate în drawer-ul din
       -- Bibliotecă. La un pachet, fiecare episod îl are pe al lui.
       subtitle_report TEXT,
+      -- Ștergere programată (formatul SQLite, UTC): titlul cerut spre
+      -- ștergere în primele 24 h de la descărcare se șterge abia la
+      -- împlinirea lor — hit and run pe Filelist, vezi scheduled-delete.ts.
+      -- Scrisă pe toate rândurile torrentului (un pachet e un singur torrent).
+      delete_scheduled_at TEXT,
+      delete_scheduled_by INTEGER,
       quality TEXT,
       duration_ms INTEGER,
       -- Titlul episodului (doar pe rândurile 'episode'): coloana title ține
@@ -1234,6 +1240,22 @@ function applyCleanups(database: DatabaseSync): void {
         // coloana există deja (bază nouă, creată direct cu schema curentă)
       }
       database.exec("PRAGMA user_version = 40");
+    }
+
+    if (version < 41) {
+      // v41: ștergerea programată (vezi CREATE TABLE și scheduled-delete.ts).
+      for (const sql of [
+        "ALTER TABLE media ADD COLUMN delete_scheduled_at TEXT",
+        "ALTER TABLE media ADD COLUMN delete_scheduled_by INTEGER",
+      ]) {
+        try {
+          database.exec(sql);
+        } catch {
+          // coloana există deja (bază nouă, creată direct cu schema curentă)
+        }
+      }
+      console.log("[db] Migrare v41: adăugat media.delete_scheduled_at/_by");
+      database.exec("PRAGMA user_version = 41");
     }
   }
 }

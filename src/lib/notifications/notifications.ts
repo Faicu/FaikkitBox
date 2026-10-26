@@ -63,6 +63,9 @@ export const PUSH_TITLES: Record<ActivityType, string> = {
   // respingerea și plățile adăugate de admin trec cu skipPush — vezi
   // contributions.functions.ts.
   contribution: "💰 Contribuție declarată",
+  // Fără push (titlu gol): programarea, renunțarea și ștergerea efectivă a
+  // unui titlu — doar de consultat în jurnal (vezi scheduled-delete.ts).
+  title_delete: "",
 };
 
 // Pagina spre care duce apăsarea notificării — implicit per tip; se poate
@@ -85,6 +88,7 @@ export const PUSH_URLS: Record<ActivityType, string> = {
   metadata_refresh: "/tehnic",
   update_available: "/sistem",
   contribution: "/contributii",
+  title_delete: "/biblioteca",
 };
 
 // --- Server (activity-log.ts — start/stop) ----------------------------------

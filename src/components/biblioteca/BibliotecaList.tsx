@@ -12,12 +12,14 @@ import type { PlexBrowseItem } from "@/lib/services/plex-browse";
 import { StatusBadge } from "./StatusBadge";
 import { WantedMoviesSection } from "./WantedMoviesSection";
 import { TitleDetailDrawer } from "./TitleDetailDrawer";
+import { DeleteTimerBadge } from "./ScheduledDelete";
 import {
   addedDate,
   itemLabel,
   matchesQuery,
   isStaleUnwatched,
   sortItems,
+  deleteTimeLabel,
   type SortMode,
 } from "./utils";
 
@@ -38,6 +40,7 @@ export function BibliotecaList({
     title: string;
     isSeasonPack: boolean;
     isCancel: boolean;
+    delayedUntil: string | null;
   } | null>(null);
   const deleteEntryFn = useServerFn(deleteMediaEntry);
 
@@ -70,8 +73,17 @@ export function BibliotecaList({
       });
       return;
     }
-    setSelectedMediaId(null);
     queryClient.invalidateQueries({ queryKey: ["plexLibraryBrowse"] });
+    // În primele 24 h ștergerea doar s-a programat: titlul rămâne, cu timer,
+    // deci drawer-ul rămâne deschis și își reîncarcă detaliile.
+    if (res.scheduledAt) {
+      queryClient.invalidateQueries({ queryKey: ["plexTitleDetail"] });
+      toast.success(
+        `${isCancel ? "Anulare" : "Ștergere"} programată pentru ${deleteTimeLabel(res.scheduledAt)}`,
+      );
+      return;
+    }
+    setSelectedMediaId(null);
     if (res.qbitDeleted) {
       toast.success(
         isCancel
@@ -168,6 +180,7 @@ export function BibliotecaList({
             {item.watchedCount}
           </span>
         )}
+        {item.deleteScheduledAt && <DeleteTimerBadge at={item.deleteScheduledAt} />}
         {isStaleUnwatched(item) && (
           <span
             title="Nimeni nu l-a vizionat de peste 3 luni"
@@ -260,6 +273,15 @@ export function BibliotecaList({
               <div className="text-sm font-semibold">
                 {confirmDeleteTitle.isCancel ? "Anulare descărcare" : "Ștergere completă"}
               </div>
+              {confirmDeleteTitle.delayedUntil && (
+                <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-snug text-amber-400">
+                  Descărcarea a început acum mai puțin de 24 de ore, iar Filelist consideră hit and
+                  run un torrent șters mai devreme.{" "}
+                  {confirmDeleteTitle.isCancel ? "Anularea" : "Ștergerea"} se programează pentru{" "}
+                  {deleteTimeLabel(confirmDeleteTitle.delayedUntil)}; până atunci torrentul continuă
+                  să se descarce și să facă seed, iar oricine poate renunța la ea.
+                </p>
+              )}
               <p className="whitespace-pre-line text-sm text-muted-foreground">
                 {confirmDeleteTitle.isCancel
                   ? confirmDeleteTitle.isSeasonPack
@@ -282,7 +304,13 @@ export function BibliotecaList({
                   onClick={confirmDeleteTitleAction}
                   className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
                 >
-                  {confirmDeleteTitle.isCancel ? "Anulează descărcarea" : "Șterge"}
+                  {confirmDeleteTitle.delayedUntil
+                    ? confirmDeleteTitle.isCancel
+                      ? "Programează anularea"
+                      : "Programează ștergerea"
+                    : confirmDeleteTitle.isCancel
+                      ? "Anulează descărcarea"
+                      : "Șterge"}
                 </button>
               </div>
             </div>

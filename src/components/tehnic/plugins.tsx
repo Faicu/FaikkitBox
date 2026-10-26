@@ -20,6 +20,7 @@ import {
   ShieldCheck,
   Replace,
   BellRing,
+  Trash2,
 } from "lucide-react";
 import { Orb } from "@/components/ui/orb";
 
@@ -228,10 +229,10 @@ export const PLUGINS: PluginInfo[] = [
     id: "maintenance",
     label: "Întreținere",
     description:
-      "Backup zilnic al bazei, verificarea actualizărilor, rating-uri IMDb, deblocarea acțiunilor",
+      "Backup zilnic al bazei, verificarea actualizărilor, rating-uri IMDb, deblocarea acțiunilor, ștergerile programate",
     cadence: "la pornire, apoi zilnic",
     details:
-      "Patru treburi de întreținere, fiecare cu ritmul ei. Una care eșuează nu le oprește pe celelalte.",
+      "Cinci treburi de întreținere, fiecare cu ritmul ei. Una care eșuează nu le oprește pe celelalte.",
     steps: [
       {
         title: "Deblocare acțiuni",
@@ -278,6 +279,18 @@ export const PLUGINS: PluginInfo[] = [
           "Importul scrie un fișier nou și îl mută peste cel vechi abia la final; dacă datasetul nu s-a schimbat (același ETag), nu se descarcă nimic.",
         ],
         icon: <Star className="h-3.5 w-3.5 text-amber-400" />,
+      },
+      {
+        title: "Ștergeri programate",
+        cadence: "la fiecare minut",
+        summary: "Șterge titlurile cerute spre ștergere în primele 24 h, la împlinirea lor.",
+        points: [
+          "Filelist consideră hit and run un torrent șters în primele 24 de ore de la descărcare. Înainte, butoanele Anulare/Ștergere erau blocate în acest interval; acum cererea se acceptă, dar ștergerea se programează pentru împlinirea celor 24 h.",
+          "Până atunci torrentul continuă să se descarce și să facă seed, iar titlul apare în Bibliotecă cu un timer. Oricine poate renunța la ștergere și devine astfel proprietarul titlului.",
+          "Termenul stă în baza de date, nu într-un cronometru în memorie: o ștergere ratată cât serverul a fost oprit se face la pornirea următoare.",
+          "Programarea, renunțarea și ștergerea efectivă apar în jurnal (filtrul Torrente), fără notificare push.",
+        ],
+        icon: <Trash2 className="h-3.5 w-3.5 text-red-400" />,
       },
     ],
     icon: <Wrench className="h-4 w-4 text-orange-400" />,

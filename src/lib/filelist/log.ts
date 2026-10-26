@@ -1,151 +1,124 @@
 import { createServerFn } from "@tanstack/react-start";
-import { qbitLogin, qbitTorrentRootPath } from "../qbit-client";
-import {
-  refreshPlexLibraryAndEmptyTrash,
-  refreshPlexLibrariesAndEmptyTrash,
-} from "../plex-refresh";
-import { DELETE_LOCK_HOURS, deleteLockedUntil, deleteMediaByTorrentHash } from "../media/media";
 
-// Ștergerea unui titlu: qBittorrent (torrent + fișiere), reziduul de pe disk
-// și rândurile din `media`. Orice rând `media` cu torrent_hash cunoscut e
-// ștergibil, indiferent de proveniență.
+// Ștergerea unui titlu din Bibliotecă (sau anularea descărcării lui). Orice
+// rând `media` cu torrent_hash cunoscut e ștergibil, indiferent de
+// proveniență. În primele 24 h de la descărcare ștergerea nu se execută, ci
+// se programează pentru împlinirea lor — hit and run pe Filelist, vezi
+// scheduled-delete.ts. Execuția propriu-zisă e în delete-title.ts.
 export const deleteMediaEntry = createServerFn({ method: "POST" })
   .validator((data: { mediaId: number }) => data)
-  .handler(async ({ data }): Promise<{ ok: boolean; qbitDeleted?: boolean; error?: string }> => {
-    const { requireAuth, isAdminOrOwner } = await import("../auth/admin.server");
+  .handler(
+    async ({
+      data,
+    }): Promise<{ ok: boolean; qbitDeleted?: boolean; scheduledAt?: string; error?: string }> => {
+      const { requireAuth, isAdminOrOwner } = await import("../auth/admin.server");
+      const session = await requireAuth();
+      try {
+        const { getDb } = await import("../db");
+        const db = getDb();
+
+        const row = db
+          .prepare(
+            "SELECT torrent_hash, media_type, imdb_id, requested_by_user_id FROM media WHERE id = ?",
+          )
+          .get(data.mediaId) as
+          | {
+              torrent_hash: string | null;
+              media_type: string | null;
+              imdb_id: string | null;
+              requested_by_user_id: number | null;
+            }
+          | undefined;
+
+        if (!row) {
+          return { ok: false, error: "Titlul nu a fost găsit" };
+        }
+        if (!isAdminOrOwner(session, row.requested_by_user_id)) {
+          return { ok: false, error: "Doar cel care a adăugat titlul sau un admin poate șterge" };
+        }
+        if (!row.torrent_hash) {
+          return {
+            ok: false,
+            error: "Hash-ul torrentului e necunoscut — nu poate fi șters automat",
+          };
+        }
+        const torrentHash = row.torrent_hash;
+
+        const {
+          deleteDelayedUntil,
+          scheduleDeletion,
+          scheduledDeletion,
+          torrentLabel,
+          formatDeleteTime,
+        } = await import("../media/scheduled-delete");
+        const { logActivity } = await import("../activity-log");
+        const who = session.data.username ?? "admin";
+        const label = torrentLabel(torrentHash);
+
+        // Pentru toată lumea, adminul inclus: în primele 24 h doar programăm.
+        const delayedUntil = deleteDelayedUntil(torrentHash);
+        if (delayedUntil) {
+          const already = scheduledDeletion(torrentHash);
+          const scheduled = scheduleDeletion(
+            torrentHash,
+            delayedUntil,
+            session.data.userId ?? null,
+          );
+          if (!already) {
+            await logActivity(
+              "title_delete",
+              `${who} a programat ștergerea: ${label} — se șterge la ${formatDeleteTime(scheduled.at)}`,
+              { torrentHash, action: "scheduled", user: who },
+            );
+          }
+          return { ok: true, scheduledAt: scheduled.at };
+        }
+
+        const { deleteTorrentNow } = await import("./delete-title");
+        const { qbitDeleted } = await deleteTorrentNow({ ...row, torrent_hash: torrentHash });
+        await logActivity("title_delete", `${who} a șters: ${label}`, {
+          torrentHash,
+          action: "deleted",
+          user: who,
+        });
+        return { ok: true, qbitDeleted };
+      } catch (e) {
+        console.error("[filelist] Nu am putut șterge titlul:", e);
+        return { ok: false };
+      }
+    },
+  );
+
+// Renunțarea la o ștergere programată — permisă oricui e logat. Cine renunță
+// devine proprietarul titlului (vezi cancelScheduledDeletion).
+export const cancelMediaDeletion = createServerFn({ method: "POST" })
+  .validator((data: { mediaId: number }) => data)
+  .handler(async ({ data }): Promise<{ ok: boolean; error?: string }> => {
+    const { requireAuth } = await import("../auth/admin.server");
     const session = await requireAuth();
     try {
       const { getDb } = await import("../db");
-      const db = getDb();
-
-      const row = db
-        .prepare(
-          "SELECT torrent_hash, media_type, imdb_id, requested_by_user_id FROM media WHERE id = ?",
-        )
-        .get(data.mediaId) as
-        | {
-            torrent_hash: string | null;
-            media_type: string | null;
-            imdb_id: string | null;
-            requested_by_user_id: number | null;
-          }
-        | undefined;
-
-      if (!row) {
+      const row = getDb()
+        .prepare("SELECT torrent_hash FROM media WHERE id = ?")
+        .get(data.mediaId) as { torrent_hash: string | null } | undefined;
+      if (!row?.torrent_hash) {
         return { ok: false, error: "Titlul nu a fost găsit" };
       }
-      if (!isAdminOrOwner(session, row.requested_by_user_id)) {
-        return { ok: false, error: "Doar cel care a adăugat titlul sau un admin poate șterge" };
+      const { cancelScheduledDeletion, torrentLabel } = await import("../media/scheduled-delete");
+      const label = torrentLabel(row.torrent_hash);
+      if (!cancelScheduledDeletion(row.torrent_hash, session.data.userId ?? null)) {
+        return { ok: false, error: "Ștergerea nu mai e programată" };
       }
-      if (!row.torrent_hash) {
-        return { ok: false, error: "Hash-ul torrentului e necunoscut — nu poate fi șters automat" };
-      }
-      // Hit and run pe Filelist — vezi deleteLockedUntil. Verificat pe server,
-      // nu doar ascuns în UI; adminul e scutit.
-      if (!session.data.admin) {
-        const lockedUntil = deleteLockedUntil(row.torrent_hash);
-        if (lockedUntil) {
-          const when = new Date(`${lockedUntil.replace(" ", "T")}Z`).toLocaleString("ro-RO", {
-            timeZone: "Europe/Bucharest",
-            dateStyle: "short",
-            timeStyle: "short",
-          });
-          return {
-            ok: false,
-            error: `Titlul poate fi șters după ${when} (regula Filelist: minim ${DELETE_LOCK_HOURS} h de la descărcare)`,
-          };
-        }
-      }
-
-      let qbitDeleted = false;
-      let rootPath: string | null = null;
-      try {
-        const qbitUrl = (process.env.QBIT_URL ?? "http://192.168.1.192:25556").replace(/\/$/, "");
-        const user = process.env.QBIT_USERNAME ?? "";
-        const pass = process.env.QBIT_PASSWORD ?? "";
-        const cookie = await qbitLogin(qbitUrl, user, pass);
-
-        // Reținem calea reală de pe disc dinaintea ștergerii — numele
-        // torrentului salvat în DB poate diferi de numele folderului de pe
-        // disk (qBittorrent normalizează unele nume), deci e singura sursă
-        // de adevăr pentru curățarea de mai jos. Rădăcina, nu content_path:
-        // un fișier unic într-un folder propriu și-ar lăsa altfel folderul
-        // gol pe disc (vezi qbitTorrentRootPath).
-        rootPath = await qbitTorrentRootPath(qbitUrl, row.torrent_hash, user, pass);
-
-        const form = new URLSearchParams({ hashes: row.torrent_hash, deleteFiles: "true" });
-        const res = await fetch(`${qbitUrl}/api/v2/torrents/delete`, {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded", Cookie: cookie },
-          body: form.toString(),
-        });
-        qbitDeleted = res.ok;
-      } catch (e) {
-        console.warn("[filelist] Nu am putut șterge din qBit:", e);
-      }
-
-      // Ce a rămas după qBittorrent (subtitrările scrise de aplicație) —
-      // vezi disk-cleanup.ts.
-      if (rootPath) {
-        const { removeTorrentResidue } = await import("./disk-cleanup");
-        await removeTorrentResidue(rootPath);
-      }
-
-      // Toate rândurile media care împart același torrent_hash (episoadele
-      // unui pachet de sezon) — nu doar cel apăsat — altfel restul rămân
-      // orfane, cu un hash care nu mai există în qBittorrent, și apar
-      // permanent ca "se descarcă" în Bibliotecă. Mesajul de confirmare din
-      // drawer promite ștergerea întregului pachet — asta chiar face.
-      deleteMediaByTorrentHash(row.torrent_hash);
-
-      // Rânduri "fantomă" pentru același titlu (același imdb_id), fără
-      // torrent_hash — create de exemplu de un backfill dintr-un scan Plex
-      // vechi, nelegat niciodată de un download real. Invizibile pentru
-      // ștergerea de mai sus (care lucrează strict după torrent_hash), deci
-      // rămân orfane la nesfârșit dacă nu le curățăm explicit aici (găsit la
-      // "Pompeii: Out of Time with Tom Hiddleston", 2026-09-02).
-      // `parent_id IS NOT NULL` e esențial: rândul-părinte al unui serial
-      // (ensureMediaPlaceholder) are prin construcție torrent_hash NULL, deci
-      // fără filtrul ăsta era prins de curățare — iar ștergerea lui declanșa
-      // ON DELETE CASCADE pe parent_id și lua cu el TOATE episoadele
-      // celorlalte sezoane, care rămâneau perfect valide în qBittorrent
-      // (găsit la "My Life with the Walter Boys", 2026-09-06: ștergerea unui
-      // episod din pachetul S2 a golit și S3 din bibliotecă).
-      if (row.imdb_id) {
-        db.prepare(
-          "DELETE FROM media WHERE imdb_id = ? AND torrent_hash IS NULL AND parent_id IS NOT NULL",
-        ).run(row.imdb_id);
-
-        // Rândul-serial rămâne util cât are măcar un episod; abia când
-        // pachetul șters era ultimul, devine un titlu gol în Bibliotecă și
-        // se curăță — intenția originală a curățării de mai sus, acum fără
-        // efectul colateral asupra sezoanelor rămase.
-        db.prepare(
-          `DELETE FROM media WHERE imdb_id = ? AND media_type = 'tv_show'
-             AND id NOT IN (SELECT parent_id FROM media WHERE parent_id IS NOT NULL)`,
-        ).run(row.imdb_id);
-      }
-
-      // Refresh Plex necondiționat, după media_type — sursa film/serial,
-      // nu categoria Filelist (RO Dubbed amestecă filme și seriale). Fără
-      // el, refresh la ambele biblioteci ca fallback sigur — la fel ca la
-      // ștergerea din pagina qBittorrent (qbittorrent.ts), în loc să
-      // renunțăm silențios (găsit la "Avatar: Foc și cenușă", 2026-09-02 —
-      // titlul șters din DB/disk, dar rămas fantomă în Plex).
-      try {
-        if (row.media_type) {
-          const plexType = row.media_type === "movie" ? "movie" : "show";
-          await refreshPlexLibraryAndEmptyTrash(plexType);
-        } else {
-          await refreshPlexLibrariesAndEmptyTrash();
-        }
-      } catch (e) {
-        console.error("[filelist] Eroare la refresh Plex după ștergere:", e);
-      }
-
-      return { ok: true, qbitDeleted };
+      const who = session.data.username ?? "admin";
+      const { logActivity } = await import("../activity-log");
+      await logActivity(
+        "title_delete",
+        `${who} a renunțat la ștergerea: ${label} — titlul e acum al lui`,
+        { torrentHash: row.torrent_hash, action: "cancelled", user: who },
+      );
+      return { ok: true };
     } catch (e) {
-      console.error("[filelist] Nu am putut șterge titlul:", e);
+      console.error("[filelist] Nu am putut renunța la ștergere:", e);
       return { ok: false };
     }
   });

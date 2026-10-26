@@ -67,6 +67,9 @@ export interface PlexBrowseItem {
   progress: number | null; // 0-100
   dlspeed: number | null; // bytes/s
   eta: number | null; // secunde
+  // Ștergere programată (formatul SQLite, UTC) — insigna cu timer din listă.
+  // La seriale, cea mai apropiată dintre episoade. Vezi scheduled-delete.ts.
+  deleteScheduledAt: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -162,6 +165,7 @@ interface MediaBrowseRow {
   torrent_hash: string | null;
   completed_at: string | null;
   auto_download: number;
+  delete_scheduled_at: string | null;
 }
 
 function rowAddedAt(r: MediaBrowseRow): number {
@@ -196,7 +200,7 @@ export const getPlexLibraryBrowse = createServerFn({ method: "GET" }).handler(
         .prepare(
           `SELECT m.id, m.parent_id, m.plex_rating_key, m.media_type, m.title, m.original_title,
                   m.season, m.episode, m.poster_path, m.plex_added_at, m.added_at,
-                  m.torrent_hash, m.completed_at, m.auto_download
+                  m.torrent_hash, m.completed_at, m.auto_download, m.delete_scheduled_at
            FROM media m
            WHERE (
                    m.media_type IN ('movie', 'episode')
@@ -247,6 +251,7 @@ export const getPlexLibraryBrowse = createServerFn({ method: "GET" }).handler(
             progress: null,
             dlspeed: null,
             eta: null,
+            deleteScheduledAt: r.delete_scheduled_at,
           });
           continue;
         }
@@ -280,6 +285,11 @@ export const getPlexLibraryBrowse = createServerFn({ method: "GET" }).handler(
           progress: null,
           dlspeed: null,
           eta: null,
+          deleteScheduledAt:
+            episodes
+              .map((e) => e.delete_scheduled_at)
+              .filter((v): v is string => v != null)
+              .sort()[0] ?? null,
         });
       }
       items.sort((a, b) => b.addedAt - a.addedAt);
@@ -431,6 +441,8 @@ export interface ShowEpisodeEntry {
   stillUrl: string | null;
   airDate: string | null;
   durationMs: number | null;
+  // Ștergere programată (formatul SQLite, UTC), vezi scheduled-delete.ts.
+  deleteScheduledAt: string | null;
 }
 
 export interface PlexTitleDetail {
@@ -489,10 +501,12 @@ export interface PlexTitleDetail {
   // true doar pentru cel care a adăugat titlul sau pentru un admin — UI-ul
   // ascunde butoanele de subtitrare/ștergere pentru oricine altcineva.
   canManage: boolean;
-  // Formatul SQLite, UTC — până când un utilizator obișnuit nu poate șterge
-  // sau anula titlul (hit and run pe Filelist, vezi deleteLockedUntil). null
-  // pentru admin sau după expirare.
-  deleteLockedUntil: string | null;
+  // Formatul SQLite, UTC — până când o ștergere/anulare cerută acum doar se
+  // programează (hit and run pe Filelist, vezi scheduled-delete.ts). null
+  // după primele 24 h sau pentru cine nu poate șterge titlul.
+  deleteDelayedUntil: string | null;
+  // Ștergerea deja programată: când și cine a cerut-o. Oricine o poate anula.
+  deleteScheduled: { at: string; byUsername: string | null } | null;
   tmdbId: number | null;
   originalTitle: string | null;
   // Vizibil pentru toți (nu doar admin, spre deosebire de tech.imdbId) —
@@ -656,7 +670,8 @@ async function buildDetailFromMediaRow(
         .prepare(
           `SELECT id, season, episode, original_title, title, episode_title,
                   plex_rating_key, plex_added_at, added_at, completed_at, is_season_pack,
-                  torrent_hash, episode_still, episode_air_date, duration_ms
+                  torrent_hash, episode_still, episode_air_date, duration_ms,
+                  delete_scheduled_at
              FROM media WHERE parent_id = ?
              ORDER BY season, episode`,
         )
@@ -676,6 +691,7 @@ async function buildDetailFromMediaRow(
         episode_still: string | null;
         episode_air_date: string | null;
         duration_ms: number | null;
+        delete_scheduled_at: string | null;
       }>)
     : [];
 
@@ -729,10 +745,16 @@ async function buildDetailFromMediaRow(
 
   const canManage = isAdminOrOwner(session, row.requested_by_user_id);
   const isAdmin = !!session.data.admin;
-  let lockedUntil: string | null = null;
-  if (canManage && !isAdmin && row.torrent_hash) {
-    const { deleteLockedUntil } = await import("../media/media");
-    lockedUntil = deleteLockedUntil(row.torrent_hash);
+  let delayedUntil: string | null = null;
+  let deleteScheduled: PlexTitleDetail["deleteScheduled"] = null;
+  if (row.torrent_hash) {
+    const { deleteDelayedUntil, scheduledDeletion, usernameOf } =
+      await import("../media/scheduled-delete");
+    if (canManage) delayedUntil = deleteDelayedUntil(row.torrent_hash);
+    const scheduled = scheduledDeletion(row.torrent_hash);
+    if (scheduled) {
+      deleteScheduled = { at: scheduled.at, byUsername: usernameOf(scheduled.byUserId) };
+    }
   }
 
   // Episoadele serialului — pentru lista pe sezoane din drawer. "Văzut" se
@@ -775,6 +797,7 @@ async function buildDetailFromMediaRow(
         stillUrl: e.episode_still,
         airDate: e.episode_air_date,
         durationMs: e.duration_ms || null,
+        deleteScheduledAt: e.delete_scheduled_at,
       };
     });
   }
@@ -849,7 +872,8 @@ async function buildDetailFromMediaRow(
     subtitleRetry: subtitleRetryOf(row),
     isSeasonPack: !!row.is_season_pack,
     canManage,
-    deleteLockedUntil: lockedUntil,
+    deleteDelayedUntil: delayedUntil,
+    deleteScheduled,
     tmdbId: row.tmdb_id,
     originalTitle: row.original_title,
     imdbId: row.imdb_id,

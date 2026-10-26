@@ -668,28 +668,6 @@ export function deleteMediaByTorrentHash(torrentHash: string): void {
   getDb().prepare("DELETE FROM media WHERE torrent_hash = ?").run(torrentHash);
 }
 
-// Filelist socotește hit and run un torrent șters prea devreme și penalizează
-// contul de pe care s-a descărcat — de aceea utilizatorii obișnuiți nu pot
-// șterge (sau anula) un titlu decât după DELETE_LOCK_HOURS de la inițierea
-// descărcării. Adminul nu are restricția.
-export const DELETE_LOCK_HOURS = 24;
-
-// Momentul (formatul SQLite, UTC) până la care torrentul nu poate fi șters de
-// un utilizator obișnuit, sau null dacă blocarea a expirat. MIN(added_at)
-// pe tot hash-ul: un pachet de sezon e un singur torrent, ștergerea îl ia
-// întreg.
-export function deleteLockedUntil(torrentHash: string): string | null {
-  const row = getDb()
-    .prepare(
-      `SELECT datetime(MIN(added_at), '+${DELETE_LOCK_HOURS} hours') AS until FROM media
-        WHERE torrent_hash = ?`,
-    )
-    .get(torrentHash) as { until: string | null } | undefined;
-  const until = row?.until ?? null;
-  if (!until) return null;
-  return new Date(`${until.replace(" ", "T")}Z`).getTime() > Date.now() ? until : null;
-}
-
 // Leagă un rând `media` de item-ul lui real din Plex — ratingKey, calitate,
 // durată. Apelat cu reîncercări (pollUntilComplete), pentru că scanarea Plex
 // e asincronă: la refreshPlexLibrary, fișierul poate să nu fie încă indexat.

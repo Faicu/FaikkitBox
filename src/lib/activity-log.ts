@@ -29,7 +29,8 @@ export type ActivityType =
   | "account_request"
   | "metadata_refresh"
   | "update_available"
-  | "contribution";
+  | "contribution"
+  | "title_delete";
 
 export type JsonValue = string | number | boolean | null | undefined;
 
@@ -142,7 +143,8 @@ export async function readActivityLog(
     }>;
     const db = getDb();
     // Titlul din Bibliotecă pentru rândurile de torrent, ca jurnalul să le
-    // poată deschide. Episoadele duc la serialul lor (parent_id) — drawer-ul
+    // poată deschide (ștergerile doar cât titlul mai există — programate
+    // sau anulate). Episoadele duc la serialul lor (parent_id) — drawer-ul
     // Bibliotecii se deschide pe film/serial. Intrările vechi au doar
     // torrentId (id-ul Filelist), cele noi și hash-ul.
     const byHash = db.prepare(
@@ -165,7 +167,8 @@ export async function readActivityLog(
     const entries = rows.map((r) => {
       const meta = r.meta ? (JSON.parse(r.meta) as Record<string, ActivityMetaValue>) : undefined;
       const mediaId =
-        meta && (r.type === "torrent_added" || r.type === "torrent_complete")
+        meta &&
+        (r.type === "torrent_added" || r.type === "torrent_complete" || r.type === "title_delete")
           ? resolveMediaId(meta)
           : undefined;
       return {
