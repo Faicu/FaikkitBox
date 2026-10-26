@@ -1,81 +1,55 @@
 // ---------------------------------------------------------------------------
-// Bibliotecă — pentru secțiunea de pe Acasă care înlocuiește fostul "Recent
-// adăugate": listă (ordonată după data adăugării) + detalii per titlu
-// (calitate, subtitrare RO, cine a văzut, durată). Necesită autentificare
-// (orice cont aprobat) — spre deosebire de restul paginii Acasă, care rămâne
-// publică.
-//
-// Atât lista cât și detaliile sunt citite exclusiv din `media` (populată
-// doar de wizard/căutarea manuală Filelist — vezi media.ts): zero cereri
-// Plex/TMDB live la navigare, indiferent câți utilizatori o deschid
-// simultan. Un titlu care nu e adăugat prin aplicație nu apare deloc în
-// Bibliotecă (nu mai există backfill retroactiv din Plex).
+// Biblioteca: lista (după data adăugării) și detaliile per titlu, pentru orice
+// cont aprobat. Citite exclusiv din `media` — zero cereri Plex/TMDB la
+// navigare; singurul lucru live e „cine a văzut” (istoricul Plex, în cache).
 // ---------------------------------------------------------------------------
 
 import { createServerFn } from "@tanstack/react-start";
 import { SUBTITLE_RETRY_DAYS as RETRY_DAYS } from "../filelist/subtitle-outcomes";
 import type { FileSubtitleReport } from "../filelist/subtitle-outcomes";
 
-// Un rând din Bibliotecă = un film SAU un serial întreg. Episoadele nu mai
-// apar niciodată la nivelul listei: se văd doar înăuntrul serialului, în
-// drawer. Înainte, lista era per episod și gruparea se făcea în client, doar
-// între rânduri adiacente cronologic (groupConsecutiveEpisodes) — un serial
-// cu episoade primite în zile diferite apărea de mai multe ori, iar
-// sortarea/căutarea/paginarea lucrau tot pe episoade, nu pe seriale.
+// Un rând = un film SAU un serial întreg; episoadele se văd doar în drawer.
+// (Lista per episod, grupată în client, arăta un serial de mai multe ori.)
 export interface PlexBrowseItem {
-  // Identificator stabil, mereu prezent (id-ul rândului din `media`) —
-  // pentru filme rândul filmului, pentru seriale rândul-părinte 'tv_show'.
+  // id-ul rândului din `media` (la seriale, rândul 'tv_show').
   mediaId: number;
   ratingKey: string | null;
   title: string;
   type: "movie" | "tv_show";
   show: string | null;
-  // Titlul original (de regulă în engleză) — doar pentru căutarea din listă,
-  // ca "Dune" să găsească și un titlu salvat în română.
+  // Titlul original, doar pentru căutare („Dune” găsește și titlul românesc).
   originalTitle: string | null;
-  // Gata de folosit direct ca src de <img> — link TMDB, salvat în `media`.
+  // Link TMDB, gata de folosit ca src.
   thumbUrl: string | null;
-  // Pentru seriale: episodul cel mai recent adăugat, nu momentul în care a
-  // fost creat rândul-părinte — "Recent adăugate" înseamnă atunci "ultima
-  // activitate pe serial", ceea ce e chiar util (un serial care primește
-  // episoade noi urcă în listă).
+  // La seriale: ultimul episod adăugat — un serial cu episoade noi urcă în listă.
   addedAt: number;
   // Pentru seriale: adevărat dacă a văzut măcar un episod.
   watchedByMe: boolean;
-  // Câți utilizatori distincți (din conturile Plex mapate la conturi
-  // FaikkitBox) au vizionat titlul — pentru seriale, câți au văzut măcar un
-  // episod. Afișat ca badge separat în listă.
+  // Câți utilizatori au vizionat titlul (la seriale, măcar un episod).
   watchedCount: number;
   // Doar pentru seriale (0 la filme).
   episodeCount: number;
   seasonCount: number;
-  // Câte episoade a văzut utilizatorul curent — arătat ca "12/36", mai util
-  // decât o bifă pentru un serial.
+  // Câte episoade a văzut utilizatorul curent („12/36”).
   watchedEpisodes: number;
   // Câte episoade sunt încă în descărcare/procesare.
   downloadingCount: number;
   // Urmărire episoade noi activă pe serial.
   autoDownload: boolean;
-  // "downloading" — are torrent, dar Plex nu l-a indexat încă; "processing"
-  // — torrentul s-a terminat (completed_at setat), se așteaptă doar
-  // legarea la Plex (vezi fereastra de retry din download.ts); "in_library"
-  // — normal, deja în Plex.
+  // "downloading" — încă neindexat de Plex; "processing" — terminat, așteaptă
+  // legarea; "in_library" — în Plex.
   status: "in_library" | "downloading" | "processing";
-  // Progres live din qBittorrent — populate doar pentru status "downloading"
-  // cu torrent_hash cunoscut; null dacă torrentul nu mai e găsit acolo
-  // (ex. șters manual) sau qBit nu e configurat/disponibil.
+  // Progresul din qBittorrent, doar la "downloading"; null dacă torrentul nu
+  // mai e acolo sau qBittorrent nu răspunde.
   progress: number | null; // 0-100
   dlspeed: number | null; // bytes/s
   eta: number | null; // secunde
-  // Ștergere programată (formatul SQLite, UTC) — insigna cu timer din listă.
-  // La seriale, cea mai apropiată dintre episoade. Vezi scheduled-delete.ts.
+  // Ștergere programată (SQLite, UTC); la seriale, cea mai apropiată.
   deleteScheduledAt: string | null;
 }
 
 // ---------------------------------------------------------------------------
-// Progres live qBittorrent — un singur request cu toate hash-urile relevante,
-// reutilizat atât de listă cât și de detalii (vezi qbit-client.ts pentru
-// autentificarea cu cookie SID + retry).
+// Progresul din qBittorrent — o singură cerere cu toate hash-urile.
 // ---------------------------------------------------------------------------
 
 interface QbitProgressInfo {
@@ -106,17 +80,14 @@ async function fetchQbitProgress(hashes: string[]): Promise<Map<string, QbitProg
       result.set(t.hash, { progress: t.progress, dlspeed: t.dlspeed, eta: t.eta });
     }
   } catch {
-    // qBit indisponibil — badge-ul rămâne fără procent, nu blocăm lista.
+    // qBittorrent indisponibil — lista rămâne fără procent.
   }
   return result;
 }
 
-// Fallback pentru "Marchează ca vizionat" din Plex (setează viewCount pe
-// item, dar NU scrie o intrare de istoric/scrobble — invizibil pentru
-// PlexWatchedIndex, oricât de bine ar potrivi ratingKey-ul). Sigur doar
-// pentru owner-ul serverului (singurul cont ale cărui viewCount-uri sunt
-// reflectate corect de PLEX_TOKEN) — vezi getPlexOwnerUsername în plex.ts.
-// Un singur loc, folosit identic de listă și de drawer.
+// Rezervă pentru „Marchează ca vizionat” din Plex, care setează viewCount, dar
+// nu scrie în istoric. Sigur doar pentru owner-ul serverului (al cărui
+// viewCount îl vede PLEX_TOKEN).
 async function getOwnerViewedAtByRatingKey(
   myPlexUsername: string | null,
   candidateRatingKeys: string[],
@@ -128,9 +99,8 @@ async function getOwnerViewedAtByRatingKey(
   return getPlexViewedRatingKeys(candidateRatingKeys);
 }
 
-// Contul Plex al utilizatorului logat: `historyName` e cheia din istoricul
-// Plex (numele afișat, aflat după plex_account_id — vezi getPlexHistoryName),
-// `plexUsername` e username-ul plex.tv, comparat cu owner-ul serverului.
+// Contul Plex al utilizatorului: `historyName` = cheia din istoricul Plex,
+// `plexUsername` = username-ul plex.tv, comparat cu owner-ul.
 async function myPlexIdentity(
   db: import("node:sqlite").DatabaseSync,
   userId: number | undefined,
@@ -188,14 +158,8 @@ export const getPlexLibraryBrowse = createServerFn({ method: "GET" }).handler(
       const { getDb } = await import("../db");
       const db = getDb();
 
-      // Bibliotecă arată doar conținut real: deja confirmat în Plex
-      // (plex_rating_key cunoscut, indiferent de sursă: descărcat prin
-      // aplicație SAU backfill din restul bibliotecii), sau în curs de
-      // descărcare (torrent_hash cunoscut, încă neindexat de Plex).
-      //
-      // Rândurile-părinte 'tv_show' intră și ele, fără condiția de conținut
-      // real (n-au niciodată torrent propriu) — dar doar dacă au măcar un
-      // episod; un serial fără episoade n-are ce căuta în Bibliotecă.
+      // Doar conținut real: legat de Plex sau în curs de descărcare. Rândurile
+      // 'tv_show' intră dacă au măcar un episod.
       const rows = db
         .prepare(
           `SELECT m.id, m.parent_id, m.plex_rating_key, m.media_type, m.title, m.original_title,
@@ -214,10 +178,8 @@ export const getPlexLibraryBrowse = createServerFn({ method: "GET" }).handler(
         )
         .all() as unknown as MediaBrowseRow[];
 
-      // Episoadele nu devin rânduri de listă; ele alimentează agregatele
-      // serialului lor. Le ținem separat, indexate pe parent_id, fiindcă mai
-      // jos avem nevoie de ele și pentru "cine a văzut" (potrivirea cu
-      // istoricul Plex se face per episod, nu per serial).
+      // Episoadele alimentează agregatele serialului; indexate pe parent_id și
+      // pentru „cine a văzut” (Plex ține evidența per episod).
       const byId = new Map(rows.map((r) => [r.id, r]));
       const episodesByParent = new Map<number, MediaBrowseRow[]>();
       for (const r of rows) {
@@ -261,15 +223,13 @@ export const getPlexLibraryBrowse = createServerFn({ method: "GET" }).handler(
         items.push({
           mediaId: r.id,
           ratingKey: null,
-          // Pentru seriale, `title` pe rândul din `media` e deja titlul
-          // serialului (nu se ține un titlu separat per episod).
+          // La seriale, `title` e deja titlul serialului.
           title: "",
           type: "tv_show",
           show: r.title,
           originalTitle:
             r.original_title ?? episodes.find((e) => e.original_title)?.original_title ?? null,
-          // Rândul-părinte are de regulă posterul serialului; dacă lipsește
-          // (seriale vechi din backfill), cădem pe al primului episod.
+          // Posterul serialului, sau al primului episod (seriale vechi din backfill).
           thumbUrl: r.poster_path ?? episodes.find((e) => e.poster_path)?.poster_path ?? null,
           addedAt: Math.max(...episodes.map(rowAddedAt)),
           watchedByMe: false,
@@ -279,8 +239,7 @@ export const getPlexLibraryBrowse = createServerFn({ method: "GET" }).handler(
           watchedEpisodes: 0,
           downloadingCount: pending.length,
           autoDownload: !!r.auto_download,
-          // Serialul e "în descărcare" cât timp are măcar un episod care nu
-          // a ajuns încă în Plex — badge-ul din listă arată atunci câte.
+          // „În descărcare” cât măcar un episod n-a ajuns în Plex.
           status: pending.length > 0 ? "downloading" : "in_library",
           progress: null,
           dlspeed: null,
@@ -294,11 +253,8 @@ export const getPlexLibraryBrowse = createServerFn({ method: "GET" }).handler(
       }
       items.sort((a, b) => b.addedAt - a.addedAt);
 
-      // Progres live: un singur request către qBit cu toate hash-urile
-      // titlurilor încă în descărcare, nu unul per titlu. Pentru un serial,
-      // hash-urile relevante sunt ale episoadelor lui neajunse încă în Plex
-      // (pot fi mai multe, sau unul singur dacă e un pachet de sezon), iar
-      // progresul afișat e media lor — un singur procent pe rândul din listă.
+      // O singură cerere qBittorrent pentru toate titlurile în descărcare; la
+      // un serial, procentul e media episoadelor lui.
       const hashesByMediaId = new Map<number, string[]>();
       for (const item of items) {
         const source =
@@ -331,9 +287,8 @@ export const getPlexLibraryBrowse = createServerFn({ method: "GET" }).handler(
         }
       }
 
-      // "Am văzut" + "văzut de N" — badge-uri afișate direct în listă, fără
-      // cost suplimentar (nicio cerere nouă către Plex): potrivim doar cu
-      // istoricul deja cachuit, pentru toți utilizatorii deodată.
+      // „Am văzut” și „văzut de N”, din istoricul deja în cache, pentru toți
+      // utilizatorii deodată.
       const { historyName: myHistoryName, plexUsername: myPlexUsername } = await myPlexIdentity(
         db,
         session.data.userId,
@@ -343,10 +298,7 @@ export const getPlexLibraryBrowse = createServerFn({ method: "GET" }).handler(
       const { getAllPlexWatchedIndexes, isItemWatched } = await import("./plex");
       const allWatchedIndexes = await getAllPlexWatchedIndexes();
 
-      // Potrivirea cu istoricul Plex rămâne per episod (asta e granularitatea
-      // la care Plex ține evidența); pentru un serial doar agregăm rezultatul:
-      // "văzut de N" = câți au văzut măcar un episod, iar pentru utilizatorul
-      // curent păstrăm și câte episoade a văzut, ca să putem arăta "12/36".
+      // Potrivirea e per episod; la un serial, „văzut de N” = măcar un episod.
       const unitsFor = (it: PlexBrowseItem): MediaBrowseRow[] =>
         it.type === "tv_show" ? (episodesByParent.get(it.mediaId) ?? []) : [byId.get(it.mediaId)!];
       const matchOf = (r: MediaBrowseRow) => {
@@ -378,8 +330,7 @@ export const getPlexLibraryBrowse = createServerFn({ method: "GET" }).handler(
         return { ...it, watchedByMe, watchedCount, watchedEpisodes };
       });
 
-      // Fallback pentru "Marchează ca vizionat" din Plex (vezi
-      // getOwnerViewedAtByRatingKey) — tot per episod, agregat la fel.
+      // Rezerva „Marchează ca vizionat”, tot per episod.
       const ratingKeysByItem = new Map(
         withWatched.map((it) => [
           it.mediaId,
@@ -388,9 +339,8 @@ export const getPlexLibraryBrowse = createServerFn({ method: "GET" }).handler(
             .map((r) => r.plex_rating_key!),
         ]),
       );
-      // Doar titlurile care nu-mi apar deja integral ca văzute — cheile plec
-      // toate într-un singur URL către Plex, deci lista trebuie să rămână
-      // mărginită pe măsură ce biblioteca crește.
+      // Doar titlurile încă nevăzute integral — cheile merg într-un singur URL
+      // către Plex, deci lista trebuie să rămână mărginită.
       const ownerViewedAt = await getOwnerViewedAtByRatingKey(
         myPlexUsername,
         withWatched
@@ -424,24 +374,20 @@ export interface ShowEpisodeEntry {
   mediaId: number;
   season: number | null;
   episode: number | null;
-  // Null cât timp completarea din TMDB n-a ajuns încă la episodul ăsta (vezi
-  // syncEpisodeDetails) — UI-ul arată atunci doar codul SxxEyy.
+  // Null până ajunge completarea din TMDB — UI-ul arată atunci doar SxxEyy.
   episodeTitle: string | null;
   addedAt: number;
   status: "in_library" | "downloading" | "processing";
   watchedByMe: boolean;
   isSeasonPack: boolean;
-  // Procentul din qBittorrent, doar cât episodul e în descărcare. Null și
-  // când torrentul nu mai e în qBittorrent (șters manual) — rândul rămâne
-  // atunci fără procent, nu blocat la 0%.
+  // Procentul din qBittorrent, cât episodul se descarcă; null dacă torrentul nu
+  // mai e acolo (rândul nu rămâne blocat la 0%).
   progress: number | null;
-  // Pentru rândul din listă: cadrul episodului (TMDB), data difuzării
-  // (YYYY-MM-DD) și durata fișierului din Plex. Aceleași coloane pe care le
-  // arată drawer-ul episodului — citite din același SELECT, fără cereri în plus.
+  // Cadrul, data difuzării și durata — din același SELECT.
   stillUrl: string | null;
   airDate: string | null;
   durationMs: number | null;
-  // Ștergere programată (formatul SQLite, UTC), vezi scheduled-delete.ts.
+  // Ștergere programată (SQLite, UTC).
   deleteScheduledAt: string | null;
 }
 
@@ -453,13 +399,11 @@ export interface PlexTitleDetail {
   show: string | null;
   season: number | null;
   episode: number | null;
-  // Gata de folosit direct ca src de <img> — link TMDB, salvat în `media`.
-  // Pe episoade: posterul sezonului (vertical).
+  // Link TMDB; pe episoade, posterul sezonului.
   thumbUrl: string | null;
-  // Doar pe episoade: un cadru din episod (orizontal), de la TMDB.
+  // Pe episoade: cadrul din episod (orizontal).
   stillUrl: string | null;
-  // Doar pe episoade: data difuzării (YYYY-MM-DD). `year` e, pe episoade,
-  // anul serialului.
+  // Pe episoade: data difuzării (`year` e anul serialului).
   airDate: string | null;
   addedAt: number;
   durationMs: number;
@@ -478,16 +422,12 @@ export interface PlexTitleDetail {
   progress: number | null;
   dlspeed: number | null;
   eta: number | null;
-  // Butoanele de corectare/ștergere subtitrare și ștergere completă operează
-  // direct pe media.id + torrentHash.
+  // Acțiunile pe subtitrare și ștergerea lucrează pe media.id + torrentHash.
   torrentHash: string | null;
-  // Pagina torrent-ului pe Filelist — doar descărcările de după migrarea v36
-  // au ID-ul; pentru rest, butonul lipsește.
+  // Pagina pe Filelist — doar descărcările de după v36.
   filelistId: number | null;
-  // Reîncercarea zilnică a subtitrării (subtitle-retry.ts), pentru rândul de
-  // sub insigne: „se caută zilnic până pe…" sau „căutarea s-a încheiat".
-  // null când nu e cazul (are subtitrare bună, audio în română, încă se
-  // descarcă, sau e rândul-serial).
+  // Reîncercarea zilnică a subtitrării: „se caută zilnic până pe…” sau
+  // „căutarea s-a încheiat”; null când nu e cazul.
   subtitleRetry: {
     state: "searching" | "ended";
     kind: "missing" | "approximate";
@@ -495,44 +435,35 @@ export interface PlexTitleDetail {
     until: string;
     lastCheckedAt: string | null;
   } | null;
-  // true dacă intrarea găsită e un pachet de sezon întreg, nu doar acest
-  // episod — ștergerea/corectarea ar afecta atunci tot pachetul.
+  // true = intrarea e un pachet de sezon — acțiunile afectează tot pachetul.
   isSeasonPack: boolean;
-  // true doar pentru cel care a adăugat titlul sau pentru un admin — UI-ul
-  // ascunde butoanele de subtitrare/ștergere pentru oricine altcineva.
+  // true pentru cel care a adăugat titlul sau un admin.
   canManage: boolean;
-  // Formatul SQLite, UTC — până când o ștergere/anulare cerută acum doar se
-  // programează (hit and run pe Filelist, vezi scheduled-delete.ts). null
-  // după primele 24 h sau pentru cine nu poate șterge titlul.
+  // Până când o ștergere cerută acum doar se programează (SQLite, UTC); null
+  // după 24 h sau pentru cine nu poate șterge.
   deleteDelayedUntil: string | null;
-  // Ștergerea deja programată: când și cine a cerut-o. Oricine o poate anula.
+  // Ștergerea programată: când și cine. Oricine o poate anula.
   deleteScheduled: { at: string; byUsername: string | null } | null;
   // Doar adminul poate ocoli programarea și șterge pe loc.
   canDeleteImmediately: boolean;
   tmdbId: number | null;
   originalTitle: string | null;
-  // Vizibil pentru toți (nu doar admin, spre deosebire de tech.imdbId) —
-  // folosit direct pentru butonul de link către IMDb.
+  // Vizibil pentru toți — butonul spre IMDb.
   imdbId: string | null;
-  // Doar pentru 'tv_show': episoadele deținute, în ordine, ca drawer-ul să
-  // le poată lista pe sezoane fără încă o cerere. Un episod deschis de-aici
-  // își cere propriile detalii complete, cu getPlexTitleDetail(mediaId).
+  // La 'tv_show': episoadele deținute, în ordine, pentru lista pe sezoane.
   episodes: ShowEpisodeEntry[];
-  // Doar pentru 'tv_show': starea urmăririi (vezi coloanele din `media`).
+  // La 'tv_show': starea urmăririi.
   tvStatus: string | null;
   autoDownload: boolean;
   autoDownloadQuality: string | null;
   autoDownloadFallbackQuality: string | null;
   autoDownloadFrom: string | null;
   watchLastCheckedAt: string | null;
-  // Următorul episod anunțat: codul ('S01E04'), data de la TMDB (fără oră) și
-  // instantul exact de la TVmaze, când există. Toate citite din `media` —
-  // reîmprospătate periodic de Watcher, nu cerute live la deschidere.
+  // Următorul episod anunțat (cod, data TMDB, ora TVmaze) — din `media`.
   nextEpisode: string | null;
   nextEpisodeAirDate: string | null;
   nextEpisodeAirstamp: string | null;
-  // Detalii tehnice — populate doar pentru admin (vezi isAdminOrOwner mai
-  // jos); UI-ul le ascunde complet pentru restul utilizatorilor.
+  // Detalii tehnice — doar pentru admin.
   tech: {
     imdbId: string | null;
     torrentName: string | null;
@@ -545,17 +476,15 @@ export interface PlexTitleDetail {
     completedAt: string | null;
     subtitleSource: string | null;
     subtitleDetail: string | null;
-    // Raportul structurat al rândului (varianta aleasă + respinsele) — null
-    // la rânduri vechi sau la placeholder-ul unui pachet; atunci rămâne
-    // detaliul text.
+    // Raportul structurat; null la rânduri vechi sau la placeholder-ul unui
+    // pachet (rămâne detaliul text).
     subtitleReport: FileSubtitleReport | null;
     subtitleCheckedAt: string | null;
     plexRatingKey: string | null;
   } | null;
 }
 
-// Doar raportul unui fișier (`file`); cel al unui pachet întreg nu se
-// afișează pe rând — drawer-ul cade pe detaliul text.
+// Doar raportul unui fișier; al unui pachet întreg nu se afișează pe rând.
 function parseFileSubtitleReport(raw: string | null): FileSubtitleReport | null {
   if (!raw) return null;
   try {
@@ -617,9 +546,7 @@ interface MediaRow {
   next_episode_airstamp: string | null;
 }
 
-// Aceeași regulă ca listTorrentsDueForSubtitleRetry (subtitle-retry.ts): fără
-// subtitrare română (nici audio) sau cu una aproximativă, în primele
-// RETRY_DAYS zile de la finalizarea descărcării.
+// Aceeași regulă ca listTorrentsDueForSubtitleRetry.
 function subtitleRetryOf(row: MediaRow): PlexTitleDetail["subtitleRetry"] {
   if (row.media_type === "tv_show" || !row.torrent_hash || !row.completed_at) return null;
   const missing = !row.has_romanian_subtitle && !row.has_romanian_audio;
@@ -637,17 +564,14 @@ function subtitleRetryOf(row: MediaRow): PlexTitleDetail["subtitleRetry"] {
       lastCheckedAt: row.subtitle_checked_at,
     };
   }
-  // După fereastră, o aproximativă rămâne pur și simplu subtitrarea titlului.
+  // După fereastră, o aproximativă rămâne subtitrarea titlului.
   return missing
     ? { state: "ended", kind: "missing", until, lastCheckedAt: row.subtitle_checked_at }
     : null;
 }
 
-// Orice titlu clicabil din Bibliotecă are un rând `media` (lista provine
-// exclusiv de-acolo) — răspunsul e mereu doar SELECT-uri, fără nicio cerere
-// Plex/TMDB live. Singurul lucru încă live e "cine a văzut" (istoricul Plex,
-// cache-uit separat 60s) — n-are sens duplicat static, s-ar dezactualiza la
-// fiecare vizionare nouă.
+// Detaliile unui titlu, doar din SELECT-uri; „cine a văzut” rămâne live
+// (istoricul Plex, cache 60s) — static s-ar dezactualiza.
 async function buildDetailFromMediaRow(
   row: MediaRow,
   session: { data: { userId?: number; admin?: boolean } },
@@ -664,9 +588,7 @@ async function buildDetailFromMediaRow(
     session.data.userId,
   );
 
-  // Pentru un serial, episoadele sunt necesare din două motive: lista pe
-  // sezoane din drawer, și "cine a văzut" — Plex ține evidența per episod,
-  // deci un serial e "văzut de X" dacă X a văzut măcar un episod al lui.
+  // La un serial: episoadele, pentru lista pe sezoane și „cine a văzut”.
   const epRows = isShow
     ? (db
         .prepare(
@@ -719,8 +641,7 @@ async function buildDetailFromMediaRow(
       ];
   const watchedByAll: Array<{ username: string; viewedAt: number }> = [];
   for (const [username, index] of Object.entries(allWatchedIndexes)) {
-    // Pentru serial reținem cea mai recentă vizionare dintre episoade — un
-    // singur rând per utilizator, ca la film.
+    // La serial: cea mai recentă vizionare, un rând per utilizator.
     const viewedAts = matchUnits
       .map((u) => getWatchedAt(index, u))
       .filter((v): v is number => v != null);
@@ -740,7 +661,7 @@ async function buildDetailFromMediaRow(
     : undefined;
   const watchedByMe = !!myWatched;
   const watchedByMeAt = myWatched && myWatched.viewedAt > 0 ? myWatched.viewedAt : null;
-  // Ordonat cronologic invers — vizionarea cea mai recentă sus.
+  // Cea mai recentă vizionare sus.
   const watchedByOthers = watchedByAll
     .filter((w) => w.username !== myHistoryName)
     .sort((a, b) => b.viewedAt - a.viewedAt);
@@ -759,15 +680,12 @@ async function buildDetailFromMediaRow(
     }
   }
 
-  // Episoadele serialului — pentru lista pe sezoane din drawer. "Văzut" se
-  // potrivește per episod, ca peste tot (Plex ține evidența la nivel de
-  // episod), refolosind indexul deja încărcat mai sus.
+  // Episoadele, pentru lista pe sezoane, cu „văzut” per episod.
   let episodes: ShowEpisodeEntry[] = [];
   if (isShow) {
     const { isItemWatched } = await import("./plex");
     const myIndex = myHistoryName ? allWatchedIndexes[myHistoryName] : undefined;
-    // O singură cerere la qBittorrent pentru toate episoadele încă nesosite
-    // în Plex, nu una per rând.
+    // O singură cerere qBittorrent pentru toate episoadele încă nesosite.
     const epProgress = await fetchQbitProgress(
       epRows.filter((e) => !e.plex_rating_key && e.torrent_hash).map((e) => e.torrent_hash!),
     );
@@ -804,10 +722,9 @@ async function buildDetailFromMediaRow(
     });
   }
 
-  // Statusul unui serial vine din episoadele lui, nu de pe rândul-părinte:
-  // 'tv_show' n-are prin construcție nici torrent, nici plex_rating_key, nici
-  // completed_at, deci formula obișnuită îl declara la nesfârșit "Se
-  // descarcă" — și ținea și un refetch la 2.5s care nu se oprea niciodată.
+  // Statusul unui serial vine din episoadele lui: rândul 'tv_show' n-are
+  // torrent, deci formula obișnuită îl declara pe veci „Se descarcă” (cu un
+  // refetch la 2,5s care nu se mai oprea).
   const status: PlexTitleDetail["status"] = isShow
     ? episodes.some((e) => e.status !== "in_library")
       ? "downloading"
@@ -841,8 +758,8 @@ async function buildDetailFromMediaRow(
   return {
     mediaId: row.id,
     ratingKey: row.plex_rating_key,
-    // Pentru episoade, coloana title ține titlul serialului (acela merge în
-    // `show`); ce arătăm ca titlu e numele episodului, dacă îl avem.
+    // Pe episoade, `title` e al serialului (merge în `show`); titlul e numele
+    // episodului.
     title: isShow ? "" : isEpisode ? (row.episode_title ?? "") : row.title,
     type: isEpisode ? "episode" : isShow ? "tv_show" : "movie",
     show: isEpisode || isShow ? row.title : null,
@@ -857,8 +774,7 @@ async function buildDetailFromMediaRow(
     quality: row.quality,
     hasRomanianSubtitle: !!row.has_romanian_subtitle,
     hasRomanianAudio: !!row.has_romanian_audio,
-    // Pe episoade, descrierea episodului; a serialului doar ca rezervă, cât
-    // TMDB n-are niciuna pentru episod.
+    // Descrierea episodului; a serialului doar ca rezervă.
     summary: isEpisode ? (row.episode_overview ?? row.overview_ro) : row.overview_ro,
     genres: JSON.parse(row.genres || "[]"),
     watchedByMe,
@@ -943,11 +859,9 @@ export const getPlexTitleDetail = createServerFn({ method: "GET" })
   );
 
 // ---------------------------------------------------------------------------
-// "Vizionări recente" — card pe Acasă. Sursa afișată e `recent_watch_cache`
-// (supraviețuiește ștergerii titlului din `media`, vezi recent-watch-cache.ts);
-// aici doar recalculăm live din PlexWatchedIndex ce s-a schimbat față de
-// ultima citire și scriem diferența în cache, cât timp titlul mai există în
-// `media` — nu putem detecta vizionări noi pentru un titlu deja șters.
+// „Vizionări recente” (Acasă). Sursa e `recent_watch_cache`, care supraviețuiește
+// ștergerii titlului; aici adăugăm vizionările noi din istoricul Plex, cât
+// timp titlul mai e în `media`.
 // ---------------------------------------------------------------------------
 
 export type { RecentWatch } from "./recent-watch-types";
@@ -987,10 +901,8 @@ export const getRecentWatches = createServerFn({ method: "GET" }).handler(
 
       const cutoff = Math.floor(Date.now() / 1000) - RECENT_WATCH_WINDOW_SECONDS;
 
-      // Recalculează live doar cât timp titlul mai există în `media` — pentru
-      // ce mai găsește, ține-o minte în `recent_watch_cache`, ca titlul să
-      // rămână vizibil aici și după ce e șters din Bibliotecă (torrent +
-      // rândul `media`), nu doar cât există local.
+      // Recalculat doar cât titlul mai e în `media`; ținut minte în cache, ca
+      // să rămână vizibil și după ștergere.
       if (rows.length > 0) {
         const { getAllPlexWatchedIndexes, getWatchedAt } = await import("./plex");
         const { createRecentWatchUpserter } = await import("./recent-watch-cache");
@@ -1065,20 +977,16 @@ export const getRecentWatches = createServerFn({ method: "GET" }).handler(
             : null,
         durationMinutes:
           !row.completed && row.duration_ms != null ? Math.round(row.duration_ms / 60_000) : null,
-        // Trailerele și extras-urile n-au rând în `media`, deci nici poster —
-        // cădem pe miniatura din Plex, derivată din ratingKey și servită prin
-        // proxy-ul autentificat. Făcut la citire, nu la scriere, ca să acopere
-        // și rândurile deja existente în cache.
+        // Trailerele n-au rând în `media` — miniatura din Plex, prin proxy-ul
+        // autentificat (la citire, ca să acopere și rândurile vechi).
         thumbUrl: row.poster_path ?? plexThumbUrl(row.plex_rating_key),
         username: row.username,
         viewedAt: row.viewed_at,
       }));
       const merged = mergeConsecutiveEpisodes(items);
       merged.sort((a, b) => b.viewedAt - a.viewedAt);
-      // Trimitem tot ce e în fereastra de 30 de zile (maximum 100 de rânduri
-      // din interogarea de mai sus). Cardul de pe Acasă arată primele 8 și le
-      // desfășoară la cerere — tăierea la 8 era aici, pe server, deci butonul
-      // "arată mai multe" n-avea ce afișa.
+      // Toată fereastra de 30 de zile (max 100); cardul arată 8 și desfășoară
+      // restul la cerere.
       return { status: "ok", items: merged };
     } catch (e) {
       return { status: "error", error: e instanceof Error ? e.message : String(e) };

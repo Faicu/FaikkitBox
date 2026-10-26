@@ -1,7 +1,4 @@
-// ---------------------------------------------------------------------------
-// Bază de date SQLite (node:sqlite — nativ în Node 22.5+, zero dependențe)
-// Un singur fișier: /opt/faikkitbox/data/faikkitbox.db
-// ---------------------------------------------------------------------------
+// Bază de date SQLite (node:sqlite, nativ), un singur fișier: data/faikkitbox.db
 
 import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
@@ -115,12 +112,9 @@ export function getDb(): DatabaseSync {
     );
     CREATE INDEX IF NOT EXISTS idx_user_logins_user ON user_logins(user_id, logged_in_at DESC);
 
-    -- Sursă unică pentru datele unui titlu media (film/serial/episod), ca
-    -- Bibliotecă/Lansări să nu mai reconstituie prin căutări TMDB live ce
-    -- oricum se știe deja din momentul în care titlul a fost adăugat.
-    -- 'tv_show' e un rând-părinte doar cu metadate (fără torrent propriu);
-    -- episoadele efectiv descărcate ale unui serial ating de el prin
-    -- parent_id, ca genul/descrierea să nu se repete per episod.
+    -- Sursă unică pentru datele unui titlu (film/serial/episod) — Biblioteca nu
+    -- reconstituie prin TMDB ce se știe de la adăugare. 'tv_show' e rândul-părinte
+    -- cu metadatele serialului; episoadele țin de el prin parent_id.
     CREATE TABLE IF NOT EXISTS media (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       media_type TEXT NOT NULL CHECK(media_type IN ('movie','tv_show','episode')),
@@ -141,9 +135,7 @@ export function getDb(): DatabaseSync {
       plex_added_at INTEGER,
       torrent_name TEXT,
       torrent_hash TEXT,
-      -- ID-ul torrent-ului pe Filelist (details.php?id=…), pentru butonul din
-      -- drawer. Doar descărcările de după v36 îl au; rândurile mai vechi rămân
-      -- NULL (completarea retroactivă a fost respinsă — vezi migrarea).
+      -- ID-ul torrentului pe Filelist (details.php?id=…), doar de la v36 încolo.
       filelist_id INTEGER,
       category INTEGER,
       category_name TEXT,
@@ -161,79 +153,49 @@ export function getDb(): DatabaseSync {
       subtitle_source TEXT,
       subtitle_detail TEXT,
       subtitle_checked_at TEXT,
-      -- 1 = subtitrarea pusă e „aproximativă" (alt release, sincronizare
-      -- slabă) — reverificată zilnic 14 zile, ca să fie înlocuită dacă apare
-      -- varianta exactă (subtitle-retry.ts).
+      -- 1 = subtitrare „aproximativă”, reverificată zilnic 14 zile (subtitle-retry.ts).
       subtitle_approximate INTEGER NOT NULL DEFAULT 0,
-      -- Raportul structurat al ultimei verificări pentru ACEST rând (JSON:
-      -- { file: SubtitleFileReport, rejected: SubtitleRejectionReport[] }) —
-      -- varianta aleasă și cele respinse, afișate în drawer-ul din
-      -- Bibliotecă. La un pachet, fiecare episod îl are pe al lui.
+      -- Raportul ultimei verificări de subtitrare pentru ACEST rând (JSON:
+      -- varianta aleasă și cele respinse), pentru drawer-ul din Bibliotecă.
       subtitle_report TEXT,
-      -- Ștergere programată (formatul SQLite, UTC): titlul cerut spre
-      -- ștergere în primele 24 h de la descărcare se șterge abia la
-      -- împlinirea lor — hit and run pe Filelist, vezi scheduled-delete.ts.
-      -- Scrisă pe toate rândurile torrentului (un pachet e un singur torrent).
+      -- Ștergere programată (SQLite, UTC) — hit and run pe Filelist, vezi
+      -- scheduled-delete.ts. Pe toate rândurile torrentului.
       delete_scheduled_at TEXT,
       delete_scheduled_by INTEGER,
       quality TEXT,
       duration_ms INTEGER,
-      -- Titlul episodului (doar pe rândurile 'episode'): coloana title ține
-      -- titlul SERIALULUI și pe rândurile de episod, deci numele episodului
-      -- n-avea unde sta. Se completează din TMDB de syncEpisodeDetails (la
-      -- descărcare, apoi la 12 ore) — nu se cere live la fiecare deschidere
-      -- de drawer, ca Biblioteca să rămână doar SELECT-uri.
+      -- Titlul episodului (pe episoade, title ține titlul serialului), completat
+      -- din TMDB de syncEpisodeDetails — Biblioteca rămâne doar SELECT-uri.
       episode_title TEXT,
-      -- Descrierea și imaginea episodului (doar pe rândurile 'episode'):
-      -- overview_ro e, pe episoade, o copie a descrierii SERIALULUI, iar
-      -- poster_path e posterul sezonului (vertical, folosit în notificări și
-      -- miniaturi). Imaginea episodului e un cadru orizontal, deci are coloana
-      -- ei. Ținute la zi de syncEpisodeDetails (show-watch.ts).
+      -- Descrierea și cadrul episodului (overview_ro e, pe episoade, a serialului,
+      -- iar poster_path e posterul sezonului). Tot de syncEpisodeDetails.
       episode_overview TEXT,
       episode_still TEXT,
-      -- Data difuzării episodului (YYYY-MM-DD, TMDB). year e, pe episoade,
-      -- anul premierei SERIALULUI — un episod din sezonul 8 ar apărea cu anul
-      -- sezonului 1. Tot de syncEpisodeDetails.
+      -- Data difuzării (TMDB); year e, pe episoade, anul premierei serialului.
       episode_air_date TEXT,
-      -- Urmărire episoade noi — au sens DOAR pe rândul-părinte 'tv_show'.
-      -- Stau aici, pe rândul serialului, nu într-o tabelă separată: prima
-      -- implementare (pinned_items, ștearsă în v14) ținea urmărirea într-o
-      -- structură paralelă, legată de 'media' doar prin tmdb_id, și de-acolo
-      -- veneau toate bug-urile ei (rânduri duplicate, dedublare între două
-      -- liste, descărcare de N ori pentru N useri care fixaseră același
-      -- titlu). Rândul 'tv_show' e deja unic per serial și deja legat de
-      -- episoade prin parent_id — e locul corect.
+      -- Urmărirea episoadelor noi — doar pe rândul 'tv_show', unic per serial și
+      -- legat deja de episoade. Prima implementare ținea urmărirea într-o tabelă
+      -- paralelă (pinned_items, ștearsă în v14), sursa tuturor bug-urilor ei.
       auto_download INTEGER NOT NULL DEFAULT 0,
       auto_download_quality TEXT,
-      -- Prima poziție de la care se descarcă ('S03E05'): activarea urmăririi
-      -- nu trebuie să tragă retroactiv tot ce lipsește din istoricul unui
-      -- serial cu 7 sezoane din care ai 2.
+      -- Poziția de la care se descarcă ('S03E05') — activarea nu trage tot
+      -- istoricul unui serial.
       auto_download_from TEXT,
       watch_last_checked_at TEXT,
-      -- Calitatea de rezervă a urmăririi (seriale și filme): se descarcă doar
-      -- dacă principala lipsește la două verificări la rând, la cel puțin 3
-      -- ore distanță (vezi fallback-quality.ts). NULL = fără rezervă.
+      -- Calitatea de rezervă (fallback-quality.ts). NULL = fără.
       auto_download_fallback_quality TEXT,
-      -- JSON { țintă: momentul ISO în care s-a găsit prima dată DOAR rezerva },
-      -- ținta fiind „S02E03", „S02 pachet" sau „film". Pe rând, nu în memorie,
+      -- JSON { țintă: momentul ISO al primei găsiri DOAR a rezervei } — pe rând,
       -- ca așteptarea să supraviețuiască unei reporniri.
       watch_fallback_seen TEXT,
-      -- Metadate de serial reîmprospătate periodic din TMDB (vezi
-      -- refreshShowMetadata). tv_status era scris o singură dată, la prima
-      -- descărcare, și rămânea așa pe veci: un serial încheiat continua să
-      -- ofere urmărirea, iar unul reînnoit după ce fusese marcat 'Ended'
-      -- nu mai arăta niciodată butonul, fiindcă panoul se ascunde exact pe
-      -- valoarea asta.
+      -- Metadate de serial reîmprospătate din TMDB (refreshShowMetadata):
+      -- tv_status decide dacă apare butonul de urmărire.
       next_episode TEXT,
-      -- Data de la TMDB ("2026-09-13", fără oră) și, separat, instantul exact
-      -- de la TVmaze ("2026-09-13T01:00:00+00:00") — TMDB nu dă ora. Coloane
-      -- distincte, nu una singură cu două înțelesuri: airstamp lipsește
-      -- adesea (serial necunoscut de TVmaze), iar atunci tot vrem data.
+      -- Data de la TMDB (fără oră) și instantul exact de la TVmaze — separat,
+      -- fiindcă airstamp lipsește des, iar data tot o vrem.
       next_episode_air_date TEXT,
       next_episode_airstamp TEXT,
-      -- Data ultimului episod difuzat (TMDB last_episode_to_air). Ține
-      -- fereastra de verificare orară a urmăririi și în ziua de DUPĂ lansare,
-      -- când TMDB a mutat deja next_episode pe episodul următor.
+      -- Ultimul episod difuzat — fereastra orară a urmăririi și în ziua de DUPĂ
+      -- lansare, când TMDB a mutat deja next_episode.
       last_episode_air_date TEXT,
       meta_refreshed_at TEXT,
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -241,15 +203,9 @@ export function getDb(): DatabaseSync {
     CREATE INDEX IF NOT EXISTS idx_media_imdb ON media(imdb_id);
     CREATE INDEX IF NOT EXISTS idx_media_parent ON media(parent_id);
     CREATE INDEX IF NOT EXISTS idx_media_torrent_hash ON media(torrent_hash) WHERE torrent_hash IS NOT NULL;
-    -- Unicitate DOAR pentru episoade. Un episod chiar e unul singur: două
-    -- rânduri pe același ratingKey ar fi un duplicat, iar indexul e plasa pe
-    -- care se bazează resolveSeasonPackPlexLinks (vezi media.ts) ca să nu
-    -- insereze de două ori același episod dintr-un pachet de sezon.
-    --
-    -- Un FILM, în schimb, poate avea legitim mai multe versiuni (4K HDR și
-    -- 1080p pentru același titlu), iar Plex le unește sub UN SINGUR item, deci
-    -- sub același ratingKey. Cu indexul unic pe toate tipurile, al doilea rând
-    -- nu se putea lega niciodată de Plex și rămânea pe veci „se procesează".
+    -- Unicitate DOAR pentru episoade (resolveSeasonPackPlexLinks se bazează pe
+    -- ea ca să nu dubleze episoade). Un film poate avea mai multe versiuni sub
+    -- același ratingKey Plex — cu index unic, a doua nu se lega niciodată.
     CREATE UNIQUE INDEX IF NOT EXISTS idx_media_plex_key_episode ON media(plex_rating_key)
       WHERE plex_rating_key IS NOT NULL AND media_type = 'episode';
     -- Nesortat/neunic, pentru căutările după ratingKey (activity-log, legare).
@@ -271,15 +227,11 @@ export function getDb(): DatabaseSync {
     );
     CREATE INDEX IF NOT EXISTS idx_recent_watch_cache_viewed_at ON recent_watch_cache(viewed_at DESC);
 
-    -- Starea rulării curente (o singură linie, id = 1). Există ca să putem
-    -- detecta opririle pe care procesul NU apucă să le logheze el însuși:
-    -- SIGKILL de la systemd, OOM kill, pană de curent. La oprirea curată
-    -- punem clean_shutdown = 1; dacă la pornire găsim 0, rularea anterioară
-    -- s-a terminat brutal, iar last_heartbeat ne dă momentul aproximativ.
-    -- Joburi care trebuie rulate exact o dată, dar care nu pot sta într-o
-    -- migrare: migrările rulează sincron, în tranzacție, iar astea fac cereri
-    -- de rețea (Plex, qBittorrent). Marcajul se scrie după ce jobul reușește,
-    -- deci o rulare eșuată se reia la următoarea pornire.
+    -- Rularea curentă (id = 1): clean_shutdown = 0 la pornire înseamnă că
+    -- rularea anterioară s-a terminat brutal (SIGKILL, OOM, curent), iar
+    -- last_heartbeat dă momentul aproximativ.
+    -- Joburi de rulat o singură dată care fac cereri de rețea (deci nu pot sta
+    -- într-o migrare); marcajul se scrie după reușită.
     CREATE TABLE IF NOT EXISTS one_time_jobs (
       name TEXT PRIMARY KEY,
       done_at TEXT NOT NULL
@@ -293,16 +245,11 @@ export function getDb(): DatabaseSync {
       pid INTEGER
     );
 
-    -- Urmărirea încărcărilor Immich (sarcina immich-uploads din Watcher).
-    -- checked_until: până unde s-a verificat (ISO) — următoarea verificare
-    -- cere de acolo încolo, deci o repornire nu pierde nimic. pending: JSON cu
-    -- încărcările încă în desfășurare, per utilizator Immich, scrise în jurnal
-    -- abia când o verificare nu mai găsește nimic nou la el.
-    -- Acțiunile pe servicii (restart / update pentru Plex, Immich, qBittorrent,
-    -- Ubuntu) — src/lib/system/service-jobs.ts. Rulează în fundal, pe server;
-    -- pagina doar citește de aici starea și ieșirea, deci o cerere HTTP tăiată
-    -- (Cloudflare) sau un tab închis nu mai pierde nici rezultatul, nici
-    -- intrarea din jurnal.
+    -- Încărcările Immich (immich-uploads): checked_until = până unde s-a
+    -- verificat; pending = încărcările încă în desfășurare, scrise în jurnal
+    -- când nu mai apare nimic nou.
+    -- Acțiunile pe servicii (service-jobs.ts), în fundal — pagina doar citește
+    -- starea, deci o cerere tăiată sau un tab închis nu pierde rezultatul.
     CREATE TABLE IF NOT EXISTS service_jobs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       service TEXT NOT NULL,
@@ -315,10 +262,8 @@ export function getDb(): DatabaseSync {
     );
     CREATE INDEX IF NOT EXISTS idx_service_jobs_service ON service_jobs(service, id DESC);
 
-    -- Verificarea zilnică a actualizărilor (src/lib/system/update-check.ts).
-    -- Momentul ultimei verificări stă aici, nu într-un timer: aplicația
-    -- repornește de mai multe ori pe zi, iar un ceas în memorie n-ar apuca
-    -- niciodată 24 de ore.
+    -- Ultima verificare a actualizărilor — în DB, fiindcă un timer de 24h s-ar
+    -- reseta la fiecare repornire.
     CREATE TABLE IF NOT EXISTS update_check (
       id INTEGER PRIMARY KEY CHECK (id = 1),
       checked_at TEXT NOT NULL
@@ -330,12 +275,10 @@ export function getDb(): DatabaseSync {
       pending TEXT NOT NULL DEFAULT '{}'
     );
 
-    -- Watcher-ul (src/lib/watcher/): starea fiecărei sarcini de fundal.
-    -- next_run_at (ms) stă aici ca un deploy să nu repornească ceasurile;
-    -- paused și run_requested_at sunt scrise de butoanele din Tehnic și citite
-    -- de tact la fiecare secundă — server functions și plugin-ul rulează în
-    -- copii separate ale modulelor, deci baza e singurul canal comun.
-    -- running_since rămas setat la pornire = rulare întreruptă de restart.
+    -- Starea sarcinilor Watcher-ului. next_run_at (ms) rămâne peste un deploy;
+    -- pauza și „Rulează acum” vin din Tehnic, citite de tact la fiecare secundă
+    -- (plugin-ul și server functions rulează în copii separate ale modulelor).
+    -- running_since setat la pornire = rulare întreruptă de restart.
     CREATE TABLE IF NOT EXISTS watcher_tasks (
       id TEXT PRIMARY KEY,
       next_run_at INTEGER,
@@ -349,9 +292,8 @@ export function getDb(): DatabaseSync {
       last_error TEXT
     );
 
-    -- Istoricul rulărilor, ultimele 20 per sarcină. La sarcinile de un minut
-    -- sau mai dese intră doar rulările care au făcut ceva, au eșuat sau au
-    -- fost pornite manual — altfel 20 de rânduri ar acoperi 10 minute.
+    -- Istoricul rulărilor: ultimele 20 per sarcină care au făcut ceva, au
+    -- eșuat sau au fost manuale.
     CREATE TABLE IF NOT EXISTS watcher_runs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       task_id TEXT NOT NULL,
@@ -365,9 +307,8 @@ export function getDb(): DatabaseSync {
     );
     CREATE INDEX IF NOT EXISTS idx_watcher_runs_task ON watcher_runs(task_id, id DESC);
 
-    -- Contribuțiile lunare (src/lib/contributions). O plată = o declarație
-    -- „Am plătit" a utilizatorului (pending → confirmată/respinsă de admin)
-    -- sau o plată adăugată direct de admin (confirmată). Sumele în lei întregi.
+    -- Contribuțiile lunare: o plată declarată de utilizator (pending →
+    -- confirmată/respinsă) sau adăugată de admin. Sume în lei întregi.
     CREATE TABLE IF NOT EXISTS contribution_payments (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL,
@@ -385,9 +326,8 @@ export function getDb(): DatabaseSync {
     CREATE INDEX IF NOT EXISTS idx_contribution_payments_user
       ON contribution_payments(user_id, declared_at DESC);
 
-    -- Lunile acoperite de fiecare plată (una pe lună). Rândurile unei plăți
-    -- respinse/anulate se șterg, ca luna să redevină neplătită; plata rămâne
-    -- în istoric. UNIQUE: o lună nu poate fi acoperită de două ori.
+    -- Lunile acoperite de fiecare plată; ale unei plăți respinse se șterg, ca
+    -- luna să redevină neplătită. UNIQUE: o lună, o singură plată.
     CREATE TABLE IF NOT EXISTS contribution_months (
       payment_id INTEGER NOT NULL,
       user_id INTEGER NOT NULL,
@@ -413,10 +353,8 @@ export function getDb(): DatabaseSync {
       window_days INTEGER NOT NULL
     );
 
-    -- Ce se știe despre HDR-ul unui dispozitiv Plex, pe clientIdentifier
-    -- (= Player.machineIdentifier din sesiuni): modelul raportat de aplicație,
-    -- ultima redare directă a unui fișier HDR și confirmarea manuală
-    -- (1/0/NULL). Vezi media/device-hdr.ts și services/device-hdr.server.ts.
+    -- HDR-ul unui dispozitiv Plex (clientIdentifier): modelul, ultima redare
+    -- directă a unui fișier HDR și confirmarea manuală (1/0/NULL).
     CREATE TABLE IF NOT EXISTS device_hdr (
       client_id TEXT PRIMARY KEY,
       model TEXT,
@@ -435,14 +373,9 @@ export function getDb(): DatabaseSync {
 }
 
 function runCleanups(database: DatabaseSync): void {
-  // Migrările rulează într-o tranzacție: mai multe dintre ele fac secvențe
-  // CREATE -> INSERT -> DROP -> RENAME (v9 recreează pinned_items), iar o
-  // întrerupere la mijloc lăsa baza cu două tabele și fără cea originală.
-  //
-  // Eșecul e fatal, intenționat: înainte, tot blocul era învelit într-un
-  // try/catch care doar scria un console.warn, deci o migrare picată la
-  // jumătate nu incrementa user_version, dar aplicația pornea oricum — cu
-  // schemă parțială și fără ca nimeni să observe. Mai bine refuză să pornească.
+  // Migrările rulează într-o tranzacție (unele fac CREATE → INSERT → DROP →
+  // RENAME), iar eșecul e fatal intenționat: înainte, o migrare picată era
+  // doar un warn, iar aplicația pornea cu schemă parțială.
   database.exec("BEGIN");
   try {
     applyCleanups(database);
@@ -555,10 +488,7 @@ function applyCleanups(database: DatabaseSync): void {
     }
 
     if (version < 6) {
-      // v6: elimină watch_plex (pinned_watch_settings) și plex_episode_keys/
-      // plex_movie_found (pinned_watch_state) — funcția "apariție în Plex" a
-      // fost eliminată din aplicație (scenariu inexistent în fluxul real de
-      // lucru, tot ce ajunge în Plex trece deja prin Filelist).
+      // v6: scoate „apariția în Plex” din urmărirea veche (scenariu inexistent).
       try {
         database.exec("ALTER TABLE pinned_watch_settings DROP COLUMN watch_plex");
         console.log("[db] Migrare v6: eliminat pinned_watch_settings.watch_plex");
@@ -581,11 +511,8 @@ function applyCleanups(database: DatabaseSync): void {
     }
 
     if (version < 7) {
-      // v7: conturile de admin trec din variabile de mediu (ADMIN_USER /
-      // ADMIN_PASS) în DB, cu suport pentru mai multe conturi. La prima
-      // rulare după migrare, dacă tabela e goală și env vars sunt setate,
-      // contul existent e migrat automat — ca să nu rămână nimeni blocat
-      // afară. După asta, gestionarea se face din UI (Tehnic).
+      // v7: conturile de admin trec din variabile de mediu în DB; contul din env
+      // e migrat automat la prima rulare, ca nimeni să nu rămână blocat.
       try {
         database.exec(`
           CREATE TABLE IF NOT EXISTS admin_users (
@@ -613,11 +540,8 @@ function applyCleanups(database: DatabaseSync): void {
     }
 
     if (version < 8) {
-      // v8: admin_users e înlocuit de tabela unificată users (role +
-      // status), care va găzdui și utilizatorii obișnuiți înregistrați
-      // public, cu aprobare manuală și legătură de cont Plex. Conturile
-      // admin existente devin role='admin', status='approved' (deja
-      // validate — nu au nevoie de aprobare).
+      // v8: admin_users → users (role + status), pentru conturi publice cu
+      // aprobare; adminii existenți devin approved.
       try {
         database.exec(
           `INSERT INTO users (username, password_hash, role, status, created_at)
@@ -633,21 +557,13 @@ function applyCleanups(database: DatabaseSync): void {
     }
 
     if (version < 9) {
-      // v9: pinned_items devine per-utilizator (fiecare user vede/gestionează
-      // propria listă de fixări în Lansări), dar pinned_watch_settings și
-      // pinned_watch_state rămân globale per titlu (id, media_type) — dacă
-      // doi useri fixează același film, verificarea/auto-download-ul rulează
-      // o singură dată pentru acel titlu, nu duplicat per user.
+      // v9: pinned_items per utilizator (urmărirea veche).
       try {
         const cols = database.prepare("PRAGMA table_info(pinned_items)").all() as Array<{
           name: string;
         }>;
-        // Pe o bază NOUĂ, pinned_items nu există deloc (v14 a eliminat funcția,
-        // deci blocul de schemă n-o mai creează). Fără verificarea asta, v9
-        // pornea oricum, crea pinned_items_new, apoi pica la INSERT ... FROM
-        // pinned_items — iar catch-ul de mai jos înghițea eroarea, lăsând
-        // tabela orfană pinned_items_new în orice instalare nouă. Reprodus pe
-        // o bază curată înainte de fix.
+        // Pe o bază nouă pinned_items nu există (v14) — fără verificare, v9
+        // lăsa în urmă tabela orfană pinned_items_new.
         const hasUserId = cols.some((c) => c.name === "user_id");
         if (cols.length > 0 && !hasUserId) {
           const admin = database
@@ -688,9 +604,7 @@ function applyCleanups(database: DatabaseSync): void {
     }
 
     if (version < 10) {
-      // v10: istoric de autentificări per cont (pentru pagina de detalii
-      // din Utilizatori) — last_login_at pe users + tabelă user_logins cu
-      // fiecare login (IP, user-agent).
+      // v10: istoricul autentificărilor per cont.
       try {
         database.exec("ALTER TABLE users ADD COLUMN last_login_at TEXT");
         console.log("[db] Migrare v10: adăugat users.last_login_at");
@@ -703,10 +617,7 @@ function applyCleanups(database: DatabaseSync): void {
     }
 
     if (version < 11) {
-      // v11: atribuie descărcările contului care le-a inițiat (pentru
-      // secțiunea de detalii din Utilizatori) — doar descărcările de acum
-      // înainte; cele vechi rămân neatribuite (NULL), fiindcă nu exista
-      // legătura de cont la momentul lor.
+      // v11: descărcările atribuite contului care le-a pornit (doar de acum).
       try {
         database.exec("ALTER TABLE downloads ADD COLUMN requested_by_user_id INTEGER");
         console.log("[db] Migrare v11: adăugat downloads.requested_by_user_id");
@@ -717,11 +628,8 @@ function applyCleanups(database: DatabaseSync): void {
     }
 
     if (version < 12) {
-      // v12: media capătă plex_added_at — data reală la care Plex a indexat
-      // fișierul (nu momentul la care a pornit descărcarea sau la care a
-      // rulat backfill-ul), necesară ca lista din Bibliotecă (sortată
-      // descrescător după ea) să reflecte ordinea reală de apariție, nu
-      // ordinea în care a rulat ultimul backfill.
+      // v12: plex_added_at — data reală a indexării Plex, pentru ordinea din
+      // Bibliotecă.
       try {
         database.exec("ALTER TABLE media ADD COLUMN plex_added_at INTEGER");
         console.log("[db] Migrare v12: adăugat media.plex_added_at");
@@ -732,11 +640,7 @@ function applyCleanups(database: DatabaseSync): void {
     }
 
     if (version < 13) {
-      // v13: torrent_hash nu mai e UNIQUE — un pachet de sezon e un singur
-      // torrent cu mai multe episoade, deci mai multe rânduri `media` chiar
-      // trebuie să partajeze același hash. Acțiunile (ștergere, corectare
-      // subtitrare) rămân cheiate pe torrent_hash și se aplică acum la
-      // nivelul întregului pachet, intenționat.
+      // v13: torrent_hash nu mai e UNIQUE — un pachet are mai multe rânduri.
       try {
         database.exec("DROP INDEX IF EXISTS idx_media_torrent_hash");
         database.exec(
@@ -750,9 +654,7 @@ function applyCleanups(database: DatabaseSync): void {
     }
 
     if (version < 14) {
-      // v14: elimină complet funcția de fixare/urmărire ("carduri fixate",
-      // Pinned Watcher, notificările lui) — tabelele nu mai sunt scrise sau
-      // citite de niciun cod, doar clutter mort altfel.
+      // v14: scoate complet urmărirea veche (pinned_*).
       database.exec("DROP TABLE IF EXISTS pinned_items");
       database.exec("DROP TABLE IF EXISTS pinned_watch_settings");
       database.exec("DROP TABLE IF EXISTS pinned_watch_state");
@@ -773,10 +675,7 @@ function applyCleanups(database: DatabaseSync): void {
     }
 
     if (version < 16) {
-      // v16: recent_watch_cache capătă progres (view_offset_ms/duration_ms +
-      // completed), ca vizionările neterminate să apară în "Vizionări
-      // recente" cu minute vizionate, nu doar cele confirmate de istoricul
-      // Plex (care nu înregistrează sub pragul lui de completare).
+      // v16: progresul în recent_watch_cache, pentru vizionările neterminate.
       try {
         database.exec("ALTER TABLE recent_watch_cache ADD COLUMN view_offset_ms INTEGER");
         database.exec("ALTER TABLE recent_watch_cache ADD COLUMN duration_ms INTEGER");
@@ -792,20 +691,14 @@ function applyCleanups(database: DatabaseSync): void {
     }
 
     if (version < 17) {
-      // v17: curăță pinned_items_new, tabela orfană lăsată în urmă de v9 pe
-      // bazele create înainte de fixul de mai sus (v9 crea tabela, apoi pica
-      // la copiere fiindcă pinned_items nu exista, iar eroarea era înghițită).
+      // v17: curăță pinned_items_new lăsată de v9 pe bazele mai vechi.
       database.exec("DROP TABLE IF EXISTS pinned_items_new");
       database.exec("PRAGMA user_version = 17");
     }
 
     if (version < 18) {
-      // v18: push_subscriptions capătă identitate. Până acum reținea doar
-      // endpoint + chei, deci un abonament mort nu putea fi deosebit de unul
-      // viu decât trimițând notificări de test și întrebând utilizatorul unde
-      // au apărut. `display_mode` e singurul semnal care separă PWA-ul instalat
-      // de browser — pe Android WebAPK-ul trimite exact același user-agent ca
-      // Chrome, deci UA-ul singur nu ajunge.
+      // v18: identitate pentru abonamentele push; `display_mode` separă PWA-ul
+      // de browser (pe Android au același user-agent).
       try {
         database.exec("ALTER TABLE push_subscriptions ADD COLUMN user_agent TEXT");
         database.exec("ALTER TABLE push_subscriptions ADD COLUMN display_mode TEXT");
@@ -818,9 +711,7 @@ function applyCleanups(database: DatabaseSync): void {
     }
 
     if (version < 19) {
-      // v19: urmărirea episoadelor noi revine, dar de data asta ca patru
-      // coloane pe rândul-părinte 'tv_show' din `media`, nu ca tabelă
-      // paralelă (vezi comentariul de la definiția tabelei).
+      // v19: urmărirea episoadelor revine, ca coloane pe rândul 'tv_show'.
       for (const sql of [
         "ALTER TABLE media ADD COLUMN auto_download INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE media ADD COLUMN auto_download_quality TEXT",
@@ -834,12 +725,7 @@ function applyCleanups(database: DatabaseSync): void {
         }
       }
 
-      // Seriale rămase fără niciun episod: rânduri-părinte create de
-      // backfill pentru titluri pe care Plex le lista, dar cărora nu li s-a
-      // legat niciodată conținut real. Curățarea existentă din log.ts le
-      // prinde doar la ștergerea unui episod al lor — astea n-au avut
-      // niciodată vreunul, deci rămâneau la nesfârșit (găsite 2 pe
-      // 2026-09-06: "Temptation Island - Reunion", "Plaha").
+      // Seriale fără niciun episod, lăsate de backfill (2 găsite pe 6 sept. 2026).
       const orphans = database
         .prepare(
           `DELETE FROM media
@@ -855,11 +741,7 @@ function applyCleanups(database: DatabaseSync): void {
     }
 
     if (version < 20) {
-      // v20: numele episoadelor. Rândurile de tip 'episode' țineau în `title`
-      // titlul serialului, deci numele episodului nu exista nicăieri în
-      // aplicație — era rezolvat din TMDB doar ca să intre în textul unei
-      // notificări (buildTorrentDisplayName) și aruncat imediat după.
-      // Completarea efectivă e treaba lui syncEpisodeDetails.
+      // v20: numele episoadelor (completate de syncEpisodeDetails).
       try {
         database.exec("ALTER TABLE media ADD COLUMN episode_title TEXT");
         console.log("[db] Migrare v20: adăugat media.episode_title");
@@ -870,11 +752,8 @@ function applyCleanups(database: DatabaseSync): void {
     }
 
     if (version < 21) {
-      // v21: watch_last_checked_at era scris cu new Date().toISOString(), în
-      // timp ce toate celelalte coloane de timp din `media` folosesc formatul
-      // SQLite. Valorile deja scrise trebuie aduse la același format, altfel
-      // rămân invizibile în UI (dată invalidă) și, mai grav, ies din
-      // comparația de scadență din checkDueShows, care e lexicografică.
+      // v21: watch_last_checked_at adus la formatul SQLite — ISO-ul ieșea din
+      // comparația lexicografică de scadență.
       const fixed = database
         .prepare(
           `UPDATE media
@@ -890,10 +769,7 @@ function applyCleanups(database: DatabaseSync): void {
     }
 
     if (version < 22) {
-      // v22: următorul episod anunțat + reîmprospătarea periodică a
-      // metadatelor de serial. TMDB întoarce next_episode_to_air în același
-      // răspuns pe care îl cerem oricum, deci informația exista deja și era
-      // aruncată.
+      // v22: următorul episod anunțat și reîmprospătarea metadatelor de serial.
       for (const sql of [
         "ALTER TABLE media ADD COLUMN next_episode TEXT",
         "ALTER TABLE media ADD COLUMN next_episode_air_date TEXT",
@@ -910,9 +786,8 @@ function applyCleanups(database: DatabaseSync): void {
     }
 
     if (version < 23) {
-      // v23: retenție de 30 de zile pentru jurnalul de activitate. Curățarea
-      // recurentă stă în activity-log.ts (`pruneActivityLog`, la pornire +
-      // zilnic); asta e doar ștergerea istoricului acumulat până acum.
+      // v23: retenția de 30 de zile a jurnalului (curățarea recurentă e în
+      // activity-log.ts).
       const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
       const removed = database.prepare("DELETE FROM activity WHERE timestamp < ?").run(cutoff);
       console.log(`[db] Migrare v23: șterse ${removed.changes} evenimente mai vechi de 30 de zile`);
@@ -920,18 +795,12 @@ function applyCleanups(database: DatabaseSync): void {
     }
 
     if (version < 24) {
-      // v24: restabilește invariantul "completed_at NULL = chiar se descarcă
-      // acum". Backfill-ul din Plex (2026-08-15) a lăsat 77 de rânduri cu
-      // torrent_hash și fără completed_at, deși titlurile erau demult pe disc
-      // și indexate de Plex. Reluarea polling-ului după restart se sprijină
-      // de-acum pe predicatul ăsta (listUnfinishedTorrents), deci un rând
-      // "veșnic în curs" ar fi însemnat o buclă de polling pornită degeaba la
-      // fiecare pornire, pentru un torrent care nu mai există în qBittorrent.
+      // v24: „completed_at NULL = chiar se descarcă acum” — backfill-ul din 15
+      // aug. lăsase 77 de rânduri fără completed_at, deși erau demult în Plex.
       const fixed = database
         .prepare(
-          // plex_added_at e un timestamp Unix (INTEGER), completed_at un text
-          // SQLite — copiat direct, ajungea „1786788281" în loc de dată (53 de
-          // rânduri, reparate în v38).
+          // plex_added_at e Unix, completed_at text — copierea directă a stricat
+          // 53 de rânduri, reparate în v38.
           `UPDATE media SET completed_at = COALESCE(datetime(plex_added_at, 'unixepoch'), added_at)
             WHERE completed_at IS NULL AND plex_rating_key IS NOT NULL`,
         )
@@ -943,28 +812,15 @@ function applyCleanups(database: DatabaseSync): void {
     }
 
     if (version < 25) {
-      // v25: `downloads` dispare. Era a doua sursă de adevăr pentru exact
-      // câmpurile pe care `media` le scria deja în paralel, la fiecare
-      // descărcare, și n-o mai citea niciun UI — ultimii doi consumatori
-      // (garda de finalizare și reluarea polling-ului) s-au mutat pe `media`
-      // în v24. Vezi regula "o singură sursă de adevăr" din AGENTS.md.
+      // v25: `downloads` dispare — dublura lui `media`, necitită de nimeni.
       database.exec("DROP TABLE IF EXISTS downloads");
       console.log("[db] Migrare v25: tabela downloads eliminată");
       database.exec("PRAGMA user_version = 25");
     }
 
     if (version < 26) {
-      // v26: posterele salvate la w92 urcă la w342.
-      //
-      // Lista de rezultate a căutării din wizard cere miniaturi de 92px —
-      // corect pentru ea — dar valoarea aia se salva ca atare în `media` și
-      // rămânea acolo, inclusiv pentru drawer-ul din Bibliotecă, unde
-      // posterul se vede la ~170×240px fizici și un w92 e vizibil moale.
-      // Sursa e reparată (normalizeStoredPoster, la scriere); aici corectăm
-      // ce s-a acumulat.
-      //
-      // E doar o rescriere de text în URL: TMDB servește aceeași imagine la
-      // orice dimensiune, ceea ce codul de notificări făcea deja la afișare.
+      // v26: posterele salvate la w92 (miniaturile din wizard) urcă la w342 —
+      // în drawer erau vizibil moi. Sursa e reparată în normalizeStoredPoster.
       for (const table of ["media", "recent_watch_cache"]) {
         const res = database
           .prepare(
@@ -980,19 +836,8 @@ function applyCleanups(database: DatabaseSync): void {
     }
 
     if (version < 27) {
-      // v27: indexul unic pe plex_rating_key se restrânge la episoade.
-      //
-      // Un film poate avea mai multe versiuni în același timp (4K HDR pentru
-      // seara de film, 1080p pentru un TV care nu duce 4K). Plex le vede ca
-      // două versiuni ale ACELUIAȘI item, deci întoarce același ratingKey
-      // pentru amândouă — iar indexul unic făcea ca al doilea rând `media` să
-      // nu se poată lega niciodată: UPDATE-ul din resolveMediaPlexLinkByTorrentHash
-      // arunca, eroarea era înghițită de catch, iar rândul rămânea permanent
-      // pe „se procesează" în Bibliotecă, cu reconcilierul reîncercând 72h.
-      //
-      // Pentru episoade unicitatea rămâne, neatinsă: acolo un ratingKey chiar
-      // înseamnă un singur rând, iar resolveSeasonPackPlexLinks se bazează pe
-      // index ca să nu insereze episoade duplicate dintr-un pachet de sezon.
+      // v27: indexul unic pe plex_rating_key doar pentru episoade — versiunile
+      // unui film au același ratingKey, iar a doua rămânea pe „se procesează”.
       database.exec("DROP INDEX IF EXISTS idx_media_plex_key");
       database.exec(
         `CREATE UNIQUE INDEX IF NOT EXISTS idx_media_plex_key_episode ON media(plex_rating_key)
@@ -1007,17 +852,8 @@ function applyCleanups(database: DatabaseSync): void {
     }
 
     if (version < 28) {
-      // v28: data de indexare Plex, doar pe versiunea care a adus-o.
-      //
-      // Când un film are mai multe versiuni, Plex le ține sub un singur item,
-      // iar `addedAt`-ul item-ului e momentul în care a intrat PRIMA versiune.
-      // Legarea îl copia pe rândul fiecărei versiuni noi, așa că un film abia
-      // descărcat apărea în Bibliotecă la data celui vechi — adică sărea
-      // instant în jos, sub intrarea veche, imediat după procesare.
-      //
-      // Aici golim coloana pe toate rândurile în plus (păstrând-o pe cel mai
-      // vechi, unde chiar e a lui). Sortarea cade atunci pe `added_at` — când
-      // am adăugat noi titlul — exact ce se aștepta.
+      // v28: plex_added_at doar pe versiunea care a adus-o — altfel un film abia
+      // descărcat lua data versiunii vechi și sărea în josul Bibliotecii.
       const res = database
         .prepare(
           `UPDATE media SET plex_added_at = NULL
@@ -1037,19 +873,9 @@ function applyCleanups(database: DatabaseSync): void {
     }
 
     if (version < 29) {
-      // v29: outcome-urile de descărcare a subtitrării nu mai pretind sursa.
-      //
-      // Se numeau `downloaded_opensubtitles(_approximate)` de pe vremea când
-      // OpenSubtitles era singura sursă. După adăugarea subs.ro numele a
-      // rămas, iar eticheta scurtă din jurnal (derivată din outcome) anunța
-      // „descărcată de pe OpenSubtitles" peste un detaliu care spunea corect
-      // subs.ro. Acum sursa e un câmp separat (`source`), iar outcome-ul e
-      // neutru: `downloaded` / `downloaded_approximate`.
-      //
-      // Înlocuirea de text merge pe blob-ul JSON din `activity.meta` (unde
-      // outcome-urile stau în meta.items[] și meta.byOutcome[]). Prefixul
-      // comun face ca `_approximate` să se rescrie corect din aceeași
-      // înlocuire.
+      // v29: outcome-urile de descărcare nu mai pretind sursa
+      // (`downloaded_opensubtitles` → `downloaded`, sursa e câmp separat);
+      // jurnalul anunța OpenSubtitles peste descărcări de pe subs.ro.
       const renamed = database
         .prepare(
           `UPDATE activity SET meta = REPLACE(meta, 'downloaded_opensubtitles', 'downloaded')
@@ -1060,9 +886,7 @@ function applyCleanups(database: DatabaseSync): void {
         console.log(`[db] Migrare v29: ${renamed.changes} intrări de jurnal cu outcome redenumit`);
       }
 
-      // Titlul deja scris în jurnal (și trimis ca push) al descărcărilor de
-      // pe subs.ro conține textul greșit, înghețat la momentul scrierii.
-      // Îl corectăm doar acolo unde detaliul din meta confirmă subs.ro.
+      // Titlurile deja scrise în jurnal, corectate unde detaliul confirmă subs.ro.
       const retitled = database
         .prepare(
           `UPDATE activity
@@ -1076,10 +900,7 @@ function applyCleanups(database: DatabaseSync): void {
         console.log(`[db] Migrare v29: ${retitled.changes} titluri de jurnal corectate la subs.ro`);
       }
 
-      // Aceeași confuzie s-a scris și în `media.subtitle_source`: orice
-      // descărcare ajungea acolo ca „opensubtitles". Sursa reală se poate
-      // recupera din `subtitle_detail`, care a conținut dintotdeauna numele
-      // corect al sursei („descărcată de pe subs.ro").
+      // La fel `media.subtitle_source`, recuperată din `subtitle_detail`.
       const fixed = database
         .prepare(
           `UPDATE media SET subtitle_source = 'subsro'
@@ -1166,9 +987,7 @@ function applyCleanups(database: DatabaseSync): void {
     }
 
     if (version < 36) {
-      // v36: media.filelist_id — linkul spre pagina torrent-ului pe Filelist.
-      // Fără completare pentru rândurile existente: butonul apare doar la
-      // descărcările noi.
+      // v36: media.filelist_id, fără completare pentru rândurile existente.
       try {
         database.exec("ALTER TABLE media ADD COLUMN filelist_id INTEGER");
         console.log("[db] Migrare v36: adăugat media.filelist_id");
@@ -1179,9 +998,7 @@ function applyCleanups(database: DatabaseSync): void {
     }
 
     if (version < 37) {
-      // v37: media.subtitle_approximate — vezi CREATE TABLE. Completat din
-      // detaliul existent: doar descărcările marcate „aproximativă" de
-      // pipeline încep cu textul ăsta.
+      // v37: media.subtitle_approximate, din detaliul existent.
       try {
         database.exec(
           "ALTER TABLE media ADD COLUMN subtitle_approximate INTEGER NOT NULL DEFAULT 0",
@@ -1198,11 +1015,7 @@ function applyCleanups(database: DatabaseSync): void {
     }
 
     if (version < 38) {
-      // v38: completed_at scris de v24 ca timestamp Unix în text
-      // („1786788281"), nu ca dată SQLite — copiat din plex_added_at. Orice
-      // comparație de dată îl trata greșit: reîncercarea zilnică a
-      // subtitrărilor (completed_at în ultimele 14 zile) îl vedea mereu ca
-      // „mai vechi", iar „Finalizat" din Detalii tehnice ieșea dată invalidă.
+      // v38: completed_at scris de v24 ca timestamp Unix, adus la data SQLite.
       const fixed = database
         .prepare(
           `UPDATE media SET completed_at = datetime(CAST(completed_at AS INTEGER), 'unixepoch')
@@ -1216,10 +1029,8 @@ function applyCleanups(database: DatabaseSync): void {
     }
 
     if (version < 39) {
-      // v39: media.subtitle_report (vezi CREATE TABLE) și detaliul pe
-      // episod la pachete. Până acum fiecare episod dintr-un pachet primea
-      // agregatul întregului sezon („7 episoade — … — S01E01: …; S01E02:
-      // …"); păstrăm pe fiecare rând doar bucata lui și, din ea, sursa reală.
+      // v39: media.subtitle_report și detaliul pe episod la pachete (fiecare
+      // rând păstrează doar bucata lui din agregatul sezonului).
       try {
         database.exec("ALTER TABLE media ADD COLUMN subtitle_report TEXT");
         console.log("[db] Migrare v39: adăugat media.subtitle_report");
@@ -1300,20 +1111,15 @@ function applyCleanups(database: DatabaseSync): void {
     }
 
     if (version < 43) {
-      // v43: subtitle_retry_state ținea ultimul tic și ultima căutare a
-      // reîncercării subtitrărilor, doar pentru afișare. Le ține acum Watcher-ul
-      // (watcher_tasks: ultima rulare, cu rezumatul ei).
+      // v43: subtitle_retry_state scos — starea e în Watcher.
       database.exec("DROP TABLE IF EXISTS subtitle_retry_state");
       console.log("[db] Migrare v43: subtitle_retry_state eliminat (starea e în Watcher)");
       database.exec("PRAGMA user_version = 43");
     }
 
     if (version < 44) {
-      // v44: reîmprospătările de metadate fără nimic nou nu se mai scriu (vezi
-      // metadata-report.ts) — le ștergem și pe cele vechi, cam o mie, ca
-      // istoricul din Watcher să arate doar schimbările reale. La fel
-      // rezumatele vechi ale sarcinii („5 filme împrospătate”), care numărau
-      // titlurile verificate, nu schimbările.
+      // v44: șterge reîmprospătările „nimic nou” (nu se mai scriu) și rezumatele
+      // vechi „N filme împrospătate”.
       const removed = database
         .prepare(
           "DELETE FROM activity WHERE type = 'metadata_refresh' AND message LIKE '%· nimic nou'",
@@ -1343,9 +1149,7 @@ function applyCleanups(database: DatabaseSync): void {
     }
 
     if (version < 46) {
-      // v46: watcher_tasks.last_started_at și last_summary nu mai erau citite
-      // nicăieri — rezumatul rulărilor stă în watcher_runs, iar Tehnic arată
-      // ultima acțiune reală de acolo.
+      // v46: watcher_tasks fără last_started_at/last_summary, necitite.
       for (const col of ["last_started_at", "last_summary"]) {
         try {
           database.exec(`ALTER TABLE watcher_tasks DROP COLUMN ${col}`);
