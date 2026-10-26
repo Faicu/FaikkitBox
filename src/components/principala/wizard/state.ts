@@ -1,21 +1,10 @@
-// Starea wizard-ului de adăugare, într-un reducer.
+// Starea wizard-ului, într-un reducer. Cu 22 de `useState`, reset() și goBack()
+// enumerau manual setteri (o stare uitată = bug tăcut, 1e1b3fe), iar stări
+// imposibile erau reprezentabile (pasul „confirm” fără țintă, 3249390).
 //
-// Înainte erau 22 de `useState` în componentă, cu două consecințe:
-//
-//  - `reset()` enumera manual 19 setteri, iar `goBack()` repeta un subset cu
-//    altă listă. O stare nouă uitată în una din liste = un bug tăcut (vezi
-//    1e1b3fe, wizard-ul deblocat în mijlocul unui lot).
-//  - stări care logic nu pot coexista puteau coexista în tip, de exemplu pasul
-//    "confirm" fără nicio țintă — ecranul gol reparat în 3249390.
-//
-// Aici, ce ține strict de un pas trăiește în varianta pasului (`Flow`), deci
-// combinațiile alea nu mai sunt reprezentabile. Restul stării stă la nivelul
-// de sus, pentru că NU e locală unui pas: subiectul verificării se încarcă o
-// dată, la "checking", și e citit de "result", "pick" și "confirm" deopotrivă.
-//
-// Atenție: căutarea (query/results) pare locală pasului de căutare, dar
-// supraviețuiește intenționat întoarcerii la el — de-asta nu stă în varianta
-// "search".
+// Ce ține de un pas stă în varianta lui (`Flow`). Subiectul verificării e la
+// nivelul de sus (citit de mai mulți pași), la fel căutarea — supraviețuiește
+// intenționat întoarcerii la ea.
 
 import type { TmdbSearchResult, TmdbDetails, TmdbSeasonSchema } from "@/lib/tmdb/tmdb.functions";
 import type { TvmazeAirstamp } from "@/lib/tvmaze/tvmaze.functions";
@@ -35,9 +24,8 @@ export interface ConfirmTarget {
 // Alegerea manuală (admin): lista de candidați și torrentul bifat.
 export type PickFlow = { step: "pick"; choice: TorrentChoiceContext; pickedTorrentId: number };
 
-// Pasul la care se întoarce săgeata de "înapoi" din confirmare. Memorat
-// explicit, nu ghicit, cu tot cu torrentul bifat — întoarcerea regăsește
-// lista exact cum ai lăsat-o.
+// Pasul la care duce „înapoi” din confirmare, cu torrentul bifat — lista se
+// regăsește exact cum ai lăsat-o.
 export type BackFlow = { step: "result" } | PickFlow;
 
 export type Flow =
@@ -121,8 +109,7 @@ export type WizardAction =
   | { type: "SET_WANTED"; wanted: WantedMovie | null }
   | { type: "DONE"; message: string };
 
-// Subiectul, golit — folosit la întoarcerea din "result" în căutare, unde
-// rezultatele căutării rămân, dar tot ce ținea de titlul ales dispare.
+// Subiectul golit — la întoarcerea în căutare rezultatele rămân, titlul ales nu.
 const EMPTY_SUBJECT = {
   selected: null,
   checkResult: null,
@@ -141,8 +128,8 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
       return initialWizardState;
 
     case "QUERY_CHANGED":
-      // Sub două caractere nu se caută, deci rezultatele vechi ar rămâne pe
-      // ecran fără legătură cu ce scrie acum în câmp.
+      // Sub două caractere nu se caută — rezultatele vechi n-ar avea legătură
+      // cu câmpul.
       return {
         ...state,
         query: action.query,
@@ -158,8 +145,7 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
     case "SELECT_ITEM":
       return {
         ...state,
-        // Reîncercarea aceluiași titlu își păstrează calitatea; un titlu nou
-        // pornește de la 1080p.
+        // Același titlu își păstrează calitatea; unul nou pornește de la 1080p.
         quality:
           state.selected?.id === action.item.id &&
           state.selected.mediaType === action.item.mediaType
@@ -184,8 +170,8 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
     case "SET_QUALITY":
       return { ...state, quality: action.quality };
 
-    // „Nu" la întrebarea HDR din confirmare: înapoi la selector, direct pe
-    // varianta fără HDR — nu la lista de candidați, care e tot HDR.
+    // „Nu” la întrebarea HDR: înapoi la selector, pe varianta fără HDR (lista de
+    // candidați e tot HDR).
     case "DECLINE_HDR":
       return { ...state, quality: action.quality, flow: { step: "result" } };
 
@@ -204,8 +190,7 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
 
     case "BACK":
       switch (state.flow.step) {
-        // Destinația e memorată în `back`, deci întoarcerea din confirmare
-        // regăsește exact lista de candidați din care venise.
+        // Întoarcerea din confirmare regăsește lista din `back`.
         case "confirm":
           return { ...state, flow: state.flow.back };
         case "pick":

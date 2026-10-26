@@ -1,8 +1,5 @@
-// Ecranul de rezultat: ce s-a aflat despre titlu și ce poți face cu el.
-//
-// Cel mai mare pas al wizard-ului, și singurul care are logică derivată
-// proprie — de-aia derivările stau aici, nu în shell: nimic din ele nu e
-// folosit de ceilalți pași.
+// Ecranul de rezultat: ce s-a aflat despre titlu și ce poți face. Derivările
+// stau aici — nu le folosește alt pas.
 
 import { useState, type Dispatch } from "react";
 import { CheckCircle2, Download, Info, Loader2, AlertTriangle, RefreshCw } from "lucide-react";
@@ -43,8 +40,7 @@ export function ResultStep({
   dispatch: Dispatch<WizardAction>;
   isAdmin: boolean;
   isTv: boolean;
-  // Primite îngustate (non-null) de shell, care oricum verifică prezența lor
-  // înainte de a randa pasul — aici ar fi doar zgomot de verificări repetate.
+  // Primite non-null de la shell, care verifică deja prezența lor.
   selected: NonNullable<WizardState["selected"]>;
   checkResult: CheckResult;
   onRetry: () => void;
@@ -62,9 +58,8 @@ export function ResultStep({
     busy,
   } = state;
 
-  // „Urmărește" la o calitate HDR trece întâi prin aceeași întrebare ca
-  // descărcarea — altfel ar fi drumul pe care un fișier HDR ajunge în
-  // bibliotecă fără ca cineva să fi fost întrebat.
+  // „Urmărește” la o calitate HDR trece prin aceeași întrebare ca descărcarea —
+  // altfel un fișier HDR ar ajunge în bibliotecă fără întrebare.
   const [askHdrWatch, setAskHdrWatch] = useState(false);
   const setQuality = (q: Quality) => {
     setAskHdrWatch(false);
@@ -74,11 +69,9 @@ export function ResultStep({
 
   const seasonGroups = isTv ? groupTorrentsBySeasonEpisode(checkResult.torrents) : [];
 
-  // Schema per-sezon afișată în accordion: pentru fiecare episod, exact una
-  // din stările posibile — deja în Plex, deja în curs de descărcare, lipsă+
-  // descărcabil, lipsă+indisponibil, sau nelansat încă (cu dată, dacă TMDB o
-  // are stabilită; fără dată cunoscută, tratăm episodul ca "indisponibil",
-  // nu ca "nelansat" — nu inventăm o dată care nu există).
+  // Starea fiecărui episod, exact una: în Plex, în descărcare, lipsă și
+  // descărcabil, lipsă și indisponibil, sau nelansat (cu dată). Fără dată
+  // cunoscută, „indisponibil” — nu inventăm o dată.
   const seasonRows: SeasonRowData[] = isTv
     ? deriveSeasonRows({
         seasons: checkResult.seasons,
@@ -94,18 +87,14 @@ export function ResultStep({
   const movieAlreadyDownloading = !isTv && downloadingEntries.length > 0;
   const movieMatches = isTv ? [] : matchesForQuality(checkResult.torrents, quality, "movie");
   const movieMatch = bestOf(movieMatches);
-  // Când nu e la calitatea aleasă, dar e la alta: altfel se vedea doar
-  // „nu există", fără indiciu că merită deschis selectorul.
+  // Lipsă la calitatea aleasă, dar există la alta — indiciu pentru selector.
   const otherQualities =
     !isTv && !movieMatch ? availableQualities(checkResult.torrents, quality, "movie") : [];
-  // Varianta HDR a rezoluției alese — „1080p" și „4K" înseamnă fără HDR,
-  // deci lansările HDR nu apar în lista lor (vezi HdrHint).
+  // Varianta HDR a rezoluției alese („1080p”, „4K” = fără HDR).
   const hdrSibling = hdrVariantOf(quality);
   const hdrMovieCount =
     !isTv && hdrSibling ? matchesForQuality(checkResult.torrents, hdrSibling, "movie").length : 0;
-  // La seriale: sezoanele care au varianta HDR, ca pachet sau măcar un episod
-  // — fără cele deja întregi în Plex la varianta HDR (ca la filme: n-ar avea
-  // ce oferi).
+  // La seriale: sezoanele cu variantă HDR, fără cele deja întregi în Plex la ea.
   const hasHdrInPlex = (seasonNum: number) => {
     const eps = seasonRows.find((r) => r.seasonNumber === seasonNum)?.episodes ?? [];
     return (
@@ -126,17 +115,15 @@ export function ResultStep({
         .map((g) => g.seasonNum)
     : [];
 
-  // Pentru filme, "există în Plex" e suficient (verificare atomică).
+  // La filme, „există în Plex” e suficient.
   const alreadyInPlex = !isTv && checkResult.plexFound;
   const plexQualities = checkResult.plexQualities;
-  // Un film deja în Plex nu mai e fundătură: dacă alegi o calitate pe care
-  // n-o ai, îți oferim explicit descărcarea — în ambele sensuri, nu doar în
-  // sus (vezi qualityDirection pentru când e `null`).
+  // Un film deja în Plex: o calitate nedeținută se oferă explicit, în ambele
+  // sensuri (vezi qualityDirection).
   const direction = alreadyInPlex ? qualityDirection(plexQualities, quality) : null;
 
-  // Deschide direct confirmarea când există un singur candidat (sau userul
-  // nu e admin — doar adminul poate alege manual), altfel arată mai întâi
-  // pasul de alegere — la fel pentru filme, episoade și sezoane întregi.
+  // Confirmarea direct la un singur candidat (sau pentru non-admini); altfel
+  // întâi alegerea manuală.
   function requestDownload(
     candidates: FilelistTorrent[],
     ctx: Omit<TorrentChoiceContext, "candidates">,
@@ -178,19 +165,15 @@ export function ResultStep({
   return (
     <div className="animate-in fade-in slide-in-from-right-2 duration-200 space-y-4">
       <PosterHero
-        // Titlul vine din lista de căutare, cu poster w92 — aici se vede
-        // mult mai mare decât în listă, deci cerem dimensiunea potrivită.
+        // Posterul din căutare e w92 — aici se vede mult mai mare.
         posterUrl={normalizeStoredPoster(selected.posterUrl)}
         mediaType={selected.mediaType}
         title={selected.title}
         subtitle={checkResult.originalTitle + (selected.year ? ` · ${selected.year}` : "")}
       />
 
-      {/* O verificare eșuată producea până acum un `checkResult`
-        gol, indistinct de un rezultat real gol: ecranul spunea
-        „nu există încă la calitatea X pe Filelist" și îți oferea
-        urmărirea, deși adevărul era că n-am reușit să întrebăm.
-        Toastul de eroare dispărea, minciuna rămânea. */}
+      {/* O verificare eșuată nu mai arată „nu există încă” (cu urmărirea
+        oferită) — adevărul era că n-am reușit să întrebăm. */}
       {checkError ? (
         <div className="space-y-3 rounded-xl border border-destructive/30 bg-destructive/10 p-3">
           <div className="flex items-start gap-2 text-sm text-destructive-foreground">
@@ -289,13 +272,11 @@ export function ResultStep({
             {plexQualities.length > 0 ? ` — ${plexQualities.join(", ")}` : ""}
           </div>
 
-          {/* Selectorul rămâne disponibil: singurul motiv să mai
-            stai pe ecranul ăsta e să iei altă variantă decât cea
-            din Plex — mai bună sau, deliberat, mai mică. */}
+          {/* Selectorul rămâne: singurul motiv să stai aici e altă variantă
+            decât cea din Plex. */}
           <QualitySelector quality={quality} onChange={setQuality} />
 
-          {/* Nu și când varianta HDR e deja în bibliotecă: n-ar avea
-            ce oferi. */}
+          {/* Nu și când varianta HDR e deja în bibliotecă. */}
           {hdrSibling && hdrMovieCount > 0 && !plexQualities.includes(hdrSibling) && (
             <HdrHint
               quality={hdrSibling}
@@ -305,9 +286,7 @@ export function ResultStep({
             />
           )}
 
-          {/* Fără asta, alegerea unei calități deja deținute nu producea
-            nimic sub selector — un ecran mut, imposibil de distins de o
-            eroare. */}
+          {/* Altfel, o calitate deja deținută lăsa un ecran mut, ca o eroare. */}
           {!direction && plexQualities.includes(quality) && (
             <div className="rounded-xl glass-card p-3 text-sm text-muted-foreground">
               {quality} e deja în bibliotecă. Alege altă calitate dacă vrei încă o variantă.
@@ -332,9 +311,8 @@ export function ResultStep({
                   label={`Descarcă varianta ${quality}`}
                   onClick={() =>
                     requestDownload(movieMatches, {
-                      // Explicit, nu neutru: label-ul ajunge în jurnal, iar
-                      // peste o lună vrei să vezi de ce ai două fișiere
-                      // pentru același film și în ce sens s-a mișcat.
+                      // Explicit: label-ul ajunge în jurnal — peste o lună vrei
+                      // să știi de ce ai două fișiere și în ce sens.
                       label: `Film — ${direction} la ${quality}`,
                       isSeasonPack: false,
                     })
@@ -349,18 +327,15 @@ export function ResultStep({
         </>
       ) : (
         <>
-          {/* Bannerul stă deasupra selectorului, nu în ramura
-              „nu există", fiindcă un film urmărit rămâne urmărit
-              și în clipa în care apare un torrent — atunci vrei
-              să vezi și că e așteptat, și butonul de descărcare. */}
+          {/* Deasupra selectorului: un film urmărit rămâne urmărit și când
+              apare un torrent — vrei și bannerul, și butonul. */}
           {wantedEntry && (
             <div className="space-y-2 rounded-xl bg-violet-500/10 p-3">
               <div className="flex items-center gap-2 text-sm text-violet-300">
                 <Orb state="searching" px={16} />
                 Se așteaptă la {wantedEntry.quality} — se verifică din 12 în 12 ore.
               </div>
-              {/* Oprirea ar putea anula așteptarea altcuiva, deci
-                  doar proprietarul sau un admin. */}
+              {/* Oprirea: doar proprietarul sau un admin. */}
               {wantedEntry.canManage && (
                 <button
                   type="button"
@@ -418,11 +393,8 @@ export function ResultStep({
                   </div>
                 </div>
               )}
-              {/* Fundacul de dinainte: mesajul spunea „încă", dar
-                  nu-ți oferea nimic de făcut cu informația asta. */}
-              {/* Deschis oricui e logat, nu doar adminilor: un film
-                  așteptat nu ocupă nimic până apare, iar descărcarea
-                  de atunci e exact ce a cerut utilizatorul. */}
+              {/* Deschis oricui e logat: un film așteptat nu ocupă nimic până
+                  apare. */}
               {!wantedEntry &&
                 (askHdrWatch && sdrOfQuality ? (
                   <HdrQuestion

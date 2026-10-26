@@ -59,18 +59,14 @@ import { QualityButton, QualityChecklist } from "./QualityChecklist";
 import { BorderFlowSweep } from "@/components/BorderFlowSweep";
 import { ScheduledDeleteCard } from "./ScheduledDelete";
 
-// Peste pragul ăsta, "Se procesează" nu mai e o scanare Plex în curs — de
-// obicei legarea reușește în primul minut după descărcare.
+// Peste prag, „Se procesează” nu mai e o scanare Plex în curs (legarea reușește
+// de obicei în primul minut).
 const PROCESSING_HINT_AFTER_MS = 30 * 60 * 1000;
 
-// Drawer-ul de detalii al unui titlu din Bibliotecă — complet independent de
-// listă: primește doar mediaId, își gestionează singur toată starea (query
-// de detalii, corectare/ștergere subtitrare). Cere listei doar două lucruri,
-// prin callback-uri: să deschidă confirmarea de ștergere completă (rândurile
-// rămân la nivel de listă, ca overlay simplu peste drawer — nu un
-// AlertDialog Radix imbricat, care ar îngheța ecranul, vezi commit c76ce30)
-// și să știe când s-a șters efectiv titlul, ca să închidă drawer-ul și să
-// reîmprospăteze lista.
+// Drawer-ul de detalii al unui titlu — independent de listă: primește doar
+// mediaId și își ține singur starea. Confirmarea ștergerii complete stă la
+// nivelul listei, ca overlay simplu (un AlertDialog Radix imbricat îngheață
+// ecranul, c76ce30).
 export function TitleDetailDrawer({
   mediaId,
   onClose,
@@ -95,15 +91,10 @@ export function TitleDetailDrawer({
   const [correcting, setCorrecting] = useState(false);
   const [deletingSubtitle, setDeletingSubtitle] = useState(false);
   const [showTech, setShowTech] = useState(false);
-  // Navigare serial → episod în ACELAȘI drawer, cu buton de întoarcere.
-  // Nu un al doilea drawer/dialog peste primul: overlay-urile Radix imbricate
-  // într-un Drawer vaul îngheață ecranul fără nicio eroare logată (vezi
-  // commit c76ce30 și incidentul din AddMediaWizard).
-  // Perechea (serial, episod), nu doar id-ul episodului: ștergerea unui titlu
-  // pune mediaId pe null din afară, fără ca vaul să apeleze onOpenChange, deci
-  // un reset făcut doar acolo lăsa episodul agățat — următorul titlu deschis
-  // ar fi afișat direct episodul rămas din sesiunea anterioară. Legat de
-  // serialul lui, starea se invalidează singură, fără useEffect.
+  // Serial → episod în ACELAȘI drawer, cu buton înapoi — un overlay Radix
+  // imbricat în vaul îngheață ecranul (c76ce30). Perechea (serial, episod), nu
+  // doar episodul: ștergerea pune mediaId pe null din afară, fără onOpenChange,
+  // iar episodul rămânea agățat pentru următorul titlu deschis.
   const [openEpisode, setOpenEpisode] = useState<{ showId: number; episodeId: number } | null>(
     null,
   );
@@ -117,10 +108,8 @@ export function TitleDetailDrawer({
   const setShowWatchFn = useServerFn(setShowWatch);
   const checkShowNowFn = useServerFn(checkShowNow);
 
-  // Serialul rămâne "titlul de bază" al drawer-ului; când e deschis un episod,
-  // el devine subiectul afișat, iar butonul înapoi doar golește starea asta.
-  // Dacă titlul de bază a dispărut (ex. ștergere), episodul deschis peste el
-  // nu mai are context — nu ținem o cerere vie pentru un drawer închis.
+  // Serialul rămâne titlul de bază; un episod deschis devine subiectul. Fără
+  // titlu de bază (șters), episodul nu mai are context.
   const openEpisodeId = openEpisode?.showId === mediaId ? openEpisode.episodeId : null;
   const activeId = mediaId == null ? null : (openEpisodeId ?? mediaId);
 
@@ -128,25 +117,16 @@ export function TitleDetailDrawer({
     queryKey: ["plexTitleDetail", activeId],
     queryFn: () => getPlexTitleDetail({ data: { mediaId: activeId! } }),
     enabled: !!activeId,
-    // Progres live cât timp titlul e în descărcare sau în așteptarea
-    // indexării Plex — se oprește automat când trece la "in_library" (vezi
-    // și plexLibraryBrowseQuery).
-    //
-    // Serialele merg pe un puls lent când n-au ce câștiga din cel rapid:
-    // statusul unui serial e agregat din episoadele lui și rămâne
-    // "downloading" cât timp măcar unul n-a ajuns în Plex, deci un episod
-    // blocat definitiv (torrent șters din qBittorrent) ținea pulsul de 2.5s
-    // pornit la nesfârșit, cât timp drawer-ul e deschis.
+    // Progres live cât titlul se descarcă sau așteaptă indexarea; se oprește la
+    // "in_library". La seriale, pulsul rapid doar cât măcar un episod are un
+    // procent care urcă — un episod blocat definitiv ținea altfel pulsul de
+    // 2,5s pornit la nesfârșit.
     refetchInterval: (query) => {
       const d = query.state.data;
       if (d?.status !== "ok") return false;
       const { status, type } = d.detail;
       if (status !== "downloading" && status !== "processing") return false;
       if (type !== "tv_show") return 2500;
-      // Pulsul rapid are rost la un serial doar cât măcar un episod chiar
-      // ține un procent care urcă; dacă toate sunt doar în așteptarea
-      // indexării Plex (sau blocate, fără torrent în qBittorrent), rămâne
-      // pulsul lent — vezi comentariul de mai sus.
       return d.detail.episodes.some((e) => e.status === "downloading" && e.progress != null)
         ? 2500
         : 15_000;
@@ -158,8 +138,7 @@ export function TitleDetailDrawer({
 
   function invalidateAfterMutation() {
     queryClient.invalidateQueries({ queryKey: ["plexLibraryBrowse"] });
-    // Ambele niveluri: o schimbare pe episod (subtitrare, ștergere) se vede și
-    // în lista de episoade a serialului de deasupra.
+    // Ambele niveluri: o schimbare pe episod se vede și în lista serialului.
     for (const id of new Set([mediaId, activeId])) {
       if (id) queryClient.invalidateQueries({ queryKey: ["plexTitleDetail", id] });
     }
@@ -181,20 +160,14 @@ export function TitleDetailDrawer({
     invalidateAfterMutation();
   }
 
-  // Calitatea principală și cea de rezervă se trimit mereu împreună: o
-  // principală schimbată pe aceeași valoare ca rezerva lasă serialul fără
-  // rezervă (două calități identice n-au sens — vezi effectiveFallback).
+  // Principala și rezerva se trimit împreună: două calități identice lasă
+  // serialul fără rezervă (effectiveFallback).
   async function setWatchQualities(quality: string, fallbackQuality: string | null) {
     if (!d) return;
     setSavingWatch(true);
-    // Schimbarea calității pe un serial deja urmărit nu trebuie să mute
-    // punctul de pornire înapoi — de-aia "backfill" nu apare aici.
-    //
-    // Eroarea se raportează, ca la toggleWatch de mai sus: setShowWatchCore
-    // întoarce {ok:false} și când n-ai drepturi pe serial, iar varianta veche
-    // (`.catch(() => {})`, fără să se uite la rezultat) o înghițea complet —
-    // calitatea părea schimbată până la următorul refetch, care o dădea
-    // înapoi fără nicio explicație.
+    // Fără "backfill": schimbarea calității nu mută punctul de pornire înapoi.
+    // Eroarea se raportează — înghițită, calitatea părea schimbată până la
+    // refetch-ul care o dădea înapoi.
     const res = await setShowWatchFn({
       data: {
         mediaId: d.mediaId,
@@ -234,8 +207,8 @@ export function TitleDetailDrawer({
     } else {
       toast.info("Niciun episod nou de descărcat", {
         id: toastId,
-        // Motivul contează: "lipsesc 3 episoade, dar niciun torrent 1080p" e
-        // altceva decât "ești la zi", iar fără el depanarea e ghicit.
+        // Motivul contează: „lipsesc 3 episoade, dar niciun torrent 1080p” ≠ „ești
+        // la zi”.
         description:
           o.skipped ??
           (o.missing.length > 0 ? `Lipsesc: ${o.missing.join(", ")}` : "Ești la zi cu serialul"),
@@ -311,9 +284,8 @@ export function TitleDetailDrawer({
               <ArrowLeft className="h-3 w-3" /> Înapoi la serial
             </button>
           )}
-          {/* Tot ce descrie titlul stă lângă poster — an, IMDb, insigne, genuri —
-              ca antetul fix să ocupe cât mai puțin; sub el, pe toată
-              lățimea, rămâne doar starea temporară (descărcare/indexare). */}
+          {/* Tot ce descrie titlul stă lângă poster, ca antetul fix să fie mic;
+              dedesubt, doar starea temporară (descărcare/indexare). */}
           <div className="flex items-start gap-3">
             {d?.thumbUrl && (
               <img
@@ -338,18 +310,14 @@ export function TitleDetailDrawer({
                   {displayEpisodeTitle(d.title) ? ` · ${d.title}` : ""}
                 </DrawerDescription>
               )}
-              {/* Titlul original, anul și IMDb pe un rând: toate trei spun
-                  „care titlu e ăsta”, nu „ce fișier am”. La episod, anul și
-                  IMDb-ul sunt ale serialului (premiera, pagina serialului), iar
-                  genurile există doar la nivel de serial pe TMDB — acolo le
-                  vezi, cu „Înapoi la serial”. Episodul își arată în schimb
-                  data difuzării. */}
+              {/* Titlul original, anul și IMDb — „care titlu e ăsta”. La episod,
+                  anul și IMDb sunt ale serialului; genurile există doar la serial.
+                  Episodul arată data difuzării. */}
               {d && (
                 <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11px]">
                   {d.originalTitle &&
                     d.originalTitle !== (d.type === "movie" ? d.title : (d.show ?? d.title)) && (
-                      // pr-1: `truncate` taie tot ce iese din cutie, inclusiv
-                      // aplecarea ultimei litere italice.
+                      // pr-1: `truncate` ar tăia aplecarea ultimei litere italice.
                       <span className="min-w-0 truncate pr-1 text-xs text-muted-foreground italic">
                         {d.originalTitle}
                       </span>
@@ -374,9 +342,8 @@ export function TitleDetailDrawer({
                       <ExternalLink className="h-3 w-3" /> IMDb
                     </a>
                   )}
-                  {/* Spre deosebire de IMDb, ține de FIȘIER: există la film și
-                      la episod (la pachet, pagina pachetului), nu la serial.
-                      Doar descărcările noi au ID-ul salvat. */}
+                  {/* Ține de FIȘIER (film, episod, pachet), nu de serial; doar
+                      descărcările noi au ID-ul. */}
                   {d.type !== "tv_show" && d.filelistId != null && (
                     <a
                       href={`https://filelist.io/details.php?id=${d.filelistId}`}
@@ -391,12 +358,9 @@ export function TitleDetailDrawer({
               )}
               {d && (d.type !== "tv_show" || d.durationMs > 0) && (
                 <div className="mt-1.5 flex flex-wrap items-center gap-1 text-[11px]">
-                  {/* Calitatea, audio/subtitrarea și durata sunt proprietăți
-                      ale unui FIȘIER. Rândul-părinte 'tv_show' nu are fișier,
-                      deci coloanele lui sunt goale prin construcție — iar
-                      has_romanian_subtitle = 0 pe el nu înseamnă "fără
-                      subtitrare RO", ci "întrebare fără sens la nivel de
-                      serial". Se aplică per episod, nu aici. */}
+                  {/* Calitatea, audio/subtitrarea și durata sunt ale unui FIȘIER —
+                      pe 'tv_show' sunt goale prin construcție, deci se arată per
+                      episod. */}
                   {d.type !== "tv_show" && d.quality && (
                     <span className="rounded-full bg-amber-500/15 text-amber-400 px-1.5 py-0.5 font-medium">
                       {d.quality}
@@ -408,10 +372,8 @@ export function TitleDetailDrawer({
                       Românesc
                     </span>
                   ) : (
-                    // Cât timp titlul e în descărcare, subtitrarea încă nu a
-                    // fost căutată/verificată — o insignă "doar engleză" ar fi
-                    // falsă, nu doar incompletă, de-aia o ascundem până se
-                    // termină.
+                    // Cât se descarcă, subtitrarea nu e încă verificată — o insignă
+                    // „doar engleză” ar fi falsă.
                     d.status !== "downloading" &&
                     (d.hasRomanianSubtitle ? (
                       <span className="flex items-center gap-1 rounded-full bg-emerald-500/15 text-emerald-400 px-1.5 py-0.5 font-medium">
@@ -435,14 +397,12 @@ export function TitleDetailDrawer({
                   )}
                 </div>
               )}
-              {/* Reîncercarea zilnică a subtitrării (Tehnic → Watcher →
-                  Reîncercare subtitrări): dacă titlul e în căutare și până
-                  când, sau că fereastra de 14 zile s-a încheiat. */}
+              {/* Reîncercarea zilnică a subtitrării: în căutare până când, sau
+                  încheiată. */}
               {d && d.subtitleRetry && d.status !== "downloading" && (
                 <SubtitleRetryLine retry={d.subtitleRetry} />
               )}
-              {/* Text simplu, nu pastile: e informație secundară, iar
-                  pastilele ocupau un rând întreg. */}
+              {/* Text simplu, nu pastile: informație secundară. */}
               {d && d.type !== "episode" && d.genres.length > 0 && (
                 <div className="mt-1.5 text-[11px] leading-snug text-muted-foreground">
                   {d.genres.join(" · ")}
@@ -471,10 +431,9 @@ export function TitleDetailDrawer({
 
               {d.status === "processing" && (
                 <div className="text-[11px] text-muted-foreground">
-                  {/* Plex poate potrivi fișierul la alt titlu (ex. „S.W.A.T.
-                      Exiles" pus la „S.W.A.T." 2017) — legarea după TMDB nu-l
-                      găsește atunci niciodată. Indiciul apare doar adminului
-                      (d.tech), singurul care poate face Fix Match în Plex. */}
+                  {/* Plex poate potrivi fișierul la alt titlu („S.W.A.T. Exiles” →
+                      „S.W.A.T.” 2017). Doar pentru admin, singurul care poate face
+                      Fix Match. */}
                   {d.tech?.completedAt &&
                   Date.now() - new Date(`${d.tech.completedAt.replace(" ", "T")}Z`).getTime() >
                     PROCESSING_HINT_AFTER_MS
@@ -495,10 +454,8 @@ export function TitleDetailDrawer({
           )}
           {d && (
             <>
-              {/* Cadrul episodului (TMDB, orizontal): în partea care se
-                  derulează, nu în antet — acolo, fix, ocupa prea mult ecran.
-                  Pe toată lățimea drawer-ului, care e oricum plafonată pe
-                  desktop (vezi DrawerContent). */}
+              {/* Cadrul episodului, în partea care se derulează — în antetul fix
+                  ocupa prea mult. */}
               {d.type === "episode" && d.stillUrl && (
                 <img
                   src={d.stillUrl}
@@ -512,21 +469,15 @@ export function TitleDetailDrawer({
 
               {d.type === "tv_show" && (
                 <>
-                  {/* Episoadele noi, într-un singur card: ce urmează și cine
-                      se ocupă de el. „Urmează S10E08” și „Urmărit” spun două
-                      jumătăți ale aceluiași lucru — când apare episodul și
-                      dacă ajunge singur în bibliotecă — deci stau împreună. */}
+                  {/* Episoadele noi într-un card: când apare următorul și dacă
+                      ajunge singur în bibliotecă. */}
                   <div
                     className={`rounded-xl border border-border bg-muted/30 p-3 space-y-2 ${d.autoDownload ? "border-flow" : ""}`}
                   >
                     {d.autoDownload && <BorderFlowSweep />}
-                    {/* Urmărirea episoadelor noi. Butoanele sunt ascunse
-                        pentru serialele încheiate — n-au ce episoade noi să
-                        primească — DAR nu și când urmărirea e deja pornită: un
-                        serial urmărit care se încheie între timp ar rămâne
-                        altfel fără niciun buton prin care s-o oprești. Fără
-                        drepturi pe serial, starea „Urmărit” se vede, fără
-                        butoane. */}
+                    {/* Butoanele lipsesc la serialele încheiate, DAR nu și când
+                        urmărirea e pornită (altfel n-ai cum s-o oprești). Fără
+                        drepturi: starea se vede, fără butoane. */}
                     {(d.autoDownload || (d.canManage && d.tvStatus !== "Ended")) && (
                       <div className="flex items-center gap-2">
                         {d.autoDownload ? (
@@ -574,11 +525,8 @@ export function TitleDetailDrawer({
                       </div>
                     )}
 
-                    {/* Următorul episod — citit din `media`, nu cerut live:
-                        Watcher-ul îl ține la zi din TMDB (data) + TVmaze
-                        (ora exactă). Ora se redă în fusul browserului, deci
-                        apare direct în ora României. În dreapta, calitatea
-                        cu care se descarcă. */}
+                    {/* Următorul episod, din `media` (TMDB + ora TVmaze), redat în
+                        ora browserului. În dreapta, calitatea. */}
                     <NextEpisodeLine
                       detail={d}
                       trailing={
@@ -594,9 +542,8 @@ export function TitleDetailDrawer({
                       }
                     />
 
-                    {/* Lista de calități, inline — nu un Popover/Select Radix:
-                        un overlay imbricat în Drawer-ul vaul îngheață ecranul
-                        (vezi commit c76ce30). */}
+                    {/* Calitățile inline, nu Popover/Select Radix — un overlay
+                        imbricat în vaul îngheață ecranul (c76ce30). */}
                     {d.canManage && d.autoDownload && pickingQuality && (
                       <QualityChecklist
                         primary={d.autoDownloadQuality ?? "1080p"}
@@ -616,11 +563,8 @@ export function TitleDetailDrawer({
                       </div>
                     )}
 
-                    {/* Alegerea punctului de pornire e explicită, nu
-                        implicită: pentru un serial din care ai doar primele
-                        sezoane, "recuperează tot" înseamnă zeci de episoade
-                        descărcate deodată — trebuie să fie o decizie luată în
-                        cunoștință de cauză, nu un efect secundar. */}
+                    {/* Punctul de pornire, explicit: „recuperează tot” poate
+                        însemna zeci de episoade deodată. */}
                     {d.canManage && pickingWatch && !d.autoDownload && (
                       <div className="space-y-1.5">
                         <button
@@ -651,8 +595,8 @@ export function TitleDetailDrawer({
                     )}
                   </div>
 
-                  {/* Cine l-a adus și cine l-a văzut, apoi episoadele.
-                      Detaliile tehnice rămân la coadă. */}
+                  {/* Cine l-a adus și cine l-a văzut, apoi episoadele; detaliile
+                      tehnice la coadă. */}
                   <AudienceCard detail={d} watchedEpisodes={watchedEpisodes} />
 
                   <EpisodeList
@@ -702,8 +646,7 @@ export function TitleDetailDrawer({
                             ),
                           ),
                         ],
-                        // Cu raport structurat, sursa și detaliul apar în
-                        // blocul „Subtitrare" de dedesubt.
+                        // Cu raport structurat, sursa și detaliul sunt mai jos.
                         !d.tech.subtitleReport &&
                           d.tech.subtitleSource && [
                             "Sursă subtitrare",
@@ -725,13 +668,9 @@ export function TitleDetailDrawer({
                         d.torrentHash && ["Torrent hash", d.torrentHash],
                       ]
                         .filter((row): row is [string, string] => !!row)
-                        // Valorile se afișează întregi, nu tăiate. Cele lungi
-                        // (detaliul subtitrării, numele torrentului) trec sub
-                        // etichetă, pe toată lățimea, aliniate la stânga — un
-                        // paragraf aliniat la dreapta pe 4-5 rânduri se citește
-                        // greu. `wrap-anywhere` rupe și șirurile fără spații
-                        // (hash, nume de release cu puncte) ca să nu iasă din
-                        // chenar.
+                        // Valorile lungi (detaliul subtitrării, torrentul) trec sub
+                        // etichetă, pe toată lățimea, aliniate la stânga;
+                        // `wrap-anywhere` rupe și șirurile fără spații.
                         .map(([label, value]) =>
                           value.length > 40 ? (
                             <div key={label} className="flex flex-col gap-0.5">
@@ -764,7 +703,7 @@ export function TitleDetailDrawer({
 
               {d.type !== "tv_show" && (
                 <div className="flex flex-col gap-2 pt-1 border-t border-border">
-                  {/* Vizibil pentru oricine: oricine poate renunța la ștergere. */}
+                  {/* Pentru oricine: oricine poate renunța la ștergere. */}
                   {d.torrentHash && d.deleteScheduled && (
                     <div className="pt-2">
                       <ScheduledDeleteCard
@@ -888,11 +827,9 @@ export function TitleDetailDrawer({
   );
 }
 
-// Cine l-a adus și cine l-a văzut — un singur card cu rânduri, în loc de
-// patru-cinci rânduri separate, fiecare cu titlul lui. Datele scurte („28
-// sept., 21:40”, „ieri, 19:45”): cele lungi rupeau rândurile în două pe telefon.
-// Ceilalți spectatori stau pe toată lățimea, nume în stânga și dată în dreapta,
-// primii trei la vedere și restul la „încă N”.
+// Cine l-a adus și cine l-a văzut, într-un card. Date scurte („28 sept.,
+// 21:40”) — cele lungi rupeau rândurile pe telefon. Primii trei spectatori la
+// vedere, restul la „încă N”.
 const OTHERS_VISIBLE = 3;
 
 function AudienceCard({
@@ -1001,8 +938,8 @@ function InfoRow({
   );
 }
 
-// Descrierea, tăiată la trei rânduri. „mai mult” apare doar dacă chiar a
-// tăiat ceva — măsurat după randare, nu ghicit după numărul de caractere.
+// Descrierea, la trei rânduri; „mai mult” doar dacă a tăiat ceva (măsurat
+// după randare).
 function ClampedSummary({ text }: { text: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const [expanded, setExpanded] = useState(false);
@@ -1029,15 +966,13 @@ function ClampedSummary({ text }: { text: string }) {
   );
 }
 
-// Rândul „Urmează…” din cardul de episoade noi — fără card propriu, stă în
-// cel al urmăririi. `trailing` e alegerea calității, în dreapta rândului.
+// Rândul „Urmează…” din cardul urmăririi; `trailing` = calitatea, în dreapta.
 function NextEpisodeLine({ detail, trailing }: { detail: PlexTitleDetail; trailing?: ReactNode }) {
   const when = nextEpisodeWhen(detail.nextEpisodeAirDate, detail.nextEpisodeAirstamp);
 
   let content: ReactNode;
   if (detail.tvStatus === "Ended" && !when) {
-    // Serial încheiat: spunem asta explicit, în loc să lăsăm un gol care ar
-    // putea fi citit drept "încă n-am aflat".
+    // Serial încheiat — spus explicit, nu un gol care pare „încă nu știm”.
     content = (
       <span className="flex min-w-0 items-center gap-2 text-muted-foreground">
         <CheckCheck className="h-3.5 w-3.5 shrink-0" />
