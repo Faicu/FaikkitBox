@@ -4,14 +4,16 @@ import { createServerFn } from "@tanstack/react-start";
 // rând `media` cu torrent_hash cunoscut e ștergibil, indiferent de
 // proveniență. În primele 24 h de la descărcare ștergerea nu se execută, ci
 // se programează pentru împlinirea lor — hit and run pe Filelist, vezi
-// scheduled-delete.ts. Execuția propriu-zisă e în delete-title.ts.
+// scheduled-delete.ts. Excepție: adminul poate cere ștergerea pe loc
+// (`immediate`), ignorat pentru oricine altcineva. Execuția propriu-zisă e în
+// delete-title.ts.
 export const deleteMediaEntry = createServerFn({ method: "POST" })
-  .validator((data: { mediaId: number }) => data)
+  .validator((data: { mediaId: number; immediate?: boolean }) => data)
   .handler(
     async ({
       data,
     }): Promise<{ ok: boolean; qbitDeleted?: boolean; scheduledAt?: string; error?: string }> => {
-      const { requireAuth, isAdminOrOwner } = await import("../auth/admin.server");
+      const { requireAuth, isAdminOrOwner, isLiveAdmin } = await import("../auth/admin.server");
       const session = await requireAuth();
       try {
         const { getDb } = await import("../db");
@@ -55,9 +57,11 @@ export const deleteMediaEntry = createServerFn({ method: "POST" })
         const who = session.data.username ?? "admin";
         const label = torrentLabel(torrentHash);
 
-        // Pentru toată lumea, adminul inclus: în primele 24 h doar programăm.
+        // În primele 24 h doar programăm — pentru toată lumea, adminul inclus,
+        // dacă n-a cerut explicit ștergerea pe loc.
         const delayedUntil = deleteDelayedUntil(torrentHash);
-        if (delayedUntil) {
+        const immediate = !!delayedUntil && !!data.immediate && (await isLiveAdmin(session));
+        if (delayedUntil && !immediate) {
           const already = scheduledDeletion(torrentHash);
           const scheduled = scheduleDeletion(
             torrentHash,
@@ -76,11 +80,17 @@ export const deleteMediaEntry = createServerFn({ method: "POST" })
 
         const { deleteTorrentNow } = await import("./delete-title");
         const { qbitDeleted } = await deleteTorrentNow({ ...row, torrent_hash: torrentHash });
-        await logActivity("title_delete", `${who} a șters: ${label}`, {
-          torrentHash,
-          action: "deleted",
-          user: who,
-        });
+        await logActivity(
+          "title_delete",
+          immediate
+            ? `${who} a șters pe loc, înainte de 24 h: ${label}`
+            : `${who} a șters: ${label}`,
+          {
+            torrentHash,
+            action: immediate ? "deleted_immediate" : "deleted",
+            user: who,
+          },
+        );
         return { ok: true, qbitDeleted };
       } catch (e) {
         console.error("[filelist] Nu am putut șterge titlul:", e);

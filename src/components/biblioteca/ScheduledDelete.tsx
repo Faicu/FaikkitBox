@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Loader2, Trash2, Undo2 } from "lucide-react";
+import { Loader2, Trash2, Undo2, Zap } from "lucide-react";
 
 import { cancelMediaDeletion } from "@/lib/filelist.functions";
 import { deleteTimeLabel } from "./utils";
@@ -53,6 +53,7 @@ export function ScheduledDeleteCard({
   byUsername,
   isCancel,
   onCancelled,
+  onDeleteNow,
 }: {
   mediaId: number;
   at: string;
@@ -60,6 +61,8 @@ export function ScheduledDeleteCard({
   // Descărcarea e încă în curs — „anulare” în loc de „ștergere”.
   isCancel: boolean;
   onCancelled: () => void;
+  // Doar pentru admin: deschide confirmarea ștergerii pe loc.
+  onDeleteNow?: () => void;
 }) {
   const now = useNow();
   const cancelFn = useServerFn(cancelMediaDeletion);
@@ -103,19 +106,32 @@ export function ScheduledDeleteCard({
         </div>
       </div>
       {!due && (
-        <button
-          type="button"
-          onClick={cancel}
-          disabled={busy}
-          className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-border bg-muted/40 py-2 text-xs font-medium text-foreground hover:bg-muted/60 transition-colors disabled:opacity-40"
-        >
-          {busy ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <Undo2 className="h-3.5 w-3.5" />
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={cancel}
+            disabled={busy}
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-border bg-muted/40 py-2 text-xs font-medium text-foreground hover:bg-muted/60 transition-colors disabled:opacity-40"
+          >
+            {busy ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Undo2 className="h-3.5 w-3.5" />
+            )}
+            Renunță la ștergere
+          </button>
+          {onDeleteNow && (
+            <button
+              type="button"
+              onClick={onDeleteNow}
+              disabled={busy}
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-border bg-muted/40 py-2 text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-40"
+            >
+              <Zap className="h-3.5 w-3.5" />
+              Șterge acum
+            </button>
           )}
-          Renunță la ștergere
-        </button>
+        </div>
       )}
     </div>
   );

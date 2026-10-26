@@ -286,7 +286,7 @@ export const PLUGINS: PluginInfo[] = [
         summary: "Șterge titlurile cerute spre ștergere în primele 24 h, la împlinirea lor.",
         points: [
           "Filelist consideră hit and run un torrent șters în primele 24 de ore de la descărcare. Înainte, butoanele Anulare/Ștergere erau blocate în acest interval; acum cererea se acceptă, dar ștergerea se programează pentru împlinirea celor 24 h.",
-          "Până atunci torrentul continuă să se descarce și să facă seed, iar titlul apare în Bibliotecă cu un timer. Oricine poate renunța la ștergere și devine astfel proprietarul titlului.",
+          "Până atunci torrentul continuă să se descarce și să facă seed, iar titlul apare în Bibliotecă cu un timer. Oricine poate renunța la ștergere și devine astfel proprietarul titlului. Adminul poate ocoli programarea cu „Șterge acum”.",
           "Termenul stă în baza de date, nu într-un cronometru în memorie: o ștergere ratată cât serverul a fost oprit se face la pornirea următoare.",
           "Programarea, renunțarea și ștergerea efectivă apar în jurnal (filtrul Torrente), fără notificare push.",
         ],

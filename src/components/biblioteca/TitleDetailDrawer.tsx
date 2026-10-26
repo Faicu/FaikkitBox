@@ -85,6 +85,10 @@ export function TitleDetailDrawer({
     isCancel: boolean;
     // Ștergerea doar se programează până atunci (formatul SQLite, UTC).
     delayedUntil: string | null;
+    // Admin: confirmarea oferă și ștergerea pe loc.
+    canDeleteImmediately: boolean;
+    // Ștergerea e deja programată — confirmarea e doar pentru „Șterge acum”.
+    alreadyScheduled: boolean;
   }) => void;
 }) {
   const queryClient = useQueryClient();
@@ -769,6 +773,20 @@ export function TitleDetailDrawer({
                         byUsername={d.deleteScheduled.byUsername}
                         isCancel={d.status === "downloading"}
                         onCancelled={invalidateAfterMutation}
+                        onDeleteNow={
+                          d.canDeleteImmediately
+                            ? () =>
+                                onRequestDelete({
+                                  mediaId: d.mediaId,
+                                  title: d.type === "movie" ? d.title : (d.show ?? d.title),
+                                  isSeasonPack: d.isSeasonPack,
+                                  isCancel: d.status === "downloading",
+                                  delayedUntil: d.deleteScheduled!.at,
+                                  canDeleteImmediately: true,
+                                  alreadyScheduled: true,
+                                })
+                            : undefined
+                        }
                       />
                     </div>
                   )}
@@ -785,6 +803,8 @@ export function TitleDetailDrawer({
                                 isSeasonPack: d.isSeasonPack,
                                 isCancel: true,
                                 delayedUntil: d.deleteDelayedUntil,
+                                canDeleteImmediately: d.canDeleteImmediately,
+                                alreadyScheduled: false,
                               })
                             }
                             className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-border bg-muted/40 py-2 text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors"
@@ -833,6 +853,8 @@ export function TitleDetailDrawer({
                                   isSeasonPack: d.isSeasonPack,
                                   isCancel: false,
                                   delayedUntil: d.deleteDelayedUntil,
+                                  canDeleteImmediately: d.canDeleteImmediately,
+                                  alreadyScheduled: false,
                                 })
                               }
                               className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-border bg-muted/40 py-2 text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors"

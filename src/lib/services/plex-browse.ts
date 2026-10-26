@@ -507,6 +507,8 @@ export interface PlexTitleDetail {
   deleteDelayedUntil: string | null;
   // Ștergerea deja programată: când și cine a cerut-o. Oricine o poate anula.
   deleteScheduled: { at: string; byUsername: string | null } | null;
+  // Doar adminul poate ocoli programarea și șterge pe loc.
+  canDeleteImmediately: boolean;
   tmdbId: number | null;
   originalTitle: string | null;
   // Vizibil pentru toți (nu doar admin, spre deosebire de tech.imdbId) —
@@ -874,6 +876,7 @@ async function buildDetailFromMediaRow(
     canManage,
     deleteDelayedUntil: delayedUntil,
     deleteScheduled,
+    canDeleteImmediately: isAdmin,
     tmdbId: row.tmdb_id,
     originalTitle: row.original_title,
     imdbId: row.imdb_id,

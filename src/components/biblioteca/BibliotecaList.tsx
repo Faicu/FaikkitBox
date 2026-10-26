@@ -41,6 +41,8 @@ export function BibliotecaList({
     isSeasonPack: boolean;
     isCancel: boolean;
     delayedUntil: string | null;
+    canDeleteImmediately: boolean;
+    alreadyScheduled: boolean;
   } | null>(null);
   const deleteEntryFn = useServerFn(deleteMediaEntry);
 
@@ -62,10 +64,11 @@ export function BibliotecaList({
     [allItems, query, sortMode],
   );
 
-  async function confirmDeleteTitleAction() {
+  // `immediate` — doar adminul, ștergerea pe loc chiar și în primele 24 h.
+  async function confirmDeleteTitleAction(immediate = false) {
     if (!confirmDeleteTitle) return;
     const { mediaId, isCancel } = confirmDeleteTitle;
-    const res = await deleteEntryFn({ data: { mediaId } });
+    const res = await deleteEntryFn({ data: { mediaId, immediate } });
     setConfirmDeleteTitle(null);
     if (!res.ok) {
       toast.error(isCancel ? "Nu am putut anula descărcarea" : "Nu am putut șterge titlul", {
@@ -273,15 +276,25 @@ export function BibliotecaList({
               <div className="text-sm font-semibold">
                 {confirmDeleteTitle.isCancel ? "Anulare descărcare" : "Ștergere completă"}
               </div>
-              {confirmDeleteTitle.delayedUntil && (
-                <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-snug text-amber-400">
-                  Descărcarea a început acum mai puțin de 24 de ore, iar Filelist consideră hit and
-                  run un torrent șters mai devreme.{" "}
-                  {confirmDeleteTitle.isCancel ? "Anularea" : "Ștergerea"} se programează pentru{" "}
-                  {deleteTimeLabel(confirmDeleteTitle.delayedUntil)}; până atunci torrentul continuă
-                  să se descarce și să facă seed, iar oricine poate renunța la ea.
-                </p>
-              )}
+              {confirmDeleteTitle.delayedUntil &&
+                (confirmDeleteTitle.alreadyScheduled ? (
+                  <p className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs leading-snug text-red-400">
+                    {confirmDeleteTitle.isCancel ? "Anularea" : "Ștergerea"} e deja programată
+                    pentru {deleteTimeLabel(confirmDeleteTitle.delayedUntil)}. Ștergerea pe loc
+                    ocolește regula: Filelist consideră hit and run un torrent șters în primele 24
+                    de ore.
+                  </p>
+                ) : (
+                  <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-snug text-amber-400">
+                    Descărcarea a început acum mai puțin de 24 de ore, iar Filelist consideră hit
+                    and run un torrent șters mai devreme.{" "}
+                    {confirmDeleteTitle.isCancel ? "Anularea" : "Ștergerea"} se programează pentru{" "}
+                    {deleteTimeLabel(confirmDeleteTitle.delayedUntil)}; până atunci torrentul
+                    continuă să se descarce și să facă seed, iar oricine poate renunța la ea.
+                    {confirmDeleteTitle.canDeleteImmediately &&
+                      " Ca admin, poți șterge și pe loc — cu riscul ca Filelist s-o considere hit and run."}
+                  </p>
+                ))}
               <p className="whitespace-pre-line text-sm text-muted-foreground">
                 {confirmDeleteTitle.isCancel
                   ? confirmDeleteTitle.isSeasonPack
@@ -299,19 +312,30 @@ export function BibliotecaList({
                 >
                   Renunță
                 </button>
-                <button
-                  type="button"
-                  onClick={confirmDeleteTitleAction}
-                  className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
-                >
-                  {confirmDeleteTitle.delayedUntil
-                    ? confirmDeleteTitle.isCancel
-                      ? "Programează anularea"
-                      : "Programează ștergerea"
-                    : confirmDeleteTitle.isCancel
-                      ? "Anulează descărcarea"
-                      : "Șterge"}
-                </button>
+                {confirmDeleteTitle.delayedUntil && confirmDeleteTitle.canDeleteImmediately && (
+                  <button
+                    type="button"
+                    onClick={() => confirmDeleteTitleAction(true)}
+                    className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600/90"
+                  >
+                    Șterge acum
+                  </button>
+                )}
+                {!confirmDeleteTitle.alreadyScheduled && (
+                  <button
+                    type="button"
+                    onClick={() => confirmDeleteTitleAction()}
+                    className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+                  >
+                    {confirmDeleteTitle.delayedUntil
+                      ? confirmDeleteTitle.isCancel
+                        ? "Programează anularea"
+                        : "Programează ștergerea"
+                      : confirmDeleteTitle.isCancel
+                        ? "Anulează descărcarea"
+                        : "Șterge"}
+                  </button>
+                )}
               </div>
             </div>
           </div>,
