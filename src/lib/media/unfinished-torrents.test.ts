@@ -88,12 +88,21 @@ describe("listUnfinishedTorrents", () => {
     expect(media.listUnfinishedTorrents().map((r) => r.torrentHash)).not.toContain("ccc");
   });
 
-  it("nu întoarce descărcări mai vechi de 48h", () => {
-    // Fereastra de urmărire de 48h — un torrent
+  it("nu întoarce descărcări mai vechi de 14 zile", () => {
+    // Fereastra de urmărire de 14 zile — un torrent
     // abandonat săptămâna trecută n-are ce relua.
     insertMedia({ title: "Abandonat", hash: "ddd", addedAt: "2026-01-01 00:00:00" });
 
     expect(media.listUnfinishedTorrents().map((r) => r.torrentHash)).not.toContain("ddd");
+  });
+
+  it("întoarce o descărcare lentă, adăugată acum 5 zile", () => {
+    insertMedia({ title: "Lent", hash: "eee", addedAt: "2026-01-01 00:00:00" });
+    db.prepare(
+      "UPDATE media SET added_at = datetime('now', '-5 days') WHERE torrent_hash = 'eee'",
+    ).run();
+
+    expect(media.listUnfinishedTorrents().map((r) => r.torrentHash)).toContain("eee");
   });
 
   it("ignoră rândurile fără torrent_hash", () => {

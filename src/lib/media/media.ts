@@ -588,9 +588,11 @@ export interface UnfinishedTorrent {
 // și indexate. Fără filtru, 33 de torrente care nu mai există în qBittorrent
 // ar fi fost cerute la fiecare verificare.
 //
-// `added_at` în ultimele 48h — fereastra de urmărire moștenită de la buclele
-// per torrent de dinainte de Watcher. Un torrent abandonat acum o lună n-are
-// ce mai aștepta.
+// `added_at` în ultimele 14 zile — un torrent abandonat acum o lună n-are ce
+// mai aștepta. Până la Watcher fereastra era de 48h, moștenită de la buclele
+// per torrent din memorie; acum un torrent în plus costă doar un hash în plus
+// în aceeași cerere, iar un sezon 4K cu un singur seeder (45 GB) poate
+// depăși ușor două zile.
 export function listUnfinishedTorrents(): UnfinishedTorrent[] {
   const rows = getDb()
     .prepare(
@@ -601,7 +603,7 @@ export function listUnfinishedTorrents(): UnfinishedTorrent[] {
         WHERE completed_at IS NULL
           AND torrent_hash IS NOT NULL
           AND plex_rating_key IS NULL
-          AND added_at > datetime('now', '-48 hours')
+          AND added_at > datetime('now', '-14 days')
         GROUP BY torrent_hash`,
     )
     .all() as unknown as Array<{

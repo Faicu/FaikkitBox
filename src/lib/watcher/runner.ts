@@ -85,12 +85,15 @@ export function boot(now: number): void {
 
     // Ora salvată se păstrează peste un deploy; întârzierea de pornire se
     // aplică doar dacă sarcina e deja scadentă (sau n-a rulat niciodată).
-    // Plafonată la un interval de acum: dacă intervalul s-a scurtat între
-    // timp, ora veche n-ar trebui s-o amâne.
+    // Plafonată la NEXT_MAX_MS (25h), ca o oră salvată greșit să nu oprească
+    // sarcina. Nu la intervalul sarcinii: la backup, IMDb și actualizări
+    // intervalul e doar ritmul de reîncercare (1h), iar ora salvată e cea
+    // cerută de sarcină (peste 23h) — plafonul la interval o scurta după
+    // fiecare deploy.
     const first =
       task.everyMs === null
         ? now + task.delayMs
-        : Math.max(now + task.delayMs, Math.min(row.next_run_at ?? 0, now + task.everyMs));
+        : Math.max(now + task.delayMs, Math.min(row.next_run_at ?? 0, now + NEXT_MAX_MS));
     nextAt.set(task.id, first);
     db.prepare("UPDATE watcher_tasks SET next_run_at = ? WHERE id = ?").run(first, task.id);
   }

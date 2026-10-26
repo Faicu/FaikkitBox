@@ -57,7 +57,7 @@ export async function trackDownloads(): Promise<string | null> {
     const done: string[] = [];
     for (const t of unfinished) {
       // Lipsă din qBittorrent (șters manual): rămâne neterminat, fără zgomot,
-      // până iese din fereastra de 48h.
+      // până iese din fereastra de 14 zile.
       const info = byHash.get(t.torrentHash.toLowerCase());
       if (!info || !isTorrentComplete(Number(info.progress ?? 0), info.state ?? "")) continue;
       finalizing.add(t.torrentHash);

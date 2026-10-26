@@ -61,7 +61,8 @@ export const WATCHER_TASK_INFO: Record<string, WatcherTaskInfo> = {
     points: [
       "La fiecare 10 secunde, o singură cerere către qBittorrent pentru toate descărcările neterminate pornite din aplicație.",
       "Un torrent terminat primește ID-ul IMDb în numele fișierelor, notificarea, subtitrarea română și refresh-ul Plex. Partea asta rulează separat, deci o subtitrare care durează minute nu le ține pe loc pe celelalte.",
-      "În primele 30 de minute după terminare încearcă legarea la Plex la fiecare 10 secunde; după aceea preia „Legare Plex”.",
+      "În primele 30 de minute după terminare încearcă legarea la Plex la fiecare 10 secunde; după aceea preia „Legare Plex”. Cele două nu rulează niciodată deodată, ca un pachet de sezon să nu fie legat de două ori.",
+      "Urmărește o descărcare cel mult 14 zile de la adăugare.",
       "Totul se citește din baza de date la fiecare tact, deci un restart nu întrerupe nimic. Înainte, fiecare descărcare avea propria buclă în memorie, pe care fiecare deploy o omora și care trebuia reluată la pornire.",
     ],
     icon: <Download className="h-3.5 w-3.5 text-blue-400" />,

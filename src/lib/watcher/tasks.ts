@@ -122,11 +122,19 @@ export const WATCHER_TASKS: WatcherTask[] = [
   // 48h, iar rândul rămânea neterminat până la următoarea repornire.
   //
   // La 15s după pornire: serverul a pornit, qBittorrent e gata.
+  //
+  // Grupul „plex-link”, cu reconcilierea: cele două leagă la Plex titluri din
+  // ferestre disjuncte (sub / peste 30 de minute de la terminare), dar exact
+  // la graniță ar putea prinde același titlu în aceeași secundă — iar două
+  // legări simultane ale unui pachet de sezon îi dublează rândurile de
+  // episod. Finalizarea (subtitrare etc.) rulează în afara sarcinii, deci nu
+  // ține grupul ocupat.
   {
     id: "downloads",
     label: "Descărcări",
     delayMs: 15 * SEC,
     everyMs: 10 * SEC,
+    group: "plex-link",
     controllable: true,
     async run() {
       const { trackDownloads } = await import("../filelist/download-tracker");
@@ -270,6 +278,7 @@ export const WATCHER_TASKS: WatcherTask[] = [
     label: "Legare Plex",
     delayMs: 45 * SEC,
     everyMs: 10 * MIN,
+    group: "plex-link",
     controllable: true,
     async run() {
       const { reconcilePlexLinks } = await import("../media/plex-link-reconciler");

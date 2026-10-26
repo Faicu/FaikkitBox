@@ -102,12 +102,18 @@ describe("Watcher", () => {
     db.prepare("INSERT INTO watcher_tasks (id, running_since) VALUES ('fast', ?)").run(T0 - 5000);
     // Și o sarcină dispărută din registru.
     db.prepare("INSERT INTO watcher_tasks (id) VALUES ('veche')").run();
+    // O oră cerută de sarcină (backup-ul, peste 14h) rămâne peste un deploy,
+    // chiar dacă e mai departe decât intervalul ei (1h).
+    db.prepare("INSERT INTO watcher_tasks (id, next_run_at) VALUES ('clock', ?)").run(
+      T0 + 14 * 3_600_000,
+    );
     at(0);
     runner.boot(Date.now());
 
     expect(row("once").next_run_at).toBe(T0);
     expect(row("fast").next_run_at).toBe(T0 + 10_000);
     expect(row("veche")).toBeUndefined();
+    expect(row("clock").next_run_at).toBe(T0 + 14 * 3_600_000);
     // Rularea întreruptă e în istoric, ca eroare.
     expect(row("fast").running_since).toBeNull();
     expect(row("fast").last_ok).toBe(0);
@@ -202,10 +208,14 @@ describe("Watcher", () => {
   });
 
   it("o sarcină cu ceas propriu rulează la ora cerută, nu la interval", async () => {
+    // Ora salvată înainte de pornire (14h), nu întârzierea de pornire.
     at(6_000_000);
     runner.tick();
+    expect(calls.map((c) => c.id)).not.toContain("clock");
+    at(50_400_000);
+    runner.tick();
     await flush();
-    expect(row("clock").next_run_at).toBe(T0 + 6_000_000 + 14 * 3_600_000);
+    expect(row("clock").next_run_at).toBe(T0 + 50_400_000 + 14 * 3_600_000);
     // Fără nimic de făcut: nu intră în istoric.
     expect(runs("clock")).toHaveLength(0);
 
@@ -214,16 +224,16 @@ describe("Watcher", () => {
     db.prepare("UPDATE watcher_tasks SET run_requested_at = ? WHERE id = 'clock'").run(Date.now());
     runner.tick();
     await flush();
-    expect(row("clock").next_run_at).toBe(T0 + 6_000_000 + 60_000);
+    expect(row("clock").next_run_at).toBe(T0 + 50_400_000 + 60_000);
   });
 
   it("poke pornește sarcina la tactul următor", async () => {
     clockHint = () => Date.now() + 14 * 3_600_000;
-    at(6_010_000);
+    at(50_410_000);
     runner.tick();
     await flush();
     calls.length = 0;
-    at(6_020_000);
+    at(50_420_000);
     runner.tick();
     expect(calls.map((c) => c.id)).not.toContain("clock");
     runner.poke("clock");

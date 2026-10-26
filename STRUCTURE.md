@@ -253,7 +253,7 @@ transversale, fără un singur domeniu clar.
 | `download-quality.ts`     | Ce torrent poate descărca cineva care nu e admin: doar unul adus de Filelist la propria căutare din wizard (ținut în memorie per utilizator, 6 h), la orice calitate — nu după ID-ul trimis de browser.                                                                                                                                                                                                                                                                                  | `wizard-check.functions.ts`, `download.functions.ts`.                                      |
 | `download.functions.ts`   | Server functions peste `download.ts` (`downloadFilelist`, `correctSubtitleForMedia`, `deleteSubtitleForMedia`) — fișierul subțire reexportat de barrel-ul `filelist.functions.ts`.                                                                                                                                                                                                                                                                                                       | `filelist.functions.ts` → componente client.                                               |
 | `download.ts`             | Orchestrarea unei descărcări — cererile brute către Filelist stau în `filelist-client.ts` (`checkFilelistForItemInternal`, căutare strict pe IMDb id); aici: descărcare + upload qBittorrent (`downloadFilelistCore` — răspunde imediat după upload, restul — hash, jurnal, `media`, detaliile episodului — rulează în fundal prin `finishFilelistDownload`), plus `finalizeDownload` (ID IMDb în nume, completed_at, notificare, subtitrare, refresh Plex) pentru torrentele terminate. | `filelist/download.functions.ts`, `filelist/download-tracker.ts`.                          |
-| `download-tracker.ts`     | Sarcina „downloads” a Watcher-ului, la 10s: o singură cerere qBittorrent pentru toate torrentele neterminate din `media`, finalizarea celor gata (separat, cu blocare pe hash în `finalizingHashes`, citită și de ștergerile programate) și legarea la Plex în primele 30 de minute.                                                                                                                                                                                                     | `watcher/tasks.ts`.                                                                        |
+| `download-tracker.ts`     | Sarcina „downloads” a Watcher-ului, la 10s: o singură cerere qBittorrent pentru toate torrentele neterminate din `media`, finalizarea celor gata (separat, cu blocare pe hash în `finalizingHashes`, citită și de ștergerile programate) și legarea la Plex în primele 30 de minute (grupul `plex-link`, cu reconcilierea, ca să nu lege simultan același pachet). Urmărește o descărcare cel mult 14 zile.                                                                              | `watcher/tasks.ts`.                                                                        |
 | `log.ts`                  | `deleteMediaEntry` — șterge un titlu complet: torrent + fișiere din qBittorrent, reziduul de pe disk (`disk-cleanup.ts`), rândurile din `media`. (Jurnalul separat de descărcări, tabela `downloads`, a fost eliminat în v25 — `media` e singura sursă.)                                                                                                                                                                                                                                 | `filelist.functions.ts`, `BibliotecaList.tsx`.                                             |
 | `subtitles.ts`            | Cel mai mare fișier din proiect — `ensureRomanianSubtitle`: verifică/corectează subtitrarea RO la finalul unei descărcări (embedded → tracked .srt → OpenSubtitles → subs.ro), inclusiv pachete de sezon episod cu episod.                                                                                                                                                                                                                                                               | `download.ts` (`finalizeDownload`), backfill.                                              |
 | `subtitle-pipeline.ts`    | Pipeline-ul unificat per fișier media, care leagă pașii 1→4. Apelat o dată pentru un film și în buclă, per episod, pentru un pachet de sezon. Există fiindcă înainte aceeași secvență de decizii era scrisă de două ori în `subtitles.ts`, iar asta a permis un bug real: verificarea de limbă a unui `.srt` bundle-uit exista doar pe fluxul de film.                                                                                                                                   | `subtitles.ts`.                                                                            |
@@ -476,7 +476,7 @@ funcții numite, fan-in rezolvat prin importurile `@/` și relative, inclusiv
 `import()` dinamic). Tabelul e integral generat — nu are rânduri actualizate
 manual, deci nu poate fi parțial vechi.
 
-**Total: 280 fișiere, ~48 292 linii, ~1 126 funcții**
+**Total: 280 fișiere, ~48 326 linii, ~1 126 funcții**
 
 (numărătoare aproximativă — funcții numite, `const x = (...) =>` și
 `createServerFn`, fără metode de clasă sau funcții anonime inline)
@@ -489,18 +489,18 @@ manual, deci nu poate fi parțial vechi.
 | `src/lib/` (rădăcină, transversale) |      19 |  3 992 |
 | `src/lib/auth/`                     |      11 |  1 101 |
 | `src/lib/tmdb/`                     |       9 |  1 390 |
-| `src/lib/media/`                    |      32 |  6 969 |
+| `src/lib/media/`                    |      32 |  6 980 |
 | `src/lib/notifications/`            |       3 |    469 |
 | `src/lib/errors/`                   |       7 |    520 |
 | `src/lib/system/`                   |      17 |  1 789 |
 | `src/lib/filelist/`                 |      38 |  6 743 |
 | `src/lib/services/`                 |      20 |  4 997 |
 | `src/lib/tvmaze/`                   |       1 |     46 |
-| `src/components/` (toate)           |      85 | 13 540 |
+| `src/components/` (toate)           |      85 | 13 541 |
 | `src/hooks/`                        |       5 |    325 |
 | `server/plugins/`                   |       2 |     90 |
 | `server/routes/api/`                |       3 |    230 |
-| altele                              |      16 |  2 807 |
+| altele                              |      16 |  2 829 |
 
 ### Fișiere-hub (fan-in mare)
 
@@ -526,7 +526,7 @@ manual, deci nu poate fi parțial vechi.
 | `src/lib/db.ts`                                               |  1349 |       6 |     51 |
 | `src/components/biblioteca/TitleDetailDrawer.tsx`             |  1124 |      13 |      1 |
 | `src/lib/services/plex-browse.ts`                             |  1088 |      12 |      6 |
-| `src/lib/media/media.ts`                                      |  1063 |      24 |     21 |
+| `src/lib/media/media.ts`                                      |  1065 |      24 |     21 |
 | `src/lib/media/show-watch.ts`                                 |  1010 |      17 |     11 |
 | `src/routes/contributii.tsx`                                  |   732 |      10 |      5 |
 | `src/lib/services/plex.ts`                                    |   721 |      16 |     15 |
@@ -545,9 +545,9 @@ manual, deci nu poate fi parțial vechi.
 | `src/components/tehnic/WatcherDrawer.tsx`                     |   456 |      10 |      1 |
 | `src/components/principala/wizard/ResultStep.tsx`             |   454 |       6 |      1 |
 | `src/components/tehnic/UserDetailDrawer.tsx`                  |   435 |       4 |      1 |
+| `src/lib/watcher/tasks.ts`                                    |   416 |       3 |      3 |
 | `src/lib/filelist/subtitle-pipeline.ts`                       |   412 |       2 |      1 |
 | `src/components/tehnic/watcher-cards.tsx`                     |   409 |      10 |      1 |
-| `src/lib/watcher/tasks.ts`                                    |   407 |       3 |      3 |
 | `src/components/principala/wizard/WizardControls.tsx`         |   403 |       9 |      4 |
 | `src/lib/services/plex-library.ts`                            |   397 |      15 |      6 |
 | `src/components/tehnic/SubtitleFixDrawer.tsx`                 |   396 |      10 |      2 |
@@ -570,8 +570,8 @@ manual, deci nu poate fi parțial vechi.
 | `src/lib/system/speedtest.ts`                                 |   289 |       8 |      3 |
 | `src/routes/__root.tsx`                                       |   287 |      10 |      1 |
 | `src/routeTree.gen.ts`                                        |   284 |       0 |      1 |
+| `src/lib/watcher/runner.ts`                                   |   280 |       8 |      2 |
 | `src/components/principala/wizard/SeasonAccordion.tsx`        |   277 |       7 |      2 |
-| `src/lib/watcher/runner.ts`                                   |   277 |       8 |      2 |
 | `src/routes/tehnic.tsx`                                       |   276 |       1 |      6 |
 | `src/lib/services/host.ts`                                    |   275 |       3 |      2 |
 | `src/components/biblioteca/WantedMovieDrawer.tsx`             |   272 |       5 |      1 |
@@ -583,10 +583,10 @@ manual, deci nu poate fi parțial vechi.
 | `src/lib/filelist/opensubtitles-client.ts`                    |   250 |       9 |      3 |
 | `src/lib/services/immich.ts`                                  |   250 |       4 |     13 |
 | `src/lib/filelist/subtitle-apply.ts`                          |   248 |       7 |      2 |
+| `src/lib/watcher/runner.test.ts`                              |   245 |       6 |      0 |
 | `src/lib/notifications/notifications.ts`                      |   242 |      10 |      5 |
 | `src/routes/immich.tsx`                                       |   242 |       2 |     13 |
 | `src/lib/errors/error-log.ts`                                 |   239 |      10 |      5 |
-| `src/lib/watcher/runner.test.ts`                              |   235 |       6 |      0 |
 | `src/components/principala/wizard/derive-seasons.test.ts`     |   234 |       6 |      0 |
 | `src/lib/media/device-hdr.ts`                                 |   232 |       8 |      2 |
 | `src/lib/filelist/release-scoring.ts`                         |   230 |       6 |      3 |
@@ -618,15 +618,15 @@ manual, deci nu poate fi parțial vechi.
 | `src/lib/tmdb/tmdb-details.test.ts`                           |   172 |       2 |      0 |
 | `src/lib/contributions/months.ts`                             |   171 |      12 |      4 |
 | `src/lib/filelist/plex-id-hint.ts`                            |   170 |       6 |      2 |
+| `src/lib/media/unfinished-torrents.test.ts`                   |   169 |       1 |      0 |
 | `src/lib/media/movie-watch.test.ts`                           |   168 |       3 |      0 |
 | `src/lib/auth/admin.functions.ts`                             |   167 |       5 |      5 |
 | `src/lib/media/scheduled-delete.test.ts`                      |   166 |       2 |      0 |
 | `src/lib/system/network-link.ts`                              |   165 |       6 |      1 |
 | `src/lib/system/service-jobs.test.ts`                         |   165 |       2 |      0 |
 | `src/lib/system/versions.ts`                                  |   163 |       8 |      5 |
+| `src/components/tehnic/plugins.tsx`                           |   161 |       0 |      2 |
 | `src/components/AppHeader.tsx`                                |   160 |       4 |      1 |
-| `src/components/tehnic/plugins.tsx`                           |   160 |       0 |      2 |
-| `src/lib/media/unfinished-torrents.test.ts`                   |   160 |       1 |      0 |
 | `src/lib/wizard-check.functions.ts`                           |   157 |       1 |      1 |
 | `src/components/principala/wizard/use-wizard-download.ts`     |   156 |       4 |      1 |
 | `src/lib/auth/admin.server.ts`                                |   153 |      10 |     31 |
