@@ -69,7 +69,9 @@ export function approximateEpisodeKeys(torrentHash: string): ReadonlySet<string>
   return rows.length ? new Set(rows.map((r) => r.k)) : undefined;
 }
 
-export async function retryMissingSubtitles(): Promise<void> {
+// Întoarce câte titluri au fost scadente și câte au primit subtitrare —
+// rezumatul rulării, afișat în Watcher.
+export async function retryMissingSubtitles(): Promise<{ checked: number; found: number }> {
   const db = getDb();
   // Tic-ul se notează mereu — e dovada că plugin-ul rulează, chiar și în
   // orele în care n-are nimic de căutat.
@@ -78,7 +80,7 @@ export async function retryMissingSubtitles(): Promise<void> {
        ON CONFLICT(id) DO UPDATE SET last_tick_at = excluded.last_tick_at`,
   ).run();
   const due = listTorrentsDueForSubtitleRetry();
-  if (due.length === 0) return;
+  if (due.length === 0) return { checked: 0, found: 0 };
   const { checkSubtitleForTorrent } = await import("./download");
   const { CORRECTED_OUTCOMES } = await import("./subtitle-outcomes");
   let found = 0;
@@ -114,6 +116,7 @@ export async function retryMissingSubtitles(): Promise<void> {
         SET last_check_at = datetime('now'), last_checked = ?, last_found = ?
       WHERE id = 1`,
   ).run(due.length, found);
+  return { checked: due.length, found };
 }
 
 // ---------------------------------------------------------------------------

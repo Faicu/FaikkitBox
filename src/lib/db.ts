@@ -291,7 +291,7 @@ export function getDb(): DatabaseSync {
       pid INTEGER
     );
 
-    -- Urmărirea încărcărilor Immich (server/plugins/immich-upload-tracker.ts).
+    -- Urmărirea încărcărilor Immich (sarcina immich-uploads din Watcher).
     -- checked_until: până unde s-a verificat (ISO) — următoarea verificare
     -- cere de acolo încolo, deci o repornire nu pierde nimic. pending: JSON cu
     -- încărcările încă în desfășurare, per utilizator Immich, scrise în jurnal
@@ -339,6 +339,43 @@ export function getDb(): DatabaseSync {
       last_checked INTEGER NOT NULL DEFAULT 0,
       last_found INTEGER NOT NULL DEFAULT 0
     );
+
+    -- Watcher-ul (src/lib/watcher/): starea fiecărei sarcini de fundal.
+    -- next_run_at (ms) stă aici ca un deploy să nu repornească ceasurile;
+    -- paused și run_requested_at sunt scrise de butoanele din Tehnic și citite
+    -- de tact la fiecare secundă — server functions și plugin-ul rulează în
+    -- copii separate ale modulelor, deci baza e singurul canal comun.
+    -- running_since rămas setat la pornire = rulare întreruptă de restart.
+    CREATE TABLE IF NOT EXISTS watcher_tasks (
+      id TEXT PRIMARY KEY,
+      next_run_at INTEGER,
+      paused INTEGER NOT NULL DEFAULT 0,
+      run_requested_at INTEGER,
+      running_since INTEGER,
+      running_manual INTEGER NOT NULL DEFAULT 0,
+      last_started_at INTEGER,
+      last_finished_at INTEGER,
+      last_duration_ms INTEGER,
+      last_ok INTEGER,
+      last_error TEXT,
+      last_summary TEXT
+    );
+
+    -- Istoricul rulărilor, ultimele 20 per sarcină. La sarcinile de un minut
+    -- sau mai dese intră doar rulările care au făcut ceva, au eșuat sau au
+    -- fost pornite manual — altfel 20 de rânduri ar acoperi 10 minute.
+    CREATE TABLE IF NOT EXISTS watcher_runs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      task_id TEXT NOT NULL,
+      started_at INTEGER NOT NULL,
+      finished_at INTEGER NOT NULL,
+      duration_ms INTEGER NOT NULL,
+      ok INTEGER NOT NULL,
+      manual INTEGER NOT NULL DEFAULT 0,
+      summary TEXT,
+      error TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_watcher_runs_task ON watcher_runs(task_id, id DESC);
 
     -- Contribuțiile lunare (src/lib/contributions). O plată = o declarație
     -- „Am plătit" a utilizatorului (pending → confirmată/respinsă de admin)

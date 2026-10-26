@@ -527,7 +527,7 @@ export interface PlexTitleDetail {
   watchLastCheckedAt: string | null;
   // Următorul episod anunțat: codul ('S01E04'), data de la TMDB (fără oră) și
   // instantul exact de la TVmaze, când există. Toate citite din `media` —
-  // reîmprospătate periodic de show-watcher, nu cerute live la deschidere.
+  // reîmprospătate periodic de Watcher, nu cerute live la deschidere.
   nextEpisode: string | null;
   nextEpisodeAirDate: string | null;
   nextEpisodeAirstamp: string | null;

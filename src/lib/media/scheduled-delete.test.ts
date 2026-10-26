@@ -133,7 +133,7 @@ describe("programare și renunțare", () => {
   });
 });
 
-describe("runDueDeletions (pasul din maintenance.ts)", () => {
+describe("runDueDeletions (sarcina din Watcher)", () => {
   it("șterge doar torrentele cu termenul atins și scrie în jurnal", async () => {
     addUser(7, "ana");
     insertRow("due", { episode: 1 });

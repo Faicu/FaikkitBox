@@ -575,7 +575,7 @@ export function TitleDetailDrawer({
                     )}
 
                     {/* Următorul episod — citit din `media`, nu cerut live:
-                        show-watcher îl ține la zi din TMDB (data) + TVmaze
+                        Watcher-ul îl ține la zi din TMDB (data) + TVmaze
                         (ora exactă). Ora se redă în fusul browserului, deci
                         apare direct în ora României. În dreapta, calitatea
                         cu care se descarcă. */}

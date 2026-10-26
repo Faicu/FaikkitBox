@@ -577,7 +577,7 @@ export interface UnfinishedTorrent {
 }
 
 // Descărcările încă neterminate, pentru reluarea polling-ului după un restart
-// (server/plugins/download-recovery.ts). Un rând per torrent, nu per episod —
+// (sarcina download-resume din Watcher). Un rând per torrent, nu per episod —
 // un pachet de sezon cu 12 episoade are 12 rânduri `media` cu același hash,
 // dar are nevoie de o singură buclă de polling.
 //

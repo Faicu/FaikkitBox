@@ -14,7 +14,7 @@
 // fișier nou, alături, și îl mută peste cel vechi abia la final — o citire în
 // timpul importului vede datele de ieri, nu un tabel pe jumătate gol.
 //
-// Rulat de server/plugins/maintenance.ts. Server-only (node:sqlite, node:fs).
+// Rulat de sarcina imdb-ratings din Watcher. Server-only (node:sqlite, node:fs).
 // ---------------------------------------------------------------------------
 
 import { DatabaseSync } from "node:sqlite";
@@ -25,7 +25,7 @@ import { createGunzip } from "node:zlib";
 import { createInterface } from "node:readline";
 
 const DATASET_URL = "https://datasets.imdbws.com/title.ratings.tsv.gz";
-// 23h, nu 24h: verificarea e din oră în oră (vezi maintenance.ts).
+// 23h, nu 24h: verificarea e din oră în oră (vezi src/lib/watcher/tasks.ts).
 const IMPORT_MIN_AGE_MS = 23 * 60 * 60 * 1000;
 // Rânduri per tranzacție. Între loturi cedăm event loop-ul: un import de 1,7
 // milioane de rânduri dintr-o bucată ar bloca serverul câteva secunde.
@@ -151,14 +151,20 @@ async function importInto(tmpFile: string, body: ReadableStream<Uint8Array>, eta
   }
 }
 
-// Reîmprospătează baza dacă ultima verificare e mai veche de 23h. Dataset-ul
-// neschimbat (același ETag) costă o singură cerere 304, fără import.
+// Reîmprospătează baza dacă ultima verificare e mai veche de 23h (sau oricând,
+// cu `force` — „Rulează acum” din Watcher). Dataset-ul neschimbat (același
+// ETag) costă o singură cerere 304, fără import. Întoarce ce s-a întâmplat,
+// pentru rezumatul din Watcher.
 let running = false;
 
-export async function refreshImdbRatingsIfDue(): Promise<void> {
-  if (running) return;
+export type ImdbRefreshResult = "skipped" | "unchanged" | { imported: number };
+
+export async function refreshImdbRatingsIfDue(
+  opts: { force?: boolean } = {},
+): Promise<ImdbRefreshResult> {
+  if (running) return "skipped";
   const last = lastCheckedAt();
-  if (last && Date.now() - last < IMPORT_MIN_AGE_MS) return;
+  if (!opts.force && last && Date.now() - last < IMPORT_MIN_AGE_MS) return "skipped";
   running = true;
   try {
     const file = ratingsPath();
@@ -180,7 +186,7 @@ export async function refreshImdbRatingsIfDue(): Promise<void> {
       } finally {
         rw.close();
       }
-      return;
+      return "unchanged";
     }
     if (!res.ok || !res.body) throw new Error(`IMDb dataset HTTP ${res.status}`);
 
@@ -200,6 +206,7 @@ export async function refreshImdbRatingsIfDue(): Promise<void> {
     console.log(
       `[imdb] ${count.toLocaleString("ro-RO")} rating-uri importate în ${((Date.now() - started) / 1000).toFixed(0)}s`,
     );
+    return { imported: count };
   } finally {
     running = false;
   }

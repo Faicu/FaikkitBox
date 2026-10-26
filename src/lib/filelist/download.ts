@@ -288,7 +288,7 @@ async function resumeOrphanedPolls(): Promise<void> {
   }
 }
 
-// Declanșată din server/plugins/download-recovery.ts, NU dintr-un efect
+// Declanșată de sarcina download-resume din Watcher, NU dintr-un efect
 // secundar la nivel de modul.
 //
 // Înainte era un `setTimeout` executat la încărcarea modulului, ceea ce

@@ -5,7 +5,7 @@
 // de la descărcare și penalizează contul de pe care s-a descărcat. Cererea de
 // ștergere (sau de anulare) din primele 24 h nu se refuză, ci se amână: se
 // scrie pe rândurile torrentului momentul împlinirii celor 24 h, iar pasul
-// „Ștergeri programate” din maintenance.ts o execută atunci. Până la ea,
+// „Ștergeri programate” din Watcher o execută atunci. Până la ea,
 // torrentul continuă să se descarce și să facă seed, iar oricine poate
 // renunța la ștergere — devenind proprietarul titlului.
 //

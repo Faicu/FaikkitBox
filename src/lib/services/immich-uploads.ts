@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------------
-// Urmărirea încărcărilor în Immich — rulată de
-// server/plugins/immich-upload-tracker.ts, la 5 minute.
+// Urmărirea încărcărilor în Immich — rulată de sarcina immich-uploads din
+// Watcher (src/lib/watcher/tasks.ts), la 5 minute.
 //
 // Varianta veche compara contoarele per utilizator din /server/statistics și
 // ținea punctul de plecare în memorie. Rula doar cât era deschisă pagina

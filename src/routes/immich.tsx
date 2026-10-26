@@ -1,6 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
 import {
   Images,
   Film,
@@ -9,7 +8,6 @@ import {
   Upload,
   Trophy,
   ListChecks,
-  Box,
   CheckCircle2,
 } from "lucide-react";
 
@@ -23,10 +21,7 @@ import {
 } from "@/components/ServiceHeaderActions";
 import { useServiceRecovery } from "@/components/useServiceRecovery";
 import { TehnicSubNav } from "@/components/tehnic/TehnicSubNav";
-import { immichQuery, immichTrackerQuery } from "@/lib/queries";
-import { IMMICH_UPLOAD_PLUGIN } from "@/components/tehnic/plugins";
-import { PluginRow } from "@/components/tehnic/PluginRow";
-import { PluginDetailDrawer } from "@/components/tehnic/PluginDetailDrawer";
+import { immichQuery } from "@/lib/queries";
 import { requireAdminBeforeLoad } from "@/lib/auth/admin-route-guard";
 import { formatBytes } from "@/lib/format";
 import { relativeTime } from "@/components/tehnic/utils";
@@ -41,10 +36,6 @@ function ImmichPage() {
   const { data, isLoading } = useQuery(immichQuery);
   const status = isLoading ? "loading" : (data?.status ?? "error");
   const { recovering, startRecovery } = useServiceRecovery(data?.status);
-  const { data: tracker } = useQuery(immichTrackerQuery);
-  const [pluginOpen, setPluginOpen] = useState(false);
-  // checked_until e ISO (Date.toISOString), deci direct utilizabil.
-  const lastCheck = tracker?.checkedUntil ?? null;
 
   return (
     <PageShell
@@ -236,27 +227,6 @@ function ImmichPage() {
           )}
         </>
       )}
-
-      {/* În afara blocului de mai sus: plugin-ul rulează pe serverul nostru,
-          nu în Immich, deci starea lui contează și când Immich e căzut. */}
-      <section className="space-y-2">
-        <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
-          <Box className="h-3.5 w-3.5" /> Plugin
-        </h2>
-        <div className="overflow-hidden rounded-2xl glass-card">
-          <PluginRow
-            plugin={IMMICH_UPLOAD_PLUGIN}
-            lastTs={lastCheck}
-            onOpen={() => setPluginOpen(true)}
-          />
-        </div>
-      </section>
-
-      <PluginDetailDrawer
-        plugin={pluginOpen ? IMMICH_UPLOAD_PLUGIN : null}
-        lastTs={lastCheck}
-        onClose={() => setPluginOpen(false)}
-      />
     </PageShell>
   );
 }

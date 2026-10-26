@@ -2,74 +2,41 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Box } from "lucide-react";
 
-import {
-  activityLogQuery,
-  dbBackupQuery,
-  showWatchStatusQuery,
-  subtitleRetryStatusQuery,
-  wantedMoviesQuery,
-} from "@/lib/queries";
-import { PLUGINS, type PluginInfo } from "../plugins";
+import { activityLogQuery, watcherStatusQuery } from "@/lib/queries";
+import { SERVER_LIFECYCLE_PLUGIN, WATCHER_PLUGIN } from "../plugins";
 import { PluginDetailDrawer } from "../PluginDetailDrawer";
 import { PluginRow } from "../PluginRow";
+import { WatcherDrawer } from "../WatcherDrawer";
 
+// Două plugin-uri pe server: Watcher-ul (toate sarcinile de fundal) și
+// pornirea/oprirea procesului. Ultima activitate a Watcher-ului e cea mai
+// recentă rulare terminată a oricărei sarcini — vine din watcher_tasks, nu
+// din jurnal sau din tabelele proprii ale fiecărei sarcini, ca înainte.
 export function PluginStatusSection() {
   const { data: log } = useQuery(activityLogQuery);
-  const { data: watch } = useQuery(showWatchStatusQuery);
-  const { data: wanted } = useQuery(wantedMoviesQuery);
-  const { data: backup } = useQuery(dbBackupQuery);
-  const { data: subRetry } = useQuery(subtitleRetryStatusQuery);
-  const [openPlugin, setOpenPlugin] = useState<PluginInfo | null>(null);
+  const { data: tasks } = useQuery(watcherStatusQuery);
+  const [watcherOpen, setWatcherOpen] = useState(false);
+  const [lifecycleOpen, setLifecycleOpen] = useState(false);
 
-  function lastActivity(type: string | null): string | null {
-    if (!type || !Array.isArray(log)) return null;
-    const entry = log.find((e) => e.type === type);
-    return entry ? entry.timestamp : null;
-  }
+  const list = tasks ?? [];
+  const lastWatcherTs =
+    list
+      .map((t) => t.lastFinishedAt)
+      .filter((t): t is string => t !== null)
+      .sort()
+      .at(-1) ?? null;
 
-  // watch_last_checked_at e în formatul SQLite, în UTC ("2026-09-06 08:09:04").
-  // new Date() l-ar citi ca oră LOCALĂ, deci "acum" ar apărea ca "acum 3h".
-  function lastShowWatch(): string | null {
-    const v = watch?.lastCheckedAt;
-    return v ? `${v.replace(" ", "T")}Z` : null;
-  }
+  const running = list.filter((t) => t.runningSince).length;
+  const errors = list.filter((t) => t.lastOk === false).length;
+  const paused = list.filter((t) => t.paused).length;
+  const parts = [`${list.length} sarcini`];
+  if (running) parts.push(`${running} în curs`);
+  if (errors) parts.push(`${errors} cu eroare`);
+  if (paused) parts.push(`${paused} pe pauză`);
 
-  // Backup-ul e urma zilnică sigură a plugin-ului; o actualizare anunțată
-  // apare doar când chiar există una. Se afișează cea mai recentă dintre ele.
-  function lastMaintenance(p: PluginInfo): string | null {
-    const ts = [backup?.lastAt ?? null, lastActivity(p.activityType)].filter(
-      (t): t is string => t !== null,
-    );
-    if (!ts.length) return null;
-    return ts.reduce((a, b) => (new Date(a).getTime() >= new Date(b).getTime() ? a : b));
-  }
-
-  function lastTsFor(p: PluginInfo): string | null {
-    if (p.id === "show-watcher") return lastShowWatch();
-    // Tic-ul din oră în oră, în format SQLite UTC (vezi lastShowWatch).
-    if (p.id === "subtitle-retry")
-      return subRetry?.lastTickAt ? `${subRetry.lastTickAt.replace(" ", "T")}Z` : null;
-    if (p.id === "maintenance") return lastMaintenance(p);
-    return lastActivity(p.activityType);
-  }
-
-  // Filmele așteptate apar doar când există.
-  function descriptionFor(p: PluginInfo): string {
-    if (p.id === "subtitle-retry" && subRetry) {
-      const n = subRetry.searching.length;
-      return n === 0
-        ? "nimic de căutat acum"
-        : `${n} ${n === 1 ? "titlu" : "titluri"} în căutare zilnică`;
-    }
-    if (p.id !== "show-watcher" || !watch) return p.description;
-    const n = watch.shows.length;
-    const shows =
-      n === 0 ? "niciun serial urmărit" : `${n} ${n === 1 ? "serial urmărit" : "seriale urmărite"}`;
-    const parts = [shows];
-    const f = wanted?.length ?? 0;
-    if (f > 0) parts.push(`${f} ${f === 1 ? "film așteptat" : "filme așteptate"}`);
-    return parts.join(" · ");
-  }
+  const lifecycleTs = Array.isArray(log)
+    ? (log.find((e) => e.type === SERVER_LIFECYCLE_PLUGIN.activityType)?.timestamp ?? null)
+    : null;
 
   return (
     <section className="space-y-2">
@@ -79,21 +46,27 @@ export function PluginStatusSection() {
       {/* overflow-hidden: fundalul de hover al primului/ultimului rând ar
           depăși altfel colțurile rotunjite ale cardului. */}
       <div className="overflow-hidden rounded-2xl glass-card divide-y divide-border/50 stagger-in">
-        {PLUGINS.map((p) => (
-          <PluginRow
-            key={p.id}
-            plugin={p}
-            description={descriptionFor(p)}
-            lastTs={lastTsFor(p)}
-            onOpen={() => setOpenPlugin(p)}
-          />
-        ))}
+        <PluginRow
+          plugin={{
+            label: WATCHER_PLUGIN.label,
+            icon: WATCHER_PLUGIN.icon,
+            description: tasks ? parts.join(" · ") : "Toate sarcinile de fundal",
+          }}
+          lastTs={lastWatcherTs}
+          onOpen={() => setWatcherOpen(true)}
+        />
+        <PluginRow
+          plugin={SERVER_LIFECYCLE_PLUGIN}
+          lastTs={lifecycleTs}
+          onOpen={() => setLifecycleOpen(true)}
+        />
       </div>
 
+      <WatcherDrawer open={watcherOpen} onClose={() => setWatcherOpen(false)} />
       <PluginDetailDrawer
-        plugin={openPlugin}
-        lastTs={openPlugin ? lastTsFor(openPlugin) : null}
-        onClose={() => setOpenPlugin(null)}
+        plugin={lifecycleOpen ? SERVER_LIFECYCLE_PLUGIN : null}
+        lastTs={lifecycleTs}
+        onClose={() => setLifecycleOpen(false)}
       />
     </section>
   );

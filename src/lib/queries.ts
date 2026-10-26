@@ -25,6 +25,7 @@ import { getNetworkLink } from "./system/network-link.functions";
 import { getDbBackupStatus } from "./system/db-backup.functions";
 import { getShowWatchStatus } from "./media/media.functions";
 import { getSubtitleRetryStatus } from "./filelist/download.functions";
+import { getWatcherStatus, getWatcherHistory } from "./watcher/watcher.functions";
 import { listUsers } from "./auth/users.functions";
 import { listPushSubscriptions } from "./notifications/push.functions";
 import {
@@ -87,7 +88,7 @@ export const immichQuery = queryOptions({
   ...keepPrev,
 });
 
-// Starea plugin-ului de încărcări Immich (immich-upload-tracker). Se schimbă
+// Starea urmăririi încărcărilor Immich (sarcina immich-uploads). Se schimbă
 // la 5 minute, deci un minut e destul.
 export const immichTrackerQuery = queryOptions({
   queryKey: ["immichTracker"],
@@ -303,7 +304,27 @@ export const networkLinkQuery = queryOptions({
   refetchOnWindowFocus: true,
 });
 
-// Starea urmăririi serialelor, pentru panoul "Plugin-uri active" din Tehnic.
+// Watcher-ul (Tehnic → Plugin-uri active). Puls lent pentru rândul din listă;
+// drawer-ul deschis îl suprascrie cu 2s (lista live de operațiuni), iar
+// react-query folosește intervalul cel mai scurt dintre observatori. Cu tab-ul
+// ascuns nu se mai cere nimic (refetchIntervalInBackground e implicit false).
+export const watcherStatusQuery = queryOptions({
+  queryKey: ["watcherStatus"],
+  queryFn: () => getWatcherStatus(),
+  staleTime: 1_000,
+  refetchInterval: 30_000,
+  ...keepPrev,
+});
+
+export const watcherHistoryQuery = (taskId: string) =>
+  queryOptions({
+    queryKey: ["watcherHistory", taskId],
+    queryFn: () => getWatcherHistory({ data: { taskId } }),
+    staleTime: 5_000,
+    ...keepPrev,
+  });
+
+// Starea urmăririi serialelor, pentru Watcher (Tehnic).
 // Ritm lent: plugin-ul verifică oricum cel mult o dată pe oră per serial (la 3
 // ore în afara zilelor de lansare), deci n-are rost un puls mai des decât atât.
 export const showWatchStatusQuery = queryOptions({

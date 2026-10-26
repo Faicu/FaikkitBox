@@ -40,6 +40,7 @@ import {
   speedtestHistoryQuery,
   speedtestStateQuery,
   subtitleRetryStatusQuery,
+  watcherStatusQuery,
   unpushedCommitsQuery,
   usersQuery,
   versionsQuery,
@@ -79,6 +80,7 @@ const ADMIN_QUERIES = [
   hostQuery,
   immichQuery,
   immichTrackerQuery,
+  watcherStatusQuery,
 ];
 
 const USER_ROUTES = ["/", "/biblioteca", "/descopera"] as const;

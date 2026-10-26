@@ -11,27 +11,19 @@ import {
   ArrowUpCircle,
   Bug,
   Tv,
-  RefreshCw,
-  Clapperboard,
   Film,
   Star,
   Captions,
-  Search,
-  ShieldCheck,
-  Replace,
-  BellRing,
   Trash2,
+  Radar,
+  Sparkles,
 } from "lucide-react";
-import { Orb } from "@/components/ui/orb";
 
-// Catalogul plugin-urilor de fundal — sursă unică pentru lista din Tehnic și
-// pentru drawer-ul de detalii. Reflectă exact fișierele din server/plugins/:
-// un rând per proces care rulează, nu per funcționalitate. Excepție de loc,
-// nu de regulă: un plugin legat de un singur serviciu stă pe pagina acelui
-// serviciu, nu în lista din Tehnic (IMMICH_UPLOAD_PLUGIN, pe pagina Immich). Completarea
-// numelor de episoade, de exemplu, n-are intrare proprie — e un pas dintr-un
-// tic al lui show-watcher, iar o intrare separată ar putea arăta "activ"
-// chiar dacă plugin-ul e mort.
+// Catalogul din Tehnic → „Plugin-uri active”. Pe server mai sunt doar două
+// plugin-uri: Watcher-ul (toate sarcinile de fundal, sub un singur tact — vezi
+// src/lib/watcher/) și server-lifecycle, care nu e o sarcină periodică, ci
+// pornirea și oprirea procesului. Ritmul sarcinilor vine de la server, din
+// registru; aici stă doar ce nu ține de rulare: iconița și explicația.
 export interface PluginInfo {
   // Identic cu numele fișierului din server/plugins/, fără extensie.
   id: string;
@@ -47,9 +39,7 @@ export interface PluginInfo {
   // text lung nu se mai citea.
   steps?: PluginStep[];
   icon: ReactNode;
-  // Tipul de intrare din jurnal care dovedește că a făcut ceva. Null pentru
-  // cele care lucrează doar la pornire sau care nu loghează când n-au găsit
-  // nimic de făcut — atunci rândul rămâne fără timestamp, ceea ce e onest.
+  // Tipul de intrare din jurnal care dovedește că a făcut ceva.
   activityType: string | null;
 }
 
@@ -62,294 +52,178 @@ export interface PluginStep {
   icon: ReactNode;
 }
 
-export const PLUGINS: PluginInfo[] = [
-  {
-    id: "show-watcher",
-    label: "Urmărire Seriale și Filme",
-    description: "Descărcare automată episoade noi și filme așteptate",
-    cadence: "verificat din 10 în 10 min",
-    details:
-      "Face patru lucruri la fiecare tic, fiecare cu ritmul lui, în ordinea de mai jos: întâi descărcările, apoi detaliile. Un pas care eșuează nu-i oprește pe ceilalți.",
-    steps: [
-      {
-        title: "Episoade noi",
-        cadence: "la 3h / serial, la 1h în jurul lansării",
-        summary: "Aduce de pe Filelist episoadele difuzate care lipsesc din bibliotecă.",
-        points: [
-          "Compară ce s-a difuzat (TMDB, inclusiv episodul lansat azi) cu ce ai deja în bibliotecă și aduce diferența.",
-          "Caută strict după IMDb ID, întrebând mereu Filelist direct, fără cache.",
-          "Din oră în oră în ziua lansării episodului următor (sau a ultimului difuzat) ±1 zi; în rest, la 3 ore.",
-          "Nu ține minte ce a văzut ultima dată: întreabă de fiecare dată realitatea, deci se poate relua oricând, se repară singur după un restart și nu poate descărca de două ori.",
-          "După fiecare descărcare, poziția de start avansează peste episoadele aduse (fără să sară vreunul lipsă), ca un episod văzut și șters din Bibliotecă să nu revină.",
-          "Dacă ai ales o calitate de rezervă, ea se ia doar când principala lipsește la două verificări, la cel puțin 3 ore distanță.",
-        ],
-        icon: <Tv className="h-3.5 w-3.5 text-blue-400" />,
-      },
-      {
-        title: "Filme așteptate",
-        cadence: "la 12h / film",
-        summary: "Filme cerute care încă nu existau pe Filelist la calitatea vrută.",
-        points: [
-          "Cadență mai lentă decât la seriale, fiindcă un film poate întârzia luni de zile.",
-          "Înainte de data lansării nici nu se caută — n-ar avea ce găsi.",
-          "Prima verificare face excepție: vine la un minut după adăugare, pe o buclă proprie de 30s.",
-          "Calitatea de rezervă funcționează ca la seriale.",
-          "Spre deosebire de seriale, urmărirea unui film se stinge singură la prima descărcare reușită.",
-        ],
-        icon: <Film className="h-3.5 w-3.5 text-amber-400" />,
-      },
-      {
-        title: "Detalii seriale",
-        cadence: "la 12h",
-        summary: "Împrospătează din TMDB toate serialele, inclusiv pe cele neurmărite.",
-        points: [
-          "Serialul: status (încheiat / în producție), titlul românesc și cel original, anul, descrierea, genurile, posterul și următorul episod anunțat.",
-          "Odată cu serialul, și toate episoadele lui: numele, descrierea, data difuzării, cadrul din episod și posterul sezonului.",
-          "Totul e cerut în română la fiecare trecere; ce TMDB n-are încă în română rămâne în engleză până apare traducerea.",
-          "Statusul contează și la serialele neurmărite: decide dacă ți se oferă butonul de urmărire.",
-        ],
-        icon: <RefreshCw className="h-3.5 w-3.5 text-emerald-400" />,
-      },
-      {
-        title: "Detalii filme",
-        cadence: "la 12h",
-        summary: "Titlul românesc și cel original, anul, descrierea, genurile și posterul.",
-        points: [
-          "După aceeași regulă ca la seriale: cerute în română, cu engleza ca rezervă până apare traducerea.",
-        ],
-        icon: <Clapperboard className="h-3.5 w-3.5 text-purple-400" />,
-      },
-    ],
-    icon: <Orb state="searching" />,
-    activityType: null,
-  },
-  {
-    id: "subtitle-retry",
-    label: "Reîncercare Subtitrări",
-    description: "Caută zilnic subtitrările care lipsesc, 14 zile de la descărcare",
-    cadence: "zilnic per titlu, 14 zile",
-    details:
-      "Subtitrarea se caută prima dată la finalul descărcării — exact când e cel mai puțin probabil să existe: episoadele apar pe Filelist în aceeași zi, iar traducerile românești vin abia peste una-trei zile. Plugin-ul o mai caută o dată pe zi, timp de două săptămâni.",
-    steps: [
-      {
-        title: "Ce caută",
-        cadence: "o dată pe zi / titlu",
-        summary: "Titlurile fără subtitrare română, în primele 14 zile de la descărcare.",
-        points: [
-          "Intră filmele și episoadele fără nicio subtitrare română. Cele cu subtitrare inclusă în video sau cu audio în română nu au nevoie.",
-          "La un pachet de sezon caută doar episoadele care încă n-au subtitrare; cele în regulă rămân neatinse.",
-          "După 14 zile se oprește. Titlul rămâne în lista „Căutare încheiată” de mai jos, iar de-acolo se încearcă din nou cu „Corectează subtitrare”, din Bibliotecă.",
-          "Ceasul fiecărui titlu e data ultimei lui verificări, ținută în baza de date — o repornire sau un deploy nu-l resetează și nu provoacă o căutare în plus.",
-        ],
-        icon: <Search className="h-3.5 w-3.5 text-sky-400" />,
-      },
-      {
-        title: "Ce acceptă",
-        cadence: "aceleași reguli ca la descărcare",
-        summary: "Doar traduceri făcute de om, pentru episodul exact, bine sincronizate.",
-        points: [
-          "Caută pe subs.ro și pe OpenSubtitles. La scor egal are prioritate subs.ro, unde traduc traducători români.",
-          "Ignoră traducerile automate: cele marcate AI pe OpenSubtitles, tot ce urcă contul „os-auto” și traducătorul „Ai” de pe subs.ro.",
-          "Ia doar fișiere chiar în română — pe subs.ro există și originale în engleză (de ex. de la „R.”), marcate „en”.",
-          "Episodul trebuie să fie exact al tău: verificat după nume (datele sursei, release-ul, fișierul) și după conținut (durata și momentele de vorbire).",
-          "Dintre variantele valide o alege pe cea mai bine sincronizată cu subtitrarea inclusă în fișier, nu pe cea cu numele cel mai apropiat.",
-        ],
-        icon: <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />,
-      },
-      {
-        title: "Subtitrări aproximative",
-        cadence: "tot 14 zile",
-        summary: "Le înlocuiește doar cu una sigur mai bună.",
-        points: [
-          "Aproximativă înseamnă pentru alt release sau cu decalaj măsurat. La episoadele noi apare des întâi varianta pentru alt release, iar cea exactă abia peste una-două zile.",
-          "Se înlocuiește doar cu o variantă bine sincronizată (sau, fără nimic de comparat, cu numele release-ului identic). Altfel rămâne ce era.",
-          "De pe OpenSubtitles încearcă atunci doar variante cu numele identic: fiecare descărcare de acolo consumă din limita de 20 pe zi a contului.",
-        ],
-        icon: <Replace className="h-3.5 w-3.5 text-amber-400" />,
-      },
-      {
-        title: "Notificări",
-        cadence: "doar la succes",
-        summary: "Jurnal și push doar când pune o subtitrare.",
-        points: [
-          "O căutare fără rezultat nu scrie în jurnal — altfel ar apărea în fiecare zi câte un „tot nimic” pentru fiecare titlu.",
-          "Ca să se vadă totuși că lucrează, mai jos sunt titlurile căutate acum, când a rulat ultima dată și ce a găsit.",
-        ],
-        icon: <BellRing className="h-3.5 w-3.5 text-purple-400" />,
-      },
-    ],
-    icon: <Captions className="h-4 w-4 text-teal-400" />,
-    // Ultimul tic vine din subtitle_retry_state — vezi PluginStatusSection.
-    activityType: null,
-  },
-  {
-    id: "plex-session-tracker",
-    label: "Plex Session Tracker",
-    description: "Urmărire sesiuni & vizionări",
-    cadence: "la 30s",
-    details:
-      "Întreabă Plex ce se redă chiar acum și scrie în jurnal începutul și sfârșitul fiecărei vizionări. De aici vin secțiunea „Se vizionează acum” de pe Acasă și istoricul „cine a văzut” din Bibliotecă.",
-    icon: <PlayCircle className="h-4 w-4 text-amber-400" />,
-    activityType: "plex_watch_start",
-  },
-  {
-    id: "download-recovery",
-    label: "Continuitate Descărcări",
-    description: "Reia descărcările și legarea la Plex întrerupte de un restart",
-    cadence: "la pornire (după 15s și 45s), apoi la 10 min",
-    details:
-      "O descărcare e urmărită de o buclă care trăiește în proces, iar după terminare tot ea o leagă la Plex, timp de 30 de minute. Un restart le omoară pe amândouă — și fiecare deploy repornește serviciul. Două plase de siguranță, pentru cele două momente în care te poate prinde restartul.",
-    steps: [
-      {
-        title: "Reluare descărcări",
-        cadence: "la pornire (după 15s)",
-        summary: "Repornește urmărirea descărcărilor încă neterminate.",
-        points: [
-          "Fără ea, torrentul se termină în qBittorrent, dar aplicația nu află niciodată: fără subtitrare RO, fără completed_at, fără notificare, fără legare la Plex.",
-          "A existat cândva ca efect secundar de modul și a încetat silențios să mai ruleze când modulul a devenit import leneș — de-aia e plugin explicit acum.",
-        ],
-        icon: <RotateCcw className="h-3.5 w-3.5 text-blue-400" />,
-      },
-      {
-        title: "Reconciliere Plex",
-        cadence: "după 45s, apoi la 10 min",
-        summary: "Leagă la Plex titlurile descărcate, dar rămase nelegate.",
-        points: [
-          "Un titlu terminat, dar prins de un restart înainte ca Plex să-l indexeze, rămâne fără plex_rating_key — adică blocat pe „se procesează” la nesfârșit.",
-          "Reîncearcă pentru tot ce s-a terminat în ultimele 72h și n-are încă legătură. Nu atinge Plex decât dacă chiar există ceva nelegat.",
-          "Completează și calitatea filmelor legate corect, dar la care nu s-a putut decide care versiune din Plex e a noastră.",
-          "Pornește la 30s după reluare: fiecare parte lucrează pe alte rânduri (neterminate vs. terminate), iar distanța le ține separate și la pornire.",
-        ],
-        icon: <Link2 className="h-3.5 w-3.5 text-emerald-400" />,
-      },
-    ],
-    icon: <Link2 className="h-4 w-4 text-emerald-400" />,
-    activityType: null,
-  },
-  {
-    id: "maintenance",
-    label: "Întreținere",
-    description:
-      "Backup zilnic al bazei, verificarea actualizărilor, rating-uri IMDb, deblocarea acțiunilor, ștergerile programate",
-    cadence: "la pornire, apoi zilnic",
-    details:
-      "Cinci treburi de întreținere, fiecare cu ritmul ei. Una care eșuează nu le oprește pe celelalte.",
-    steps: [
-      {
-        title: "Deblocare acțiuni",
-        cadence: "la pornire",
-        summary: "Închide acțiunile Restart/Update rămase „în curs” după o repornire.",
-        points: [
-          "Dacă aplicația repornește în timpul unei acțiuni, acțiunea moare odată cu ea, dar în baza de date ar rămâne „în curs” și ar bloca toate butoanele pe veci, cu „rulează deja”.",
-          "O marchează „întreruptă” și scrie asta în jurnal.",
-        ],
-        icon: <Wrench className="h-3.5 w-3.5 text-orange-400" />,
-      },
-      {
-        title: "Backup bază de date",
-        cadence: "zilnic (verificat din oră în oră)",
-        summary: "Copie a bazei, cu rotație la ultimele 14.",
-        points: [
-          "Baza ține tot ce știe aplicația — bibliotecă, conturi, jurnal, abonamente push. Înainte nu exista niciun backup: un disc mort sau o migrare greșită însemna pierdere totală.",
-          "Copia se face cu VACUUM INTO, nu cu o copiere de fișier: baza rulează în mod WAL, deci un `cp` poate prinde un .db fără tranzacțiile încă necheckpoint-ate și poate da o copie coruptă.",
-          "O copie se face doar dacă cea mai recentă e mai veche de 23h — altfel o zi cu cinci deploy-uri ar face cinci copii identice și ar împinge afară din rotație istoricul chiar util.",
-          "Ceasul e data ultimei copii de pe disc, verificată din oră în oră, deci deploy-urile nu-l resetează. Înainte, un interval de 24h pornit la fiecare repornire lăsa uneori până la 41h între copii.",
-          "Copiile stau lângă bază, pe același disc: te apără de o stricăciune logică, nu de un disc mort.",
-        ],
-        icon: <DatabaseBackup className="h-3.5 w-3.5 text-teal-400" />,
-      },
-      {
-        title: "Actualizări disponibile",
-        cadence: "la 24h (verificat din oră în oră)",
-        summary: "Plex (beta), Immich, pachete Ubuntu și cererea de repornire.",
-        points: [
-          "Aceleași verificări ca butoanele Update. Dacă găsește ceva, scrie o intrare în jurnal (filtrul Updates) și trimite o notificare push cu tot ce e disponibil.",
-          "Reamintirea e zilnică: cât timp ceva rămâne neinstalat, apare din nou a doua zi.",
-          "Momentul ultimei verificări stă în baza de date, așa că deploy-urile dese nu resetează ceasul; dacă nicio verificare nu reușește (fără rețea), se reîncearcă peste o oră.",
-        ],
-        icon: <ArrowUpCircle className="h-3.5 w-3.5 text-sky-400" />,
-      },
-      {
-        title: "Rating-uri IMDb",
-        cadence: "zilnic (verificat din oră în oră)",
-        summary: "Descarcă datasetul oficial IMDb cu notele și numărul de voturi.",
-        points: [
-          "Grilele din Descoperă afișau nota TMDB, care diferă vizibil de cea de pe IMDb. Acum afișează nota și voturile IMDb.",
-          "Sursa e title.ratings.tsv.gz de la IMDb (~1,7 milioane de titluri), regenerat de IMDb zilnic — cifrele au cel mult o zi întârziere.",
-          "Stă într-o bază separată, data/imdb-ratings.db (~35 MB), ca să nu umfle backup-urile: se poate reface oricând din dataset.",
-          "Importul scrie un fișier nou și îl mută peste cel vechi abia la final; dacă datasetul nu s-a schimbat (același ETag), nu se descarcă nimic.",
-        ],
-        icon: <Star className="h-3.5 w-3.5 text-amber-400" />,
-      },
-      {
-        title: "Ștergeri programate",
-        cadence: "la fiecare minut",
-        summary: "Șterge titlurile cerute spre ștergere în primele 24 h, la împlinirea lor.",
-        points: [
-          "Filelist consideră hit and run un torrent șters în primele 24 de ore de la descărcare. Înainte, butoanele Anulare/Ștergere erau blocate în acest interval; acum cererea se acceptă, dar ștergerea se programează pentru împlinirea celor 24 h.",
-          "Până atunci torrentul continuă să se descarce și să facă seed, iar titlul apare în Bibliotecă cu un timer. Oricine poate renunța la ștergere și devine astfel proprietarul titlului. Adminul poate ocoli programarea cu „Șterge acum”.",
-          "Termenul stă în baza de date, nu într-un cronometru în memorie: o ștergere ratată cât serverul a fost oprit se face la pornirea următoare.",
-          "Programarea, renunțarea și ștergerea efectivă apar în jurnal (filtrul Torrente), fără notificare push.",
-        ],
-        icon: <Trash2 className="h-3.5 w-3.5 text-red-400" />,
-      },
-    ],
-    icon: <Wrench className="h-4 w-4 text-orange-400" />,
-    // Rândul arată ultimul backup sau ultima actualizare anunțată, care e mai
-    // recentă — vezi PluginStatusSection.
-    activityType: "update_available",
-  },
-  {
-    id: "server-lifecycle",
-    label: "Pornire și Oprire",
-    description: "Jurnalul pornirilor/opririlor, oprire curată, captura erorilor",
-    cadence: "la pornire și la oprire",
-    details: "Tot ce ține de procesul serverului în sine, nu de vreun serviciu.",
-    steps: [
-      {
-        title: "Jurnal pornire/oprire",
-        cadence: "la pornire",
-        summary: "Scrie în jurnal fiecare pornire și oprire, cu cauza ei.",
-        points: [
-          "Rula ca efect secundar de modul, deci se executa abia la prima cerere HTTP: după un restart, jurnalul rămânea gol până deschidea cineva aplicația, iar atunci „Serverul a pornit” se scria cu ora greșită și cu cauza greșită.",
-          "Dacă serviciul era oprit înainte de vreo cerere, oprirea nu se loga deloc.",
-        ],
-        icon: <PlugZap className="h-3.5 w-3.5 text-sky-400" />,
-      },
-      {
-        title: "Oprire controlată",
-        cadence: "la oprire",
-        summary: "Închide curat la SIGTERM, înainte ca systemd să dea SIGKILL.",
-        points: [
-          "Fără ea, oprirea aștepta drenarea tuturor conexiunilor HTTP — inclusiv SSE-ul de auto-reload, deschis cât timp orice tab are dashboard-ul deschis.",
-          "Asta depășea mereu TimeoutStopSec=5, iar systemd termina procesul cu SIGKILL, fără nicio șansă pentru logarea opririi. Acum logarea are o fereastră scurtă, apoi procesul iese controlat.",
-        ],
-        icon: <Power className="h-3.5 w-3.5 text-rose-400" />,
-      },
-      {
-        title: "Captura erorilor",
-        cadence: "la pornire",
-        summary: "Trimite erorile și avertismentele din consolă în „Erori aplicație”.",
-        points: [
-          "Prinde tot ce ajunge în console.error/console.warn pe server — server functions și plugin-uri de fundal — nu doar ce e logat explicit.",
-        ],
-        icon: <Bug className="h-3.5 w-3.5 text-amber-400" />,
-      },
-    ],
-    icon: <PlugZap className="h-4 w-4 text-sky-400" />,
-    activityType: "server_start",
-  },
-];
-
-// Pe pagina Immich, nu în lista din Tehnic — vezi nota de la începutul
-// fișierului.
-export const IMMICH_UPLOAD_PLUGIN: PluginInfo = {
-  id: "immich-upload-tracker",
-  label: "Urmărire Încărcări",
-  description: "Trece în jurnal pozele și clipurile încărcate",
-  cadence: "la 5 min (prima, la 1 min după pornire)",
+export const WATCHER_PLUGIN = {
+  id: "watcher",
+  label: "Watcher",
   details:
-    "Întreabă Immich ce s-a încărcat de la ultima verificare și scrie în Jurnalul de activitate câte fotografii și videoclipuri a încărcat fiecare utilizator, cu notificare push. O încărcare întreagă devine o singură intrare: se scrie când o verificare nu mai găsește nimic nou, deci apare în jurnal la cel mult ~10 minute după ce se termină. Un Live Photo se numără o dată, ca în galerie.\n\nPunctul de plecare stă în baza de date, așa că o repornire a serverului nu pierde nimic — verificarea următoare continuă de unde a rămas. Varianta veche rula doar cât era deschisă pagina Immich și pornea de la zero la fiecare repornire: în septembrie 2026, 285 de încărcări într-o lună, zero intrări în jurnal.",
-  icon: <Upload className="h-4 w-4 text-purple-400" />,
-  activityType: "immich_upload",
+    "Un singur tact, la fiecare secundă, care pornește sarcinile de fundal când le vine rândul. Fiecare rulează ca operațiune separată, deci una lentă nu le ține pe loc pe celelalte; două sarcini din același grup (căutările pe Filelist) nu rulează niciodată deodată. Cadențele per titlu — serialul la 3 ore, subtitrarea o dată pe zi — stau în baza de date, iar sarcina decide singură ce e scadent, deci o rulare în plus nu strică nimic.",
+  icon: <Radar className="h-4 w-4 text-sky-400" />,
 };
+
+// Explicația fiecărei sarcini, după id-ul din src/lib/watcher/tasks.ts. Un id
+// nou fără intrare aici apare oricum în listă, doar fără explicație.
+export interface WatcherTaskInfo {
+  summary: string;
+  points: string[];
+  icon: ReactNode;
+}
+
+export const WATCHER_TASK_INFO: Record<string, WatcherTaskInfo> = {
+  "interrupted-jobs": {
+    summary: "Închide acțiunile Restart/Update rămase „în curs” după o repornire.",
+    points: [
+      "Dacă aplicația repornește în timpul unei acțiuni, acțiunea moare odată cu ea, dar în baza de date ar rămâne „în curs” și ar bloca toate butoanele pe veci, cu „rulează deja”.",
+      "O marchează „întreruptă” și scrie asta în jurnal.",
+      "Rulează doar la pornire: pornită manual, ar marca drept întreruptă o acțiune care chiar rulează acum.",
+    ],
+    icon: <Wrench className="h-3.5 w-3.5 text-orange-400" />,
+  },
+  "plex-sessions": {
+    summary: "Ce se redă acum în Plex: începutul și sfârșitul fiecărei vizionări, în jurnal.",
+    points: [
+      "De aici vin secțiunea „Se vizionează acum” de pe Acasă și istoricul „cine a văzut” din Bibliotecă.",
+      "Tot de aici se adună dovezile despre HDR-ul dispozitivelor (redare directă a unui fișier HDR).",
+      "Cât Plex e oprit sau nu răspunde, sesiunile rămân cum erau — nu se închid pe baza unei erori.",
+    ],
+    icon: <PlayCircle className="h-3.5 w-3.5 text-amber-400" />,
+  },
+  "download-resume": {
+    summary: "Repornește urmărirea descărcărilor încă neterminate după un restart.",
+    points: [
+      "O descărcare e urmărită de o buclă care trăiește în proces; un restart o omoară — și fiecare deploy repornește serviciul.",
+      "Fără reluare, torrentul se termină în qBittorrent, dar aplicația nu află niciodată: fără subtitrare RO, fără completed_at, fără notificare, fără legare la Plex.",
+      "A existat cândva ca efect secundar de modul și a încetat silențios să mai ruleze când modulul a devenit import leneș.",
+    ],
+    icon: <RotateCcw className="h-3.5 w-3.5 text-blue-400" />,
+  },
+  "scheduled-delete": {
+    summary: "Șterge titlurile cerute spre ștergere în primele 24 h, la împlinirea lor.",
+    points: [
+      "Filelist consideră hit and run un torrent șters în primele 24 de ore de la descărcare. Cererea se acceptă, dar ștergerea se programează pentru împlinirea celor 24 h.",
+      "Până atunci torrentul continuă să se descarce și să facă seed, iar titlul apare în Bibliotecă cu un timer. Oricine poate renunța la ștergere și devine astfel proprietarul titlului. Adminul poate ocoli programarea cu „Șterge acum”.",
+      "Termenul stă în baza de date: o ștergere ratată cât serverul a fost oprit se face la pornirea următoare.",
+      "Programarea, renunțarea și ștergerea efectivă apar în jurnal (filtrul Torrente), fără notificare push.",
+    ],
+    icon: <Trash2 className="h-3.5 w-3.5 text-red-400" />,
+  },
+  "show-watch": {
+    summary: "Episoadele noi și filmele așteptate de pe Filelist, plus detaliile din TMDB.",
+    points: [
+      "Episoade noi, la 3h / serial (la 1h în ziua lansării ±1 zi): compară ce s-a difuzat (TMDB, inclusiv episodul lansat azi) cu ce ai deja și aduce diferența, căutând strict după IMDb ID, fără cache.",
+      "Nu ține minte ce a văzut ultima dată: întreabă de fiecare dată realitatea, deci se poate relua oricând și nu poate descărca de două ori. După fiecare descărcare, poziția de start avansează peste episoadele aduse, ca un episod văzut și șters să nu revină.",
+      "Filme așteptate, la 12h / film: înainte de data lansării nici nu se caută; urmărirea se stinge singură la prima descărcare reușită.",
+      "Calitatea de rezervă se ia doar când principala lipsește la două verificări, la cel puțin 3 ore distanță.",
+      "Detalii seriale și filme, la 12h: status, titlurile română/original, anul, descrierea, genurile, posterul, episoadele — cerute în română, cu engleza ca rezervă. Statusul contează și la serialele neurmărite: decide dacă ți se oferă butonul de urmărire.",
+      "Un pas eșuat nu-i oprește pe ceilalți; rularea apare atunci ca eșuată, cu numele pasului.",
+    ],
+    icon: <Tv className="h-3.5 w-3.5 text-blue-400" />,
+  },
+  "new-movies": {
+    summary: "Prima verificare a unui film abia adăugat, la un minut după adăugare.",
+    points: [
+      "Un singur SELECT care, în marea majoritate a cazurilor, nu întoarce nimic — de-aia poate rula des.",
+      "Cât rulează „Seriale și filme”, așteaptă: ambele caută pe Filelist, iar căutările de fundal nu se fac niciodată deodată.",
+    ],
+    icon: <Film className="h-3.5 w-3.5 text-amber-400" />,
+  },
+  "plex-link": {
+    summary: "Leagă la Plex titlurile descărcate, dar rămase nelegate.",
+    points: [
+      "Un titlu terminat, dar prins de un restart înainte ca Plex să-l indexeze, rămâne fără plex_rating_key — adică blocat pe „se procesează” la nesfârșit.",
+      "Reîncearcă pentru tot ce s-a terminat în ultimele 72h și n-are încă legătură. Nu atinge Plex decât dacă chiar există ceva nelegat.",
+      "Completează și calitatea filmelor legate corect, dar la care nu s-a putut decide care versiune din Plex e a noastră.",
+    ],
+    icon: <Link2 className="h-3.5 w-3.5 text-emerald-400" />,
+  },
+  "immich-uploads": {
+    summary: "Pozele și clipurile încărcate în Immich, trecute în jurnal.",
+    points: [
+      "Scrie câte fotografii și videoclipuri a încărcat fiecare utilizator, cu notificare push. O încărcare întreagă devine o singură intrare: se scrie când o verificare nu mai găsește nimic nou, deci apare în jurnal la cel mult ~10 minute după ce se termină. Un Live Photo se numără o dată, ca în galerie.",
+      "Punctul de plecare stă în baza de date, așa că o repornire nu pierde nimic. Varianta veche rula doar cât era deschisă pagina Immich: în septembrie 2026, 285 de încărcări într-o lună, zero intrări în jurnal.",
+    ],
+    icon: <Upload className="h-3.5 w-3.5 text-purple-400" />,
+  },
+  "db-backup": {
+    summary: "Copie zilnică a bazei, cu rotație la ultimele 14.",
+    points: [
+      "Baza ține tot ce știe aplicația — bibliotecă, conturi, jurnal, abonamente push.",
+      "Copia se face cu VACUUM INTO, nu cu o copiere de fișier: baza rulează în mod WAL, deci un `cp` poate da o copie coruptă.",
+      "O copie se face doar dacă cea mai recentă e mai veche de 23h; ceasul e data ultimei copii de pe disc, deci deploy-urile nu-l resetează. „Rulează acum” face copia oricum.",
+      "Copiile stau lângă bază, pe același disc: te apără de o stricăciune logică, nu de un disc mort.",
+    ],
+    icon: <DatabaseBackup className="h-3.5 w-3.5 text-teal-400" />,
+  },
+  "imdb-ratings": {
+    summary: "Datasetul oficial IMDb cu notele și voturile, pentru Descoperă.",
+    points: [
+      "Sursa e title.ratings.tsv.gz (~1,7 milioane de titluri), regenerat de IMDb zilnic. Efectiv o dată la 23h; „Rulează acum” verifică oricum.",
+      "Stă într-o bază separată, data/imdb-ratings.db (~35 MB), ca să nu umfle backup-urile.",
+      "Dacă datasetul nu s-a schimbat (același ETag), nu se descarcă nimic.",
+    ],
+    icon: <Star className="h-3.5 w-3.5 text-amber-400" />,
+  },
+  "update-check": {
+    summary: "Plex (beta), Immich, pachete Ubuntu și cererea de repornire.",
+    points: [
+      "Aceleași verificări ca butoanele Update. Dacă găsește ceva, scrie în jurnal (filtrul Updates) și trimite o notificare push.",
+      "Efectiv o dată la 24h, cu ceasul în baza de date; cât timp ceva rămâne neinstalat, reamintirea vine zilnic. „Rulează acum” verifică oricum.",
+      "Dacă nicio sursă nu răspunde (fără rețea), rularea apare eșuată și se reia peste o oră.",
+    ],
+    icon: <ArrowUpCircle className="h-3.5 w-3.5 text-sky-400" />,
+  },
+  "subtitle-retry": {
+    summary: "Caută zilnic subtitrările care lipsesc, 14 zile de la descărcare.",
+    points: [
+      "Prima căutare, la finalul descărcării, vine exact când e cel mai puțin probabil să existe ceva: traducerile românești apar abia peste una-trei zile.",
+      "Doar traduceri făcute de om, pe subs.ro și OpenSubtitles, pentru episodul exact (verificat după nume și după conținut), alese după sincronizare.",
+      "O subtitrare aproximativă e înlocuită doar cu una sigur mai bună.",
+      "Ceasul fiecărui titlu stă în baza de date, deci „Rulează acum” caută doar ce e scadent — OpenSubtitles are o limită de 20 de descărcări pe zi.",
+      "Jurnal și push doar când pune o subtitrare.",
+    ],
+    icon: <Captions className="h-3.5 w-3.5 text-teal-400" />,
+  },
+};
+
+export const SERVER_LIFECYCLE_PLUGIN: PluginInfo = {
+  id: "server-lifecycle",
+  label: "Pornire și Oprire",
+  description: "Jurnalul pornirilor/opririlor, oprire curată, captura erorilor",
+  cadence: "la pornire și la oprire",
+  details:
+    "Tot ce ține de procesul serverului în sine, nu de vreun serviciu — de-aia nu e o sarcină a Watcher-ului.",
+  steps: [
+    {
+      title: "Jurnal pornire/oprire",
+      cadence: "la pornire",
+      summary: "Scrie în jurnal fiecare pornire și oprire, cu cauza ei.",
+      points: [
+        "Rula ca efect secundar de modul, deci se executa abia la prima cerere HTTP: după un restart, jurnalul rămânea gol până deschidea cineva aplicația, iar atunci „Serverul a pornit” se scria cu ora greșită și cu cauza greșită.",
+        "Dacă serviciul era oprit înainte de vreo cerere, oprirea nu se loga deloc.",
+      ],
+      icon: <PlugZap className="h-3.5 w-3.5 text-sky-400" />,
+    },
+    {
+      title: "Oprire controlată",
+      cadence: "la oprire",
+      summary: "Închide curat la SIGTERM, înainte ca systemd să dea SIGKILL.",
+      points: [
+        "Fără ea, oprirea aștepta drenarea tuturor conexiunilor HTTP — inclusiv SSE-ul de auto-reload, deschis cât timp orice tab are dashboard-ul deschis.",
+        "Asta depășea mereu TimeoutStopSec=5, iar systemd termina procesul cu SIGKILL, fără nicio șansă pentru logarea opririi. Acum logarea are o fereastră scurtă, apoi procesul iese controlat.",
+      ],
+      icon: <Power className="h-3.5 w-3.5 text-rose-400" />,
+    },
+    {
+      title: "Captura erorilor",
+      cadence: "la pornire",
+      summary: "Trimite erorile și avertismentele din consolă în „Erori aplicație”.",
+      points: [
+        "Prinde tot ce ajunge în console.error/console.warn pe server — server functions și sarcinile Watcher-ului — nu doar ce e logat explicit.",
+      ],
+      icon: <Bug className="h-3.5 w-3.5 text-amber-400" />,
+    },
+  ],
+  icon: <PlugZap className="h-4 w-4 text-sky-400" />,
+  activityType: "server_start",
+};
+
+export const FALLBACK_TASK_ICON = <Sparkles className="h-3.5 w-3.5 text-muted-foreground" />;

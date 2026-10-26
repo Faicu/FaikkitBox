@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------------
 // Verificarea zilnică a actualizărilor: Plex, Immich, Ubuntu (pachete și
 // cererea de repornire). qBittorrent nu intră — nu se actualizează niciodată
-// din aplicație. Rulată de server/plugins/maintenance.ts.
+// din aplicație. Rulată de sarcina update-check din Watcher.
 //
 // Reamintire zilnică, nu doar la noutăți (decizia userului, 26 sept. 2026):
 // cât timp ceva rămâne neinstalat, fiecare verificare îl anunță din nou —
@@ -54,6 +54,9 @@ export function summarizeUpdates(v: {
 export async function checkForUpdates(
   opts: {
     now?: number;
+    // „Rulează acum” din Watcher: verifică și dacă ultima verificare e mai
+    // nouă de 24h.
+    force?: boolean;
     readVersions?: () => Promise<{
       plex: ServiceVersion;
       immich: ServiceVersion;
@@ -65,7 +68,8 @@ export async function checkForUpdates(
   const db = getDb();
   const last = db.prepare("SELECT checked_at FROM update_check WHERE id = 1").get() as
     { checked_at: string } | undefined;
-  if (last && now - new Date(last.checked_at).getTime() < CHECK_INTERVAL_MS) return "skipped";
+  if (!opts.force && last && now - new Date(last.checked_at).getTime() < CHECK_INTERVAL_MS)
+    return "skipped";
 
   const read = opts.readVersions ?? (await import("./versions")).readAllVersions;
   const v = await read();

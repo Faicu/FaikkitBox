@@ -3,14 +3,14 @@ import { ChevronRight } from "lucide-react";
 import { relativeTime } from "./utils";
 import type { PluginInfo } from "./plugins";
 
-// Un rând de plugin: în lista din Tehnic și pe paginile de serviciu (Immich).
+// Un rând de plugin, în lista din Tehnic.
 export function PluginRow({
   plugin,
   description,
   lastTs,
   onOpen,
 }: {
-  plugin: PluginInfo;
+  plugin: Pick<PluginInfo, "icon" | "label" | "description">;
   description?: string;
   lastTs: string | null;
   onOpen: () => void;

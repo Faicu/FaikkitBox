@@ -70,7 +70,7 @@ function plexDevices(): Promise<Map<number, PlexDevice>> {
   });
 }
 
-// Din pluginul plex-session-tracker, la fiecare verificare: modelul raportat
+// Din sarcina plex-sessions a Watcher-ului, la fiecare verificare: modelul raportat
 // de aplicație și, dacă un fișier HDR merge cu video-ul netranscodat (direct
 // play sau direct stream), data — dovada că dispozitivul a primit HDR.
 // O transcodare NU e dovadă de lipsă: Plex transcodează și pentru subtitrări

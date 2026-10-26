@@ -15,7 +15,7 @@ import {
 // Ștergerea efectivă a unui titlu: qBittorrent (torrent + fișiere), reziduul
 // de pe disk, rândurile din `media` și Plex. Fără verificări de drepturi sau
 // de termen — le fac apelanții: deleteMediaEntry (log.ts), la cererea unui
-// utilizator, și pasul „Ștergeri programate” din maintenance.ts, la
+// utilizator, și sarcina „Ștergeri programate” din Watcher, la
 // împlinirea celor 24 h (vezi scheduled-delete.ts).
 export async function deleteTorrentNow(row: {
   torrent_hash: string;
@@ -112,7 +112,7 @@ export async function deleteTorrentNow(row: {
   return { qbitDeleted };
 }
 
-// Pasul „Ștergeri programate” din maintenance.ts: execută ștergerile cu
+// Sarcina „Ștergeri programate” din Watcher: execută ștergerile cu
 // termenul atins și le scrie în jurnal. O ștergere eșuată rămâne programată
 // și se reîncearcă la următorul tic. Întoarce câte s-au executat.
 export async function runDueDeletions(nowMs = Date.now()): Promise<number> {
