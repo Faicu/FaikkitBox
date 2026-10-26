@@ -343,12 +343,10 @@ export function getDb(): DatabaseSync {
       run_requested_at INTEGER,
       running_since INTEGER,
       running_manual INTEGER NOT NULL DEFAULT 0,
-      last_started_at INTEGER,
       last_finished_at INTEGER,
       last_duration_ms INTEGER,
       last_ok INTEGER,
-      last_error TEXT,
-      last_summary TEXT
+      last_error TEXT
     );
 
     -- Istoricul rulărilor, ultimele 20 per sarcină. La sarcinile de un minut
@@ -1326,11 +1324,6 @@ function applyCleanups(database: DatabaseSync): void {
           "DELETE FROM watcher_runs WHERE task_id = 'show-watch' AND summary LIKE '%împrospăt%'",
         )
         .run();
-      database
-        .prepare(
-          "UPDATE watcher_tasks SET last_summary = NULL WHERE id = 'show-watch' AND last_summary LIKE '%împrospăt%'",
-        )
-        .run();
       console.log(`[db] Migrare v44: ${removed.changes} reîmprospătări „nimic nou” șterse`);
       database.exec("PRAGMA user_version = 44");
     }
@@ -1347,6 +1340,21 @@ function applyCleanups(database: DatabaseSync): void {
       }
       console.log("[db] Migrare v45: adăugat plex_active_sessions.missed");
       database.exec("PRAGMA user_version = 45");
+    }
+
+    if (version < 46) {
+      // v46: watcher_tasks.last_started_at și last_summary nu mai erau citite
+      // nicăieri — rezumatul rulărilor stă în watcher_runs, iar Tehnic arată
+      // ultima acțiune reală de acolo.
+      for (const col of ["last_started_at", "last_summary"]) {
+        try {
+          database.exec(`ALTER TABLE watcher_tasks DROP COLUMN ${col}`);
+        } catch {
+          // coloana nu există (bază nouă, creată direct cu schema curentă)
+        }
+      }
+      console.log("[db] Migrare v46: watcher_tasks fără last_started_at/last_summary");
+      database.exec("PRAGMA user_version = 46");
     }
   }
 }

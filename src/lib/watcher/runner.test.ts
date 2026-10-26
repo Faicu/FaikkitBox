@@ -142,13 +142,13 @@ describe("Watcher", () => {
     expect(runs("fast")).toHaveLength(1);
   });
 
-  it("o rulare cu rezumat intră în stare și în istoric", async () => {
+  it("o rulare cu rezumat intră în istoric", async () => {
     // big (45s) a pornit la tactul de la 50s.
     expect(row("big").running_since).not.toBeNull();
     finish("big", "2 seriale împrospătate");
     await flush();
-    expect(row("big").last_summary).toBe("2 seriale împrospătate");
     expect(runs("big")).toHaveLength(1);
+    expect(runs("big")[0].summary).toBe("2 seriale împrospătate");
   });
 
   it("pauza oprește rulările automate, dar nu și „Rulează acum”", async () => {

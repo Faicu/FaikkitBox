@@ -16,12 +16,10 @@ interface TaskRow {
   run_requested_at: number | null;
   running_since: number | null;
   running_manual: number;
-  last_started_at: number | null;
   last_finished_at: number | null;
   last_duration_ms: number | null;
   last_ok: number | null;
   last_error: string | null;
-  last_summary: string | null;
 }
 
 const iso = (ms: number | null) => (ms === null ? null : new Date(ms).toISOString());

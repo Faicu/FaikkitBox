@@ -75,10 +75,9 @@ export function boot(now: number): void {
       ).run(task.id, row.running_since, now, now - row.running_since, row.running_manual, error);
       db.prepare(
         `UPDATE watcher_tasks SET running_since = NULL, running_manual = 0,
-           last_started_at = ?, last_finished_at = ?, last_duration_ms = ?,
-           last_ok = 0, last_error = ?, last_summary = NULL
+           last_finished_at = ?, last_duration_ms = ?, last_ok = 0, last_error = ?
          WHERE id = ?`,
-      ).run(row.running_since, now, now - row.running_since, error, task.id);
+      ).run(now, now - row.running_since, error, task.id);
       prune(task.id);
     }
 
@@ -183,10 +182,9 @@ async function execute(task: WatcherTask, manual: boolean): Promise<void> {
     const db = getDb();
     db.prepare(
       `UPDATE watcher_tasks SET running_since = NULL, running_manual = 0, next_run_at = ?,
-         last_started_at = ?, last_finished_at = ?, last_duration_ms = ?,
-         last_ok = ?, last_error = ?, last_summary = ?
+         last_finished_at = ?, last_duration_ms = ?, last_ok = ?, last_error = ?
        WHERE id = ?`,
-    ).run(next, started, finished, finished - started, ok ? 1 : 0, error, summary, task.id);
+    ).run(next, finished, finished - started, ok ? 1 : 0, error, task.id);
 
     if (!repeated && (manual || !ok || summary !== null)) {
       db.prepare(
