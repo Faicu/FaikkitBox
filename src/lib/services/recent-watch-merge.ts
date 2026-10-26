@@ -1,36 +1,15 @@
-// Unirea episoadelor consecutive din "Vizionări recente", ca funcție pură:
-// intră lista de vizionări, iese lista de carduri. Separată de plex-browse.ts
-// (care vorbește cu DB-ul și cu Plex) ca să poată fi verificată singură —
-// regula are cazuri de margine ușor de stricat la o rescriere.
+// Unirea episoadelor consecutive din „Vizionări recente” — funcție pură,
+// testabilă (are cazuri de margine ușor de stricat).
 
 import type { RecentWatch } from "./recent-watch-types";
 
-// Unește episoade consecutive din același serial/sezon/user într-un singur
-// card (ex. S02E03-E05), ca "Vizionări recente" să nu se umple cu rânduri
-// separate pentru un maraton de episoade.
-//
-// Două condiții, amândouă obligatorii:
-//
-//  1. Episoadele să fie consecutive ca număr (E03, E04, E05).
-//  2. Intrările să fie ALĂTURATE în lista cronologică — fără nimic între ele,
-//     nici măcar vizionarea altui utilizator.
-//
-// A doua a lipsit la început, iar unirea se făcea pur pe numărul episodului:
-// E01 și E02 apăreau ca un card „E01-E02" chiar dacă între ele, în timp,
-// altcineva văzuse altceva. Adică lista părea să spună că maratonul a fost
-// neîntrerupt, când de fapt nu fusese — iar intrarea celuilalt utilizator
-// ajungea, vizual, după un card care o cuprindea în interval.
-//
-// Acum un maraton întrerupt dă două carduri („E01-E02" și „E03"), ceea ce e
-// exact adevărul: două reprize.
-//
-// Doar episoadele terminate complet se unesc — un episod neterminat rămâne pe
-// rândul lui, altfel minutele afișate ("34/41 min") ar părea să se refere la
-// tot intervalul unit, nu la ultimul episod din el.
+// Episoade consecutive din același serial/sezon/user devin un card (S02E03-E05).
+// Două condiții: numere consecutive ȘI intrări alăturate în listă — fără nimic
+// între ele, nici vizionarea altcuiva. Fără a doua, un maraton întrerupt
+// părea neîntrerupt. Doar episoadele terminate se unesc — altfel „34/41 min”
+// ar părea să se refere la tot intervalul.
 export function mergeConsecutiveEpisodes(items: RecentWatch[]): RecentWatch[] {
-  // Cronologic descrescător, ca „alăturat în listă" să însemne alăturat în
-  // ordinea în care vede utilizatorul lista, nu în ordinea din care a venit
-  // interogarea.
+  // Descrescător, ca „alăturat” să însemne alăturat în lista văzută.
   const ordered = [...items].sort((a, b) => b.viewedAt - a.viewedAt);
 
   const merged: RecentWatch[] = [];
@@ -43,8 +22,7 @@ export function mergeConsecutiveEpisodes(items: RecentWatch[]): RecentWatch[] {
       run = [];
       return;
     }
-    // Cardul poartă ora celei mai recente vizionări din serie, dar
-    // intervalul de episoade în ordine crescătoare.
+    // Ora celei mai recente vizionări, intervalul în ordine crescătoare.
     const latest = run.reduce((a, b) => (b.viewedAt > a.viewedAt ? b : a));
     const nums = run.map((r) => r.episode ?? 0).sort((a, b) => a - b);
     merged.push({ ...latest, episode: nums[0], episodeEnd: nums[nums.length - 1] });
@@ -61,8 +39,7 @@ export function mergeConsecutiveEpisodes(items: RecentWatch[]): RecentWatch[] {
       continue;
     }
     const last = run[run.length - 1];
-    // Lista e descrescătoare cronologic, iar un maraton se vede de sus în jos
-    // ca episoade în ordine descrescătoare — de-aia diferența așteptată e -1.
+    // Lista e descrescătoare, deci diferența așteptată e -1.
     const continuesRun =
       last != null &&
       last.username === item.username &&

@@ -8,15 +8,12 @@ export type AdminSession = {
   userId?: number;
   username?: string;
   role?: "admin" | "user";
-  // Copia lui users.session_version de la login. Cookie-urile emise înainte
-  // de coloană n-o au — contează ca 0, valoarea implicită din DB.
+  // users.session_version de la login; cookie-urile mai vechi contează ca 0.
   sessionVersion?: number;
 };
 
-// Exportată pentru rutele Nitro brute (server/routes/api/*), care rulează în
-// afara AsyncLocalStorage-ului TanStack Start și nu pot folosi getSession() de
-// mai jos — au nevoie de aceeași configurație de cookie ca să citească exact
-// aceeași sesiune, nu de una duplicată care s-ar putea desincroniza.
+// Pentru rutele Nitro brute (server/routes/api/*), care nu pot folosi
+// getSession() — aceeași configurație de cookie, nu una duplicată.
 export function sessionConfig() {
   const password = process.env.SESSION_SECRET;
   if (!password || password.length < 32) {
@@ -36,24 +33,16 @@ export function sessionConfig() {
 }
 
 export async function getSession() {
-  // Nu e un React Hook — e un helper server-side din @tanstack/react-start.
+  // Helper server-side, nu React Hook.
   // eslint-disable-next-line react-hooks/rules-of-hooks
   return useSession<AdminSession>(sessionConfig());
 }
 
-// Contul din cookie mai există și mai e aprobat?
-//
-// Cookie-ul e semnat și ține 7 zile, deci fără verificarea asta „revocă
-// accesul" din pagina Utilizatori nu revoca nimic: rândul dispărea din `users`,
-// dar sesiunea deja emisă rămânea bună până expira singură, cu tot cu dreptul
-// de a descărca și șterge. Un SELECT pe cheie primară într-un SQLite local e
-// prea ieftin ca să merite un cache care ar reintroduce exact fereastra asta.
-//
-// Tot de aici vine și rolul: dacă cineva e retrogradat din admin, sesiunea lui
-// nu mai trebuie să poarte mai departe `admin: true` înghețat la login.
-//
-// Și versiunea sesiunii: resetarea parolei incrementează users.session_version,
-// deci orice cookie emis cu parola veche nu mai trece.
+// Contul din cookie mai există și mai e aprobat? Cookie-ul semnat ține 7 zile,
+// deci fără verificare „revocă accesul” nu revoca nimic. Tot de aici vin rolul
+// curent (un admin retrogradat își pierde drepturile) și versiunea sesiunii
+// (resetarea parolei invalidează cookie-urile vechi). Un SELECT pe cheie e
+// prea ieftin pentru un cache care ar reintroduce fereastra.
 export async function isAccountLive(
   userId: number,
   sessionVersion: number | undefined,
@@ -61,9 +50,8 @@ export async function isAccountLive(
   return (await liveAccount(userId, sessionVersion))?.role ?? null;
 }
 
-// Statement-ul se pregătește o singură dată: verificarea rulează la FIECARE
-// cerere autentificată, inclusiv la fiecare poster prin /api/plex-thumb, iar
-// re-parsarea SQL-ului de fiecare dată ar fi singurul cost care se vede.
+// Pregătit o singură dată: rulează la FIECARE cerere autentificată, inclusiv la
+// fiecare poster.
 let accountStmt: StatementSync | null = null;
 
 async function liveAccount(
@@ -81,22 +69,20 @@ async function liveAccount(
   return row;
 }
 
-// Statusul HTTP rămâne 401 (util în Network/loguri), dar corpul e o eroare
-// serializată, nu un `Response` brut — vezi unauthorized.ts pentru de ce.
+// 401, dar cu o eroare serializată, nu un `Response` brut (vezi unauthorized.ts).
 function throwUnauthorized(): never {
   setResponseStatus(401);
   throw new Error(UNAUTHORIZED_MESSAGE);
 }
 
-// Logat, dar fără rolul cerut. Separat de 401: clientul redirecționează spre
-// login doar la sesiune pierdută, nu și când un user obișnuit atinge o
-// funcție de admin.
+// Logat, dar fără rol — separat de 401, ca clientul să nu trimită la login un
+// user obișnuit care atinge o funcție de admin.
 function throwForbidden(): never {
   setResponseStatus(403);
   throw new Error(FORBIDDEN_MESSAGE);
 }
 
-// Orice cont autentificat (admin sau user obișnuit, ambele aprobate).
+// Orice cont autentificat și aprobat.
 export async function requireAuth() {
   const session = await getSession();
   const userId = session.data.userId;
@@ -105,8 +91,7 @@ export async function requireAuth() {
   }
   const account = await liveAccount(userId, session.data.sessionVersion);
   if (!account) {
-    // Golim cookie-ul, altfel clientul continuă să se creadă logat și se
-    // lovește de 401 la fiecare cerere, fără să fie trimis la autentificare.
+    // Golim cookie-ul, altfel clientul se crede logat și ia 401 la nesfârșit.
     await session.clear();
     throwUnauthorized();
   }
@@ -127,13 +112,9 @@ export async function requireAdmin() {
   return session;
 }
 
-// true dacă sesiunea e admin sau chiar contul care a inițiat acțiunea (ex.
-// cel care a descărcat un torrent poate corecta/șterge subtitrarea sau
-// titlul, fără să aibă nevoie de rol de admin) — folosit pentru acțiuni pe
-// intrări din jurnalul de descărcări (downloads.requested_by_user_id).
-// Întoarce bool (nu aruncă), ca apelanții să poată răspunde cu un mesaj
-// prietenos în același format {status:"error"} folosit de restul funcțiilor,
-// nu cu un 401 brut.
+// Admin sau chiar contul care a inițiat acțiunea (cel care a descărcat poate
+// corecta sau șterge). Întoarce bool, nu aruncă — apelanții răspund cu un
+// mesaj prietenos.
 export function isAdminOrOwner(
   session: { data: AdminSession },
   ownerUserId: number | null,
@@ -141,9 +122,8 @@ export function isAdminOrOwner(
   return !!session.data.admin || (ownerUserId != null && session.data.userId === ownerUserId);
 }
 
-// Adminul verificat ca la requireAdmin (sesiunea ȘI rolul curent din DB),
-// dar fără să arunce — pentru acțiuni deschise tuturor, cu reguli în plus
-// pentru cei care nu sunt admini (ex. calitatea la descărcare).
+// Adminul verificat ca la requireAdmin (sesiune ȘI rol din DB), fără să arunce —
+// pentru acțiuni deschise tuturor, cu reguli în plus pentru non-admini.
 export async function isLiveAdmin(session: { data: AdminSession }): Promise<boolean> {
   const userId = session.data.userId;
   if (!userId || !session.data.admin) return false;

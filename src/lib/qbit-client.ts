@@ -1,8 +1,4 @@
-// ---------------------------------------------------------------------------
-// Client qBittorrent unic (autentificare cookie SID + fetch cu retry automat
-// la 401/403). Folosit atât de fluxul de descărcare Filelist cât și de
-// monitorizarea din src/lib/services/qbittorrent.ts.
-// ---------------------------------------------------------------------------
+// Client qBittorrent unic: cookie SID și o reîncercare la 401/403.
 
 let qbitCookie: string | null = null;
 
@@ -36,8 +32,7 @@ export function resetQbitCookie(): void {
   qbitCookie = null;
 }
 
-// Rulează un fetch autentificat cu cookie-ul curent și, dacă serverul respinge
-// cu 401/403 (SID expirat), face un singur retry cu un cookie proaspăt.
+// Fetch autentificat; la 401/403 (SID expirat), o reîncercare cu cookie nou.
 async function qbitFetchWithRetry(
   url: string,
   user: string,
@@ -54,14 +49,14 @@ async function qbitFetchWithRetry(
   return res;
 }
 
-// GET cu autentificare automată și un singur retry la 401/403 (SID expirat).
+// GET autentificat, cu reîncercare la 401/403.
 export function qbitGet(url: string, path: string, user: string, pass: string): Promise<Response> {
   return qbitFetchWithRetry(url, user, pass, (cookie) =>
     fetch(`${url}${path}`, { headers: { Cookie: cookie, Referer: url } }),
   );
 }
 
-// POST form-urlencoded cu autentificare automată și un singur retry la 401/403.
+// POST form-urlencoded, cu reîncercare la 401/403.
 export function qbitPostForm(
   url: string,
   path: string,
@@ -84,14 +79,10 @@ export function qbitPostForm(
   );
 }
 
-// Calea reală de pe disk a conținutului unui torrent — fișierul, pentru un
-// torrent cu un singur fișier; folderul, pentru unul cu mai multe.
-//
-// E singura sursă de adevăr pentru „unde e fișierul nostru": `torrent_name`
-// din `media` vine de pe Filelist și diferă adesea de ce a scris qBittorrent
-// pe disk (punctele devin spații, „DoVi.HDR" devine „DV HDR10P" ș.a.m.d.).
-// Ștergerea unui titlu se bazează pe asta de mult (vezi log.ts); legarea la
-// Plex are nevoie de ea ca să știe care versiune a unui film e a noastră.
+// Calea reală a conținutului unui torrent (fișierul unic sau folderul) — sursa
+// unică pentru „unde e fișierul nostru”: `torrent_name` de pe Filelist diferă
+// des de ce a scris qBittorrent pe disc. Ștergerea și legarea la Plex depind
+// de ea.
 export async function qbitContentPath(
   url: string,
   hash: string,
@@ -104,22 +95,15 @@ export async function qbitContentPath(
     const info = (await res.json()) as Array<{ content_path?: string }>;
     return info[0]?.content_path ?? null;
   } catch {
-    // Torrentul poate lipsi din qBittorrent (șters manual după descărcare) —
-    // apelantul are o rezervă, nu are rost să propagăm.
+    // Torrent șters din qBittorrent — apelantul are o rezervă.
     return null;
   }
 }
 
-// Rădăcina unui torrent pe disc — ce trebuie să dispară la ștergerea lui.
-// Diferă de content_path într-un singur caz, dar frecvent: torrent cu un
-// singur fișier pus într-un folder propriu ("Film-GRUP/Film-GRUP.mkv").
-// Acolo qBittorrent raportează ca content_path fișierul, nu folderul, deci o
-// ștergere pornită de la content_path lăsa folderul gol pe disc.
-//
-// Folderul rădăcină = primul segment, comun TUTUROR fișierelor. Un torrent
-// fără folder rădăcină poate avea totuși subfoldere („Subs/…") — acolo
-// primul segment al primului fișier nu e rădăcina. Fără node:path
-// intenționat — modulul ajunge și în bundle-ul de client.
+// Rădăcina unui torrent pe disc — ce dispare la ștergere. Diferă de
+// content_path la un fișier unic în folder propriu („Film-GRUP/Film-GRUP.mkv”),
+// unde ștergerea după content_path lăsa folderul gol. Rădăcina = primul segment
+// comun TUTUROR fișierelor. Fără node:path — modulul ajunge și în client.
 export function torrentRootPath(
   savePath: string,
   contentPath: string,
@@ -163,7 +147,7 @@ export interface QbitFileInfo {
   piece_range?: [number, number]; // pentru detectarea suprapunerii de piesă cu alte fișiere
 }
 
-// Listează fișierele unui torrent (pentru a găsi fișierul media + eventuale .srt).
+// Fișierele unui torrent (media și .srt).
 export async function qbitListFiles(
   url: string,
   hash: string,
@@ -175,9 +159,8 @@ export async function qbitListFiles(
   return (await res.json()) as QbitFileInfo[];
 }
 
-// Redenumește un fișier din interiorul unui torrent — trebuie făcut prin API,
-// nu direct pe disk, altfel qBittorrent pierde evidența fișierului și
-// consideră torrentul incomplet.
+// Redenumire în interiorul torrentului — prin API; direct pe disc, qBittorrent
+// pierde fișierul și consideră torrentul incomplet.
 export async function qbitRenameFile(
   url: string,
   hash: string,
@@ -194,12 +177,9 @@ export async function qbitRenameFile(
   if (!res.ok) throw new Error(`qBit renameFile HTTP ${res.status}`);
 }
 
-// Exclude (prioritate 0) sau reinclude un fișier din setul "wanted" al unui
-// torrent. Folosit înainte de a modifica direct pe disc conținutul unui .srt
-// existent (conversie encoding) — bytes-ii nu mai corespund hash-ului piesei
-// din .torrent, iar excluderea fișierului face ca un eventual "Force Recheck"
-// să nu-l mai re-verifice/redescarce (revenind la varianta greșit codată) și
-// să nu-l mai ofere la seed altor peers (ar ieși ca hash mismatch pentru ei).
+// Exclude (prioritate 0) sau reinclude un fișier. Înainte de a rescrie un .srt
+// pe disc: bytes-ii nu mai corespund piesei, iar excluderea împiedică un
+// recheck să-l redescarce și seed-ul să trimită bytes greșiți.
 export async function qbitSetFilePriority(
   url: string,
   hash: string,

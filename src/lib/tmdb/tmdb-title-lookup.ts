@@ -1,9 +1,5 @@
-// ---------------------------------------------------------------------------
-// Lookup titlu film/serial pornind de la un IMDb id — folosit ca să afișăm
-// în jurnal/notificări titlul real ("The Death of Robin Hood"), nu numele
-// tehnic al lansării ("The.Death.of.Robin.Hood.2026.1080p.AMZN.WEB-DL...").
-// Vezi src/lib/filelist/subtitles.ts pentru contextul de utilizare.
-// ---------------------------------------------------------------------------
+// Titlul unui film/serial după IMDb id — pentru jurnal și notificări, în locul
+// numelui tehnic al lansării.
 
 import { tmdbFetch } from "./tmdb-client";
 import { parseSeasonEpisodeFromName } from "../media/torrent-name-parse";
@@ -16,8 +12,7 @@ interface TmdbFindResponse {
 const titleCache = new Map<string, { expiresAt: number; title: string | null }>();
 const TITLE_CACHE_TTL = 60 * 60_000; // titlurile nu se schimbă — cache lung
 
-// Fail-soft: null la orice eroare (lipsă TMDB_API_KEY, IMDb id necunoscut pe
-// TMDB, timeout etc.) — apelantul cade pe numele tehnic al lansării.
+// Fail-soft: null la orice eroare — apelantul cade pe numele lansării.
 export async function lookupTitleByImdbId(imdbId: string): Promise<string | null> {
   const key = imdbId.trim();
   if (!key) return null;
@@ -40,12 +35,9 @@ export async function lookupTitleByImdbId(imdbId: string): Promise<string | null
 }
 
 // ---------------------------------------------------------------------------
-// Nume de afișat în jurnal/notificări push, pornind de la un IMDb id — titlu
-// RO (cu fallback EN dacă TMDB n-are traducere) + An, pentru filme; pentru
-// seriale, "Titlu — SxxExx — Titlu episod" dacă numele lansării conține un
-// tipar SxxExx recunoscut (pachetele de sezon/nume neregulate cad pe doar
-// titlul serialului). Fail-soft: fără IMDb id sau la orice eroare TMDB,
-// întoarce numele tehnic al lansării neschimbat.
+// Numele afișat în jurnal și push: titlul românesc (sau englez) + anul la
+// filme; la seriale „Titlu — SxxEyy — Titlu episod” când numele are SxxEyy.
+// Fail-soft: altfel numele tehnic al lansării.
 // ---------------------------------------------------------------------------
 
 interface TmdbFindItem {
@@ -74,11 +66,8 @@ interface TmdbAlternativeTitlesResponse {
   results?: TmdbAlternativeTitle[]; // /tv/{id}/alternative_titles
 }
 
-// TMDB nu are întotdeauna o traducere ro-RO a titlului (câmpul `title` cade
-// atunci pe engleză) — dar are des un titlu românesc listat separat ca "AKA"
-// (alternative_titles, iso_3166_1 "RO"), exact ce arată și IMDb la "also
-// known as". Apelat doar când traducerea normală a picat pe engleză, ca să nu
-// adăugăm un fetch în plus la fiecare căutare.
+// Fără traducere ro-RO, TMDB are des un titlu românesc „AKA” (alternative_titles
+// RO), ca pe IMDb. Cerut doar când traducerea a căzut pe engleză.
 export async function findRomanianAkaTitle(
   mediaType: "movie" | "tv",
   id: number,
@@ -107,9 +96,7 @@ export interface TmdbBasicInfo {
 
 const infoCache = new Map<string, { expiresAt: number; value: TmdbBasicInfo | null }>();
 
-// Exportată (era privată) — folosită și de download.ts, ca să rezolve
-// metadatele TMDB ale unui torrent descărcat manual din Filelist (fără
-// context TMDB trimis din UI), pornind doar de la IMDb id-ul torrentului.
+// Metadatele TMDB pornind doar de la IMDb id — și pentru descărcările manuale.
 export async function lookupTmdbInfoByImdbId(imdbId: string): Promise<TmdbBasicInfo | null> {
   const key = imdbId.trim();
   if (!key) return null;
@@ -134,7 +121,7 @@ export async function lookupTmdbInfoByImdbId(imdbId: string): Promise<TmdbBasicI
       const roTitle = movie.title?.trim();
       const enTitle = enMovie?.title?.trim();
       let title = roTitle || enTitle || "";
-      // ro-RO n-a întors o traducere reală (a picat pe engleză) — încercăm AKA.
+      // Fără traducere reală — încercăm AKA.
       if (!roTitle || roTitle === enTitle) {
         title = (await findRomanianAkaTitle("movie", movie.id)) || title;
       }
@@ -173,9 +160,7 @@ export async function lookupTmdbInfoByImdbId(imdbId: string): Promise<TmdbBasicI
   return info;
 }
 
-// Poster (URL complet, gata de folosit) pentru un IMDb id — folosit ca imagine
-// mare în notificările push de torrent. Reutilizează cache-ul de mai sus
-// (aceeași cerere TMDB ca la rezolvarea titlului), fără cerere suplimentară.
+// Posterul pentru un IMDb id (notificările push), din același cache.
 export async function lookupPosterUrlByImdbId(imdbId: string): Promise<string | null> {
   const info = await lookupTmdbInfoByImdbId(imdbId);
   return info?.posterPath ? `https://image.tmdb.org/t/p/w500${info.posterPath}` : null;
@@ -198,9 +183,8 @@ export async function buildTorrentDisplayName(
 
   const seasonPad = String(parsed.season).padStart(2, "0");
   if (parsed.episode === null) {
-    // Pachet de sezon complet (fără Exx în nume) — FileList înlocuiește des
-    // episoadele individuale cu un pachet la câteva ore după ultimul episod
-    // lansat; nu-l etichetăm greșit ca fiind un singur episod.
+    // Pachet de sezon (fără Exx) — Filelist înlocuiește des episoadele cu un
+    // pachet după ultimul episod.
     return `${info.title} — Sezonul ${parsed.season} (pachet complet)`;
   }
 
@@ -211,12 +195,9 @@ export async function buildTorrentDisplayName(
 }
 
 // ---------------------------------------------------------------------------
-// Căutare IMDb id pornind de la numele tehnic al unei lansări — folosită
-// când torrentul n-a fost descărcat prin site (deci n-avem IMDb id salvat în
-// jurnalul propriu). Extrage un titlu + an aproximativ din numele lansării,
-// caută pe TMDB, și confirmă rezultatul citind IMDb id-ul lui — dacă TMDB nu
-// găsește nimic sigur, întoarce null (nu ghicim, mai bine sărim peste decât
-// să asociem greșit un IMDb id).
+// IMDb id-ul după numele tehnic al lansării (torrente adăugate direct în
+// qBittorrent): titlu + an din nume, căutat pe TMDB și confirmat; null dacă
+// nu e sigur — mai bine fără decât asociat greșit.
 // ---------------------------------------------------------------------------
 
 const SEARCH_TAG_CUTOFF =
@@ -262,8 +243,7 @@ interface ImdbSearchResult {
 
 const searchCache = new Map<string, { expiresAt: number; value: ImdbSearchResult | null }>();
 
-// Fail-soft: null la orice eroare sau lipsă rezultat — apelantul rămâne fără
-// IMDb id (cade pe numele tehnic al lansării, fără căutare pe OpenSubtitles).
+// Fail-soft: null — apelantul rămâne fără IMDb id.
 export async function searchImdbIdByReleaseName(
   releaseName: string,
   mediaType?: "movie" | "tv",

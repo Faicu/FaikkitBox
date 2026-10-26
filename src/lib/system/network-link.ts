@@ -1,29 +1,12 @@
 // ---------------------------------------------------------------------------
-// Starea legăturii Ethernet a serverului + renegociere.
+// Starea legăturii Ethernet și renegocierea ei (`ethtool -r`, doar
+// auto-negocierea). Legătura se reașeza pe 100 Mb/s deși ambele capete duc
+// 1000; cauza (6 sept. 2026) era un cablu defect — `dmesg` arăta
+// „100Mbps/Full (downshifted)” și 84 de căderi în 24h. Un `degraded: true`
+// persistent înseamnă cel mai probabil tot un cablu sau port stricat:
+// verifică `dmesg | grep downshifted` înainte de a renegocia la nesfârșit.
 //
-// Problemă reală, recurentă: auto-negocierea se reașază pe 100 Mb/s și rămâne
-// acolo, deși ambele capete suportă 1000. Diagnosticat pe 2026-09-05 exact în
-// starea asta:
-//   interfața suportă  2500baseT/Full
-//   routerul anunță    1000baseT/Full
-//   negociat           100 Mb/s
-// Leacul e `ethtool -r`, care repornește doar auto-negocierea, fără să atingă
-// configurația interfeței.
-//
-// CAUZA, găsită abia pe 2026-09-06: cablul Ethernet era defect, nu "atins din
-// greșeală", cum presupusesem inițial aici. Semnătura în dmesg era clară —
-// linkul revenea ca `100Mbps/Full (downshifted)`, adică perechile deteriorate
-// nu reușeau să antreneze gigabit — plus 84 de căderi de link în 24h. După
-// înlocuirea cablului: 1Gbps/Full stabil, fără flap-uri.
-//
-// Butonul rămâne, ca diagnostic și ca leac dacă negocierea se mai împotmolește
-// vreodată, dar în funcționare normală n-ar trebui să mai fie nevoie de el. Un
-// `degraded: true` persistent înseamnă acum, cel mai probabil, tot un cablu
-// (sau un port) stricat — verifică `dmesg | grep downshifted` înainte de a da
-// pe renegociere la nesfârșit.
-//
-// Fișierul e server-only (node:fs, node:child_process). Server functions stau
-// în network-link.functions.ts — vezi comentariul de acolo.
+// Server-only; server functions în network-link.functions.ts.
 // ---------------------------------------------------------------------------
 
 import { execFile } from "node:child_process";
@@ -45,8 +28,7 @@ export interface NetworkLinkInfo {
   error?: string;
 }
 
-// Interfața rutei implicite, citită din /proc/net/route — fără să pornim
-// procese. Linia cu Destination 00000000 e ruta implicită.
+// Interfața rutei implicite (Destination 00000000), din /proc/net/route.
 async function defaultRouteIface(): Promise<string | null> {
   try {
     const raw = await readFile("/proc/net/route", "utf8");
@@ -55,7 +37,7 @@ async function defaultRouteIface(): Promise<string | null> {
       if (cols.length > 2 && cols[1] === "00000000") return cols[0];
     }
   } catch {
-    // /proc indisponibil — cădem pe null, apelantul raportează necunoscut
+    // /proc indisponibil — necunoscut.
   }
   return null;
 }
@@ -68,16 +50,14 @@ async function readSysFile(iface: string, name: string): Promise<string | null> 
   }
 }
 
-// Extrage vitezele (în Mb/s) dintr-un bloc de moduri ethtool, ex.
-// "1000baseT/Full" -> 1000. "2500baseT/Full" -> 2500.
+// Vitezele în Mb/s dintr-un bloc de moduri ethtool („1000baseT/Full” → 1000).
 function maxModeSpeed(block: string): number | null {
   const speeds = [...block.matchAll(/(\d+)base/g)].map((m) => Number(m[1]));
   return speeds.length ? Math.max(...speeds) : null;
 }
 
-// Ce viteză e realist atins: minimul dintre ce suportă placa noastră și ce
-// anunță celălalt capăt. Fără partea de "link partner" am compara cu 2500,
-// deși routerul nu poate decât 1000 — și butonul ar părea mereu necesar.
+// Viteza realistă: minimul dintre placa noastră și celălalt capăt — fără
+// „link partner” am compara cu 2500, iar butonul ar părea mereu necesar.
 async function expectedFromEthtool(iface: string): Promise<number | null> {
   try {
     const { stdout } = await execFileAsync("sudo", ["ethtool", iface], { timeout: 5000 });
@@ -139,11 +119,8 @@ export async function renegotiateLink(): Promise<RenegotiateResult> {
   if (!iface) return { ok: false, error: "Nu am putut determina interfața rutei implicite" };
 
   try {
-    // Rulăm DETAȘAT, peste o secundă: `ethtool -r` face legătura să cadă și să
-    // revină (2-5s), iar cererea HTTP curentă circulă chiar pe ea. Executat
-    // inline, răspunsul n-ar mai ajunge niciodată la telefon și butonul ar
-    // părea că a eșuat, deși comanda a mers. Cu întârzierea asta, răspunsul
-    // pleacă înainte ca legătura să pice.
+    // DETAȘAT, peste o secundă: `ethtool -r` face legătura să cadă 2–5s, iar
+    // răspunsul HTTP circulă chiar pe ea — altfel butonul ar părea eșuat.
     await execFileAsync(
       "sudo",
       [

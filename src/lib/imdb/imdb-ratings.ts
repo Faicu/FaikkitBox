@@ -1,20 +1,12 @@
 // ---------------------------------------------------------------------------
-// Rating-urile IMDb (notă + număr de voturi) — afișate în grilele Descoperă,
-// în locul notei TMDB, care diferă vizibil de IMDb.
+// Rating-urile IMDb pentru Descoperă, în locul notei TMDB. Sursa e datasetul
+// oficial (title.ratings.tsv.gz, ~1,7 mil. titluri), regenerat zilnic — cel
+// mult o zi întârziere. OMDb a fost respins (terț, întârzieri mai mari la
+// titlurile noi).
 //
-// Sursa e datasetul oficial IMDb (title.ratings.tsv.gz, ~1,7 milioane de
-// titluri, ~8 MB), regenerat de IMDb o dată pe zi. Nu e în timp real: cifrele
-// au cel mult o zi întârziere. Alternativa OMDb (cheie API, 1000 cereri/zi)
-// a fost respinsă: e un serviciu terț, cu întârzieri nepublicate, mai mari
-// tocmai la titlurile noi.
-//
-// Baza e un fișier SQLite separat (data/imdb-ratings.db), nu un tabel în
-// faikkitbox.db: are ~35 MB, se poate reface oricând din dataset și n-are ce
-// căuta în cele 14 backup-uri zilnice ale bazei principale. Importul scrie un
-// fișier nou, alături, și îl mută peste cel vechi abia la final — o citire în
-// timpul importului vede datele de ieri, nu un tabel pe jumătate gol.
-//
-// Rulat de sarcina imdb-ratings din Watcher. Server-only (node:sqlite, node:fs).
+// Bază separată (data/imdb-ratings.db, ~35 MB): se reface oricând și n-are ce
+// căuta în backup-uri. Importul scrie un fișier nou și îl mută peste cel vechi
+// abia la final. Server-only.
 // ---------------------------------------------------------------------------
 
 import { DatabaseSync } from "node:sqlite";
@@ -25,10 +17,10 @@ import { createGunzip } from "node:zlib";
 import { createInterface } from "node:readline";
 
 const DATASET_URL = "https://datasets.imdbws.com/title.ratings.tsv.gz";
-// 23h, nu 24h: verificarea e din oră în oră (vezi src/lib/watcher/tasks.ts).
+// 23h, nu 24h: tactul de reîncercare e orar.
 const IMPORT_MIN_AGE_MS = 23 * 60 * 60 * 1000;
-// Rânduri per tranzacție. Între loturi cedăm event loop-ul: un import de 1,7
-// milioane de rânduri dintr-o bucată ar bloca serverul câteva secunde.
+// Rânduri per tranzacție; între loturi cedăm event loop-ul (altfel importul
+// ar bloca serverul câteva secunde).
 const BATCH = 50_000;
 
 export interface ImdbRating {
@@ -57,15 +49,14 @@ function readMeta(database: DatabaseSync, key: string): string | null {
   return row?.value ?? null;
 }
 
-// „tt0111161" → 111161. Cheia numerică ține tabelul compact (rowid direct).
+// „tt0111161” → 111161 (rowid direct, tabel compact).
 function imdbNumber(imdbId: string): number | null {
   const m = imdbId.trim().match(/^tt(\d{7,9})$/i);
   return m ? Number(m[1]) : null;
 }
 
-// Rating-urile pentru o listă de IMDb id-uri. Lipsesc din rezultat titlurile
-// pe care IMDb nu le are în dataset (încă fără voturi) și id-urile invalide.
-// Map gol dacă baza nu există încă (primul import n-a rulat).
+// Rating-urile unei liste de IMDb id-uri; lipsesc titlurile fără voturi și
+// id-urile invalide. Map gol înainte de primul import.
 export function getImdbRatings(imdbIds: Iterable<string>): Map<string, ImdbRating> {
   const out = new Map<string, ImdbRating>();
   let database: DatabaseSync | null;
@@ -95,8 +86,7 @@ function lastCheckedAt(): number | null {
   }
 }
 
-// Când devine scadentă următoarea verificare — Watcher-ul o programează exact
-// atunci, nu din oră în oră. Null = încă niciuna, deci acum.
+// Ora următoarei verificări; null = încă niciuna, deci acum.
 export function nextImdbCheckAt(): number | null {
   const last = lastCheckedAt();
   return last === null ? null : last + IMPORT_MIN_AGE_MS;
@@ -158,10 +148,8 @@ async function importInto(tmpFile: string, body: ReadableStream<Uint8Array>, eta
   }
 }
 
-// Reîmprospătează baza dacă ultima verificare e mai veche de 23h (sau oricând,
-// cu `force` — „Rulează acum” din Watcher). Dataset-ul neschimbat (același
-// ETag) costă o singură cerere 304, fără import. Întoarce ce s-a întâmplat,
-// pentru rezumatul din Watcher.
+// Reîmprospătează baza dacă ultima verificare are peste 23h (sau oricând, cu
+// `force`). Un dataset neschimbat costă o cerere 304.
 let running = false;
 
 type ImdbRefreshResult = "skipped" | "unchanged" | { imported: number };
@@ -184,7 +172,7 @@ export async function refreshImdbRatingsIfDue(
     });
 
     if (res.status === 304 && current) {
-      // Baza e deschisă read-only — marcajul se scrie printr-o conexiune scurtă.
+      // Baza e read-only — marcajul printr-o conexiune scurtă.
       const rw = new DatabaseSync(file);
       try {
         rw.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('checked_at', ?)").run(

@@ -1,22 +1,11 @@
 // ---------------------------------------------------------------------------
-// Acțiunile pe servicii: Restart și Update pentru Plex, Immich, qBittorrent și
-// Ubuntu — un singur mecanism pentru toate.
+// Restart și Update pentru Plex, Immich, qBittorrent și Ubuntu — un singur
+// mecanism. Comanda rulează în fundal pe server, iar starea și ieșirea stau în
+// `service_jobs`: rulată în cererea HTTP, era tăiată de Cloudflare la un update
+// lung, iar jurnalul se pierdea. O singură acțiune odată, pe toate serviciile
+// (un `apt-get upgrade` poate atinge docker).
 //
-// Înainte, fiecare buton rula comanda ÎN cererea HTTP (până la 30 de minute),
-// iar jurnalul îl scria browserul, după răspuns. Aplicația trece prin
-// Cloudflare Tunnel, care taie cererile lungi, deci la un update lung pagina
-// primea eroare, deși comanda continua, iar intrarea din jurnal se pierdea.
-// Ubuntu avea în plus propriul cod, separat, cu alt comportament.
-//
-// Acum: pornirea întoarce imediat, comanda rulează în fundal pe server, starea
-// și ieșirea se scriu în `service_jobs`, iar jurnalul îl scrie serverul, la
-// final. O singură acțiune odată, pe toate serviciile: un `apt-get upgrade`
-// poate atinge docker, iar două acțiuni simultane pe același serviciu s-ar
-// călca pe picioare.
-//
-// Comenzile de mai jos trebuie să existe identic în
-// deploy/hardening/faikkitbox.sudoers — altfel sudo le refuză.
-//
+// Comenzile trebuie să existe identic în deploy/hardening/faikkitbox.sudoers.
 // Server-only (node:child_process).
 // ---------------------------------------------------------------------------
 
@@ -43,18 +32,16 @@ const compose = (file: string, ...args: string[]): Step => ({
   argv: ["sudo", "-n", "/usr/bin/docker", "compose", "-f", file, ...args],
 });
 
-// null = acțiune inexistentă (qBittorrent nu se actualizează niciodată din
-// aplicație; repornirea Ubuntu e tratată separat, vezi rebootUbuntu).
+// null = acțiune inexistentă (qBittorrent nu se actualizează din aplicație;
+// repornirea Ubuntu e separată).
 export function jobSteps(service: ServiceKey, kind: JobKind): Step[] | null {
   switch (`${service}:${kind}`) {
     case "plex:restart":
       return [compose(PLEX_COMPOSE, "restart")];
     case "plex:update":
-      // Imaginea `beta` își instalează singură ultima versiune Plex la
-      // pornirea containerului (cont-init.d/50-plex-update), deci containerul
-      // trebuie recreat chiar dacă imaginea n-a avut ce descărca — un `up -d`
-      // simplu nu l-ar atinge. `pull` întâi, cu Plex încă pornit: oprirea
-      // durează cât repornirea, nu cât descărcarea.
+      // Imaginea `beta` își instalează singură ultima versiune Plex la pornire,
+      // deci containerul se recreează chiar fără imagine nouă. `pull` întâi, cu
+      // Plex încă pornit — oprirea durează cât repornirea.
       return [compose(PLEX_COMPOSE, "pull"), compose(PLEX_COMPOSE, "up", "-d", "--force-recreate")];
     case "immich:restart":
       return [compose(IMMICH_COMPOSE, "restart")];
@@ -68,10 +55,8 @@ export function jobSteps(service: ServiceKey, kind: JobKind): Step[] | null {
         { argv: ["sudo", "-n", "/usr/bin/systemctl", "restart", "qbittorrent-nox"] },
       ];
     case "ubuntu:update": {
-      // Fără nicio întrebare interactivă: fișierele de configurare modificate
-      // local se păstrează (confold), cele nemodificate se înlocuiesc
-      // (confdef). DEBIAN_FRONTEND trece prin sudo datorită env_keep din
-      // sudoers.
+      // Fără întrebări: configurările modificate local rămân (confold), restul
+      // se înlocuiesc (confdef). DEBIAN_FRONTEND trece prin env_keep din sudoers.
       const env = { DEBIAN_FRONTEND: "noninteractive" };
       return [
         { argv: ["sudo", "-n", "/usr/bin/apt-get", "update"], env },
@@ -119,9 +104,8 @@ export function runningJob(): ServiceJob | null {
   return r ? rowToJob(r) : null;
 }
 
-// Ultima acțiune a fiecărui serviciu — ce afișează paginile. Se cere la 2s
-// cât una rulează, deci ieșirea (până la 64 KB) pleacă doar cât e încă de
-// afișat.
+// Ultima acțiune a fiecărui serviciu. Cerută la 2s cât rulează, deci ieșirea
+// (până la 64 KB) se trimite doar cât e de afișat.
 export function latestJobs(): Partial<Record<ServiceKey, ServiceJob>> {
   const rows = getDb()
     .prepare(
@@ -142,8 +126,8 @@ export function latestJobs(): Partial<Record<ServiceKey, ServiceJob>> {
 // Istoricul complet stă în jurnal; aici contează doar ultimele acțiuni.
 const KEEP_JOBS = 50;
 
-// La finalul fiecărei acțiuni: tabela nu crește la nesfârșit, iar versiunile
-// se recitesc la următoarea cerere — butonul Update dispare singur.
+// La final: tabela nu crește la nesfârșit, iar versiunile se recitesc —
+// butonul Update dispare singur.
 async function afterJob(): Promise<void> {
   getDb()
     .prepare(
@@ -302,9 +286,8 @@ function runStep(
   });
 }
 
-// Repornirea sistemului omoară și procesul nostru, deci totul se scrie
-// ÎNAINTE: acțiunea e marcată reușită și jurnalul completat, apoi se cere
-// reboot-ul. Dacă sudo îl refuză, starea se corectează imediat.
+// Repornirea omoară și procesul nostru, deci totul se scrie ÎNAINTE; dacă sudo
+// o refuză, starea se corectează imediat.
 async function rebootUbuntu(): Promise<number> {
   const { readUbuntuStatus } = await import("./ubuntu-status");
   const st = await readUbuntuStatus();
@@ -336,8 +319,7 @@ async function rebootUbuntu(): Promise<number> {
   return id;
 }
 
-// La pornirea aplicației: o acțiune rămasă „running” a murit odată cu
-// procesul anterior (systemd oprește și procesele copil).
+// La pornire: o acțiune rămasă „running” a murit cu procesul anterior.
 export async function markInterruptedJobs(): Promise<void> {
   const db = getDb();
   const rows = db.prepare("SELECT * FROM service_jobs WHERE status = 'running'").all() as Record<

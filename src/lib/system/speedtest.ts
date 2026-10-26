@@ -1,14 +1,7 @@
 // ---------------------------------------------------------------------------
-// Speedtest — implementarea, server-only.
-//
-// Fișierul are importuri server statice (node:child_process, node:crypto) și
-// atinge DB-ul. Server function-urile stau în speedtest.functions.ts, care e
-// importat de tehnic.tsx și queries.ts — deci ajunge în bundle-ul de client.
-// Înainte, importurile astea erau chiar acolo, static: exact tiparul care a
-// produs eroarea `dirname` la update-ul Plex (node:path stub-uit în client).
-//
-// Rularea e DECUPLATĂ de cererea HTTP care o pornește: starea trăiește în
-// modul, nu în request. Vezi startSpeedtestRun.
+// Speedtest — implementarea, server-only (server functions în
+// speedtest.functions.ts, importat și de client — tiparul care a produs eroarea
+// `dirname`). Rularea e decuplată de cererea HTTP: starea trăiește în modul.
 // ---------------------------------------------------------------------------
 
 import { execFile } from "node:child_process";
@@ -40,11 +33,9 @@ export type SpeedtestResult = {
   resultUrl?: string;
 };
 
-// Testul rulează DOAR pe serverul Digi București (Ookla 11494) — rezultatele
-// trebuie să fie comparabile între ele. speedtest-cli (Python) nu poate ținti
-// serverul ăsta („No matched servers: 11494”) și alegea unul la întâmplare
-// (ex. Harkov), așa că nu mai e folosit ca fallback: dacă Ookla eșuează,
-// utilizatorul vede eroarea, nu un rezultat de pe alt server.
+// Doar serverul Digi București (Ookla 11494), ca rezultatele să fie
+// comparabile. speedtest-cli nu-l poate ținti și alegea unul la întâmplare, deci
+// nu mai e rezervă: un eșec Ookla se arată ca eroare.
 const SPEEDTEST_SERVER_ID = 11494;
 
 function speedtestBinaries(): string[] {
@@ -110,7 +101,7 @@ async function saveToHistory(result: SpeedtestResult) {
       result.server?.name ?? null,
       result.resultUrl ?? null,
     );
-    // Păstrăm doar ultimele 30
+    // Ultimele 30.
     db.prepare(
       `DELETE FROM speedtest_history WHERE id NOT IN (
         SELECT id FROM speedtest_history ORDER BY timestamp DESC LIMIT 30
@@ -187,9 +178,8 @@ export async function readHistory(): Promise<SpeedtestHistoryEntry[]> {
   }
 }
 
-// Folosește primul binar Ookla găsit. Doar lipsa binarului (ENOENT) trece la
-// următorul candidat; orice altă eroare e eroarea reală a testului și se
-// aruncă direct — apelantul (startSpeedtestRun) o ține în stare.
+// Primul binar Ookla găsit; doar ENOENT trece la următorul, orice altă eroare
+// e a testului.
 async function executeSpeedtest(): Promise<SpeedtestResult> {
   for (const bin of speedtestBinaries()) {
     let stdout: string;
@@ -219,27 +209,20 @@ async function executeSpeedtest(): Promise<SpeedtestResult> {
 }
 
 // ---------------------------------------------------------------------------
-// Starea rulării — în modul, nu în cererea HTTP.
-//
-// Testul durează 30-60s. Dacă browserul se închide sau Android îngheață PWA-ul
-// minimizat, cererea moare — dar rularea nu trebuie să moară cu ea. De aceea
-// startSpeedtestRun pornește promisiunea și returnează IMEDIAT: nimic din
-// rulare nu mai depinde de conexiune.
-//
-// Clientul află ce se întâmplă interogând getSpeedtestState, deci vede corect
-// "în curs" chiar dacă a redeschis aplicația la mijlocul testului.
+// Starea rulării, în modul: testul durează 30–60s, iar cererea poate muri
+// (browser închis, PWA înghețat). startSpeedtestRun pornește și întoarce
+// imediat; clientul întreabă getSpeedtestState, deci vede „în curs” și după
+// redeschidere.
 // ---------------------------------------------------------------------------
 
 export type SpeedtestState = {
   running: boolean;
   startedAt: string | null;
-  /** Momentul în care s-a încheiat ultima rulare — cheia după care clientul
-   *  recunoaște o rulare nouă față de una deja raportată. */
+  /** Când s-a încheiat ultima rulare — după asta clientul recunoaște una nouă. */
   finishedAt: string | null;
   /** Rezultatul ultimei rulări încheiate cu succes. */
   result: SpeedtestResult | null;
-  /** Mesajul ultimei rulări eșuate. Ținut doar în memorie: rularea moare
-   *  oricum la restart de server, deci nu are ce supraviețui separat. */
+  /** Eroarea ultimei rulări eșuate — doar în memorie (rularea moare oricum la restart). */
   error: string | null;
 };
 
@@ -267,9 +250,7 @@ export function startSpeedtestRun(): { started: boolean } {
     error: null,
   };
 
-  // `void`: deliberat neașteptat. Handler-ul server function-ului se întoarce
-  // fără să aștepte, deci răspunsul pleacă la client în milisecunde, iar
-  // rularea continuă în procesul serverului.
+  // `void`, deliberat: răspunsul pleacă imediat, rularea continuă pe server.
   void executeSpeedtest()
     .then(async (result) => {
       await saveToHistory(result);

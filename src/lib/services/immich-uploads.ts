@@ -1,22 +1,13 @@
 // ---------------------------------------------------------------------------
-// Urmărirea încărcărilor în Immich — rulată de sarcina immich-uploads din
-// Watcher (src/lib/watcher/tasks.ts), la 5 minute.
+// Încărcările în Immich, în jurnal — sarcina immich-uploads din Watcher.
+// Varianta veche rula doar cât era deschisă pagina Immich și pornea de la zero
+// la fiecare repornire: 285 de încărcări într-o lună, zero intrări (26 sept.
+// 2026).
 //
-// Varianta veche compara contoarele per utilizator din /server/statistics și
-// ținea punctul de plecare în memorie. Rula doar cât era deschisă pagina
-// Immich (verificarea mergea pe spinarea cererii de statistici), iar prima
-// verificare după fiecare repornire doar nota contoarele. Rezultatul, găsit pe
-// 26 sept. 2026: 285 de încărcări în 30 de zile, zero intrări în jurnal.
-//
-// Acum: cerem Immich-ului exact ce s-a încărcat de la ultima verificare
-// (search/metadata cu createdAfter = momentul încărcării, nu data EXIF), iar
-// punctul de plecare stă în DB (immich_upload_tracker). O încărcare = o
-// intrare: ce s-a găsit se adună în `pending` și se scrie în jurnal abia când
-// o verificare nu mai găsește nimic nou la acel utilizator.
-//
-// Căutarea vede asset-urile utilizatorului căruia îi aparține cheia API (și pe
-// cele partajate cu el). Pe server există un singur utilizator Immich; la mai
-// mulți, cheia ar trebui să fie a unui cont care îi vede pe toți.
+// Acum cerem exact ce s-a încărcat de la ultima verificare (după momentul
+// încărcării, nu EXIF), cu punctul de plecare în DB. O încărcare = o intrare,
+// scrisă când o verificare nu mai găsește nimic nou la acel utilizator.
+// Căutarea vede asset-urile contului cheii API — pe server e un singur cont.
 // ---------------------------------------------------------------------------
 
 import { getDb } from "../db";
@@ -60,10 +51,8 @@ export function buildImmichUploadMessage(userName: string, p: PendingUpload): st
   return `${userName} a încărcat ${parts.join(" și ")} ${when}`;
 }
 
-// Ce vede utilizatorul în galerie, nu numărul brut de asset-uri: un Live Photo
-// e o poză plus un videoclip-pereche (legat prin livePhotoVideoId, ascuns) —
-// numărat o singură dată, ca poză. Aceeași regulă ca la „încărcări azi”
-// din immich.ts.
+// Ce vede utilizatorul în galerie: un Live Photo (poză + video ascuns) se
+// numără o dată — ca la „încărcări azi” din immich.ts.
 export function countVisible(
   items: ImmichAsset[],
 ): Map<string, { photos: number; videos: number }> {
@@ -97,8 +86,7 @@ export async function checkImmichUploads(): Promise<void> {
     return;
   }
 
-  // O eroare aici aruncă mai departe fără să mute checked_until — verificarea
-  // următoare cere din nou același interval, deci nu se pierde nimic.
+  // O eroare nu mută checked_until — intervalul se cere din nou.
   let items: ImmichAsset[] = [];
   let page: number | string | null = 1;
   for (let guard = 0; page != null && guard < 20; guard++) {
@@ -137,8 +125,8 @@ export async function checkImmichUploads(): Promise<void> {
     };
   }
 
-  // Încărcările încheiate: nimic nou la acest utilizator de la verificarea
-  // trecută. Numele vin din statistici, cerute doar când chiar e ceva de scris.
+  // Încărcările încheiate (nimic nou de data trecută); numele vin din
+  // statistici, cerute doar la nevoie.
   const done = Object.keys(pending).filter((owner) => !found.has(owner));
   if (done.length > 0) {
     const stats = await fetchJson<{
@@ -166,7 +154,7 @@ export async function checkImmichUploads(): Promise<void> {
   );
 }
 
-// Pentru pagina Immich: până unde s-a verificat și ce încărcare e în curs.
+// Pentru Watcher: până unde s-a verificat și ce încărcare e în curs.
 export function readImmichTrackerState(): {
   checkedUntil: string | null;
   inProgress: number;
