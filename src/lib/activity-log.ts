@@ -34,11 +34,8 @@ export type ActivityType =
 
 export type JsonValue = string | number | boolean | null | undefined;
 
-// Valorile din meta acceptă și array de obiecte plate (ex. subtitle_fix
-// atașează lista per-torrent ca meta.items) — logActivity/getActivityLog
-// serializează/deserializează tot blob-ul cu JSON.stringify/parse dintr-o
-// dată, deci runtime-ul suportă deja structuri nested; doar tipul era
-// restricționat la primitive.
+// Meta acceptă și liste de obiecte plate (ex. meta.items la subtitle_fix) —
+// blob-ul e serializat întreg cu JSON.
 export type ActivityMetaValue = JsonValue | Record<string, JsonValue>[];
 
 export interface ActivityEntry {
@@ -47,8 +44,8 @@ export interface ActivityEntry {
   type: ActivityType;
   message: string;
   meta?: Record<string, ActivityMetaValue>;
-  // Doar la torrente: titlul din Bibliotecă (filmul sau serialul), rezolvat
-  // la citire din `media` — lipsește dacă titlul a fost șters între timp.
+  // La torrente: titlul din Bibliotecă, rezolvat la citire; lipsește dacă a
+  // fost șters.
   mediaId?: number;
 }
 
@@ -65,14 +62,11 @@ export async function logActivity(
     image?: string | null;
     url?: string;
     title?: string;
-    // Tag-ul notificării push: una nouă cu același tag o înlocuiește pe cea
-    // veche pe dispozitiv (torrent: inițiată → completă; Plex: început →
-    // încheiat).
+    // Tag-ul push: o notificare nouă cu același tag o înlocuiește pe cea veche
+    // (torrent: inițiată → completă; Plex: început → încheiat).
     tag?: string;
-    // Momentul real al evenimentului, când diferă de "acum" — folosit pentru
-    // opririle detectate retroactiv la pornirea următoare (SIGKILL, pană de
-    // curent). Fără el, o oprire de acum două zile ar apărea în jurnal ca
-    // fiind de adineauri.
+    // Momentul real, când diferă de „acum” — opririle detectate retroactiv ar
+    // apărea altfel ca fiind de adineauri.
     timestamp?: string;
   },
 ): Promise<void> {
@@ -92,9 +86,7 @@ export async function logActivity(
     console.warn("[activity-log] Eroare la logActivity:", e);
   }
 
-  // Trimite notificare push (fire and forget) — tipurile cu titlu gol nu
-  // trimit push, la fel ca apelurile care cer explicit skipPush (ex.
-  // subtitle_fix pentru o descărcare unde n-a fost nevoie de nicio corecție)
+  // Push fire-and-forget; fără push la tipurile cu titlu gol și la skipPush.
   const pushTitle = options?.title ?? PUSH_TITLES[type];
   if (pushTitle && !options?.skipPush) {
     import("./notifications/push")
@@ -113,15 +105,12 @@ export async function logActivity(
 // Server function: citire log pentru UI
 // ---------------------------------------------------------------------------
 
-// getActivityLog trăiește acum în activity-log.functions.ts — vezi comentariul
-// de acolo: modulul ăsta are importuri server statice (node:crypto) și e
-// rădăcina care târa db.ts în bundle-ul de client.
+// getActivityLog e în activity-log.functions.ts — modulul ăsta are importuri
+// server statice și târa db.ts în bundle-ul de client.
 
-// `cursor` = cel mai mare rowid din tabel: clientul cere apoi doar intrările
-// scrise după el (`afterRowid`). După rowid, nu după `timestamp` — unele
-// intrări se scriu cu ora din trecut (oprirea unei vizionări e datată la
-// ultimul heartbeat), deci ar fi sărite de o citire după oră. Intrările nu se
-// modifică după scriere; se șterg doar cele mai vechi de 30 de zile.
+// `cursor` = cel mai mare rowid; clientul cere apoi doar ce e după el. După
+// rowid, nu după timestamp: unele intrări au ora din trecut (oprirea unei
+// vizionări, datată la ultimul heartbeat) și ar fi sărite.
 export async function readActivityLog(
   afterRowid = 0,
 ): Promise<{ entries: ActivityEntry[]; cursor: number }> {
@@ -142,11 +131,8 @@ export async function readActivityLog(
       meta: string | null;
     }>;
     const db = getDb();
-    // Titlul din Bibliotecă pentru rândurile de torrent, ca jurnalul să le
-    // poată deschide (ștergerile doar cât titlul mai există — programate
-    // sau anulate). Episoadele duc la serialul lor (parent_id) — drawer-ul
-    // Bibliotecii se deschide pe film/serial. Intrările vechi au doar
-    // torrentId (id-ul Filelist), cele noi și hash-ul.
+    // Titlul din Bibliotecă pentru torrente, ca jurnalul să le poată deschide;
+    // episoadele duc la serialul lor. Intrările vechi au doar torrentId.
     const byHash = db.prepare(
       "SELECT COALESCE(parent_id, id) AS id FROM media WHERE torrent_hash = ? ORDER BY id LIMIT 1",
     );
@@ -188,7 +174,7 @@ export async function readActivityLog(
 }
 
 // ---------------------------------------------------------------------------
-// Tracking sesiuni Plex active (persistat în SQLite, supraviețuiește restarturilor)
+// Sesiunile Plex active (în SQLite, supraviețuiesc restarturilor)
 // ---------------------------------------------------------------------------
 
 function sessionKey(user: string, title: string, grandparent?: string): string {
@@ -219,12 +205,8 @@ export async function trackPlexSessions(
   const { getDb } = await import("./db");
   const db = getDb();
 
-  // Sesiunile Plex vin cu titlul original (limba din bibliotecă), nu cel
-  // tradus RO folosit peste tot în restul aplicației (Bibliotecă etc.) —
-  // căutăm rândul din `media` după ratingKey-ul item-ului redat, ca să
-  // afișăm în jurnal același titlu ca în Bibliotecă. Pentru episoade,
-  // `media.title` conține deja numele serialului (nu se ține titlu
-  // separat per episod — vezi media.ts).
+  // Sesiunile vin cu titlul din bibliotecă (original); afișăm titlul românesc
+  // din `media`, după ratingKey, ca în Bibliotecă.
   function resolveDisplayTitle(ratingKey: string | undefined, isEpisode: boolean): string | null {
     if (!ratingKey) return null;
     const row = db
@@ -233,7 +215,6 @@ export async function trackPlexSessions(
     return row?.title || null;
   }
 
-  // Citește sesiunile active din SQLite (supraviețuiesc restarturilor)
   const stored = db.prepare("SELECT * FROM plex_active_sessions").all() as Array<{
     key: string;
     started_at: string;
@@ -253,8 +234,7 @@ export async function trackPlexSessions(
     const key = sessionKey(s.user, s.title, s.grandparentTitle);
     currentKeys.add(key);
     if (storedMap.has(key)) {
-      // Actualizăm progresul în DB; sesiunea e din nou aici, deci lipsurile
-      // anterioare nu mai contează.
+      // Progresul; sesiunea e din nou aici, deci lipsurile se resetează.
       const prev = storedMap.get(key)!;
       db.prepare(
         `UPDATE plex_active_sessions SET last_view_offset_ms = ?, duration_ms = ?, missed = 0
@@ -263,16 +243,12 @@ export async function trackPlexSessions(
     }
   }
 
-  // STOPs înainte de STARTs — astfel rowid-ul stop < rowid start,
-  // iar cu ORDER BY timestamp DESC, rowid DESC starts apar deasupra stops în UI
+  // Opririle înaintea pornirilor — rowid-ul ține pornirile deasupra în UI.
   const MIN_PROGRESS_MS = 60_000;
   for (const [key, row] of storedMap.entries()) {
     if (!currentKeys.has(key)) {
-      // Plex „pierde” uneori o sesiune pentru o clipă (la derulare, când
-      // pornește din nou conversia video). Cu verificarea la 10s, o singură
-      // lipsă ar însemna o oprire falsă, cu pereche oprire/pornire și două
-      // notificări — deci o vizionare e oprită abia după MISSES_TO_STOP
-      // verificări la rând fără ea (10–20s după oprirea reală).
+      // Plex „pierde” uneori o sesiune o clipă (la derulare) — oprirea se
+      // confirmă abia după MISSES_TO_STOP verificări la rând fără ea.
       if (row.missed + 1 < MISSES_TO_STOP) {
         db.prepare("UPDATE plex_active_sessions SET missed = missed + 1 WHERE key = ?").run(key);
         continue;
@@ -291,12 +267,9 @@ export async function trackPlexSessions(
         { tag: `plex-${key}` },
       );
 
-      // Vizionare oprită/întreruptă înainte ca Plex să o marcheze "văzută" în
-      // istoric (sub pragul lui de completare) — o ținem minte aici, cu
-      // progresul exact, ca să apară totuși în "Vizionări recente" (nu doar
-      // titlurile terminate complet). Vezi getRecentWatches din plex-browse.ts,
-      // care poate ulterior să suprascrie cu completed=1 dacă istoricul Plex
-      // confirmă vizionarea completă.
+      // Oprită înainte ca Plex s-o marcheze văzută: ținută minte cu progresul,
+      // ca să apară în „Vizionări recente” (getRecentWatches poate s-o treacă
+      // apoi la completed=1).
       if (row.rating_key && row.last_view_offset_ms >= MIN_PROGRESS_MS && row.duration_ms > 0) {
         try {
           const mediaRow = db
@@ -312,9 +285,7 @@ export async function trackPlexSessions(
             show: row.grandparent_title || null,
             season: mediaRow?.season ?? null,
             episode: mediaRow?.episode ?? null,
-            // Poate rămâne null pentru trailere/extras, care n-au rând în
-            // `media` — se completează la citire, în getRecentWatches, din
-            // miniatura Plex.
+            // Null la trailere — completat la citire din miniatura Plex.
             posterPath: mediaRow?.poster_path ?? null,
             viewedAt: Math.floor(Date.now() / 1000),
             viewOffsetMs: row.last_view_offset_ms,
@@ -331,8 +302,7 @@ export async function trackPlexSessions(
   for (const s of sessions) {
     const key = sessionKey(s.user, s.title, s.grandparentTitle);
     if (!storedMap.has(key)) {
-      // Titlul afișat/stocat e cel tradus RO (dacă titlul redat e cunoscut
-      // local) — atât aici cât și la stop (care citește din DB, nu recalculează).
+      // Titlul românesc, stocat — oprirea îl citește din DB.
       const displayGrandparentTitle = s.grandparentTitle
         ? (resolveDisplayTitle(s.ratingKey, true) ?? s.grandparentTitle)
         : undefined;
@@ -340,7 +310,6 @@ export async function trackPlexSessions(
         ? (resolveDisplayTitle(s.ratingKey, false) ?? s.title)
         : s.title;
 
-      // Sesiune nouă — inserăm în DB și logăm start
       db.prepare(
         `INSERT OR REPLACE INTO plex_active_sessions
          (key, started_at, last_view_offset_ms, duration_ms, user, title, grandparent_title, rating_key)
@@ -375,32 +344,19 @@ export async function trackPlexSessions(
 }
 
 // ---------------------------------------------------------------------------
-// Ciclul de viață al serverului: pornire, oprire, cauză
-//
-// Proiectat în jurul unei singure idei: procesul NU poate loga întotdeauna
-// propria oprire. Un SIGKILL (systemd după TimeoutStopSec), un OOM kill sau o
-// pană de curent nu rulează niciun cod al nostru. Versiunea anterioară se baza
-// exclusiv pe handlere de semnal, deci acele opriri lipseau pur și simplu din
-// jurnal, iar pornirea următoare apărea nemotivat, fără pereche.
-//
-// Soluția: un rând de stare în DB (`server_runtime`) cu un heartbeat periodic.
-// La oprirea curată îl marcăm `clean_shutdown = 1`. Dacă la pornire găsim un
-// rând rămas cu 0, știm că rularea anterioară s-a terminat brutal — și logăm
-// RETROACTIV oprirea, datată la ultimul heartbeat (adică ±30s de momentul
-// real). Jurnalul devine astfel complet în toate scenariile, nu doar în cele
-// în care apucăm să ne executăm codul.
+// Pornirea și oprirea serverului. Procesul nu-și poate loga mereu oprirea
+// (SIGKILL, OOM, pană de curent), deci `server_runtime` ține un heartbeat: la
+// oprirea curată, clean_shutdown = 1; dacă la pornire e 0, oprirea se loghează
+// retroactiv, datată la ultimul heartbeat (±30s).
 // ---------------------------------------------------------------------------
 
-// Referință pre-încărcată la DB pentru shutdown handler (ESM nu are require sincron)
+// DB pre-încărcat pentru oprire (ESM n-are require sincron).
 let dbModuleRef: typeof import("./db") | null = null;
 let cryptoRef: typeof import("node:crypto") | null = null;
 
 const HEARTBEAT_MS = 30_000;
 
-// Retenție jurnal: evenimentele mai vechi de atât se șterg. Jurnalul e o
-// fereastră pe ce se întâmplă acum, nu o arhivă — iar majoritatea rândurilor
-// vechi sunt perechi server_start/server_stop de la deploy-uri, care nu mai
-// spun nimic după o lună.
+// Retenția jurnalului — e o fereastră pe prezent, nu o arhivă.
 const ACTIVITY_RETENTION_DAYS = 30;
 const PRUNE_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
@@ -424,12 +380,9 @@ export function pruneActivityLog(): number {
   }
 }
 
-// Marcaj scris de `npm run build` (vezi package.json) și consumat o singură
-// dată, la prima pornire de după. Înlocuiește o euristică veche pe mtime-ul
-// lui .output/server/index.mjs, care era greșită prin construcție: workflow-ul
-// e stop → build → start, deci la oprire mtime-ul era vechi (oprirea se loga)
-// iar la pornire proaspăt (pornirea se suprima) — fiecare deploy lăsa o oprire
-// fără pereche.
+// Marcaj scris de `npm run build`, consumat la prima pornire de după. Euristica
+// veche pe mtime-ul build-ului era greșită (stop → build → start lăsa fiecare
+// deploy cu o oprire fără pereche).
 function deployMarkerPath(): string {
   return process.env.FAIKKITBOX_DEPLOY_MARKER ?? "/opt/faikkitbox/data/.deploy-marker";
 }
@@ -455,8 +408,8 @@ function nowHM(iso?: string): string {
   });
 }
 
-// Setat de handlerele uncaughtException/unhandledRejection — singura cauză de
-// oprire pe care o putem numi exact în momentul în care se întâmplă.
+// Setat de uncaughtException/unhandledRejection — singura cauză de oprire
+// știută exact.
 let crashCause: string | null = null;
 
 // ---------------------------------------------------------------------------
@@ -498,13 +451,11 @@ async function logServerStart(): Promise<void> {
     const dbModule = await import("./db");
     dbModuleRef = dbModule;
     cryptoRef = await import("node:crypto");
-    // Deschide conexiunea (și rulează migrările) acum, la pornire — la oprire
-    // avem doar ~300ms până la ieșirea forțată din server-lifecycle.ts, prea
-    // puțin ca să deschidem DB-ul de la zero acolo.
+    // Conexiunea și migrările acum: la oprire avem doar ~300ms.
     const db = dbModule.getDb();
 
-    // 1. Rularea anterioară s-a încheiat brutal? Logăm oprirea ei ÎNAINTE de
-    //    pornirea curentă, ca jurnalul să rămână în ordine cronologică.
+    // 1. Rularea anterioară s-a încheiat brutal? Oprirea ei se loghează ÎNAINTE
+    //    de pornire, în ordine cronologică.
     const prev = readPreviousRuntime(db);
     if (prev && prev.clean_shutdown === 0) {
       await logActivity(
@@ -514,11 +465,8 @@ async function logServerStart(): Promise<void> {
           nowHM(prev.last_heartbeat),
         ),
         { unclean: true, detectedAt: "next_boot", previousPid: prev.pid },
-        // Datat la ultimul heartbeat, nu la momentul detectării: dacă serverul
-        // a stat picat două zile, oprirea trebuie să apară în jurnal acolo
-        // unde s-a întâmplat, nu acum.
-        // Fără push: notificarea ar sosi acum, pentru ceva petrecut înainte.
-        // Pornirea de mai jos anunță oricum că serverul e din nou sus.
+        // Datată la ultimul heartbeat, nu acum. Fără push: ar sosi acum pentru
+        // ceva petrecut înainte, iar pornirea anunță oricum revenirea.
         { skipPush: true, timestamp: prev.last_heartbeat },
       );
       console.warn(
@@ -537,17 +485,10 @@ async function logServerStart(): Promise<void> {
 
     writeRuntimeStart(db);
 
-    // Push la fiecare pornire, inclusiv la deploy. A fost suprimat pentru
-    // deploy-uri o săptămână (5-12 sep), ca să nu vină o notificare la
-    // fiecare `npm run build` — dar oprirea nu putea fi suprimată simetric:
-    // când procesul moare, marcajul de deploy încă nu există, fiindcă
-    // build-ul rulează DUPĂ stop (workflow-ul e stop → build → start). Deci
-    // fiecare deploy trimitea "Serverul s-a oprit" și tăcea la revenire —
-    // exact oprirea fără pereche pe care marcajul o repara în jurnal.
-    // Dintre cele două, pornirea e și informația utilă ("e din nou sus"), și
-    // singura trimisă de un proces care chiar are timp s-o ducă la capăt:
-    // push-ul de la oprire pleacă fără await, într-o fereastră de ~300ms
-    // (server-lifecycle.ts), deci uneori nu ajunge deloc.
+    // Push la fiecare pornire, inclusiv la deploy. Suprimarea pentru deploy-uri
+    // (5–12 sept.) lăsa doar oprirea anunțată — marcajul de deploy apare abia
+    // după stop. Pornirea e și informația utilă („e din nou sus”), și singura
+    // trimisă sigur: push-ul de la oprire are doar ~300ms.
     await logActivity("server_start", buildServerStartMessage(cause, nowHM()), {
       deploy: isDeploy,
       pid: process.pid,
@@ -576,13 +517,10 @@ function logServerStopSync(): void {
       message,
       JSON.stringify({ crash: crashCause != null, pid: process.pid }),
     );
-    // Marcăm oprirea ca fiind curată — altfel pornirea următoare ar raporta
-    // retroactiv un kill care nu s-a întâmplat.
+    // Oprire curată — altfel pornirea următoare ar raporta un kill inexistent.
     db.prepare("UPDATE server_runtime SET clean_shutdown = 1 WHERE id = 1").run();
 
-    // Push best-effort, fără await — la oprire avem doar ~300ms
-    // (server-lifecycle.ts) înainte de ieșirea forțată, insuficient garantat
-    // pentru un round-trip web-push, dar merită încercat când apucă.
+    // Push best-effort, fără await — ~300ms până la ieșirea forțată.
     import("./notifications/push")
       .then(({ sendPushToAll }) =>
         sendPushToAll(PUSH_TITLES.server_stop, message, { url: PUSH_URLS.server_stop }),
@@ -598,34 +536,22 @@ declare global {
   var __faikkitboxActivityInit: boolean | undefined;
 }
 
-// Rulează doar când modulul e încărcat din build-ul real (.output/server/...),
-// nu din sursă (ex. un script ad-hoc peste src/lib/*.ts) — altfel un script
-// efemer ar loga fals "Serverul a pornit / s-a oprit" la fiecare rulare; asta
-// a poluat jurnalul în timpul testării manuale a acestui fișier.
+// Doar din build-ul real, nu din sursă — un script ad-hoc ar loga fals
+// pornirea și oprirea.
 const isRealServerBuild = import.meta.url.includes("/.output/");
 
-// Apelată explicit din server/plugins/server-lifecycle.ts.
-//
-// Înainte, blocul rula ca side-effect la încărcarea modulului — dar nimic nu
-// importa activity-log la boot, deci se executa abia la PRIMA CERERE HTTP.
-// Măsurat: după `systemctl restart`, jurnalul rămânea gol până când cineva
-// deschidea aplicația; un singur curl declanșa imediat "Serverul a pornit", cu
-// ora cererii în loc de ora pornirii, și cu `os.uptime()` deja mare, deci un
-// reboot real apărea ca "pornire manuală".
+// Apelată din server/plugins/server-lifecycle.ts. Ca efect de modul rula abia
+// la prima cerere HTTP: ora și cauza pornirii ieșeau greșite.
 export async function initServerLifecycleLogging(): Promise<void> {
   if (!isRealServerBuild || typeof process === "undefined" || !process.env) return;
   if (globalThis.__faikkitboxActivityInit) return;
   globalThis.__faikkitboxActivityInit = true;
 
-  // Așteptat, nu fire-and-forget: handlerele de mai jos au nevoie de
-  // dbModuleRef populat, iar un SIGTERM sosit între timp ar găsi altfel
-  // shutdown-ul nelogabil.
+  // Așteptat: handlerele de mai jos au nevoie de dbModuleRef, altfel un SIGTERM
+  // timpuriu n-ar putea fi logat.
   await logServerStart();
 
-  // Heartbeat: cât timp procesul trăiește, își actualizează ora. Dacă e
-  // omorât brutal, ultimul heartbeat rămâne cea mai bună aproximare a
-  // momentului morții (±30s), folosită de logServerStart la pornirea
-  // următoare.
+  // Heartbeat: ultima lui oră aproximează momentul unei opriri brutale (±30s).
   const beat = setInterval(() => {
     try {
       dbModuleRef
@@ -639,9 +565,7 @@ export async function initServerLifecycleLogging(): Promise<void> {
   // Nu ține procesul în viață doar pentru heartbeat.
   beat.unref?.();
 
-  // Curățarea jurnalului: o dată la pornire (dbModuleRef e deja populat de
-  // logServerStart de mai sus) și apoi zilnic, pentru procesele care rulează
-  // săptămâni întregi fără restart.
+  // Curățarea jurnalului: la pornire și zilnic (procese care rulează săptămâni).
   pruneActivityLog();
   const prune = setInterval(pruneActivityLog, PRUNE_INTERVAL_MS);
   prune.unref?.();
@@ -654,20 +578,16 @@ export async function initServerLifecycleLogging(): Promise<void> {
     logServerStopSync();
   };
 
-  // "exit" rulează la orice ieșire normală — doar cod sincron (node:sqlite
-  // e sincron, deci merge).
+  // „exit” rulează la orice ieșire normală — doar cod sincron (node:sqlite e).
   process.on("exit", logOnce);
-  // Backup: dacă SIGTERM nu duce la un exit normal, logăm direct la semnal.
-  // NU apelăm process.exit() aici — lăsăm Nitro (și server-lifecycle.ts) să-și
-  // termine treaba.
+  // Rezervă: dacă SIGTERM nu duce la un exit normal, logăm la semnal. Fără
+  // process.exit() — Nitro și server-lifecycle își termină treaba.
   process.on("SIGTERM", logOnce);
   process.on("SIGINT", logOnce);
 
-  // Un listener pe uncaughtException/unhandledRejection dezactivează crash-ul
-  // implicit al Node, deci trebuie să ieșim noi explicit — altfel procesul
-  // rămâne agățat în loc să pice curat (și systemd să-l repornească).
-  // console-capture.ts prinde deja console.error pentru Jurnalul de erori,
-  // deci eroarea se loghează o singură dată aici, nu duplicat.
+  // Un listener pe uncaughtException dezactivează crash-ul implicit — ieșim
+  // explicit, ca systemd să repornească procesul. console-capture prinde deja
+  // eroarea pentru „Erori aplicație”.
   process.on("uncaughtException", (e) => {
     crashCause = `eroare neașteptată (${e.message})`;
     console.error("[activity-log] uncaughtException:", e);

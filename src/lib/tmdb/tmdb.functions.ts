@@ -69,13 +69,8 @@ interface TmdbApiTvShow {
   poster_path?: string | null;
 }
 
-// TMDB marchează cu type "literal title" romanizarea/transliterarea folosită
-// efectiv pe scenă (Filelist, grupuri de release) pentru producții cu titlu
-// original în alt alfabet — spre deosebire de original_title/original_name,
-// care rămâne mereu în scriptul nativ (ex. coreeană, "군체"), inutilizabil ca
-// text de căutare. Ex: pentru "Colony" (2026), original_title TMDB e "군체",
-// dar pe Filelist lansarea e denumită "Gunche" — exact "literal title" de mai
-// jos, ceea ce IMDB afișează drept "titlu original".
+// „Literal title” în TMDB = romanizarea folosită pe scenă pentru titlurile în
+// alt alfabet (Colony 2026: original „군체”, pe Filelist „Gunche”).
 function findLiteralTitle(titles: TmdbApiAlternativeTitle[] | undefined): string | null {
   return titles?.find((t) => t.type === "literal title")?.title ?? null;
 }
@@ -110,17 +105,10 @@ export const searchTmdb = createServerFn({ method: "GET" })
     const q = data.query.trim();
     if (!q) return [];
     try {
-      // TMDB potrivește query-ul pe titlurile din limba cererii, deci cele
-      // două apeluri dau liste DIFERITE, nu aceeași listă tradusă: „elita" pe
-      // en-US nu găsește Élite (acolo e „Elite"), pe ro-RO îl pune primul.
-      // Le intercalăm (ro, en, ro, en…), ca primul rezultat din fiecare limbă
-      // să ajungă mereu în primele două — căutările în română găsesc titlul
-      // românesc, iar cele în engleză nu-și pierd rezultatul bun.
-      //
-      // Titlul afișat/salvat e cel ro-RO unde există (altfel rămâne cel
-      // englez). Fără asta, titlul din wizard ajungea nemodificat în
-      // `media.title` și apărea englezesc peste tot în aplicație (Bibliotecă,
-      // notificări).
+      // TMDB caută în titlurile limbii cererii, deci ro și en dau liste diferite
+      // („elita” pe en-US nu găsește Élite). Le intercalăm, ca primul rezultat
+      // din fiecare limbă să fie în primele două. Titlul salvat e cel ro-RO unde
+      // există — altfel apărea englezesc peste tot în aplicație.
       const [json, roJson] = await Promise.all([
         tmdbFetch<TmdbApiSearchResponse>(
           `/search/multi?query=${encodeURIComponent(q)}&include_adult=false&language=en-US&page=1`,
@@ -163,41 +151,30 @@ export interface TmdbDetails {
   mediaType: "movie" | "tv";
   title: string;
   originalTitle: string;
-  // Titlul romanizat/literal (ex. "Gunche" pentru 군체) — ce arată IMDB drept
-  // "titlu original" și ce folosesc grupurile de release pe Filelist. Null
-  // dacă TMDB n-are un titlu marcat "literal title" pentru producția asta
-  // (frecvent pentru titluri deja în alfabet latin).
+  // Titlul romanizat („Gunche” pentru 군체), ca pe IMDb și Filelist; null fără.
   literalTitle: string | null;
   imdbId: string | null;
-  // Data lansării (film) / a primului episod difuzat (serial) — format ISO
-  // "YYYY-MM-DD", null dacă TMDB n-o are încă anunțată.
+  // Lansarea (film) / primul episod (serial), „YYYY-MM-DD”; null neanunțat.
   releaseDate: string | null;
   // doar pentru tv:
   tvStatus: string | null;
-  // Următorul episod anunțat de TMDB (dacă există dată de lansare) — separat
-  // de tvStatus, care doar spune dacă serialul e reînnoit/în producție, nu și
-  // dacă chiar există un episod concret programat. Folosit ca mesajul din
-  // wizard să nu mai spună generic "încă în producție" pentru un serial al
-  // cărui ultim sezon cunoscut e deja lansat complet, fără nimic anunțat.
+  // Următorul episod anunțat (cu dată) — tvStatus spune doar că serialul e
+  // reînnoit, nu că există un episod programat.
   nextEpisode: { seasonNumber: number; episodeNumber: number; airDate: string } | null;
-  // Data ultimului episod difuzat — fereastra orară a urmăririi (show-watch.ts).
+  // Ultimul episod difuzat — fereastra orară a urmăririi.
   lastEpisodeAirDate?: string | null;
   seasons: Array<{ seasonNumber: number; episodeCount: number; airDate: string | null }>;
-  // Rezumat scurt — în română când TMDB are traducerea disponibilă, altfel
-  // cade pe engleză (multe producții mai puțin populare n-au overview RO).
+  // Rezumat în română, altfel engleză.
   overview: string | null;
-  // Genurile (RO) — lista TMDB e globală/predefinită, deci numele sunt deja
-  // traduse chiar și pentru producții obscure fără overview RO propriu.
+  // Genurile (RO) — lista TMDB e predefinită, deci mereu traduse.
   genres: string[];
   posterUrl: string | null;
 }
 
-// Când numele din TMDB pe ro-RO coincide cu cel original, de obicei înseamnă
-// că traducerea lipsește, iar un titlu alternativ marcat "RO" e mai bun. NU și
-// pentru producțiile românești: acolo numele original ESTE cel românesc, iar
-// titlul alternativ RO e de regulă varianta internațională — adică exact
-// invers decât vrem. Găsit la "Insula Iubirii" (limba originală: ro), pe care
-// regula veche îl redenumea în "Temptation Island – Insula iubirii".
+// Numele ro-RO egal cu originalul înseamnă de obicei traducere lipsă, deci un
+// titlu alternativ „RO” e mai bun. NU la producțiile românești: acolo
+// alternativul e varianta internațională (Insula Iubirii devenea „Temptation
+// Island – Insula iubirii”).
 function shouldTryRomanianAka(
   title: string,
   originalTitle: string | undefined,
@@ -206,9 +183,7 @@ function shouldTryRomanianAka(
   return !!title && title === originalTitle?.trim() && lang !== "ro";
 }
 
-// Versiune internă (fără createServerFn) — folosită și din plex-browse.ts,
-// care are nevoie de detaliile TMDB (overview RO, genuri, imdbId) pentru
-// pagina Bibliotecă, fără să treacă prin granița de server function.
+// Fără createServerFn — și pentru apelurile din alt cod de server.
 export async function getTmdbDetailsInternal(
   id: number,
   mediaType: "movie" | "tv",
@@ -218,8 +193,7 @@ export async function getTmdbDetailsInternal(
       const movie = await tmdbFetch<TmdbApiMovie>(
         `/movie/${id}?language=ro-RO&append_to_response=external_ids,alternative_titles`,
       );
-      // Varianta engleză se cere cel mult o dată, și doar dacă e nevoie de ea
-      // (descriere sau titlu lipsă în română).
+      // Engleza se cere cel mult o dată, doar dacă lipsește ceva în română.
       let enMovieP: Promise<TmdbApiMovie | null> | null = null;
       const enMovie = () =>
         (enMovieP ??= tmdbFetch<TmdbApiMovie>(`/movie/${id}`).catch(() => null));
@@ -230,10 +204,8 @@ export async function getTmdbDetailsInternal(
         const { findRomanianAkaTitle } = await import("./tmdb-title-lookup");
         title = (await findRomanianAkaTitle("movie", id)) || title;
       }
-      // Fără titlu românesc (nici traducere, nici titlu alternativ RO): engleza
-      // înaintea originalului — un film spaniol sau coreean e mai lizibil
-      // „în engleză" decât în limba lui. (Și searchTmdb, din wizard, cade tot
-      // pe engleză când lipsește româna.)
+      // Fără titlu românesc: engleza înaintea originalului (un film coreean e
+      // mai lizibil în engleză).
       if (shouldTryRomanianAka(title, movie.original_title, movie.original_language)) {
         title = (await enMovie())?.title?.trim() || title;
       }
@@ -256,7 +228,7 @@ export async function getTmdbDetailsInternal(
       const show = await tmdbFetch<TmdbApiTvShow>(
         `/tv/${id}?language=ro-RO&append_to_response=external_ids,alternative_titles`,
       );
-      // Ca la filme: engleza se cere cel mult o dată, doar la nevoie.
+      // Engleza cel mult o dată, la nevoie.
       let enShowP: Promise<TmdbApiTvShow | null> | null = null;
       const enShow = () => (enShowP ??= tmdbFetch<TmdbApiTvShow>(`/tv/${id}`).catch(() => null));
       let overview = show.overview?.trim() || null;
@@ -266,7 +238,7 @@ export async function getTmdbDetailsInternal(
         const { findRomanianAkaTitle } = await import("./tmdb-title-lookup");
         title = (await findRomanianAkaTitle("tv", id)) || title;
       }
-      // Fără titlu românesc: engleza înaintea originalului (vezi filmele).
+      // Fără titlu românesc: engleza înaintea originalului.
       if (shouldTryRomanianAka(title, show.original_name, show.original_language)) {
         title = (await enShow())?.name?.trim() || title;
       }
@@ -335,53 +307,38 @@ export interface TmdbEpisode {
   title: string;
   airDate: string | null;
   aired: boolean;
-  // Doar cu `details: true`. Descrierea episodului în română, altfel în
-  // engleză; null dacă TMDB n-are niciuna. Imaginea e un cadru din episod
-  // (orizontal), nu un poster.
+  // Doar cu `details: true`: descrierea (RO, altfel EN, null fără) și un cadru
+  // din episod (orizontal).
   overview?: string | null;
   stillUrl?: string | null;
 }
 
-// Găsește titlul unui episod dintr-o listă deja încărcată (getTmdbSeasonEpisodes*)
-// — sursă unică, folosită atât în wizard-ul "Adaugă film/serial" (AddMediaWizard)
-// cât și în buildTorrentDisplayName (tmdb-title-lookup.ts, pentru notificări),
-// ca să nu se repete același `.find(...) ?? fallback` în ambele locuri.
+// Titlul unui episod dintr-o listă deja încărcată — comun wizard-ului și
+// notificărilor.
 export function findEpisodeTitle(episodes: TmdbEpisode[], episodeNum: number): string {
   return episodes.find((e) => e.episodeNum === episodeNum)?.title ?? `Episodul ${episodeNum}`;
 }
 
-// TMDB, când nu are o traducere RO reală pentru un episod, nu întoarce câmp
-// gol — întoarce un placeholder generic "Episodul {N}" (autogenerat, în
-// funcție de limba cerută). E indistigabil de un titlu real doar uitându-te
-// dacă e gol, deci verificăm explicit acest tipar.
+// Fără traducere, TMDB nu întoarce gol, ci „Episodul {N}” — verificat explicit.
 function isGenericEpisodePlaceholder(name: string | undefined, episodeNumber: number): boolean {
   const n = name?.trim();
   if (!n) return true;
   return new RegExp(`^episodul\\s*${episodeNumber}$`, "i").test(n);
 }
 
-// Versiune internă (funcție simplă, fără createServerFn) — folosită și din
-// alt cod server-side care nu poate
-// trece prin granița de server function (același pattern ca
-// checkFilelistForItemInternal din filelist/download.ts).
+// Fără createServerFn — pentru apelurile din alt cod de server.
 export async function getTmdbSeasonEpisodesInternal(
   tmdbId: number,
   seasonNum: number,
 ): Promise<TmdbEpisode[]> {
   try {
     const path = `/tv/${tmdbId}/season/${seasonNum}`;
-    // Cache-bust (_=timestamp) — CDN-ul TMDB ține cache pe URL exact, iar un
-    // episod aterizat chiar azi (titlu adăugat abia după difuzare) poate
-    // rămâne cu placeholder generic minute/ore bune după ce TMDB chiar are
-    // deja titlul real, dacă lovim un răspuns cache-uit mai vechi. Confirmat
-    // reproductibil: același request fără cache-bust întorcea "Episode 8" în
-    // loc de titlul real "The Treasons at Tumbleton", la câteva ore după
-    // difuzare (House of the Dragon S03E08, 2026-08-09).
+    // Cache-bust: CDN-ul TMDB ține cache pe URL, iar un episod abia difuzat
+    // rămânea ore întregi cu placeholder-ul, deși TMDB avea titlul (House of
+    // the Dragon S03E08, 9 aug. 2026).
     const bust = `_=${Date.now()}`;
     const season = await tmdbFetch<TmdbApiSeason>(`${path}?language=ro-RO&${bust}`);
-    // TMDB nu are titluri RO pentru toate episoadele (mai ales lansări
-    // recente) — cădem pe engleză doar pentru cele fără traducere reală,
-    // nu pentru tot sezonul, ca să nu pierdem degeaba titlurile RO existente.
+    // Engleza doar pentru episoadele fără traducere, nu pentru tot sezonul.
     const missingRo = (season.episodes ?? []).some((e) =>
       isGenericEpisodePlaceholder(e.name, e.episode_number),
     );
@@ -394,9 +351,7 @@ export async function getTmdbSeasonEpisodesInternal(
     return (season.episodes ?? []).map((e) => {
       const airDate = e.air_date ?? null;
       const enName = enByNum.get(e.episode_number)?.trim();
-      // Dacă și titlul englez e tot un placeholder generic ("Episode 8" —
-      // TMDB întoarce mereu placeholder-ul în limba cerută, nu doar în RO),
-      // preferăm varianta noastră curată în română, nu textul englez brut.
+      // Placeholder și în engleză: păstrăm varianta curată în română.
       const enIsGeneric =
         enName && new RegExp(`^episode\\s*${e.episode_number}$`, "i").test(enName);
       const title = isGenericEpisodePlaceholder(e.name, e.episode_number)
@@ -419,30 +374,21 @@ export async function getTmdbSeasonEpisodesInternal(
 export interface TmdbSeasonSchema {
   seasonNumber: number;
   episodes: TmdbEpisode[];
-  // Doar cu `details: true` (vezi getTmdbAllSeasonsInternal). Posterul
-  // sezonului — românesc când TMDB are unul, altfel cel implicit.
+  // Doar cu `details: true`: posterul sezonului (românesc când există).
   posterUrl?: string | null;
 }
 
-// Schema completă (toate sezoanele, cu episoade+date de lansare) într-un
-// singur request suplimentar — folosind append_to_response=season/1,season/2,...
-// (posibil doar după ce știm câte sezoane are serialul, din getTmdbDetails).
-// Wizard-ul ("Adaugă film/serial") are nevoie de toată schema dintr-o dată, ca
-// utilizatorul să vadă orice sezon extins fără să aștepte un request nou de
-// fiecare dată.
-//
-// `details`: adaugă descrierea și imaginea fiecărui episod și posterul
-// sezonului — pentru Bibliotecă (show-watch.ts). Wizard-ul nu le cere: îi
-// trimite clientului schema TUTUROR sezoanelor, iar descrierile ar îngreuna
-// răspunsul degeaba.
+// Toate sezoanele (episoade + date) într-o singură cerere suplimentară, prin
+// append_to_response — wizard-ul arată orice sezon fără altă cerere.
+// `details` adaugă descrierile, cadrele și posterele — pentru Bibliotecă;
+// wizard-ul nu le cere, ar îngreuna răspunsul.
 export async function getTmdbAllSeasonsInternal(
   tmdbId: number,
   seasonNumbers: number[],
   opts: { details?: boolean } = {},
 ): Promise<TmdbSeasonSchema[]> {
   if (seasonNumbers.length === 0) return [];
-  // Plafon de siguranță — peste el, un URL cu zeci de "season/N" ar deveni
-  // nerezonabil de lung.
+  // Plafon — peste el, URL-ul cu „season/N” ar fi prea lung.
   if (seasonNumbers.length > 40) return [];
 
   try {
@@ -457,10 +403,8 @@ export async function getTmdbAllSeasonsInternal(
       if (s) roBySeason.set(n, s);
     }
 
-    // Fallback pe engleză — un singur request suplimentar, batched la fel,
-    // declanșat doar dacă chiar lipsește vreun titlu RO undeva (aceeași
-    // logică per-episod ca getTmdbSeasonEpisodesInternal, doar aplicată o
-    // singură dată pentru toate sezoanele, nu per-sezon).
+    // Engleza într-o singură cerere suplimentară, doar dacă lipsește vreun
+    // titlu românesc.
     const needsEnFallback = [...roBySeason.values()].some((s) =>
       (s.episodes ?? []).some(
         (e) =>
@@ -509,8 +453,8 @@ export async function getTmdbAllSeasonsInternal(
           ...(opts.details
             ? {
                 overview: e.overview?.trim() || enOverviewByNum.get(e.episode_number) || null,
-                // Originalul, nu w300: TMDB are pentru cadre doar 92/185/300 px sau
-                // originalul, iar 300 px e neclar pe lățimea unui telefon.
+                // Originalul: cadrele au doar 92/185/300 px, iar 300 e neclar pe
+                // lățimea unui telefon.
                 stillUrl: e.still_path
                   ? `https://image.tmdb.org/t/p/original${e.still_path}`
                   : null,

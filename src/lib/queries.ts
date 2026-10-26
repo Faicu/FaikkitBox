@@ -38,27 +38,20 @@ import {
   type DiscoverSort,
 } from "./tmdb/tmdb.discover.functions";
 
-// Ritmul statisticilor live e reglabil din pagina Sistem — vezi
-// lib/refresh-rate.ts. `refetchInterval` primește o funcție, evaluată la
-// fiecare tick, deci schimbarea are efect imediat, fără reîncărcare.
-//
-// A fost fix 1000ms, ceea ce însemna, PER TAB DESCHIS, un set complet de
-// apeluri pe secundă: si.processes(), dockerContainerStats per container,
-// lista completă de torrente din qBittorrent, statisticile Immich. Monitorul
-// de sistem ajunsese principalul consumator de CPU al sistemului monitorizat.
-// Acum serverul cachează rezultatele (cachedAsync din services/shared.ts),
+// Ritmul statisticilor live e reglabil din Sistem (refresh-rate.ts);
+// `refetchInterval` e o funcție, deci schimbarea are efect imediat. La 1s fix,
+// fiecare tab cerea pe secundă procese, Docker, torrente și Immich — monitorul
+// ajunsese principalul consumator de CPU. Acum serverul cachează (cachedAsync),
 // deci N tab-uri costă cât unul.
 
-// Listele care se schimbă rar nu merită ritmul statisticilor de sistem, dar
-// nici nu trebuie să rămână blocate pe o valoare fixă când userul cere
-// explicit un ritm mai lent (ex. economie de baterie pe telefon).
+// Listele care se schimbă rar au un ritm propriu, dar urmează și ele un ritm
+// cerut mai lent (economie de baterie).
 const slower = (factor: number) => () => getRefreshMs() * factor;
 
-// Pulsul de fond al Bibliotecii, ca multiplu al ritmului ales: 30s la
-// implicitul de 3s, 5 min dacă userul cere 30s (economie de baterie).
+// Pulsul Bibliotecii: 30s la implicitul de 3s, 5 min la 30s.
 const LIBRARY_IDLE_FACTOR = 10;
 
-// Păstrează datele vechi afișate în timp ce se încarcă cele noi (fără flicker)
+// Datele vechi rămân afișate cât se încarcă cele noi.
 const keepPrev = { placeholderData: <T>(prev: T) => prev };
 
 export const plexQuery = queryOptions({
@@ -70,7 +63,7 @@ export const plexQuery = queryOptions({
   ...keepPrev,
 });
 
-// "Cine vizionează acum" — cerere separată, rapidă (doar /status/sessions)
+// „Cine vizionează acum” — cerere separată, rapidă.
 export const plexSessionsQuery = queryOptions({
   queryKey: ["plexSessions"],
   queryFn: () => getPlexSessions(),
@@ -88,8 +81,7 @@ export const immichQuery = queryOptions({
   ...keepPrev,
 });
 
-// Starea urmăririi încărcărilor Immich (sarcina immich-uploads). Se schimbă
-// la 5 minute, deci un minut e destul.
+// Starea urmăririi încărcărilor Immich (sarcina la 2 minute).
 export const immichTrackerQuery = queryOptions({
   queryKey: ["immichTracker"],
   queryFn: () => getImmichTracker(),
@@ -110,19 +102,16 @@ export const hostQuery = queryOptions({
   queryKey: ["host"],
   queryFn: () => getHost(),
   refetchInterval: () => getRefreshMs(),
-  // Era `true`: statisticile de sistem continuau să fie cerute la fiecare
-  // secundă și cu tabul minimizat, la nesfârșit. Nimeni nu le vede atunci.
+  // Fără cereri cu tabul minimizat — nimeni nu le vede.
   refetchIntervalInBackground: false,
   staleTime: 0,
   ...keepPrev,
 });
 
-// Jurnalul ține 30 de zile (~2.000 de intrări, ~0,5 MB). La puls se cer doar
-// intrările scrise de la ultima citire (cursorul serverului) și se adaugă la
-// cele deja primite. Lista întreagă se cere la prima citire și apoi din 5 în
-// 5 minute: așa dispar și intrările șterse după 30 de zile, iar intrările de
-// torrent scrise înaintea titlului din Bibliotecă își primesc legătura spre el
-// (mediaId, calculat la citire).
+// Jurnalul (30 de zile, ~0,5 MB): la puls se cer doar intrările noi (cursorul
+// serverului); lista întreagă la prima citire și din 5 în 5 minute — așa dispar
+// intrările expirate și își primesc legătura spre Bibliotecă cele scrise
+// înaintea titlului.
 interface ActivityLogData {
   entries: ActivityEntry[];
   cursor: number;
@@ -167,8 +156,7 @@ export const adminStatusQuery = queryOptions({
   refetchOnWindowFocus: true,
 });
 
-// Acțiunile pe servicii (Restart / Update): des cât una rulează, ca ieșirea
-// să curgă live, rar în rest.
+// Acțiunile pe servicii: des cât una rulează (ieșirea curge live), rar în rest.
 export const serviceJobsQuery = queryOptions({
   queryKey: ["serviceJobs"],
   queryFn: () => getServiceJobs(),
@@ -191,7 +179,7 @@ export const lastSpeedtestQuery = queryOptions({
   refetchOnWindowFocus: true,
 });
 
-// Fetch periodic de pe GitHub → upsert în DB (rulat în background)
+// Commit-urile de pe GitHub → în DB (în fundal).
 export const recentCommitsQuery = queryOptions({
   queryKey: ["recentCommits"],
   queryFn: () => getRecentCommits(),
@@ -200,7 +188,7 @@ export const recentCommitsQuery = queryOptions({
   refetchOnWindowFocus: true,
 });
 
-// Citire din DB — sursa pentru timeline (istoric complet)
+// Commit-urile din DB — istoricul complet.
 export const commitsFromDbQuery = queryOptions({
   queryKey: ["commitsFromDb"],
   queryFn: () => getCommitsFromDb(),
@@ -238,9 +226,8 @@ export const speedtestHistoryQuery = queryOptions({
   staleTime: 60_000,
 });
 
-// Starea rulării de speedtest, ținută pe server. Interogăm des DOAR cât timp
-// chiar rulează un test; altfel query-ul stă liniștit. Așa butonul arată "se
-// rulează" corect chiar dacă ai redeschis aplicația la mijlocul testului.
+// Speedtest-ul: des doar cât rulează un test — butonul arată „se rulează” și
+// după redeschiderea aplicației.
 export const speedtestStateQuery = queryOptions({
   queryKey: ["speedtestState"],
   queryFn: () => getSpeedtestState(),
@@ -252,16 +239,9 @@ export const speedtestStateQuery = queryOptions({
 export const plexLibraryBrowseQuery = queryOptions({
   queryKey: ["plexLibraryBrowse"],
   queryFn: () => getPlexLibraryBrowse(),
-  // Cât timp o descărcare e în curs: ritmul ales, pentru progresul live din
-  // qBittorrent. Altfel un puls lent de fond (30s implicit), ca un titlu
-  // adăugat de pe alt dispozitiv — sau de alt utilizator — să apară singur,
-  // fără refresh manual. Înainte era `false`, adică lista rămânea înghețată
-  // pe ce era la deschiderea paginii.
-  //
-  // Costul e mic și mărginit: query-ul e folosit DOAR de pagina Bibliotecă
-  // (BibliotecaList), iar refetchInterval rulează doar cât timp query-ul e
-  // montat — deci pulsul există doar cât ai efectiv pagina deschisă. Cererea
-  // se servește din `media`, fără să atingă Plex sau TMDB.
+  // Cât se descarcă ceva: ritmul ales (progres live). Altfel un puls lent, ca
+  // un titlu adăugat de pe alt dispozitiv să apară singur. Rulează doar cât
+  // pagina Bibliotecă e deschisă și citește doar din `media`.
   refetchInterval: (query) => {
     const data = query.state.data;
     const items = data?.status === "ok" ? data.items : [];
@@ -269,11 +249,9 @@ export const plexLibraryBrowseQuery = queryOptions({
       ? getRefreshMs()
       : slower(LIBRARY_IDLE_FACTOR)();
   },
-  // staleTime aliniat la pulsul de fond: revenind pe pagină nu vezi date mai
-  // vechi decât un ciclu. Era 60s, adică dublu față de puls.
+  // staleTime aliniat la puls.
   staleTime: LIBRARY_IDLE_FACTOR * REFRESH_DEFAULT_MS,
-  // Revenind din altă aplicație / alt tab, reîmprospătează imediat, fără să
-  // aștepți următorul puls.
+  // La revenirea în tab, reîmprospătare imediată.
   refetchOnWindowFocus: true,
 });
 
@@ -284,11 +262,9 @@ export const recentWatchesQuery = queryOptions({
   refetchInterval: 60_000,
 });
 
-// Viteza negociată a legăturii Ethernet — se schimbă doar la evenimente fizice
-// (cablu atins, switch repornit), deci un ritm lent e suficient. Componenta
-// invalidează manual query-ul cât timp urmărește revenirea după renegociere.
-// Starea backup-urilor, pentru cardul din Tehnic. Ritm lent: se schimbă o
-// dată pe zi, iar butonul manual invalidează explicit.
+// Viteza legăturii Ethernet — se schimbă doar la evenimente fizice; componenta
+// invalidează query-ul cât urmărește o renegociere.
+// Backup-urile, pentru cardul din Tehnic — se schimbă o dată pe zi.
 export const dbBackupQuery = queryOptions({
   queryKey: ["dbBackup"],
   queryFn: () => getDbBackupStatus(),
@@ -304,10 +280,8 @@ export const networkLinkQuery = queryOptions({
   refetchOnWindowFocus: true,
 });
 
-// Watcher-ul (Tehnic → Plugin-uri active). Puls lent pentru rândul din listă;
-// drawer-ul deschis îl suprascrie cu 2s (lista live de operațiuni), iar
-// react-query folosește intervalul cel mai scurt dintre observatori. Cu tab-ul
-// ascuns nu se mai cere nimic (refetchIntervalInBackground e implicit false).
+// Watcher-ul: puls lent pentru rândul din listă; drawer-ul deschis cere 2s
+// (react-query folosește intervalul cel mai scurt). Nimic cu tab-ul ascuns.
 export const watcherStatusQuery = queryOptions({
   queryKey: ["watcherStatus"],
   queryFn: () => getWatcherStatus(),
@@ -324,9 +298,7 @@ export const watcherHistoryQuery = (taskId: string) =>
     ...keepPrev,
   });
 
-// Serialele urmărite, pentru Watcher → Seriale și filme (Tehnic). Ritm lent:
-// Watcher-ul verifică oricum cel mult o dată pe oră per serial (la 3 ore în
-// afara zilelor de lansare), deci n-are rost un puls mai des decât atât.
+// Serialele urmărite — puls lent: fiecare serial e verificat cel mult o dată pe oră.
 export const showWatchStatusQuery = queryOptions({
   queryKey: ["showWatchStatus"],
   queryFn: () => getShowWatchStatus(),
@@ -334,9 +306,7 @@ export const showWatchStatusQuery = queryOptions({
   refetchInterval: 120_000,
 });
 
-// Reîncercarea zilnică a subtitrărilor, pentru Watcher → Reîncercare
-// subtitrări (Tehnic). Puls lent: sarcina rulează din oră în oră, iar fiecare
-// titlu e căutat o dată pe zi.
+// Reîncercarea subtitrărilor — puls lent: fiecare titlu e căutat o dată pe zi.
 export const subtitleRetryStatusQuery = queryOptions({
   queryKey: ["subtitleRetryStatus"],
   queryFn: () => getSubtitleRetryStatus(),
@@ -344,10 +314,8 @@ export const subtitleRetryStatusQuery = queryOptions({
   refetchInterval: 5 * 60_000,
 });
 
-// Filmele așteptate (urmărire pornită, dar încă negăsite pe Filelist) — vezi
-// movie-watch.ts. Puls lent: verificarea de fundal e la 12 ore per film, deci
-// lista se schimbă rar. Contează totuși să nu fie înghețată — un film găsit
-// între timp dispare de aici singur, fiindcă rândul de așteptare se șterge.
+// Filmele așteptate — puls lent (12h per film), dar nu înghețat: un film găsit
+// dispare singur.
 export const wantedMoviesQuery = queryOptions({
   queryKey: ["wanted-movies"],
   queryFn: () => listWantedMovies(),
@@ -361,9 +329,8 @@ export const usersQuery = queryOptions({
   queryFn: () => listUsers(),
 });
 
-// Contribuția lunară: cardul de pe Acasă (oricine e logat) și pagina de
-// administrare. Invalidate împreună după orice acțiune, cu prefixul
-// ["contributions"].
+// Contribuția lunară (Acasă și administrare), invalidate împreună prin
+// prefixul ["contributions"].
 export const myContributionQuery = queryOptions({
   queryKey: ["contributions", "mine"],
   queryFn: () => getMyContribution(),
