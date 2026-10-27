@@ -17,6 +17,7 @@ Construit cu [TanStack Start](https://tanstack.com/start) (React 19 + TanStack R
 - [Subtitrare română automată](#subtitrare-română-automată)
 - [Urmărire automată](#urmărire-automată)
 - [Viața unei descărcări](#viața-unei-descărcări)
+- [Watcher — sarcinile de fundal](#watcher--sarcinile-de-fundal)
 - [Notificări și jurnal](#notificări-și-jurnal)
 - [Întreținere: backup, actualizări, retenție](#întreținere-backup-actualizări-retenție)
 - [Erori aplicație](#erori-aplicație)
@@ -52,11 +53,11 @@ Construit cu [TanStack Start](https://tanstack.com/start) (React 19 + TanStack R
 
 **qBittorrent** — viteze, torrente active/total, filtre pe stări (inclusiv stările `stopped*` din qBittorrent 5), căutare, pauză/reluare globală sau individuală, ștergere torrent + fișiere.
 
-**Immich** — număr de fișiere, spațiu ocupat, joburile în curs (cele terminate rămân 30s), Restart/Update, plugin-ul care trece încărcările în jurnal.
+**Immich** — număr de fișiere, spațiu ocupat, joburile în curs (cele terminate rămân 30s), Restart/Update. Încărcările ajung în jurnal prin sarcina „Încărcări Immich” a Watcher-ului.
 
 **Sistem** — CPU, memorie, swap, uptime, discuri (cu viteze), rețea, senzori de temperatură, top procese și top I/O, aplicații monitorizate, Update Ubuntu (doar când sunt pachete) și repornire (doar când sistemul o cere), reglajul ritmului statisticilor live (1s…30s, per dispozitiv).
 
-**Tehnic** — Restart/Update Plex, speedtest (doar pe serverul Ookla Digi București, cu istoric grafic și starea legăturii Ethernet, cu renegociere), plugin-urile de fundal (clicabile, cu detalii — inclusiv ce caută acum reîncercarea subtitrărilor), backup-ul bazei, abonamentele push, commit-uri, Jurnalul de activitate, **Erori aplicație**, push manual către GitHub.
+**Tehnic** — Restart/Update Plex, speedtest (doar pe serverul Ookla Digi București, cu istoric grafic și starea legăturii Ethernet, cu renegociere), **Watcher-ul** (toate sarcinile de fundal, cu starea, istoricul, „Rulează acum” și pauza fiecăreia), starea backup-urilor bazei, abonamentele push, commit-uri, Jurnalul de activitate, **Erori aplicație**, push manual către GitHub.
 
 **Utilizatori** — cereri de aprobare, lista conturilor; drawer-ul unui cont arată contactul, legătura Plex, descărcările inițiate, activitatea Plex, istoricul autentificărilor, și permite **resetarea parolei**.
 
@@ -79,7 +80,7 @@ Primul admin al unei instalări noi vine din `ADMIN_USER`/`ADMIN_PASS` din `.env
 
 - paginile Immich, Sistem, Tehnic, Utilizatori; tabul Top Filelist din Descoperă; căutarea manuală Filelist și alegerea manuală a torrentului;
 - **altă calitate decât 1080p**, cu excepția titlurilor care nu există deloc la 1080p pe Filelist (wizard-ul îi arată atunci calitățile disponibile). Serverul verifică torrentul după rezultatele căutării făcute de același utilizator în wizard (`download-quality.ts`, ținute 6 h în memorie), nu după numele trimis de browser;
-- **ștergerea sau anularea unui titlu în primele 24 h** de la inițierea descărcării (regula hit and run de pe Filelist), socotite pentru tot pachetul de sezon. Drawer-ul arată ora de la care se poate. Altfel, un titlu îl poate șterge cel care l-a adăugat sau adminul (`isAdminOrOwner`).
+- **ștergerea pe loc în primele 24 h** de la descărcare (regula hit and run de pe Filelist, socotită pentru tot pachetul de sezon): cererea e acceptată, dar ștergerea se **programează** la împlinirea celor 24 h (vezi [Viața unei descărcări](#viața-unei-descărcări)). Doar adminul poate șterge pe loc. Un titlu îl poate șterge cel care l-a adăugat sau adminul (`isAdminOrOwner`).
 
 **Înregistrare** (`registerUser`, `src/lib/auth/registration.functions.ts`) — Username/Parolă/Email/Telefon (WhatsApp). Username-ul **sau** email-ul trebuie să corespundă unui cont din biblioteca Plex (`matchPlexAccount`, `src/lib/auth/plex-users.server.ts` — `plex.tv/api/users`, XML parsat manual, cache 5 min), altfel cererea e respinsă. Contul intră `pending` și nu se poate loga până la aprobare; cererea apare în jurnal (`account_request`) + push.
 
@@ -126,7 +127,7 @@ O singură sursă de adevăr pentru „există pe Filelist?”: `checkFilelistFo
 - **Cache de 10 minute, citit doar de wizard** (`useCache: true`), ca să cruțe limita orară a contului. Urmărirea întreabă mereu direct — un răspuns vechi ar raporta „nimic nou”.
 - Fiecare rezultat păstrează `matchedByImdb`, vizibil la **„Info Căutare”** în dialogul de confirmare (`DownloadConfirmDialog.tsx`).
 
-Orchestrarea descărcării (upload qBittorrent, scriere în `media`, notificări, polling) stă în `download.ts`. Cererea răspunde imediat după ce qBittorrent confirmă upload-ul; restul rulează în fundal.
+Orchestrarea descărcării (upload qBittorrent, scriere în `media`, notificări) stă în `download.ts`. Cererea răspunde imediat după ce qBittorrent confirmă upload-ul; urmărirea până la final e a sarcinii „Descărcări” din [Watcher](#watcher--sarcinile-de-fundal).
 
 ### Potrivirea cu Plex — după ID, nu după titlu
 
@@ -137,7 +138,7 @@ Biblioteca Plex e în română („Imperiul Mafiei” pentru _MobLand_), deci po
 
 ### Detaliile se țin singure la zi
 
-Plugin-ul `show-watcher` reîmprospătează la 12h per titlu detaliile serialelor (cu toate episoadele — nume, descriere, cadru, posterul sezonului) și ale filmelor (`refreshShowMetadata`, `syncEpisodeDetails`, `refreshMovieMetadata`). Totul se cere în română, cu engleza ca rezervă, deci o traducere apărută mai târziu pe TMDB se preia singură. Câmpurile se scriu doar cu valori nevide: ce lipsește la TMDB nu șterge ce avem. Producțiile românești își păstrează titlul original. Fiecare rulare scrie în jurnal (filtrul „Metadate”) ce s-a schimbat. TMDB se actualizează treptat (episodul înaintea sezonului), deci o corectură poate apărea cu întârziere.
+Sarcina „Seriale și filme” a Watcher-ului reîmprospătează la 12h per titlu detaliile serialelor (cu toate episoadele — nume, descriere, cadru, posterul sezonului) și ale filmelor (`refreshShowMetadata`, `syncEpisodeDetails`, `refreshMovieMetadata`). Totul se cere în română, cu engleza ca rezervă, deci o traducere apărută mai târziu pe TMDB se preia singură. Câmpurile se scriu doar cu valori nevide: ce lipsește la TMDB nu șterge ce avem. Producțiile românești își păstrează titlul original. O rulare cu schimbări reale (sau titluri eșuate) le scrie, cu detalii, în istoricul sarcinii din Watcher; rulările fără nimic nou nu se scriu. TMDB se actualizează treptat (episodul înaintea sezonului), deci o corectură poate apărea cu întârziere.
 
 ---
 
@@ -170,7 +171,7 @@ La finalul fiecărei descărcări (înainte de refresh-ul Plex), `ensureRomanian
 4. **Alegere și verificare** (`subtitle-sources.ts`, `release-scoring.ts`, `subtitle-verify.ts`) — candidații sunt ordonați după numele release-ului (sursa și grupul contează mult, rezoluția aproape deloc; la egalitate câștigă subs.ro), apoi încercați pe rând până trece unul de verificarea de conținut: limba, durata (ultima replică nu poate fi mult după sfârșitul fișierului) și **sincronizarea** — corelația intervalelor de vorbire cu o subtitrare text deja încorporată (de obicei engleza). Episodul corect dă 0,72–1,00, altul ≤ 0,29; pragul e 0,45. Când există o referință, câștigă varianta cea mai bine sincronizată.
 5. **Scriere** (`subtitle-encoding.ts`, `subtitle-apply.ts`) — conversie la UTF-8 (Plex nu detectează encoding-ul), scriere lângă video cu numele lui + `.ro.srt`. Fără o potrivire sigură, se scrie cea mai apropiată, marcată **aproximativă**.
 
-**Reîncercare zilnică** (plugin `subtitle-retry`, `src/lib/filelist/subtitle-retry.ts`) — traducerile apar des la una-trei zile după episod. Timp de **14 zile** de la descărcare, o dată pe zi, se reverifică orice torrent fără subtitrare română și orice subtitrare aproximativă; aproximativa se înlocuiește doar cu una sigur mai bună. Ceasul e `subtitle_checked_at` din DB. Jurnal și push doar când se găsește ceva; starea e vizibilă în Bibliotecă și în Tehnic → Plugin-uri.
+**Reîncercare zilnică** (sarcina „Reîncercare subtitrări”, `src/lib/filelist/subtitle-retry.ts`) — traducerile apar des la una-trei zile după episod. Timp de **14 zile** de la descărcare, o dată pe zi, se reverifică orice torrent fără subtitrare română și orice subtitrare aproximativă; aproximativa se înlocuiește doar cu una sigur mai bună. Ceasul e `subtitle_checked_at` din DB. Jurnal și push doar când se găsește ceva; starea e vizibilă în Bibliotecă și în Watcher.
 
 **Corectare manuală** — „Corectează subtitrare” din drawer-ul Bibliotecii rulează aceeași verificare (`checkSubtitleForTorrent`), pentru admin sau cel care a adăugat titlul.
 
@@ -182,7 +183,7 @@ OpenSubtitles e servit prin Cloudflare cu cache comun de până la 24 h; cereril
 
 ## Urmărire automată
 
-Două module simetrice, conduse de plugin-ul `server/plugins/show-watcher.ts`.
+Două module simetrice, conduse de sarcina „Seriale și filme” a Watcher-ului.
 
 **Seriale** (`src/lib/media/show-watch.ts`) — un serial urmărit își descarcă singur episoadele noi. Mecanismul e **declarativ**: TMDB spune ce s-a difuzat, `media WHERE parent_id = ?` spune ce avem, diferența se descarcă. Idempotent — se repară singur după restart și nu poate descărca de două ori. Activarea pornește de la o poziție aleasă (`auto_download_from`, ex. `S03E05`), nu trage tot istoricul.
 
@@ -194,18 +195,43 @@ Două module simetrice, conduse de plugin-ul `server/plugins/show-watcher.ts`.
 
 **Unde stă starea** — coloane pe rândul-părinte din `media` (`auto_download`, `auto_download_quality`, `auto_download_fallback_quality`, `auto_download_from`, `watch_last_checked_at`, `watch_fallback_seen`), nu o tabelă paralelă. Prima variantă (`pinned_items`, eliminată în v14) producea duplicate și descărcări de N ori.
 
-**Cadența** — 3h la seriale, 12h la filme, pe `watch_last_checked_at` din DB. Bucla doar întreabă la 10 min cine a expirat (plus un poll de 30s pentru filmele tocmai adăugate). Ora exactă a următorului episod vine de la TVmaze, pe care TMDB n-o dă.
+**Cadența** — 3h la seriale (1h în ziua lansării ±1 zi), 12h la filme, pe `watch_last_checked_at` din DB; sarcina întreabă la 10 min cine a expirat. Pornirea urmăririi unui serial îl verifică imediat, iar un film adăugat e căutat prima dată după un minut (`pokeWatcher`). Ora exactă a următorului episod vine de la TVmaze, pe care TMDB n-o dă.
 
 ---
 
 ## Viața unei descărcări
 
-**Continuitate după restart** — polling-ul unei descărcări trăiește în procesul serverului, iar fiecare deploy îl repornește. Plugin-ul `download-recovery.ts`:
+**Până la final** — sarcina „Descărcări” a Watcher-ului (`src/lib/filelist/download-tracker.ts`) citește din `media` torrentele neterminate și le cere stadiul într-o singură cerere qBittorrent. Un torrent terminat e **finalizat** separat (`finalizeDownload`): ID-ul IMDb în numele fișierelor, `completed_at`, notificare, subtitrare română, refresh Plex. Apoi e **legat la Plex** — la fiecare rulare în primele 30 de minute, apoi la 10 minute, până la 72h (`plex-link-reconciler.ts`). Pachetele de sezon sunt desfăcute în câte un rând per episod. Totul e în DB, deci un restart sau un deploy nu întrerupe nimic. O descărcare e urmărită cel mult 14 zile de la adăugare.
 
-- **Reluarea** (la +15s) reia polling-ul descărcărilor nefinalizate — altfel un torrent terminat după restart rămâne fără subtitrare, `completed_at`, notificare și legare Plex.
-- **Reconcilierea** (la +45s, apoi la 10 min) reîncearcă legarea Plex pentru tot ce e complet și fără `plex_rating_key` în ultimele 72h.
+**Ștergerea completă** (`deleteMediaEntry`, `log.ts`, și `delete-title.ts`) — torrent + fișiere prin qBittorrent, apoi reziduul de pe disc pe care qBittorrent nu-l consideră al lui: subtitrările scrise de aplicație, inclusiv `.respins` și cele cu sufix dublu (`disk-cleanup.ts`, cu garda `isInsideMediaRoot` — nu șterge niciodată `Filme/`/`Seriale/` ca întreg), apoi rândurile din `media` și rescanarea Plex.
 
-**Ștergerea completă** (`deleteMediaEntry`, `log.ts`) — torrent + fișiere prin qBittorrent, apoi reziduul de pe disc pe care qBittorrent nu-l consideră al lui: subtitrările scrise de aplicație, inclusiv `.respins` și cele cu sufix dublu (`disk-cleanup.ts`, cu garda `isInsideMediaRoot` — nu șterge niciodată `Filme/`/`Seriale/` ca întreg), apoi rândurile din `media`.
+**Ștergerea programată** (`src/lib/media/scheduled-delete.ts`) — în primele 24 h de la descărcare, o cerere de ștergere sau anulare se programează la împlinirea lor (hit and run pe Filelist); torrentul continuă să se descarce și să facă seed, iar titlul apare în Bibliotecă cu un timer. Oricine poate renunța la ștergere și devine proprietarul titlului; adminul poate șterge pe loc („Șterge acum”). Termenul stă în `media`, iar sarcina „Ștergeri programate” rulează exact la el.
+
+---
+
+## Watcher — sarcinile de fundal
+
+Toate sarcinile periodice ale aplicației rulează sub un singur tact de o secundă (`server/plugins/watcher.ts` → `src/lib/watcher/runner.ts`), declarate într-un registru (`src/lib/watcher/tasks.ts`). Fiecare sarcină pornită e o operațiune independentă, deci una lentă nu le ține pe loc pe celelalte; aceeași sarcină nu rulează niciodată de două ori deodată.
+
+| Sarcină                 | Ritm                                  | Ce face                                                                                        |
+| ----------------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Sesiuni Plex            | 10s                                   | vizionările în jurnal (oprirea confirmată la două verificări), dovezile HDR ale dispozitivelor |
+| Descărcări              | 10s cât e ceva în curs, altfel doarme | finalizarea și legarea la Plex (vezi mai sus)                                                  |
+| Ștergeri programate     | la termenul ștergerii                 | ștergerile ajunse la cele 24 h                                                                 |
+| Seriale și filme        | la 10 min (3h / serial)               | episoadele noi, filmele așteptate, detaliile din TMDB                                          |
+| Încărcări Immich        | 2 min                                 | încărcările, în jurnal                                                                         |
+| Backup bază de date     | zilnic                                | copie `VACUUM INTO`, vezi [Întreținere](#întreținere-backup-actualizări-retenție)              |
+| Rating-uri IMDb         | zilnic                                | datasetul oficial IMDb                                                                         |
+| Actualizări disponibile | zilnic                                | Plex, Immich, Ubuntu                                                                           |
+| Reîncercare subtitrări  | zilnic / titlu                        | subtitrările care lipsesc, 14 zile                                                             |
+| Acțiuni întrerupte      | la pornire                            | închide acțiunile Restart/Update rămase „în curs”                                              |
+
+- **Starea e în DB** (`watcher_tasks`, `watcher_runs`): ora următoarei rulări rămâne peste un deploy, iar plugin-ul și server functions (copii separate ale modulelor) comunică prin bază.
+- **O sarcină își poate cere singură ora următoare** (backup-ul: 23h după ultima copie) sau poate dormi până e trezită (`pokeWatcher`, `src/lib/watcher/poke.ts`, la o descărcare nouă sau o ștergere programată).
+- **În Tehnic**, un singur rând „Watcher” deschide lista sarcinilor: operațiunile în curs (live), ultima acțiune reală, ritmul, eroarea, istoricul ultimelor 20 de rulări relevante, **„Rulează acum”** și **Pauză** (doar admin). Aceeași eroare repetată se raportează o singură dată.
+- **O sarcină periodică nouă** se adaugă în `tasks.ts`, cu explicația în `WATCHER_TASK_INFO` (`src/components/tehnic/plugins.tsx`) — nu ca plugin separat.
+
+Singurul alt plugin, `server-lifecycle.ts`, nu e o sarcină: oprirea controlată la `SIGTERM`, captura erorilor din consolă și logarea pornirii/opririi.
 
 ---
 
@@ -213,16 +239,16 @@ Două module simetrice, conduse de plugin-ul `server/plugins/show-watcher.ts`.
 
 **Web push** pentru commit-uri GitHub, torrente adăugate/complete, subtitrări găsite ulterior, încărcări în Immich, actualizări disponibile și acțiunile Restart/Update, cereri noi de cont și erori noi ale aplicației. Funcționează fără browser deschis; notificările pierdute în timpul unui restart se recuperează; erorile de rețea temporare (DNS încă nepornit după reboot) se reîncearcă. Notificările aceluiași eveniment se înlocuiesc (tag: „Descărcare completă” peste „Inițiată”), iar apăsarea aduce aplicația deja deschisă la pagina potrivită. Conținutul lor stă într-un singur loc: `src/lib/notifications/notifications.ts`. Abonamentele se văd și se revocă din Tehnic.
 
-**Jurnalul de activitate** (Tehnic) — categorii (inclusiv Subtitrări și Metadate), separatoare pe zile, căutare fără diacritice. Vizionările Plex sunt un singur rând cu intervalul și progresul („în curs” până se încheie); oprirea + pornirea unui deploy sunt un rând „Deploy · oprit N s”. Rândurile de torrent deschid titlul în Bibliotecă (`/biblioteca?titlu=ID`). Clientul cere la fiecare puls doar intrările noi (cursor pe `rowid`), iar lista întreagă din 5 în 5 minute.
+**Jurnalul de activitate** (Tehnic) — categorii (Server, Plex, Torrente, Subtitrări, Immich, Updates, Commits, Conturi, Contribuții, Erori), separatoare pe zile, căutare fără diacritice. Vizionările Plex sunt un singur rând cu intervalul și progresul („în curs” până se încheie); oprirea + pornirea unui deploy sunt un rând „Deploy · oprit N s”. Rândurile de torrent deschid titlul în Bibliotecă (`/biblioteca?titlu=ID`). Clientul cere la fiecare puls doar intrările noi (cursor pe `rowid`), iar lista întreagă din 5 în 5 minute.
 
 ---
 
 ## Întreținere: backup, actualizări, retenție
 
-Plugin-ul `server/plugins/maintenance.ts`, cu pași independenți:
+Sarcini ale [Watcher-ului](#watcher--sarcinile-de-fundal):
 
 - **Închide acțiunile rămase „în curs”** de la procesul anterior, la pornire — altfel ar bloca butoanele Restart/Update.
-- **Backup-ul bazei** (`src/lib/system/db-backup.ts`) — `data/faikkitbox.db` ține tot. Copia se face cu **`VACUUM INTO`**, nu cu `cp` (baza e în WAL). Verificare la +90s, apoi din oră în oră; copia se face doar dacă ultima de pe disc e mai veche de 23h, cu rotație la 14 fișiere în `data/backups/` (sau `FAIKKITBOX_BACKUP_DIR`). Ceasul e chiar fișierul, deci deploy-urile nu-l resetează. Stare și backup manual în Tehnic.
+- **Backup-ul bazei** (`src/lib/system/db-backup.ts`) — `data/faikkitbox.db` ține tot. Copia se face cu **`VACUUM INTO`**, nu cu `cp` (baza e în WAL). O copie la 23h după cea mai recentă de pe disc, cu rotație la 14 fișiere în `data/backups/` (sau `FAIKKITBOX_BACKUP_DIR`). Ceasul e chiar fișierul, deci deploy-urile nu-l resetează. Starea e în Tehnic; un backup manual se face din Watcher, cu „Rulează acum”.
 - **Verificarea actualizărilor** (`update-check.ts`) — Plex, Immich, Ubuntu și cererea de repornire, efectiv o dată pe zi; intrare în jurnal + push cât timp ceva rămâne neinstalat.
 - **Rating-urile IMDb** (`src/lib/imdb/imdb-ratings.ts`) — datasetul oficial `title.ratings.tsv.gz`, importat zilnic într-o bază separată, `data/imdb-ratings.db` (~35 MB, se poate reface oricând, deci nu încarcă backup-urile). Importul scrie un fișier nou și îl mută peste cel vechi abia la final.
 
@@ -232,14 +258,14 @@ Plugin-ul `server/plugins/maintenance.ts`, cu pași independenți:
 
 ## Erori aplicație
 
-Toate `console.warn`/`console.error` din **toată aplicația** — server functions, SSR, plugin-uri, cod client — sunt captate automat în widget-ul **„Erori aplicație”** din Tehnic.
+Toate `console.warn`/`console.error` din **toată aplicația** — server functions, SSR, sarcinile Watcher-ului, cod client — sunt captate automat în widget-ul **„Erori aplicație”** din Tehnic.
 
-| Componentă                               | Rol                                                                                                                                         |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/lib/errors/console-capture.ts`      | Suprascrie `console.error`/`console.warn` pe server, trimite spre `logError()`. Instalată idempotent din `server.ts` și din fiecare plugin. |
-| `src/lib/errors/client-error-capture.ts` | Echivalentul pentru browser (plus `window.onerror`/`unhandledrejection`), spre `logClientError()`, cu rate-limit per IP.                    |
-| `src/lib/errors/error-log.ts`            | Nucleul: grupare, rate-limit, retenție, notificare. Server-only.                                                                            |
-| `src/lib/errors/error-log.functions.ts`  | Server functions (`getErrorLogs`, `clearErrorLogs`, `logClientError`) — fișierul subțire importat de client.                                |
+| Componentă                               | Rol                                                                                                                                                       |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/lib/errors/console-capture.ts`      | Suprascrie `console.error`/`console.warn` pe server, trimite spre `logError()`. Instalată idempotent din `server.ts` și din plugin-ul `server-lifecycle`. |
+| `src/lib/errors/client-error-capture.ts` | Echivalentul pentru browser (plus `window.onerror`/`unhandledrejection`), spre `logClientError()`, cu rate-limit per IP.                                  |
+| `src/lib/errors/error-log.ts`            | Nucleul: grupare, rate-limit, retenție, notificare. Server-only.                                                                                          |
+| `src/lib/errors/error-log.functions.ts`  | Server functions (`getErrorLogs`, `clearErrorLogs`, `logClientError`) — fișierul subțire importat de client.                                              |
 
 - **Grupare** — erori identice (sursă + nivel + mesaj) incrementează un contor `×N`.
 - **Rate limit** — max 60 scrieri/minut; peste, o intrare de avertizare și suspendare temporară.
@@ -333,6 +359,7 @@ src/
     services/           Plex, Immich, qBittorrent, Host
     system/             metrici, Restart/Update, actualizări, Ethernet,
                         speedtest, backup
+    watcher/            Watcher: registrul sarcinilor de fundal și motorul
     errors/             captare erori server + client
     notifications/      web push și conținutul notificărilor
     prefetch.ts         preîncărcarea paginilor la deschidere
@@ -341,9 +368,7 @@ src/
   routes/             pagini: index, descopera, biblioteca, immich, qbit,
                       sistem, tehnic, users, login, register
 server/
-  plugins/            fundal: show-watcher, subtitle-retry, download-recovery,
-                      maintenance, plex-session-tracker,
-                      immich-upload-tracker, server-lifecycle
+  plugins/            watcher (toate sarcinile de fundal), server-lifecycle
   routes/api/         GitHub webhook, SSE auto-reload, proxy postere Plex
 deploy/
   hardening/          unit systemd, sudoers și scripturi pentru contul dedicat
@@ -453,15 +478,16 @@ export const getSomething = createServerFn({ method: "GET" })
 
 În componente se apelează direct (loader/SSR) sau prin `useServerFn(fn)` în event handler-e (identitatea e stabilă, poate sta în dependențele unui efect).
 
-Plugin-urile (`server/plugins/*.ts`) n-au request context — folosesc variante „interne” ale funcțiilor (plain function, fără `createServerFn`), prin `await import(...)` dinamic: `checkFilelistForItemInternal`, `getTmdbSeasonEpisodesInternal`, `checkShow`/`checkMovie`. Nitro încarcă `server/plugins/` și montează `server/routes/api/` **prin convenție de folder**, deci un grep nu le arată ca „folosite”.
+Sarcinile Watcher-ului (`src/lib/watcher/tasks.ts`) n-au request context — folosesc variante „interne” ale funcțiilor (plain function, fără `createServerFn`), prin `await import(...)` dinamic: `checkFilelistForItemInternal`, `getTmdbSeasonEpisodesInternal`, `checkShow`/`checkMovie`. Nitro încarcă `server/plugins/` și montează `server/routes/api/` **prin convenție de folder**, deci un grep nu le arată ca „folosite”.
 
 ### Reguli
 
 - **`*.functions.ts` — fără importuri server statice.** Corpul handler-ului e scos din bundle-ul client, deci un `await import("./x")` din el rămâne pe server; un import static la vârf trage tot graful în bundle-ul public. Logica stă în modulele pereche (`media.ts`, `activity-log.ts`, `error-log.ts`, `filelist/download.ts`, `system/*.ts`...). Încălcarea regulii a servit public schema SQLite și a produs `(0 , n.dirname) is not a function`, luni de zile neexplicată.
 - **O eroare dintr-o server function se aruncă cu `throw new Error(...)`, nu cu un `Response`.** TanStack Start tratează un `Response` aruncat ca rezultat reușit (`x-tss-raw`).
 - **Rutele brute din `server/routes/` doar citesc sesiunea** (`unsealSession`), nu folosesc `getSession` din h3-ul Nitro: cele două h3 (Nitro vs TanStack Start) au formate de sigiliu diferite, iar rescrierea cookie-ului deloga utilizatorul.
-- **Munca de la pornire se declanșează din `server/plugins/`**, nu dintr-un `setTimeout` la nivel de modul — un efect de modul rulează doar dacă cineva importă modulul. Două bug-uri identice au venit din asta.
-- **Munca de pornire care atinge rețeaua nu stă într-o migrare** (sincronă, în tranzacție, fatală la eșec). Pentru „o singură dată, cu rețea”: tabela `one_time_jobs`, declanșată din plugin.
+- **Munca de fundal stă în Watcher**, nu într-un `setTimeout`/`setInterval` la nivel de modul — un efect de modul rulează doar dacă cineva importă modulul (două bug-uri identice au venit din asta). O sarcină periodică nouă se adaugă în `src/lib/watcher/tasks.ts`, cu cadențele per element în DB.
+- **Munca de pornire care atinge rețeaua nu stă într-o migrare** (sincronă, în tranzacție, fatală la eșec). Pentru „o singură dată, cu rețea”: tabela `one_time_jobs`, declanșată dintr-o sarcină de pornire.
+- **Comentariile spun „de ce”**, pe scurt — bug-ul evitat, decizia, constrângerea —, nu repetă codul și nu descriu lucruri care nu mai există. Comentariile SQL din `db.ts` stau într-un template literal: fără backtick-uri în ele.
 - **DB** — SQLite nativ (`node:sqlite`, nu `better-sqlite3`), un singur fișier. Schema cu `CREATE TABLE IF NOT EXISTS`, migrările incrementale pe `PRAGMA user_version` (`runCleanups` în `db.ts`), tranzacționale și fatale la eșec. O migrare nouă trebuie să fie idempotentă și să verifice că tabela sursă există; o migrare deja aplicată nu se modifică.
 - **`media` e sursa unică de adevăr pentru bibliotecă** — datele din wizard se scriu complet acolo, restul proiectului citește de acolo, nu recalculează live. Urmărirea e un set de coloane pe rândul-părinte, nu o tabelă paralelă (`pinned_*` și `downloads` au fost eliminate tocmai de-asta). Un flux nou de intenție extinde rândul existent.
 - **Filelist** — `categories.ts` e singurul loc pentru film/serial pe categorie; `checkFilelistForItemInternal` e singurul care vorbește cu API-ul Filelist; `plex-refresh.ts` e singurul care declanșează rescan Plex.
