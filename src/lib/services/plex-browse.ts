@@ -44,8 +44,9 @@ export interface PlexBrowseItem {
   progress: number | null; // 0-100
   dlspeed: number | null; // bytes/s
   eta: number | null; // secunde
-  // Ștergere programată (SQLite, UTC); la seriale, cea mai apropiată.
-  deleteScheduledAt: string | null;
+  // Ștergere programată: termenul (SQLite, UTC; null = la 48 h după
+  // finalizare). La seriale, cel mai apropiat.
+  deleteScheduled: { at: string | null } | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -135,7 +136,27 @@ interface MediaBrowseRow {
   torrent_hash: string | null;
   completed_at: string | null;
   auto_download: number;
+  delete_requested_at: string | null;
   delete_scheduled_at: string | null;
+}
+
+function rowDeleteScheduled(r: {
+  delete_requested_at: string | null;
+  delete_scheduled_at: string | null;
+}): { at: string | null } | null {
+  return r.delete_requested_at ? { at: r.delete_scheduled_at } : null;
+}
+
+// Cea mai apropiată ștergere programată dintre episoade; un termen cunoscut
+// bate unul care încă așteaptă finalizarea.
+function earliestDeleteScheduled(rows: MediaBrowseRow[]): { at: string | null } | null {
+  const scheduled = rows.map(rowDeleteScheduled).filter((d) => d != null);
+  if (scheduled.length === 0) return null;
+  const at = scheduled
+    .map((d) => d.at)
+    .filter((v): v is string => v != null)
+    .sort()[0];
+  return { at: at ?? null };
 }
 
 function rowAddedAt(r: MediaBrowseRow): number {
@@ -164,7 +185,8 @@ export const getPlexLibraryBrowse = createServerFn({ method: "GET" }).handler(
         .prepare(
           `SELECT m.id, m.parent_id, m.plex_rating_key, m.media_type, m.title, m.original_title,
                   m.season, m.episode, m.poster_path, m.plex_added_at, m.added_at,
-                  m.torrent_hash, m.completed_at, m.auto_download, m.delete_scheduled_at
+                  m.torrent_hash, m.completed_at, m.auto_download, m.delete_requested_at,
+                  m.delete_scheduled_at
            FROM media m
            WHERE (
                    m.media_type IN ('movie', 'episode')
@@ -213,7 +235,7 @@ export const getPlexLibraryBrowse = createServerFn({ method: "GET" }).handler(
             progress: null,
             dlspeed: null,
             eta: null,
-            deleteScheduledAt: r.delete_scheduled_at,
+            deleteScheduled: rowDeleteScheduled(r),
           });
           continue;
         }
@@ -244,11 +266,7 @@ export const getPlexLibraryBrowse = createServerFn({ method: "GET" }).handler(
           progress: null,
           dlspeed: null,
           eta: null,
-          deleteScheduledAt:
-            episodes
-              .map((e) => e.delete_scheduled_at)
-              .filter((v): v is string => v != null)
-              .sort()[0] ?? null,
+          deleteScheduled: earliestDeleteScheduled(episodes),
         });
       }
       items.sort((a, b) => b.addedAt - a.addedAt);
@@ -387,8 +405,8 @@ export interface ShowEpisodeEntry {
   stillUrl: string | null;
   airDate: string | null;
   durationMs: number | null;
-  // Ștergere programată (SQLite, UTC).
-  deleteScheduledAt: string | null;
+  // Ștergere programată: termenul (SQLite, UTC; null = la 48 h după finalizare).
+  deleteScheduled: { at: string | null } | null;
 }
 
 export interface PlexTitleDetail {
@@ -439,11 +457,12 @@ export interface PlexTitleDetail {
   isSeasonPack: boolean;
   // true pentru cel care a adăugat titlul sau un admin.
   canManage: boolean;
-  // Până când o ștergere cerută acum doar se programează (SQLite, UTC); null
-  // după 24 h sau pentru cine nu poate șterge.
-  deleteDelayedUntil: string | null;
-  // Ștergerea programată: când și cine. Oricine o poate anula.
-  deleteScheduled: { at: string; byUsername: string | null } | null;
+  // O ștergere cerută acum doar se programează: termenul (SQLite, UTC), null
+  // cât se descarcă. null = pe loc (după 48 h) sau pentru cine nu poate șterge.
+  deleteDelay: { until: string | null } | null;
+  // Ștergerea programată: când (null = la 48 h după finalizare) și cine.
+  // Oricine o poate anula.
+  deleteScheduled: { at: string | null; byUsername: string | null } | null;
   // Doar adminul poate ocoli programarea și șterge pe loc.
   canDeleteImmediately: boolean;
   tmdbId: number | null;
@@ -595,7 +614,7 @@ async function buildDetailFromMediaRow(
           `SELECT id, season, episode, original_title, title, episode_title,
                   plex_rating_key, plex_added_at, added_at, completed_at, is_season_pack,
                   torrent_hash, episode_still, episode_air_date, duration_ms,
-                  delete_scheduled_at
+                  delete_requested_at, delete_scheduled_at
              FROM media WHERE parent_id = ?
              ORDER BY season, episode`,
         )
@@ -615,6 +634,7 @@ async function buildDetailFromMediaRow(
         episode_still: string | null;
         episode_air_date: string | null;
         duration_ms: number | null;
+        delete_requested_at: string | null;
         delete_scheduled_at: string | null;
       }>)
     : [];
@@ -668,12 +688,12 @@ async function buildDetailFromMediaRow(
 
   const canManage = isAdminOrOwner(session, row.requested_by_user_id);
   const isAdmin = !!session.data.admin;
-  let delayedUntil: string | null = null;
+  let delay: PlexTitleDetail["deleteDelay"] = null;
   let deleteScheduled: PlexTitleDetail["deleteScheduled"] = null;
   if (row.torrent_hash) {
-    const { deleteDelayedUntil, scheduledDeletion, usernameOf } =
+    const { deleteDelay, scheduledDeletion, usernameOf } =
       await import("../media/scheduled-delete");
-    if (canManage) delayedUntil = deleteDelayedUntil(row.torrent_hash);
+    if (canManage) delay = deleteDelay(row.torrent_hash);
     const scheduled = scheduledDeletion(row.torrent_hash);
     if (scheduled) {
       deleteScheduled = { at: scheduled.at, byUsername: usernameOf(scheduled.byUserId) };
@@ -717,7 +737,7 @@ async function buildDetailFromMediaRow(
         stillUrl: e.episode_still,
         airDate: e.episode_air_date,
         durationMs: e.duration_ms || null,
-        deleteScheduledAt: e.delete_scheduled_at,
+        deleteScheduled: rowDeleteScheduled(e),
       };
     });
   }
@@ -790,7 +810,7 @@ async function buildDetailFromMediaRow(
     subtitleRetry: subtitleRetryOf(row),
     isSeasonPack: !!row.is_season_pack,
     canManage,
-    deleteDelayedUntil: delayedUntil,
+    deleteDelay: delay,
     deleteScheduled,
     canDeleteImmediately: isAdmin,
     tmdbId: row.tmdb_id,

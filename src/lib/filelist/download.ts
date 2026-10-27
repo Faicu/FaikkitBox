@@ -107,6 +107,12 @@ export async function finalizeDownload(t: {
     return;
   }
   console.log(`[filelist] "${torrentName}" complet — dau refresh Plex`);
+  // O ștergere cerută în timpul descărcării tocmai și-a primit termenul.
+  const { scheduledDeletion } = await import("../media/scheduled-delete");
+  if (scheduledDeletion(torrentHash)) {
+    const { pokeWatcher } = await import("../watcher/poke");
+    pokeWatcher("scheduled-delete");
+  }
   import("../notifications/notifications")
     .then(({ buildTorrentCompleteNotification }) =>
       buildTorrentCompleteNotification({ torrentName, imdb: imdbId, torrentHash }),

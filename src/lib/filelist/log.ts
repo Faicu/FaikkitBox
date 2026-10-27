@@ -2,8 +2,8 @@ import { createServerFn } from "@tanstack/react-start";
 
 // Ștergerea unui titlu din Bibliotecă (sau anularea descărcării lui). Orice
 // rând `media` cu torrent_hash cunoscut e ștergibil, indiferent de
-// proveniență. În primele 24 h de la descărcare ștergerea nu se execută, ci
-// se programează pentru împlinirea lor — hit and run pe Filelist, vezi
+// proveniență. Până la 48 h de la finalizarea descărcării ștergerea nu se
+// execută, ci se programează pentru împlinirea lor — hit and run pe Filelist, vezi
 // scheduled-delete.ts. Excepție: adminul poate cere ștergerea pe loc
 // (`immediate`), ignorat pentru oricine altcineva. Execuția propriu-zisă e în
 // delete-title.ts.
@@ -12,7 +12,13 @@ export const deleteMediaEntry = createServerFn({ method: "POST" })
   .handler(
     async ({
       data,
-    }): Promise<{ ok: boolean; qbitDeleted?: boolean; scheduledAt?: string; error?: string }> => {
+    }): Promise<{
+      ok: boolean;
+      qbitDeleted?: boolean;
+      // Ștergerea doar s-a programat; `at` null = la 48 h după finalizare.
+      scheduled?: { at: string | null };
+      error?: string;
+    }> => {
       const { requireAuth, isAdminOrOwner, isLiveAdmin } = await import("../auth/admin.server");
       const session = await requireAuth();
       try {
@@ -46,28 +52,19 @@ export const deleteMediaEntry = createServerFn({ method: "POST" })
         }
         const torrentHash = row.torrent_hash;
 
-        const {
-          deleteDelayedUntil,
-          scheduleDeletion,
-          scheduledDeletion,
-          torrentLabel,
-          formatDeleteTime,
-        } = await import("../media/scheduled-delete");
+        const { deleteDelay, scheduleDeletion, scheduledDeletion, torrentLabel, formatDeleteTime } =
+          await import("../media/scheduled-delete");
         const { logActivity } = await import("../activity-log");
         const who = session.data.username ?? "admin";
         const label = torrentLabel(torrentHash);
 
-        // În primele 24 h doar programăm — pentru toată lumea, adminul inclus,
-        // dacă n-a cerut explicit ștergerea pe loc.
-        const delayedUntil = deleteDelayedUntil(torrentHash);
-        const immediate = !!delayedUntil && !!data.immediate && (await isLiveAdmin(session));
-        if (delayedUntil && !immediate) {
+        // Până la 48 h după finalizare doar programăm — pentru toată lumea,
+        // adminul inclus, dacă n-a cerut explicit ștergerea pe loc.
+        const delay = deleteDelay(torrentHash);
+        const immediate = !!delay && !!data.immediate && (await isLiveAdmin(session));
+        if (delay && !immediate) {
           const already = scheduledDeletion(torrentHash);
-          const scheduled = scheduleDeletion(
-            torrentHash,
-            delayedUntil,
-            session.data.userId ?? null,
-          );
+          const scheduled = scheduleDeletion(torrentHash, delay.until, session.data.userId ?? null);
           if (!already) {
             // Watcher-ul doarme cât nu e nimic programat — îl trezim, ca
             // să-și ia ora noii ștergeri.
@@ -75,11 +72,15 @@ export const deleteMediaEntry = createServerFn({ method: "POST" })
             pokeWatcher("scheduled-delete");
             await logActivity(
               "title_delete",
-              `${who} a programat ștergerea: ${label} — se șterge la ${formatDeleteTime(scheduled.at)}`,
+              `${who} a programat ștergerea: ${label} — ${
+                scheduled.at
+                  ? `se șterge la ${formatDeleteTime(scheduled.at)}`
+                  : "se șterge la 48 h după finalizarea descărcării"
+              }`,
               { torrentHash, action: "scheduled", user: who },
             );
           }
-          return { ok: true, scheduledAt: scheduled.at };
+          return { ok: true, scheduled: { at: scheduled.at } };
         }
 
         const { deleteTorrentNow } = await import("./delete-title");
@@ -87,7 +88,7 @@ export const deleteMediaEntry = createServerFn({ method: "POST" })
         await logActivity(
           "title_delete",
           immediate
-            ? `${who} a șters pe loc, înainte de 24 h: ${label}`
+            ? `${who} a șters pe loc, înainte de 48 h: ${label}`
             : `${who} a șters: ${label}`,
           {
             torrentHash,

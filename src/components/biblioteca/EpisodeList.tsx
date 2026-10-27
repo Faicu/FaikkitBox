@@ -120,7 +120,7 @@ function EpisodeRow({ ep, onOpen }: { ep: ShowEpisodeEntry; onOpen: () => void }
           procentul, cât timp torrentul chiar se descarcă ("processing" =
           terminat, aștepți doar indexarea Plex). */}
       <div className="flex shrink-0 items-center gap-1 pr-1">
-        {ep.deleteScheduledAt && <DeleteTimerBadge at={ep.deleteScheduledAt} />}
+        {ep.deleteScheduled && <DeleteTimerBadge at={ep.deleteScheduled.at} />}
         {ep.status === "in_library" ? (
           ep.watchedByMe ? (
             <Eye className="h-4 w-4 text-emerald-400" />

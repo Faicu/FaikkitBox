@@ -30,8 +30,9 @@ let db: ReturnType<DbModule["getDb"]>;
 let logActivity: ReturnType<typeof vi.fn>;
 
 const HOUR = 60 * 60 * 1000;
-const ADDED = "2026-10-26 10:00:00";
-const addedMs = new Date("2026-10-26T10:00:00Z").getTime();
+const ADDED = "2026-10-26 09:00:00";
+const COMPLETED = "2026-10-26 10:00:00";
+const completedMs = new Date("2026-10-26T10:00:00Z").getTime();
 
 beforeAll(async () => {
   db = (await import("../db")).getDb();
@@ -54,13 +55,16 @@ afterAll(() => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-function insertRow(hash: string, opts: { episode?: number; owner?: number } = {}): number {
+function insertRow(
+  hash: string,
+  opts: { episode?: number; owner?: number; downloading?: boolean } = {},
+): number {
   return Number(
     db
       .prepare(
         `INSERT INTO media (media_type, title, season, episode, is_season_pack, torrent_hash,
-                            requested_by_user_id, added_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                            requested_by_user_id, added_at, completed_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         opts.episode != null ? "episode" : "movie",
@@ -71,6 +75,7 @@ function insertRow(hash: string, opts: { episode?: number; owner?: number } = {}
         hash,
         opts.owner ?? null,
         ADDED,
+        opts.downloading ? null : COMPLETED,
       ).lastInsertRowid,
   );
 }
@@ -82,17 +87,53 @@ function addUser(id: number, username: string) {
   );
 }
 
-describe("deleteDelayedUntil", () => {
-  it("în primele 24 h întoarce termenul — ștergerea se programează", () => {
+describe("deleteDelay", () => {
+  it("în primele 48 h de la finalizare întoarce termenul — ștergerea se programează", () => {
     insertRow("h1");
-    expect(sched.deleteDelayedUntil("h1", addedMs + 23 * HOUR + 59 * 60_000)).toBe(
-      "2026-10-27 10:00:00",
-    );
+    expect(sched.deleteDelay("h1", completedMs + 47 * HOUR + 59 * 60_000)).toEqual({
+      until: "2026-10-28 10:00:00",
+    });
   });
 
-  it("după 24 h și un minut întoarce null — ștergerea e instantă", () => {
+  it("după 48 h și un minut întoarce null — ștergerea e instantă", () => {
     insertRow("h1");
-    expect(sched.deleteDelayedUntil("h1", addedMs + 24 * HOUR + 60_000)).toBeNull();
+    expect(sched.deleteDelay("h1", completedMs + 48 * HOUR + 60_000)).toBeNull();
+  });
+
+  it("cât se descarcă, termenul așteaptă finalizarea", () => {
+    insertRow("h1", { downloading: true });
+    expect(sched.deleteDelay("h1", completedMs + 100 * HOUR)).toEqual({ until: null });
+  });
+});
+
+describe("cerere în timpul descărcării", () => {
+  it("finalizarea dă termenul: acum + 48 h, pe tot pachetul", async () => {
+    insertRow("pack", { episode: 1, downloading: true });
+    insertRow("pack", { episode: 2, downloading: true });
+    sched.scheduleDeletion("pack", null, 7);
+    expect(sched.scheduledDeletion("pack")).toEqual({ at: null, byUserId: 7 });
+    // Fără termen, sarcina n-are ce rula.
+    expect(sched.nextScheduledDeletionAt()).toBeNull();
+    expect(await del.runDueDeletions(completedMs + 1000 * HOUR)).toBe(0);
+
+    const { markMediaCompleted } = await import("./media");
+    expect(markMediaCompleted("pack")).toBe(true);
+    const rows = db
+      .prepare(
+        `SELECT DISTINCT (julianday(delete_scheduled_at) - julianday(completed_at)) * 24 AS h
+           FROM media WHERE torrent_hash = ?`,
+      )
+      .all("pack") as Array<{ h: number }>;
+    expect(rows).toHaveLength(1);
+    expect(Math.round(rows[0].h)).toBe(48);
+  });
+
+  it("finalizarea fără cerere nu programează nimic", async () => {
+    insertRow("h1", { downloading: true });
+    const { markMediaCompleted } = await import("./media");
+    markMediaCompleted("h1");
+    expect(sched.scheduledDeletion("h1")).toBeNull();
+    expect(db.prepare("SELECT delete_scheduled_at AS at FROM media").get()).toEqual({ at: null });
   });
 });
 

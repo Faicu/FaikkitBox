@@ -67,9 +67,10 @@ export const WATCHER_TASK_INFO: Record<string, WatcherTaskInfo> = {
     icon: <Download className="h-3.5 w-3.5 text-blue-400" />,
   },
   "scheduled-delete": {
-    summary: "Șterge titlurile cerute spre ștergere în primele 24 h, la împlinirea lor.",
+    summary:
+      "Șterge titlurile cerute spre ștergere în primele 48 h de la finalizarea descărcării, la împlinirea lor.",
     points: [
-      "Filelist consideră hit and run un torrent șters în primele 24 de ore de la descărcare. Cererea se acceptă, dar ștergerea se programează pentru împlinirea celor 24 h.",
+      "Filelist consideră hit and run un torrent șters prea repede după descărcare. Cererea se acceptă, dar ștergerea se programează la 48 h de la finalizarea descărcării. Cerută cât torrentul încă se descarcă, așteaptă finalizarea și abia atunci își primește termenul.",
       "Până atunci torrentul continuă să se descarce și să facă seed, iar titlul apare în Bibliotecă cu un timer. Oricine poate renunța la ștergere și devine astfel proprietarul titlului. Adminul poate ocoli programarea cu „Șterge acum”.",
       "Rulează exact la termenul celei mai apropiate ștergeri; fără nimic programat doarme, iar o programare nouă o trezește. Termenul stă în baza de date: o ștergere ratată cât serverul a fost oprit se face la pornirea următoare.",
       "Un torrent care tocmai s-a terminat și își primește încă subtitrarea, sau o ștergere eșuată, se reîncearcă peste un minut.",

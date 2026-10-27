@@ -107,7 +107,7 @@ export const WATCHER_TASKS: WatcherTask[] = [
   },
 
   // -------------------------------------------------------------------------
-  // Ștergerile programate în primele 24 h (hit and run pe Filelist) — vezi
+  // Ștergerile programate în primele 48 h după finalizare (hit and run pe Filelist) — vezi
   // scheduled-delete.ts. Rulează la termenul celei mai apropiate, doarme fără
   // nimic programat (o programare nouă o trezește), iar o ștergere eșuată sau
   // un torrent în finalizare (finalizingHashes) se reîncearcă la minut.

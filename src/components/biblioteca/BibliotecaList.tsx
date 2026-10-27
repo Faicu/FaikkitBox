@@ -40,7 +40,7 @@ export function BibliotecaList({
     title: string;
     isSeasonPack: boolean;
     isCancel: boolean;
-    delayedUntil: string | null;
+    delay: { until: string | null } | null;
     canDeleteImmediately: boolean;
     alreadyScheduled: boolean;
   } | null>(null);
@@ -64,7 +64,7 @@ export function BibliotecaList({
     [allItems, query, sortMode],
   );
 
-  // `immediate` — doar adminul, ștergerea pe loc chiar și în primele 24 h.
+  // `immediate` — doar adminul, ștergerea pe loc chiar înainte de termen.
   async function confirmDeleteTitleAction(immediate = false) {
     if (!confirmDeleteTitle) return;
     const { mediaId, isCancel } = confirmDeleteTitle;
@@ -77,11 +77,13 @@ export function BibliotecaList({
       return;
     }
     queryClient.invalidateQueries({ queryKey: ["plexLibraryBrowse"] });
-    // În primele 24 h ștergerea doar s-a programat — titlul rămâne, cu timer.
-    if (res.scheduledAt) {
+    // Înainte de termen ștergerea doar s-a programat — titlul rămâne, cu timer.
+    if (res.scheduled) {
       queryClient.invalidateQueries({ queryKey: ["plexTitleDetail"] });
       toast.success(
-        `${isCancel ? "Anulare" : "Ștergere"} programată pentru ${deleteTimeLabel(res.scheduledAt)}`,
+        res.scheduled.at
+          ? `${isCancel ? "Anulare" : "Ștergere"} programată pentru ${deleteTimeLabel(res.scheduled.at)}`
+          : "Ștergere programată la 48 h după finalizarea descărcării",
       );
       return;
     }
@@ -180,7 +182,7 @@ export function BibliotecaList({
             {item.watchedCount}
           </span>
         )}
-        {item.deleteScheduledAt && <DeleteTimerBadge at={item.deleteScheduledAt} />}
+        {item.deleteScheduled && <DeleteTimerBadge at={item.deleteScheduled.at} />}
         {isStaleUnwatched(item) && (
           <span
             title="Nimeni nu l-a vizionat de peste 3 luni"
@@ -265,18 +267,26 @@ export function BibliotecaList({
               <div className="text-sm font-semibold">
                 {confirmDeleteTitle.isCancel ? "Anulare descărcare" : "Ștergere completă"}
               </div>
-              {confirmDeleteTitle.delayedUntil &&
+              {confirmDeleteTitle.delay &&
                 (confirmDeleteTitle.alreadyScheduled ? (
                   <p className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs leading-snug text-red-400">
                     {confirmDeleteTitle.isCancel ? "Anularea" : "Ștergerea"} e deja programată
-                    pentru {deleteTimeLabel(confirmDeleteTitle.delayedUntil)}. O faci acum?
+                    {confirmDeleteTitle.delay.until
+                      ? ` pentru ${deleteTimeLabel(confirmDeleteTitle.delay.until)}`
+                      : " la 48 de ore după finalizarea descărcării"}
+                    . O faci acum?
                   </p>
                 ) : (
                   <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-snug text-amber-400">
-                    {confirmDeleteTitle.isCancel
-                      ? "Descărcarea nu poate fi anulată pe loc în primele 24 de ore. Se va anula automat pe "
-                      : "Titlul nu poate fi șters pe loc în primele 24 de ore de la descărcare. Se va șterge automat pe "}
-                    {deleteTimeLabel(confirmDeleteTitle.delayedUntil)}.
+                    {confirmDeleteTitle.delay.until
+                      ? `${
+                          confirmDeleteTitle.isCancel
+                            ? "Descărcarea nu poate fi anulată pe loc"
+                            : "Titlul nu poate fi șters pe loc"
+                        } în primele 48 de ore de la finalizarea descărcării. Se va ${
+                          confirmDeleteTitle.isCancel ? "anula" : "șterge"
+                        } automat pe ${deleteTimeLabel(confirmDeleteTitle.delay.until)}.`
+                      : "Descărcarea nu poate fi anulată pe loc: continuă până la capăt, iar titlul se va șterge automat la 48 de ore după finalizare."}
                   </p>
                 ))}
               <p className="whitespace-pre-line text-sm text-muted-foreground">
@@ -296,7 +306,7 @@ export function BibliotecaList({
                 >
                   Renunță
                 </button>
-                {confirmDeleteTitle.delayedUntil && confirmDeleteTitle.canDeleteImmediately && (
+                {confirmDeleteTitle.delay && confirmDeleteTitle.canDeleteImmediately && (
                   <button
                     type="button"
                     onClick={() => confirmDeleteTitleAction(true)}
@@ -311,8 +321,8 @@ export function BibliotecaList({
                     onClick={() => confirmDeleteTitleAction()}
                     className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
                   >
-                    {confirmDeleteTitle.delayedUntil
-                      ? confirmDeleteTitle.isCancel
+                    {confirmDeleteTitle.delay
+                      ? confirmDeleteTitle.isCancel && confirmDeleteTitle.delay.until
                         ? "Programează anularea"
                         : "Programează ștergerea"
                       : confirmDeleteTitle.isCancel

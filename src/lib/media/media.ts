@@ -2,6 +2,7 @@
 // căile de descărcare — vezi upsertMediaEntry.
 
 import { getDb } from "../db";
+import { DELETE_DELAY_HOURS } from "./scheduled-delete";
 // Doar tipuri: `import type` nu trage modulele Plex în graf.
 import type {
   FileSubtitleReport,
@@ -509,10 +510,13 @@ export function clearMediaSubtitleStatus(torrentHash: string): void {
 // IS NULL` face din UPDATE o gardă atomică, deci a doua finalizare a aceluiași
 // hash nu mai trimite notificare și nu mai rulează subtitrările. Pe hash, nu pe
 // id-ul Filelist: un pachet are zeci de rânduri, dar o singură finalizare.
+// O ștergere cerută în timpul descărcării își primește aici termenul.
 export function markMediaCompleted(torrentHash: string): boolean {
   const res = getDb()
     .prepare(
-      `UPDATE media SET completed_at = datetime('now'), updated_at = datetime('now')
+      `UPDATE media SET completed_at = datetime('now'), updated_at = datetime('now'),
+              delete_scheduled_at = CASE WHEN delete_requested_at IS NOT NULL
+                THEN datetime('now', '+${DELETE_DELAY_HOURS} hours') END
        WHERE torrent_hash = ? AND completed_at IS NULL`,
     )
     .run(torrentHash);

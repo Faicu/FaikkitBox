@@ -1,58 +1,64 @@
 // ---------------------------------------------------------------------------
 // Ștergerea programată a unui titlu. Filelist socotește hit and run un torrent
-// șters în primele DELETE_DELAY_HOURS de la descărcare, deci cererea din acest
-// interval se amână: termenul se scrie pe rândurile torrentului, iar sarcina
-// „Ștergeri programate” o execută atunci. Până la termen oricine poate renunța,
+// șters în primele DELETE_DELAY_HOURS de la finalizarea descărcării, deci
+// cererea făcută până atunci se amână: termenul se scrie pe rândurile
+// torrentului, iar sarcina „Ștergeri programate” o execută atunci. Cerută cât
+// încă se descarcă, ștergerea așteaptă finalizarea (delete_scheduled_at NULL,
+// completat de markMediaCompleted). Până la termen oricine poate renunța,
 // devenind proprietarul titlului. Totul în DB: un restart nu pierde ștergerea.
 // ---------------------------------------------------------------------------
 
 import { getDb } from "../db";
 
-export const DELETE_DELAY_HOURS = 24;
+export const DELETE_DELAY_HOURS = 48;
 
 const sqliteMs = (v: string) => new Date(`${v.replace(" ", "T")}Z`).getTime();
 
-// Termenul (SQLite, UTC) până la care o ștergere se programează, sau null după
-// 24 h. MIN(added_at) pe hash: un pachet de sezon se șterge întreg.
-export function deleteDelayedUntil(torrentHash: string, nowMs = Date.now()): string | null {
+// null = ștergerea se face pe loc; `until` = termenul (SQLite, UTC), sau null
+// cât torrentul încă se descarcă. MIN pe hash: un pachet de sezon se șterge întreg.
+export type DeleteDelay = { until: string | null } | null;
+
+export function deleteDelay(torrentHash: string, nowMs = Date.now()): DeleteDelay {
   const row = getDb()
     .prepare(
-      `SELECT datetime(MIN(added_at), '+${DELETE_DELAY_HOURS} hours') AS until FROM media
-        WHERE torrent_hash = ?`,
+      `SELECT COUNT(completed_at) AS done,
+              datetime(MIN(completed_at), '+${DELETE_DELAY_HOURS} hours') AS until
+         FROM media WHERE torrent_hash = ?`,
     )
-    .get(torrentHash) as { until: string | null } | undefined;
-  const until = row?.until ?? null;
-  if (!until) return null;
-  return sqliteMs(until) > nowMs ? until : null;
+    .get(torrentHash) as { done: number; until: string | null } | undefined;
+  if (!row) return null;
+  if (!row.done) return { until: null };
+  return row.until && sqliteMs(row.until) > nowMs ? { until: row.until } : null;
 }
 
 export interface ScheduledDeletion {
-  // Formatul SQLite, UTC.
-  at: string;
+  // Formatul SQLite, UTC; null = așteaptă finalizarea descărcării.
+  at: string | null;
   byUserId: number | null;
 }
 
 export function scheduledDeletion(torrentHash: string): ScheduledDeletion | null {
   const row = getDb()
     .prepare(
-      `SELECT MIN(delete_scheduled_at) AS at, MIN(delete_scheduled_by) AS by FROM media
-        WHERE torrent_hash = ? AND delete_scheduled_at IS NOT NULL`,
+      `SELECT COUNT(*) AS n, MIN(delete_scheduled_at) AS at, MIN(delete_scheduled_by) AS by
+         FROM media WHERE torrent_hash = ? AND delete_requested_at IS NOT NULL`,
     )
-    .get(torrentHash) as { at: string | null; by: number | null } | undefined;
-  return row?.at ? { at: row.at, byUserId: row.by } : null;
+    .get(torrentHash) as { n: number; at: string | null; by: number | null } | undefined;
+  return row?.n ? { at: row.at, byUserId: row.by } : null;
 }
 
-// Programează ștergerea pe toate rândurile torrentului; una existentă rămâne.
 export function scheduleDeletion(
   torrentHash: string,
-  at: string,
+  at: string | null,
   byUserId: number | null,
 ): ScheduledDeletion {
   const existing = scheduledDeletion(torrentHash);
   if (existing) return existing;
   getDb()
     .prepare(
-      "UPDATE media SET delete_scheduled_at = ?, delete_scheduled_by = ? WHERE torrent_hash = ?",
+      `UPDATE media SET delete_requested_at = datetime('now'), delete_scheduled_at = ?,
+              delete_scheduled_by = ?
+        WHERE torrent_hash = ?`,
     )
     .run(at, byUserId, torrentHash);
   return { at, byUserId };
@@ -64,9 +70,10 @@ export function cancelScheduledDeletion(torrentHash: string, byUserId: number | 
   const db = getDb();
   const res = db
     .prepare(
-      `UPDATE media SET delete_scheduled_at = NULL, delete_scheduled_by = NULL,
+      `UPDATE media SET delete_requested_at = NULL, delete_scheduled_at = NULL,
+              delete_scheduled_by = NULL,
               requested_by_user_id = COALESCE(?, requested_by_user_id)
-        WHERE torrent_hash = ? AND delete_scheduled_at IS NOT NULL`,
+        WHERE torrent_hash = ? AND delete_requested_at IS NOT NULL`,
     )
     .run(byUserId, torrentHash);
   return Number(res.changes) > 0;

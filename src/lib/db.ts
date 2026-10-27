@@ -158,8 +158,10 @@ export function getDb(): DatabaseSync {
       -- Raportul ultimei verificări de subtitrare pentru ACEST rând (JSON:
       -- varianta aleasă și cele respinse), pentru drawer-ul din Bibliotecă.
       subtitle_report TEXT,
-      -- Ștergere programată (SQLite, UTC) — hit and run pe Filelist, vezi
-      -- scheduled-delete.ts. Pe toate rândurile torrentului.
+      -- Ștergere programată — hit and run pe Filelist, vezi scheduled-delete.ts.
+      -- Pe toate rândurile torrentului. requested_at = cererea; scheduled_at =
+      -- termenul (SQLite, UTC), NULL cât torrentul încă se descarcă.
+      delete_requested_at TEXT,
       delete_scheduled_at TEXT,
       delete_scheduled_by INTEGER,
       quality TEXT,
@@ -1159,6 +1161,25 @@ function applyCleanups(database: DatabaseSync): void {
       }
       console.log("[db] Migrare v46: watcher_tasks fără last_started_at/last_summary");
       database.exec("PRAGMA user_version = 46");
+    }
+
+    if (version < 47) {
+      // v47: termenul ștergerii programate = finalizarea descărcării + 48 h
+      // (era adăugarea + 24 h); cererea separată de termen, care poate lipsi.
+      try {
+        database.exec("ALTER TABLE media ADD COLUMN delete_requested_at TEXT");
+      } catch {
+        // coloana există deja (bază nouă, creată direct cu schema curentă)
+      }
+      database.exec(
+        `UPDATE media SET delete_requested_at = datetime('now'),
+                delete_scheduled_at = (
+                  SELECT datetime(MIN(c.completed_at), '+48 hours') FROM media c
+                   WHERE c.torrent_hash = media.torrent_hash)
+          WHERE delete_scheduled_at IS NOT NULL AND torrent_hash IS NOT NULL`,
+      );
+      console.log("[db] Migrare v47: ștergerea programată la 48 h de la finalizare");
+      database.exec("PRAGMA user_version = 47");
     }
   }
 }

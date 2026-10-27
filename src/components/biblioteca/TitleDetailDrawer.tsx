@@ -79,8 +79,9 @@ export function TitleDetailDrawer({
     title: string;
     isSeasonPack: boolean;
     isCancel: boolean;
-    // Ștergerea doar se programează până atunci (formatul SQLite, UTC).
-    delayedUntil: string | null;
+    // Ștergerea doar se programează: până la `until` (SQLite, UTC), sau
+    // până la 48 h după finalizare dacă `until` e null.
+    delay: { until: string | null } | null;
     // Admin: confirmarea oferă și ștergerea pe loc.
     canDeleteImmediately: boolean;
     // Ștergerea e deja programată — confirmarea e doar pentru „Șterge acum”.
@@ -720,7 +721,7 @@ export function TitleDetailDrawer({
                                   title: d.type === "movie" ? d.title : (d.show ?? d.title),
                                   isSeasonPack: d.isSeasonPack,
                                   isCancel: d.status === "downloading",
-                                  delayedUntil: d.deleteScheduled!.at,
+                                  delay: { until: d.deleteScheduled!.at },
                                   canDeleteImmediately: true,
                                   alreadyScheduled: true,
                                 })
@@ -741,7 +742,7 @@ export function TitleDetailDrawer({
                                 title: d.type === "movie" ? d.title : (d.show ?? d.title),
                                 isSeasonPack: d.isSeasonPack,
                                 isCancel: true,
-                                delayedUntil: d.deleteDelayedUntil,
+                                delay: d.deleteDelay,
                                 canDeleteImmediately: d.canDeleteImmediately,
                                 alreadyScheduled: false,
                               })
@@ -791,7 +792,7 @@ export function TitleDetailDrawer({
                                   title: d.type === "movie" ? d.title : (d.show ?? d.title),
                                   isSeasonPack: d.isSeasonPack,
                                   isCancel: false,
-                                  delayedUntil: d.deleteDelayedUntil,
+                                  delay: d.deleteDelay,
                                   canDeleteImmediately: d.canDeleteImmediately,
                                   alreadyScheduled: false,
                                 })

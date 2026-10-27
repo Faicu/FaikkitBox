@@ -33,16 +33,21 @@ function remainingLabel(ms: number, compact: boolean): string {
   return h > 0 ? `${h} h ${m} min` : `${m} min`;
 }
 
-export function DeleteTimerBadge({ at }: { at: string }) {
+// `at` null — se șterge la 48 h după finalizarea descărcării, încă necunoscută.
+export function DeleteTimerBadge({ at }: { at: string | null }) {
   const now = useNow();
-  const left = now == null ? null : sqliteMs(at) - now;
+  const left = now == null || at == null ? null : sqliteMs(at) - now;
   return (
     <span
-      title={`Se șterge la ${deleteTimeLabel(at)}`}
+      title={
+        at
+          ? `Se șterge la ${deleteTimeLabel(at)}`
+          : "Se șterge la 48 h după finalizarea descărcării"
+      }
       className="flex shrink-0 items-center gap-0.5 rounded-full bg-red-500/15 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-red-400"
     >
       <Trash2 className="h-2.5 w-2.5" />
-      {left != null && (left > 0 ? remainingLabel(left, true) : "acum")}
+      {at == null ? "+48h" : left != null && (left > 0 ? remainingLabel(left, true) : "acum")}
     </span>
   );
 }
@@ -56,7 +61,8 @@ export function ScheduledDeleteCard({
   onDeleteNow,
 }: {
   mediaId: number;
-  at: string;
+  // null — la 48 h după finalizarea descărcării, încă necunoscută.
+  at: string | null;
   byUsername: string | null;
   // Descărcarea e încă în curs — „anulare” în loc de „ștergere”.
   isCancel: boolean;
@@ -67,7 +73,7 @@ export function ScheduledDeleteCard({
   const now = useNow();
   const cancelFn = useServerFn(cancelMediaDeletion);
   const [busy, setBusy] = useState(false);
-  const left = now == null ? null : sqliteMs(at) - now;
+  const left = now == null || at == null ? null : sqliteMs(at) - now;
   const due = left != null && left <= 0;
 
   async function cancel() {
@@ -91,15 +97,18 @@ export function ScheduledDeleteCard({
         <Trash2 className="mt-px h-3.5 w-3.5 shrink-0 text-red-400" />
         <div className="min-w-0 flex-1 leading-snug">
           <div className="font-medium text-foreground">
-            {due
-              ? "Se șterge acum…"
-              : left == null
-                ? `Se șterge la ${deleteTimeLabel(at)}`
-                : `Se șterge în ${remainingLabel(left, false)}`}
+            {at == null
+              ? "Se șterge la 48 h după finalizarea descărcării"
+              : due
+                ? "Se șterge acum…"
+                : left == null
+                  ? `Se șterge la ${deleteTimeLabel(at)}`
+                  : `Se șterge în ${remainingLabel(left, false)}`}
           </div>
           <div className="mt-0.5 text-[11px] text-muted-foreground">
-            {isCancel ? "Anulare" : "Ștergere"} programată
-            {byUsername ? ` de ${byUsername}` : ""} pentru {deleteTimeLabel(at)}.
+            {at == null
+              ? `Ștergere programată${byUsername ? ` de ${byUsername}` : ""}; descărcarea continuă până la capăt.`
+              : `${isCancel ? "Anulare" : "Ștergere"} programată${byUsername ? ` de ${byUsername}` : ""} pentru ${deleteTimeLabel(at)}.`}
           </div>
         </div>
       </div>
