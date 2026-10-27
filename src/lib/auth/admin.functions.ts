@@ -15,15 +15,19 @@ export const adminLogin = createServerFn({ method: "POST" })
     const { verifyPassword } = await import("./password");
     const { hitRateLimit, resetRateLimit, formatRetryAfter } = await import("./rate-limit");
     const { getClientIp } = await import("../client-ip.server");
+    const { findLoginAccount } = await import("./account-identity.server");
 
     // Două limite complementare: una per IP (oprește o rafală de pe o singură
-    // sursă, indiferent ce conturi încearcă) și una per utilizator (oprește un
-    // atac distribuit concentrat pe un singur cont). Fără ele, ghicirea parolei
-    // era complet nelimitată.
+    // sursă, indiferent ce conturi încearcă) și una per cont (oprește un atac
+    // distribuit concentrat pe un singur cont). Cheia per cont e id-ul când
+    // contul există, ca username-ul și emailul să nu aibă fiecare limita lui.
     const ip = await getClientIp();
-    const username = data.user.trim().toLowerCase();
+    const db = getDb();
+    const found = findLoginAccount(db, data.user);
+    const accountKey =
+      found && "row" in found ? `id:${found.row.id}` : data.user.trim().toLowerCase();
     const perIp = hitRateLimit(`login:ip:${ip}`, LOGIN_MAX_PER_IP, LOGIN_WINDOW_MS);
-    const perUser = hitRateLimit(`login:user:${username}`, LOGIN_MAX_PER_USER, LOGIN_WINDOW_MS);
+    const perUser = hitRateLimit(`login:user:${accountKey}`, LOGIN_MAX_PER_USER, LOGIN_WINDOW_MS);
     if (!perIp.allowed || !perUser.allowed) {
       const wait = Math.max(perIp.retryAfterSec, perUser.retryAfterSec);
       return {
@@ -32,22 +36,13 @@ export const adminLogin = createServerFn({ method: "POST" })
       };
     }
 
-    const db = getDb();
-    const row = db
-      .prepare(
-        "SELECT id, username, password_hash, role, status, session_version FROM users WHERE username = ?",
-      )
-      .get(data.user) as
-      | {
-          id: number;
-          username: string;
-          password_hash: string;
-          role: string;
-          status: string;
-          session_version: number;
-        }
-      | undefined;
-
+    if (found && "ambiguous" in found) {
+      return {
+        ok: false as const,
+        error: "Email-ul aparține mai multor conturi — autentifică-te cu username-ul.",
+      };
+    }
+    const row = found?.row;
     if (!row || !verifyPassword(data.pass, row.password_hash)) {
       return { ok: false as const, error: "Utilizator sau parolă greșită." };
     }
@@ -70,7 +65,7 @@ export const adminLogin = createServerFn({ method: "POST" })
     // Autentificare reușită — contorul de încercări se stinge, ca un login
     // corect după câteva greșeli să nu lase userul limitat degeaba.
     resetRateLimit(`login:ip:${ip}`);
-    resetRateLimit(`login:user:${username}`);
+    resetRateLimit(`login:user:${accountKey}`);
 
     const { getRequestHeader } = await import("@tanstack/react-start/server");
     const userAgent = getRequestHeader("user-agent") ?? null;
@@ -120,28 +115,28 @@ export const getAdminStatus = createServerFn({ method: "GET" }).handler(async ()
 // ---------------------------------------------------------------------------
 
 export const addAdminUser = createServerFn({ method: "POST" })
-  .validator((data: { username: string; password: string }) => data)
+  .validator((data: { username: string; email: string; password: string }) => data)
   .handler(async ({ data }): Promise<{ ok: boolean; error?: string }> => {
     const { requireAdmin } = await import("./admin.server");
     await requireAdmin();
 
     const username = data.username.trim();
-    if (!username || data.password.length < 8) {
-      return { ok: false, error: "Utilizator necompletat sau parolă sub 8 caractere." };
+    const email = data.email.trim();
+    if (!username || !email || data.password.length < 8) {
+      return { ok: false, error: "Utilizator sau email necompletat, ori parolă sub 8 caractere." };
     }
 
     const { getDb } = await import("../db");
     const { hashPassword } = await import("./password");
+    const { validateNewAccount } = await import("./account-identity.server");
     const db = getDb();
 
-    const exists = db.prepare("SELECT 1 FROM users WHERE username = ?").get(username);
-    if (exists) {
-      return { ok: false, error: "Există deja un cont cu acest nume." };
-    }
+    const invalid = validateNewAccount(db, username, email);
+    if (invalid) return { ok: false, error: invalid };
 
     db.prepare(
-      "INSERT INTO users (username, password_hash, role, status) VALUES (?, ?, 'admin', 'approved')",
-    ).run(username, hashPassword(data.password));
+      "INSERT INTO users (username, password_hash, email, role, status) VALUES (?, ?, ?, 'admin', 'approved')",
+    ).run(username, hashPassword(data.password), email);
     return { ok: true };
   });
 

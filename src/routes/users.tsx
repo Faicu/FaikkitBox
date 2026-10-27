@@ -238,10 +238,11 @@ function AdminSection({
   const deleteFn = useServerFn(deleteAdminUser);
 
   const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
   const addMutation = useMutation({
-    mutationFn: () => addFn({ data: { username, password } }),
+    mutationFn: () => addFn({ data: { username, email, password } }),
     onSuccess: (res) => {
       if (!res.ok) {
         toast.error(res.error ?? "Adăugare eșuată");
@@ -249,6 +250,7 @@ function AdminSection({
       }
       toast.success(`Cont adăugat: ${username}`);
       setUsername("");
+      setEmail("");
       setPassword("");
       onChanged();
     },
@@ -286,8 +288,9 @@ function AdminSection({
             >
               <div className="min-w-0">
                 <div className="truncate text-sm font-medium">{u.username}</div>
-                <div className="text-[11px] text-muted-foreground">
-                  Creat {new Date(u.createdAt).toLocaleDateString("ro-RO")}
+                <div className="truncate text-[11px] text-muted-foreground">
+                  {u.email ? `${u.email} · ` : ""}Creat{" "}
+                  {new Date(u.createdAt).toLocaleDateString("ro-RO")}
                 </div>
               </div>
               <button
@@ -326,6 +329,14 @@ function AdminSection({
             className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
           />
           <input
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            type="email"
+            placeholder="Email"
+            autoComplete="off"
+            className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+          />
+          <input
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             type="password"
@@ -336,7 +347,7 @@ function AdminSection({
         </div>
         <button
           type="submit"
-          disabled={addMutation.isPending || !username || password.length < 8}
+          disabled={addMutation.isPending || !username || !email || password.length < 8}
           className="w-full rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-transform hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50"
         >
           {addMutation.isPending ? "Se adaugă..." : "Adaugă cont"}

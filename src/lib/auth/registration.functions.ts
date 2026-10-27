@@ -33,17 +33,13 @@ export const registerUser = createServerFn({ method: "POST" })
     if (data.password.length < 8) {
       return { ok: false, error: "Parola trebuie să aibă minim 8 caractere." };
     }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return { ok: false, error: "Email invalid." };
-    }
 
     const { getDb } = await import("../db");
+    const { validateNewAccount } = await import("./account-identity.server");
     const db = getDb();
 
-    const exists = db.prepare("SELECT 1 FROM users WHERE username = ?").get(username);
-    if (exists) {
-      return { ok: false, error: "Există deja un cont cu acest nume." };
-    }
+    const invalid = validateNewAccount(db, username, email);
+    if (invalid) return { ok: false, error: invalid };
 
     const { matchPlexAccount } = await import("./plex-users.server");
     const plexMatch = await matchPlexAccount(username, email);

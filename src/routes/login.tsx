@@ -53,7 +53,7 @@ function LoginPage() {
         className="space-y-4 rounded-2xl glass-card p-5 shadow-sm"
       >
         <div className="space-y-1.5">
-          <label className="text-xs font-medium text-muted-foreground">Utilizator</label>
+          <label className="text-xs font-medium text-muted-foreground">Utilizator sau email</label>
           <div className="relative">
             <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
