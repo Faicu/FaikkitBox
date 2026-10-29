@@ -120,8 +120,33 @@ async function mediaDurationSeconds(mediaAbsPath: string): Promise<number | null
   }
 }
 
-// Prima subtitrare text încorporată care nu e română (una română ar fi oprit
-// pipeline-ul la pasul 1a), ca SRT.
+export interface EmbeddedSubtitleStream {
+  index: number;
+  codec_name?: string;
+  disposition?: { forced?: number; hearing_impaired?: number };
+  tags?: { language?: string; title?: string };
+}
+
+// Reperul de sincronizare: o subtitrare text completă care nu e română (una
+// română ar fi oprit pipeline-ul la pasul 1a). Cele forțate au doar replicile
+// în altă limbă — The Fix (29 oct. 2026): pista „English [Forced]”, prima din
+// fișier, dădea 0,21 pentru subtitrarea corectă, care cu engleza completă
+// dădea 0,91. SDH merge, dar descrierile de sunete o fac mai puțin precisă.
+export function pickReferenceStream(
+  streams: EmbeddedSubtitleStream[],
+): EmbeddedSubtitleStream | null {
+  const candidates = streams.filter(
+    (s) =>
+      TEXT_SUBTITLE_CODECS.includes(s.codec_name ?? "") &&
+      !ROMANIAN_LANG_CODES.includes((s.tags?.language ?? "").toLowerCase()) &&
+      s.disposition?.forced !== 1 &&
+      !/forced/i.test(s.tags?.title ?? ""),
+  );
+  const isSdh = (s: EmbeddedSubtitleStream) =>
+    s.disposition?.hearing_impaired === 1 || /\b(sdh|cc)\b/i.test(s.tags?.title ?? "");
+  return candidates.find((s) => !isSdh(s)) ?? candidates[0] ?? null;
+}
+
 async function embeddedReferenceTiming(mediaAbsPath: string): Promise<SrtTiming | null> {
   try {
     const { stdout } = await execFileAsync(
@@ -132,22 +157,15 @@ async function embeddedReferenceTiming(mediaAbsPath: string): Promise<SrtTiming 
         "-select_streams",
         "s",
         "-show_entries",
-        "stream=index,codec_name:stream_tags=language",
+        "stream=index,codec_name:stream_tags=language,title:stream_disposition=forced,hearing_impaired",
         "-of",
         "json",
         mediaAbsPath,
       ],
       { timeout: 20_000 },
     );
-    const streams = (
-      JSON.parse(stdout) as {
-        streams?: Array<{ index: number; codec_name?: string; tags?: { language?: string } }>;
-      }
-    ).streams;
-    const ref = (streams ?? []).find(
-      (s) =>
-        TEXT_SUBTITLE_CODECS.includes(s.codec_name ?? "") &&
-        !ROMANIAN_LANG_CODES.includes((s.tags?.language ?? "").toLowerCase()),
+    const ref = pickReferenceStream(
+      (JSON.parse(stdout) as { streams?: EmbeddedSubtitleStream[] }).streams ?? [],
     );
     if (!ref) return null;
     // Extragerea citește tot containerul — câteva secunde pe un episod.

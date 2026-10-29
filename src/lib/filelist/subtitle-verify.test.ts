@@ -4,6 +4,7 @@ import {
   isBetterSync,
   isConfidentSync,
   parseSrtTiming,
+  pickReferenceStream,
   speechCorrelation,
 } from "./subtitle-verify";
 
@@ -108,5 +109,52 @@ describe("isConfidentSync", () => {
     expect(isConfidentSync({ score: 0.47, offset: 0 }, other)).toBe(false);
     expect(isConfidentSync({ score: 0.47, offset: 8 }, exact)).toBe(false);
     expect(isConfidentSync({ score: 0.9, offset: 2 }, exact)).toBe(false);
+  });
+});
+
+describe("pickReferenceStream", () => {
+  const stream = (
+    index: number,
+    language: string,
+    extra: { title?: string; forced?: number; hi?: number; codec?: string } = {},
+  ) => ({
+    index,
+    codec_name: extra.codec ?? "subrip",
+    disposition: { forced: extra.forced ?? 0, hearing_impaired: extra.hi ?? 0 },
+    tags: { language, title: extra.title },
+  });
+
+  it("sare peste pista forțată și preferă engleza completă înaintea SDH (The Fix)", () => {
+    const picked = pickReferenceStream([
+      stream(2, "eng", { title: "English [Forced]", forced: 1 }),
+      stream(3, "eng", { title: "English" }),
+      stream(4, "eng", { title: "English [SDH]", hi: 1 }),
+    ]);
+    expect(picked?.index).toBe(3);
+  });
+
+  it("recunoaște pista forțată și doar după titlu", () => {
+    expect(
+      pickReferenceStream([stream(2, "eng", { title: "Forced" }), stream(3, "eng")])?.index,
+    ).toBe(3);
+  });
+
+  it("folosește SDH când e singura completă", () => {
+    expect(
+      pickReferenceStream([
+        stream(2, "eng", { forced: 1 }),
+        stream(3, "eng", { title: "English SDH" }),
+      ])?.index,
+    ).toBe(3);
+  });
+
+  it("fără reper când rămân doar piste forțate, române sau grafice", () => {
+    expect(
+      pickReferenceStream([
+        stream(2, "eng", { forced: 1 }),
+        stream(3, "rum"),
+        stream(4, "eng", { codec: "hdmv_pgs_subtitle" }),
+      ]),
+    ).toBeNull();
   });
 });
