@@ -28,7 +28,11 @@ export interface MovieWatchOutcome {
   title: string;
   // Numele torrentului pornit, dacă filmul a fost găsit în rularea asta.
   downloaded: string | null;
+  // Calitatea de rezervă, dacă a fost luată ea.
+  fallbackQuality: string | null;
   skipped: string | null;
+  // Eroare Filelist sau descărcare eșuată — Watcher-ul marchează rularea eșuată.
+  error: string | null;
 }
 
 interface MovieRow {
@@ -79,11 +83,27 @@ const inProgress = new Set<number>();
 
 export async function checkMovie(movieId: number): Promise<MovieWatchOutcome> {
   if (inProgress.has(movieId)) {
-    return { mediaId: movieId, title: "?", downloaded: null, skipped: "verificare deja în curs" };
+    return {
+      mediaId: movieId,
+      title: "?",
+      downloaded: null,
+      fallbackQuality: null,
+      skipped: "verificare deja în curs",
+      error: null,
+    };
   }
   inProgress.add(movieId);
+  // Rezultatul ultimei verificări, afișat în Watcher. După o descărcare
+  // reușită rândul de așteptare e șters, deci n-are ce afișa.
+  const save = (text: string) =>
+    getDb().prepare("UPDATE media SET watch_last_result = ? WHERE id = ?").run(text, movieId);
   try {
-    return await checkMovieInner(movieId);
+    const out = await checkMovieInner(movieId);
+    if (!out.downloaded) save(out.error ? `eroare: ${out.error}` : (out.skipped ?? "verificat"));
+    return out;
+  } catch (e) {
+    save(`eroare: ${e instanceof Error ? e.message : String(e)}`);
+    throw e;
   } finally {
     inProgress.delete(movieId);
   }
@@ -110,13 +130,22 @@ async function checkMovieInner(movieId: number): Promise<MovieWatchOutcome> {
       .run(movieId);
 
   if (!row) {
-    return { mediaId: movieId, title: "?", downloaded: null, skipped: "film inexistent" };
+    return {
+      mediaId: movieId,
+      title: "?",
+      downloaded: null,
+      fallbackQuality: null,
+      skipped: "film inexistent",
+      error: null,
+    };
   }
   const result: MovieWatchOutcome = {
     mediaId: movieId,
     title: row.title,
     downloaded: null,
+    fallbackQuality: null,
     skipped: null,
+    error: null,
   };
 
   // Căutarea pe Filelist e strict după IMDb (confirmat de suport).
@@ -147,6 +176,7 @@ async function checkMovieInner(movieId: number): Promise<MovieWatchOutcome> {
   if (search.status !== "ok") {
     stamp();
     result.skipped = search.error ?? "eroare Filelist";
+    result.error = result.skipped;
     return result;
   }
 
@@ -227,6 +257,7 @@ async function checkMovieInner(movieId: number): Promise<MovieWatchOutcome> {
   if (dl.status !== "ok") {
     stamp();
     result.skipped = `descărcare eșuată: ${dl.error}`;
+    result.error = result.skipped;
     return result;
   }
 
@@ -238,6 +269,7 @@ async function checkMovieInner(movieId: number): Promise<MovieWatchOutcome> {
 
   // Fără notificare aici: downloadFilelistCore trimite deja push-ul.
   result.downloaded = usingFallback ? `${best.name} (${fallbackQuality}, rezervă)` : best.name;
+  if (usingFallback) result.fallbackQuality = fallbackQuality;
   return result;
 }
 
@@ -254,7 +286,7 @@ function safeGenres(raw: string): string[] {
 // „Seriale și filme”, trezită de setMovieWatch după un minut. Fără ea, rândul
 // ar arăta „neverificat” până la 10 minute. Minutul evită repetarea căutării
 // tocmai făcute în wizard.
-export async function checkNewMovies(): Promise<void> {
+export async function checkNewMovies(): Promise<MovieRunReport> {
   const db = getDb();
   const fresh = db
     .prepare(
@@ -266,22 +298,39 @@ export async function checkNewMovies(): Promise<void> {
     )
     .all() as unknown as Array<{ id: number }>;
 
+  const report: MovieRunReport = { started: [], errors: [] };
   for (const { id } of fresh) {
     try {
       const outcome = await checkMovie(id);
       console.log(
         `[movie-watch] prima verificare "${outcome.title}" — ${outcome.downloaded ?? outcome.skipped}`,
       );
+      addToReport(report, outcome);
     } catch (e) {
       console.warn(`[movie-watch] Eroare la prima verificare a filmului ${id}:`, e);
+      report.errors.push(`filmul ${id}: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
+  return report;
+}
+
+// Pentru istoricul Watcher-ului: ce a pornit și ce a eșuat.
+interface MovieRunReport {
+  started: string[];
+  errors: string[];
+}
+
+function addToReport(report: MovieRunReport, o: MovieWatchOutcome): void {
+  if (o.downloaded) {
+    report.started.push(o.fallbackQuality ? `${o.title} (${o.fallbackQuality}, rezervă)` : o.title);
+  }
+  if (o.error) report.errors.push(`${o.title}: ${o.error}`);
 }
 
 // Filmele cu cadența expirată, ținută în watch_last_checked_at. Cele încă
 // neverificate (NULL) sunt ale lui checkNewMovies — aici ar fi verificate
 // prea devreme.
-export async function checkDueMovies(): Promise<void> {
+export async function checkDueMovies(): Promise<MovieRunReport> {
   const db = getDb();
   const due = db
     .prepare(
@@ -293,6 +342,7 @@ export async function checkDueMovies(): Promise<void> {
     )
     .all(`-${Math.round(ITEM_INTERVAL_MS / 1000)} seconds`) as unknown as Array<{ id: number }>;
 
+  const report: MovieRunReport = { started: [], errors: [] };
   for (const { id } of due) {
     try {
       const outcome = await checkMovie(id);
@@ -301,10 +351,13 @@ export async function checkDueMovies(): Promise<void> {
       } else if (outcome.skipped) {
         console.log(`[movie-watch] "${outcome.title}" — sărit: ${outcome.skipped}`);
       }
+      addToReport(report, outcome);
     } catch (e) {
       console.warn(`[movie-watch] Eroare la filmul ${id}:`, e);
+      report.errors.push(`filmul ${id}: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
+  return report;
 }
 
 // ---------------------------------------------------------------------------
@@ -366,7 +419,8 @@ export async function setMovieWatchCore(input: SetMovieWatchInput): Promise<void
     db.prepare(
       `UPDATE media SET auto_download = 1, auto_download_quality = ?,
               auto_download_fallback_quality = CASE WHEN ? THEN ? ELSE auto_download_fallback_quality END,
-              watch_fallback_seen = NULL, watch_last_checked_at = NULL
+              watch_fallback_seen = NULL, watch_last_checked_at = NULL,
+              watch_last_result = NULL
         WHERE id = ?`,
     ).run(
       quality,
@@ -412,6 +466,8 @@ export interface WantedMovie {
   quality: string;
   addedAt: string;
   lastCheckedAt: string | null;
+  // Rezultatul ultimei verificări („încă niciun torrent 1080p”).
+  lastResult: string | null;
   requestedByUserId: number | null;
   // true pentru cel care a pornit urmărirea sau un admin — calculat în server
   // function, unde există sesiunea.
@@ -424,7 +480,7 @@ export function listWantedMoviesCore(): Omit<WantedMovie, "canManage">[] {
     db
       .prepare(
         `SELECT id, tmdb_id, title, year, poster_path, auto_download_quality,
-                added_at, watch_last_checked_at, requested_by_user_id
+                added_at, watch_last_checked_at, watch_last_result, requested_by_user_id
            FROM media
           WHERE media_type = 'movie' AND auto_download = 1
             AND torrent_hash IS NULL AND plex_rating_key IS NULL
@@ -439,6 +495,7 @@ export function listWantedMoviesCore(): Omit<WantedMovie, "canManage">[] {
       auto_download_quality: string | null;
       added_at: string;
       watch_last_checked_at: string | null;
+      watch_last_result: string | null;
       requested_by_user_id: number | null;
     }>
   ).map((r) => ({
@@ -450,6 +507,7 @@ export function listWantedMoviesCore(): Omit<WantedMovie, "canManage">[] {
     quality: r.auto_download_quality || "1080p",
     addedAt: r.added_at,
     lastCheckedAt: r.watch_last_checked_at,
+    lastResult: r.watch_last_result,
     requestedByUserId: r.requested_by_user_id,
   }));
 }

@@ -17,7 +17,11 @@ interface WatcherRunContext {
   manual: boolean;
 }
 
-export type WatcherOutcome = string | null | { summary: string | null; nextAt: number | null };
+export type WatcherOutcome =
+  | string
+  | null
+  // `error`: rularea a eșuat parțial — rezumatul (ce s-a făcut) se păstrează.
+  | { summary: string | null; nextAt: number | null; error?: string };
 
 export interface WatcherTask {
   id: string;
@@ -139,12 +143,20 @@ export const WATCHER_TASKS: WatcherTask[] = [
   {
     id: "show-watch",
     label: "Seriale și filme",
-    cadenceLabel: "la 3h / serial",
+    // Tactul e la 10 min; fiecare titlu își are ritmul lui.
+    cadenceLabel: "serial 1–3h · film 12h",
     delayMs: 45 * SEC,
     everyMs: 10 * MIN,
     controllable: true,
     async run() {
       const failed: string[] = [];
+      // Ce au pornit pașii de descărcare și titlurile la care au eșuat.
+      const started: string[] = [];
+      const itemErrors: string[] = [];
+      const collect = (r: { started: string[]; errors: string[] }) => {
+        started.push(...r.started);
+        itemErrors.push(...r.errors);
+      };
       // Descărcările întâi, strict secvențial: toate caută pe Filelist, iar
       // căutările de fundal nu se fac niciodată deodată.
       await steps(
@@ -153,21 +165,21 @@ export const WATCHER_TASKS: WatcherTask[] = [
             "Filme noi",
             async () => {
               const { checkNewMovies } = await import("../media/movie-watch");
-              await checkNewMovies();
+              collect(await checkNewMovies());
             },
           ],
           [
             "Episoade noi",
             async () => {
               const { checkDueShows } = await import("../media/show-watch");
-              await checkDueShows();
+              collect(await checkDueShows());
             },
           ],
           [
             "Filme așteptate",
             async () => {
               const { checkDueMovies } = await import("../media/movie-watch");
-              await checkDueMovies();
+              collect(await checkDueMovies());
             },
           ],
         ],
@@ -199,10 +211,20 @@ export const WATCHER_TASKS: WatcherTask[] = [
         failed,
       );
       await logMetaReport(report);
-      if (failed.length) throw new Error(`Pași eșuați: ${failed.join(", ")}`);
-      return hasMetaNews(report)
-        ? buildMetaRefreshMessage(report).replace(/^Metadate: /, "")
-        : null;
+      const parts = [
+        started.length > 0 && `Pornite: ${started.join(", ")}`,
+        hasMetaNews(report) &&
+          `Detalii TMDB: ${buildMetaRefreshMessage(report).replace(/^Metadate: /, "")}`,
+      ].filter((p): p is string => typeof p === "string");
+      const errors = [
+        ...itemErrors,
+        ...(failed.length ? [`pași eșuați: ${failed.join(", ")}`] : []),
+      ];
+      return {
+        summary: parts.length > 0 ? parts.join(" · ") : null,
+        nextAt: null,
+        error: errors.length > 0 ? errors.join("; ") : undefined,
+      };
     },
   },
 

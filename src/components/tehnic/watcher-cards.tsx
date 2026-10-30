@@ -75,6 +75,7 @@ export function ShowWatchCards() {
                         ? `verificat ${relativeTime(`${sh.lastCheckedAt.replace(" ", "T")}Z`)}`
                         : "încă neverificat"}
                     </FlashValue>
+                    <LastResult text={sh.lastResult} />
                   </div>
                 </div>
               );
@@ -113,6 +114,7 @@ export function ShowWatchCards() {
                       ? `verificat ${relativeTime(`${m.lastCheckedAt.replace(" ", "T")}Z`)}`
                       : "încă neverificat"}
                   </FlashValue>
+                  <LastResult text={m.lastResult} />
                 </div>
               </div>
             ))}
@@ -125,6 +127,12 @@ export function ShowWatchCards() {
       />
     </>
   );
+}
+
+// Ce a găsit ultima verificare a unui titlu urmărit.
+function LastResult({ text }: { text: string | null }) {
+  if (!text) return null;
+  return <span className={text.startsWith("eroare") ? "text-red-300" : ""}>{` · ${text}`}</span>;
 }
 
 // Ultimele încărcări Immich din jurnal — sarcina immich-uploads.
@@ -176,14 +184,14 @@ function ImmichUploadsCard({ uploads }: { uploads: ActivityEntry[] }) {
   );
 }
 
-// Reîmprospătările cu schimbări reale — istoricul sarcinii. Inline, nu drawer
-// peste drawer (c76ce30); câte una deschisă.
+// Reîmprospătările cu schimbări reale, cu detaliile fiecăreia. Inline, nu
+// drawer peste drawer (c76ce30); câte una deschisă.
 function MetaRefreshHistory({ entries }: { entries: ActivityEntry[] }) {
   const [open, setOpen] = useState<string | null>(null);
   return (
     <div className="overflow-hidden rounded-2xl glass-card text-xs">
       <div className="flex items-center gap-1.5 px-3 pt-3 pb-2 text-muted-foreground">
-        <History className="h-3.5 w-3.5" /> Istoric
+        <History className="h-3.5 w-3.5" /> Detalii actualizate din TMDB
       </div>
       {entries.length === 0 ? (
         <div className="px-3 pb-3 text-muted-foreground">

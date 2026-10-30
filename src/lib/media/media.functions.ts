@@ -87,6 +87,7 @@ export interface WatchedShowSummary {
   quality: string | null;
   from: string | null;
   lastCheckedAt: string | null;
+  lastResult: string | null;
   nextEpisode: string | null;
   nextEpisodeAirstamp: string | null;
   nextEpisodeAirDate: string | null;
@@ -103,7 +104,7 @@ export const getShowWatchStatus = createServerFn({ method: "GET" }).handler(
       .prepare(
         `SELECT id AS mediaId, title, auto_download_quality AS quality,
                 auto_download_from AS "from", watch_last_checked_at AS lastCheckedAt,
-                next_episode AS nextEpisode, next_episode_airstamp AS nextEpisodeAirstamp,
+                watch_last_result AS lastResult, next_episode AS nextEpisode, next_episode_airstamp AS nextEpisodeAirstamp,
                 next_episode_air_date AS nextEpisodeAirDate
            FROM media WHERE media_type = 'tv_show' AND auto_download = 1
           ORDER BY title`,

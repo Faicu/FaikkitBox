@@ -23,12 +23,12 @@ const iso = (ms: number | null) => (ms === null ? null : new Date(ms).toISOStrin
 export function readWatcherStatus(): WatcherTaskStatus[] {
   const rows = getDb().prepare("SELECT * FROM watcher_tasks").all() as unknown as TaskRow[];
   const byId = new Map(rows.map((r) => [r.id, r]));
-  // Ultima rulare reușită cu rezumat, per sarcină.
+  // Ultima rulare cu rezumat, per sarcină — și una parțial eșuată poate avea.
   const actions = getDb()
     .prepare(
       `SELECT r.task_id, r.finished_at, r.summary FROM watcher_runs r
         WHERE r.id = (SELECT MAX(id) FROM watcher_runs
-                       WHERE task_id = r.task_id AND ok = 1 AND summary IS NOT NULL)`,
+                       WHERE task_id = r.task_id AND summary IS NOT NULL)`,
     )
     .all() as unknown as Array<{ task_id: string; finished_at: number; summary: string }>;
   const actionById = new Map(actions.map((a) => [a.task_id, a]));

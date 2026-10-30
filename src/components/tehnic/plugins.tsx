@@ -81,12 +81,14 @@ export const WATCHER_TASK_INFO: Record<string, WatcherTaskInfo> = {
   "show-watch": {
     summary: "Episoadele noi și filmele așteptate de pe Filelist, plus detaliile din TMDB.",
     points: [
-      "Episoade noi, la 3h / serial (la 1h în ziua lansării ±1 zi): compară ce s-a difuzat (TMDB, inclusiv episodul lansat azi) cu ce ai deja și aduce diferența, căutând strict după IMDb ID, fără cache.",
+      "Sarcina pornește la 10 minute, dar verifică doar ce e scadent: fiecare serial la 3h (la 1h în ziua lansării ±1 zi), fiecare film la 12h, detaliile fiecărui titlu la 12h.",
+      "Episoade noi: compară ce s-a difuzat (TMDB, inclusiv episodul lansat azi) cu ce ai deja și aduce diferența, căutând strict după IMDb ID, fără cache.",
       "Nu ține minte ce a văzut ultima dată: întreabă de fiecare dată realitatea, deci se poate relua oricând și nu poate descărca de două ori. După fiecare descărcare, poziția de start avansează peste episoadele aduse, ca un episod văzut și șters să nu revină.",
-      "Filme așteptate, la 12h / film: înainte de data lansării nici nu se caută; urmărirea se stinge singură la prima descărcare reușită. Un film abia adăugat e căutat prima dată la un minut după adăugare — destul cât să nu repete căutarea tocmai făcută în wizard.",
+      "Filme așteptate: înainte de data lansării nici nu se caută; urmărirea se stinge singură la prima descărcare reușită. Un film abia adăugat e căutat prima dată la un minut după adăugare — destul cât să nu repete căutarea tocmai făcută în wizard.",
       "Calitatea de rezervă se ia doar când principala lipsește la două verificări, la cel puțin 3 ore distanță.",
-      "Detalii seriale și filme, la 12h: status, titlurile română/original, anul, descrierea, genurile, posterul, episoadele — cerute în română, cu engleza ca rezervă. Statusul contează și la serialele neurmărite: decide dacă ți se oferă butonul de urmărire.",
-      "Un pas eșuat nu-i oprește pe ceilalți; rularea apare atunci ca eșuată, cu numele pasului.",
+      "Detalii seriale și filme: status, titlurile română/original, anul, descrierea, genurile, posterul, episoadele — cerute în română, cu engleza ca rezervă. Statusul contează și la serialele neurmărite: decide dacă ți se oferă butonul de urmărire.",
+      "În istoric apar descărcările pornite și actualizările de detalii. Lângă fiecare serial și film urmărit vezi ce a găsit ultima verificare.",
+      "Un pas eșuat sau o eroare la un titlu (Filelist, descărcare) nu le oprește pe celelalte; rularea apare atunci ca eșuată, cu pasul sau titlul în mesaj, iar ce a apucat să pornească rămâne în istoric.",
       "Pornirea urmăririi unui serial îl verifică imediat, nu la următorul ciclu de 10 minute.",
     ],
     icon: <Tv className="h-3.5 w-3.5 text-blue-400" />,

@@ -205,6 +205,8 @@ export interface ShowWatchOutcome {
   missing: string[];
   downloaded: string[];
   skipped: string | null;
+  // Eroare Filelist sau descărcare eșuată — Watcher-ul marchează rularea eșuată.
+  error: string | null;
 }
 
 // Serialele în verificare acum. Rulările succesive sunt idempotente, dar două
@@ -221,11 +223,17 @@ export async function checkShow(showId: number): Promise<ShowWatchOutcome> {
       missing: [],
       downloaded: [],
       skipped: "o verificare e deja în curs",
+      error: null,
     };
   }
   inProgress.add(showId);
   try {
-    return await checkShowInner(showId);
+    const out = await checkShowInner(showId);
+    saveLastResult(showId, showResultText(out));
+    return out;
+  } catch (e) {
+    saveLastResult(showId, `eroare: ${e instanceof Error ? e.message : String(e)}`);
+    throw e;
   } finally {
     inProgress.delete(showId);
   }
@@ -255,13 +263,21 @@ async function checkShowInner(showId: number): Promise<ShowWatchOutcome> {
       .run(Object.keys(seen).length > 0 ? JSON.stringify(seen) : null, showId);
 
   if (!row)
-    return { showId, title: "?", missing: [], downloaded: [], skipped: "serial inexistent" };
+    return {
+      showId,
+      title: "?",
+      missing: [],
+      downloaded: [],
+      skipped: "serial inexistent",
+      error: null,
+    };
   const result: ShowWatchOutcome = {
     showId,
     title: row.title,
     missing: [],
     downloaded: [],
     skipped: null,
+    error: null,
   };
 
   // Căutarea pe Filelist e strict după IMDb (fallback-ul pe titlu, eliminat
@@ -328,6 +344,7 @@ async function checkShowInner(showId: number): Promise<ShowWatchOutcome> {
     stamp();
     result.skipped =
       search.status === "ok" ? "niciun torrent pe Filelist" : (search.error ?? "eroare Filelist");
+    if (search.status !== "ok") result.error = result.skipped;
     return result;
   }
 
@@ -471,6 +488,7 @@ async function checkShowInner(showId: number): Promise<ShowWatchOutcome> {
         `[show-watch] "${row.title}" — descărcare eșuată (${c.torrent.name}):`,
         dl.error,
       );
+      result.error ??= `descărcare eșuată: ${dl.error}`;
       continue;
     }
     for (const k of coversNow) covered.add(k);
@@ -530,7 +548,7 @@ async function checkShowInner(showId: number): Promise<ShowWatchOutcome> {
 // Serialele cu cadența expirată: 1h în fereastra lansării, 3h în rest, ținută
 // în DB (un timer s-ar reseta la restart). Ziua e cea locală: un episod de
 // duminică seara în SUA apare luni aici — marja de ±1 zi îl acoperă.
-export async function checkDueShows(): Promise<void> {
+export async function checkDueShows(): Promise<{ started: string[]; errors: string[] }> {
   const db = getDb();
   const due = db
     .prepare(
@@ -547,18 +565,44 @@ export async function checkDueShows(): Promise<void> {
       `-${Math.round(RELEASE_WINDOW_INTERVAL_MS / 1000)} seconds`,
     ) as unknown as Array<{ id: number }>;
 
+  // Pentru istoricul Watcher-ului: ce a pornit și ce a eșuat.
+  const report = { started: [] as string[], errors: [] as string[] };
   for (const { id } of due) {
     try {
       const outcome = await checkShow(id);
       if (outcome.downloaded.length > 0) {
         console.log(`[show-watch] "${outcome.title}" — pornite ${outcome.downloaded.length}`);
+        report.started.push(`${outcome.title} ${outcome.downloaded.join(", ")}`);
       } else if (outcome.skipped) {
         console.log(`[show-watch] "${outcome.title}" — sărit: ${outcome.skipped}`);
       }
+      if (outcome.error) report.errors.push(`${outcome.title}: ${outcome.error}`);
     } catch (e) {
       console.warn(`[show-watch] Eroare la serialul ${id}:`, e);
+      report.errors.push(`serialul ${id}: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
+  return report;
+}
+
+// Rezultatul ultimei verificări, afișat în Watcher lângă „verificat acum X”.
+function showResultText(o: ShowWatchOutcome): string {
+  const parts: string[] = [];
+  if (o.downloaded.length > 0) parts.push(`pornite ${o.downloaded.join(", ")}`);
+  if (o.error) parts.push(`eroare: ${o.error}`);
+  else if (o.downloaded.length === 0) {
+    if (o.skipped) parts.push(o.skipped);
+    else if (o.missing.length === 0) parts.push("la zi");
+  }
+  if (o.downloaded.length === 0 && o.missing.length > 0) {
+    const shown = o.missing.slice(0, 3).join(", ");
+    parts.push(`lipsă ${shown}${o.missing.length > 3 ? ` și încă ${o.missing.length - 3}` : ""}`);
+  }
+  return parts.join(" · ");
+}
+
+function saveLastResult(showId: number, text: string): void {
+  getDb().prepare("UPDATE media SET watch_last_result = ? WHERE id = ?").run(text, showId);
 }
 
 // ---------------------------------------------------------------------------
@@ -639,7 +683,8 @@ export async function setShowWatchCore(input: SetShowWatchInput): Promise<void> 
   db.prepare(
     `UPDATE media SET auto_download = 1, auto_download_quality = ?,
                       auto_download_fallback_quality = ?, auto_download_from = ?,
-                      watch_last_checked_at = NULL, watch_fallback_seen = NULL
+                      watch_last_checked_at = NULL, watch_fallback_seen = NULL,
+                      watch_last_result = NULL
        WHERE id = ? AND media_type = 'tv_show'`,
   ).run(input.quality ?? "1080p", input.fallbackQuality ?? null, from, input.mediaId);
 }

@@ -189,6 +189,9 @@ export function getDb(): DatabaseSync {
       -- JSON { țintă: momentul ISO al primei găsiri DOAR a rezervei } — pe rând,
       -- ca așteptarea să supraviețuiască unei reporniri.
       watch_fallback_seen TEXT,
+      -- Rezultatul ultimei verificări („niciun torrent 1080p · lipsă S10E15”),
+      -- afișat în Watcher.
+      watch_last_result TEXT,
       -- Metadate de serial reîmprospătate din TMDB (refreshShowMetadata):
       -- tv_status decide dacă apare butonul de urmărire.
       next_episode TEXT,
@@ -1180,6 +1183,17 @@ function applyCleanups(database: DatabaseSync): void {
       );
       console.log("[db] Migrare v47: ștergerea programată la 48 h de la finalizare");
       database.exec("PRAGMA user_version = 47");
+    }
+
+    if (version < 48) {
+      // v48: rezultatul ultimei verificări a unui titlu urmărit, pentru Watcher.
+      try {
+        database.exec("ALTER TABLE media ADD COLUMN watch_last_result TEXT");
+      } catch {
+        // coloana există deja (bază nouă, creată direct cu schema curentă)
+      }
+      console.log("[db] Migrare v48: adăugat media.watch_last_result");
+      database.exec("PRAGMA user_version = 48");
     }
   }
 }

@@ -54,6 +54,19 @@ vi.mock("./tasks", () => ({
         return { summary: null, nextAt: clockHint() };
       },
     },
+    // Eșec parțial (ca „Seriale și filme”): a pornit ceva, dar un titlu a eșuat.
+    {
+      id: "partial",
+      label: "partial",
+      delayMs: 90_000_000,
+      everyMs: 600_000,
+      controllable: true,
+      run: async () => ({
+        summary: "Pornite: Insula Iubirii S10E15",
+        nextAt: null,
+        error: "Fjord: Filelist API HTTP 503",
+      }),
+    },
   ],
 }));
 
@@ -236,5 +249,23 @@ describe("Watcher", () => {
     runner.tick();
     await flush();
     expect(calls).toContainEqual({ id: "clock", manual: false });
+  });
+
+  it("un eșec parțial păstrează rezumatul, chiar cu aceeași eroare ca data trecută", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    at(90_000_000);
+    runner.tick();
+    await flush();
+    expect(row("partial").last_ok).toBe(0);
+    expect(row("partial").last_error).toBe("Fjord: Filelist API HTTP 503");
+    expect(row("partial").next_run_at).toBe(T0 + 90_000_000 + 600_000);
+    expect(runs("partial").at(-1)?.summary).toBe("Pornite: Insula Iubirii S10E15");
+
+    at(90_600_000);
+    runner.tick();
+    await flush();
+    expect(runs("partial")).toHaveLength(2);
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
   });
 });

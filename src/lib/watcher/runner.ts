@@ -122,22 +122,32 @@ async function execute(task: WatcherTask, manual: boolean): Promise<void> {
   let requestedNext: number | null = null;
   let error: string | null = null;
   let repeated = false;
+  let failure: unknown = null;
   try {
     const out: WatcherOutcome = await task.run({ manual });
     if (out !== null && typeof out === "object") {
       summary = out.summary;
       requestedNext = out.nextAt;
+      // Eșec parțial: ce s-a făcut rămâne în istoric, lângă eroare.
+      if (out.error) {
+        ok = false;
+        error = errorText(out.error);
+        failure = out.error;
+      }
     } else {
       summary = out;
     }
   } catch (e) {
     ok = false;
     error = errorText(e);
+    failure = e;
+  }
+  if (error !== null) {
     // Aceeași eroare ca data trecută se raportează o singură dată — altfel o
     // sarcină de 10s ar umple „Erori aplicație” cât e qBittorrent oprit.
     repeated = isRepeatedError(task.id, error);
     if (!repeated) {
-      console.warn(`[watcher] ${task.label} — rulare eșuată, se reia la următoarea:`, e);
+      console.warn(`[watcher] ${task.label} — rulare eșuată, se reia la următoarea:`, failure);
     }
   }
 
@@ -164,7 +174,8 @@ async function execute(task: WatcherTask, manual: boolean): Promise<void> {
        WHERE id = ?`,
     ).run(next, finished, finished - started, ok ? 1 : 0, error, task.id);
 
-    if (!repeated && (manual || !ok || summary !== null)) {
+    // O eroare repetată nu mai intră în istoric — decât dacă rularea a și făcut ceva.
+    if ((!repeated || summary !== null) && (manual || !ok || summary !== null)) {
       db.prepare(
         `INSERT INTO watcher_runs (task_id, started_at, finished_at, duration_ms, ok, manual, summary, error)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,

@@ -368,10 +368,7 @@ function TaskDetails({ task, now: _tick }: { task: WatcherTaskStatus; now: numbe
         </div>
       )}
 
-      {/* La „Seriale și filme”, istoricul e cel al reîmprospătărilor, cu
-          detaliile fiecăreia (ShowWatchCards) — al doilea istoric, cu
-          aceleași rulări, ar fi doar o repetiție. */}
-      {task.id !== "show-watch" && <TaskHistory task={task} />}
+      <TaskHistory task={task} />
 
       {task.id === "show-watch" && <ShowWatchCards />}
       {task.id === "subtitle-retry" && <SubtitleRetryCards />}
@@ -433,9 +430,14 @@ function TaskHistory({ task }: { task: WatcherTaskStatus }) {
                 className={`mt-[0.45em] h-1.5 w-1.5 shrink-0 rounded-full ${r.ok ? "bg-emerald-400" : "bg-red-400"}`}
               />
               <span className="min-w-0 flex-1">
-                <span className={r.ok ? "" : "text-red-300"}>
-                  {r.ok ? (r.summary ?? "fără nimic de făcut") : (r.error ?? "eroare")}
-                </span>
+                {/* O rulare parțial eșuată are și rezumat (ce a apucat să facă). */}
+                {(r.ok || r.summary) && <span>{r.summary ?? "fără nimic de făcut"}</span>}
+                {!r.ok && (
+                  <span className="text-red-300">
+                    {r.summary ? " · " : ""}
+                    {r.error ?? "eroare"}
+                  </span>
+                )}
                 {r.manual && <span className="text-primary"> · manual</span>}
               </span>
               <span
