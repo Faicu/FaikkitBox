@@ -125,10 +125,12 @@ export const WATCHER_TASKS: WatcherTask[] = [
     async run() {
       const { runDueDeletions } = await import("../filelist/delete-title");
       const { nextScheduledDeletionAt } = await import("../media/scheduled-delete");
-      const n = await runDueDeletions();
+      const r = await runDueDeletions();
       return {
-        summary: n > 0 ? plural(n, "titlu șters", "titluri șterse") : null,
+        summary: r.deleted.length > 0 ? `Șterse: ${r.deleted.join(", ")}` : null,
+        // Cu o eroare, termenul rămas în trecut aduce reîncercarea la minut.
         nextAt: nextScheduledDeletionAt() ?? Date.now() + HOUR,
+        error: r.errors.length > 0 ? r.errors.join("; ") : undefined,
       };
     },
   },

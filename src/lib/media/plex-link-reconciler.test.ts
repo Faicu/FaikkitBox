@@ -82,7 +82,7 @@ describe("reconcilePlexLinks", () => {
     const result = await reconciler.reconcilePlexLinks();
 
     expect(triedHashes()).toEqual(["de-legat"]);
-    expect(result).toEqual({ checked: 1, linked: 0 });
+    expect(result).toEqual({ checked: 1, linked: 0, titles: [] });
   });
 
   it("încă reîncearcă la limita ferestrei de 72 de ore", async () => {
@@ -113,7 +113,7 @@ describe("reconcilePlexLinks", () => {
     const result = await reconciler.reconcilePlexLinks();
 
     expect(resolvePack.mock.calls.map((c) => c[0])).toEqual(["pachet"]);
-    expect(result).toEqual({ checked: 2, linked: 2 });
+    expect(result).toEqual({ checked: 2, linked: 2, titles: ["Dune", "Dune"] });
   });
 
   it("o eroare la un hash nu-i oprește pe ceilalți", async () => {
@@ -127,7 +127,7 @@ describe("reconcilePlexLinks", () => {
     const result = await reconciler.reconcilePlexLinks();
 
     expect(triedHashes().sort()).toEqual(["merge", "strica"]);
-    expect(result).toEqual({ checked: 2, linked: 1 });
+    expect(result).toEqual({ checked: 2, linked: 1, titles: ["Dune"] });
   });
 
   it("o eroare la completarea calităților nu oprește legarea", async () => {
@@ -144,7 +144,7 @@ describe("reconcilePlexLinks", () => {
     const result = await reconciler.reconcilePlexLinks();
 
     expect(repairQuality).toHaveBeenCalledWith(72);
-    expect(result).toEqual({ checked: 0, linked: 0 });
+    expect(result).toEqual({ checked: 0, linked: 0, titles: [] });
     expect(resolveOne).not.toHaveBeenCalled();
   });
 });

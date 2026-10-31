@@ -114,7 +114,7 @@ describe("cerere în timpul descărcării", () => {
     expect(sched.scheduledDeletion("pack")).toEqual({ at: null, byUserId: 7 });
     // Fără termen, sarcina n-are ce rula.
     expect(sched.nextScheduledDeletionAt()).toBeNull();
-    expect(await del.runDueDeletions(completedMs + 1000 * HOUR)).toBe(0);
+    expect((await del.runDueDeletions(completedMs + 1000 * HOUR)).deleted).toEqual([]);
 
     const { markMediaCompleted } = await import("./media");
     expect(markMediaCompleted("pack")).toBe(true);
@@ -186,7 +186,7 @@ describe("runDueDeletions (sarcina din Watcher)", () => {
 
     const done = await del.runDueDeletions(new Date("2026-10-27T10:00:30Z").getTime());
 
-    expect(done).toBe(1);
+    expect(done).toEqual({ deleted: ["Dune S01E01"], errors: [] });
     const left = db.prepare("SELECT DISTINCT torrent_hash AS h FROM media ORDER BY h").all();
     expect(left).toEqual([{ h: "later" }, { h: "none" }]);
     // Watcher-ul doarme până la următorul termen.
@@ -202,7 +202,10 @@ describe("runDueDeletions (sarcina din Watcher)", () => {
     insertRow("h1");
     sched.scheduleDeletion("h1", "2026-10-27 10:00:00", null);
     sched.cancelScheduledDeletion("h1", 3);
-    expect(await del.runDueDeletions(new Date("2026-10-28T00:00:00Z").getTime())).toBe(0);
+    expect(await del.runDueDeletions(new Date("2026-10-28T00:00:00Z").getTime())).toEqual({
+      deleted: [],
+      errors: [],
+    });
     expect(db.prepare("SELECT COUNT(*) AS n FROM media").get()).toEqual({ n: 1 });
   });
 });

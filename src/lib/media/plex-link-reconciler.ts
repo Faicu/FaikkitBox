@@ -21,6 +21,8 @@ export const RECENT_LINK_MINUTES = 30;
 export interface ReconcileResult {
   checked: number;
   linked: number;
+  // Titlurile legate acum (torrentLabel), pentru istoricul Watcher-ului.
+  titles: string[];
 }
 
 export async function reconcilePlexLinks(): Promise<ReconcileResult> {
@@ -49,15 +51,18 @@ export async function reconcilePlexLinks(): Promise<ReconcileResult> {
     torrent_hash: string;
   }>;
 
-  if (rows.length === 0) return { checked: 0, linked: 0 };
+  if (rows.length === 0) return { checked: 0, linked: 0, titles: [] };
 
+  const { torrentLabel } = await import("./scheduled-delete");
   let linked = 0;
+  const titles: string[] = [];
   for (const { torrent_hash } of rows) {
     try {
       const ok = await resolveMediaPlexLinkByTorrentHash(torrent_hash);
       const okPack = ok ? false : await resolveSeasonPackPlexLinks(torrent_hash);
       if (ok || okPack) {
         linked++;
+        titles.push(torrentLabel(torrent_hash));
         console.log(`[plex-reconcile] Legat la Plex: ${torrent_hash}`);
       }
     } catch (e) {
@@ -72,5 +77,5 @@ export async function reconcilePlexLinks(): Promise<ReconcileResult> {
       `[plex-reconcile] ${rows.length} titluri nelegate verificate, ${linked} legate acum`,
     );
   }
-  return { checked: rows.length, linked };
+  return { checked: rows.length, linked, titles };
 }

@@ -38,6 +38,8 @@ export async function trackDownloads(): Promise<{ summary: string | null; nextAt
   if (!qbitUser || !qbitPass) return { summary: null, nextAt: Date.now() + IDLE_CHECK_MS };
 
   const media = await import("../media/media");
+  // „Insula Iubirii S10E15”, nu numele torrentului.
+  const { torrentLabel } = await import("../media/scheduled-delete");
   const finalizing = finalizingHashes();
   const parts: string[] = [];
 
@@ -63,24 +65,24 @@ export async function trackDownloads(): Promise<{ summary: string | null; nextAt
       const info = byHash.get(t.torrentHash.toLowerCase());
       if (!info || !isTorrentComplete(Number(info.progress ?? 0), info.state ?? "")) continue;
       finalizing.add(t.torrentHash);
-      done.push(t.torrentName);
+      done.push(torrentLabel(t.torrentHash));
       void finalizeDownload({ ...t, qbitUrl, qbitUser, qbitPass })
         .catch((e) => console.warn(`[filelist] Finalizarea „${t.torrentName}” a eșuat:`, e))
         .finally(() => finalizing.delete(t.torrentHash));
     }
-    if (done.length) parts.push(`terminat: ${done.join(", ")}`);
+    if (done.length) parts.push(`Terminate: ${done.join(", ")}`);
   }
 
   // Cele încă în finalizare n-au primit refresh-ul Plex — vin la tactul următor.
   const { RECENT_LINK_MINUTES } = await import("../media/plex-link-reconciler");
   const recent = media.listRecentlyCompletedUnlinked(RECENT_LINK_MINUTES);
   const toLink = recent.filter((h) => !finalizing.has(h));
-  let linked = 0;
+  const linked: string[] = [];
   for (const hash of toLink) {
     // Eroare tăcută (Plex oprit, scanare neterminată): se reia peste 10s.
     const ok = await media.resolveMediaPlexLinkByTorrentHash(hash).catch(() => false);
     const okPack = ok ? false : await media.resolveSeasonPackPlexLinks(hash).catch(() => false);
-    if (ok || okPack) linked++;
+    if (ok || okPack) linked.push(torrentLabel(hash));
   }
 
   // Reconcilierea completează și calitatea filmelor legate fără ea; dacă doar
@@ -90,13 +92,13 @@ export async function trackDownloads(): Promise<{ summary: string | null; nextAt
   if (!reconcile || now - reconcile.at >= RECONCILE_EVERY_MS) {
     const { reconcilePlexLinks } = await import("../media/plex-link-reconciler");
     const r = await reconcilePlexLinks();
-    linked += r.linked;
+    linked.push(...r.titles);
     reconcile = globalThis.__faikkitboxReconcile = {
       at: now,
       pending: r.checked > r.linked,
     };
   }
-  if (linked) parts.push(`${linked} ${linked === 1 ? "legat" : "legate"} la Plex`);
+  if (linked.length) parts.push(`Legate la Plex: ${linked.join(", ")}`);
 
   const active = allUnfinished.length > 0 || finalizing.size > 0 || recent.length > 0;
   const nextAt = active

@@ -73,7 +73,7 @@ describe("trackDownloads", () => {
     const { summary, nextAt } = await tracker.trackDownloads();
     expect(qbitGet).toHaveBeenCalledTimes(1);
     expect(finalized).toEqual(["done1"]);
-    expect(summary).toBe("terminat: done1");
+    expect(summary).toBe("Terminate: done1");
     // Ceva în curs: ritmul obișnuit (10s).
     expect(nextAt).toBeNull();
     expect(tracker.finalizingHashes().has("done1")).toBe(true);

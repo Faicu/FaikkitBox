@@ -90,11 +90,16 @@ export async function deleteTorrentNow(row: {
 
 // Ștergerile cu termenul atins, scrise în jurnal. O ștergere eșuată rămâne
 // programată. Întoarce câte s-au executat.
-export async function runDueDeletions(nowMs = Date.now()): Promise<number> {
+// Întoarce titlurile șterse și pe cele eșuate, pentru istoricul Watcher-ului.
+export async function runDueDeletions(
+  nowMs = Date.now(),
+): Promise<{ deleted: string[]; errors: string[] }> {
   const { finalizingHashes } = await import("./download-tracker");
   const { logActivity } = await import("../activity-log");
-  let done = 0;
+  const deleted: string[] = [];
+  const errors: string[] = [];
   for (const due of listDueDeletions(nowMs)) {
+    let label: string | null = null;
     try {
       // Cineva poate să fi renunțat între timp.
       if (!scheduledDeletion(due.torrentHash)) continue;
@@ -104,7 +109,7 @@ export async function runDueDeletions(nowMs = Date.now()): Promise<number> {
         .prepare("SELECT media_type, imdb_id FROM media WHERE id = ?")
         .get(due.mediaId) as { media_type: string | null; imdb_id: string | null } | undefined;
       if (!row) continue;
-      const label = torrentLabel(due.torrentHash);
+      label = torrentLabel(due.torrentHash);
       await deleteTorrentNow({ ...row, torrent_hash: due.torrentHash });
       const by = usernameOf(due.byUserId);
       await logActivity(
@@ -112,10 +117,13 @@ export async function runDueDeletions(nowMs = Date.now()): Promise<number> {
         `Șters la termen: ${label}${by ? ` (programat de ${by})` : ""}`,
         { torrentHash: due.torrentHash, action: "deleted_scheduled", user: by },
       );
-      done++;
+      deleted.push(label);
     } catch (e) {
       console.warn(`[scheduled-delete] Ștergerea ${due.torrentHash} a eșuat:`, e);
+      errors.push(
+        `${label ?? torrentLabel(due.torrentHash)}: ${e instanceof Error ? e.message : String(e)}`,
+      );
     }
   }
-  return done;
+  return { deleted, errors };
 }
