@@ -188,8 +188,7 @@ export const WATCHER_TASKS: WatcherTask[] = [
       // Detaliile tuturor titlurilor, la 12h fiecare — și ale celor neurmărite:
       // tv_status decide dacă vezi butonul de urmărire. Un raport comun, scris
       // doar cu schimbări reale (metadata-report.ts).
-      const { newMetaReport, logMetaReport, hasMetaNews, buildMetaRefreshMessage } =
-        await import("../media/metadata-report");
+      const { newMetaReport, logMetaReport } = await import("../media/metadata-report");
       const report = newMetaReport();
       await steps(
         [
@@ -210,18 +209,16 @@ export const WATCHER_TASKS: WatcherTask[] = [
         ],
         failed,
       );
+      // Metadatele intră doar în jurnal (logMetaReport); istoricul din Tehnic
+      // le amestecă singur cu rulările (watcher-cards.tsx) — în rezumat s-ar
+      // vedea de două ori.
       await logMetaReport(report);
-      const parts = [
-        started.length > 0 && `Pornite: ${started.join(", ")}`,
-        hasMetaNews(report) &&
-          `Detalii TMDB: ${buildMetaRefreshMessage(report).replace(/^Metadate: /, "")}`,
-      ].filter((p): p is string => typeof p === "string");
       const errors = [
         ...itemErrors,
         ...(failed.length ? [`pași eșuați: ${failed.join(", ")}`] : []),
       ];
       return {
-        summary: parts.length > 0 ? parts.join(" · ") : null,
+        summary: started.length > 0 ? `Pornite: ${started.join(", ")}` : null,
         nextAt: null,
         error: errors.length > 0 ? errors.join("; ") : undefined,
       };

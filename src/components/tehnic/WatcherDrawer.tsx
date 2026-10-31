@@ -22,12 +22,16 @@ import {
   DrawerTitle,
   DrawerDescription,
 } from "@/components/ui/drawer";
-import { watcherHistoryQuery, watcherStatusQuery } from "@/lib/queries";
+import { activityLogQuery, watcherHistoryQuery, watcherStatusQuery } from "@/lib/queries";
+import type { ActivityEntry } from "@/lib/activity-log.functions";
 import {
   runWatcherTaskNow,
   setWatcherTaskPaused,
+  type WatcherRun,
   type WatcherTaskStatus,
 } from "@/lib/watcher/watcher.functions";
+import { MetaRefreshDetails } from "./MetaRefreshDetails";
+import { metaItems } from "./meta-items";
 import { FALLBACK_TASK_ICON, WATCHER_PLUGIN, WATCHER_TASK_INFO } from "./plugins";
 import { ImmichUploadsSection, Row, ShowWatchCards, SubtitleRetryCards } from "./watcher-cards";
 import { formatDateTime, relativeTime } from "./utils";
@@ -404,52 +408,129 @@ function TaskDetails({ task, now: _tick }: { task: WatcherTaskStatus; now: numbe
 }
 
 // Ultimele 20 de rulări care au făcut ceva, au eșuat sau au fost pornite
-// manual (vezi runner.ts).
+// manual (vezi runner.ts). La „Seriale și filme”, amestecate cronologic cu
+// actualizările de detalii din jurnal — acolo stă lista câmpurilor schimbate,
+// iar unele (după o descărcare) nici nu vin dintr-o rulare.
+const HISTORY_SIZE = 20;
+
+type HistoryItem = { at: string; run: WatcherRun } | { at: string; meta: ActivityEntry };
+
 function TaskHistory({ task }: { task: WatcherTaskStatus }) {
+  const withMeta = task.id === "show-watch";
   const { data: runs, refetch } = useQuery(watcherHistoryQuery(task.id));
+  const { data: log } = useQuery({ ...activityLogQuery, enabled: withMeta });
+  const [openId, setOpenId] = useState<string | null>(null);
   // O rulare nouă terminată = istoric nou.
   useEffect(() => {
     void refetch();
   }, [task.lastFinishedAt, refetch]);
+
+  const meta =
+    withMeta && Array.isArray(log) ? log.filter((e) => e.type === "metadata_refresh") : [];
+  const items: HistoryItem[] = [
+    ...(runs ?? []).map((r) => ({ at: r.finishedAt, run: r })),
+    ...meta.map((e) => ({ at: e.timestamp, meta: e })),
+  ]
+    .sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0))
+    .slice(0, HISTORY_SIZE);
 
   return (
     <div className="rounded-xl bg-muted/30 p-2.5">
       <div className="mb-1.5 flex items-center gap-1.5 text-muted-foreground">
         <History className="h-3.5 w-3.5" /> Istoric
       </div>
-      {!runs || runs.length === 0 ? (
+      {items.length === 0 ? (
         <div className="text-muted-foreground">
           Nimic încă. Aici apar doar rulările care au făcut ceva, au eșuat sau au fost pornite
-          manual.
+          manual{withMeta ? ", plus detaliile actualizate din TMDB" : ""}.
         </div>
       ) : (
         <div className="space-y-1">
-          {runs.map((r) => (
-            <div key={r.id} className="flex items-start gap-2 leading-relaxed">
-              <span
-                className={`mt-[0.45em] h-1.5 w-1.5 shrink-0 rounded-full ${r.ok ? "bg-emerald-400" : "bg-red-400"}`}
+          {items.map((it) =>
+            "run" in it ? (
+              <RunRow key={`run-${it.run.id}`} r={it.run} />
+            ) : (
+              <MetaRow
+                key={`meta-${it.meta.id}`}
+                e={it.meta}
+                isOpen={openId === it.meta.id}
+                onToggle={() => setOpenId(openId === it.meta.id ? null : it.meta.id)}
               />
-              <span className="min-w-0 flex-1">
-                {/* O rulare parțial eșuată are și rezumat (ce a apucat să facă). */}
-                {(r.ok || r.summary) && <span>{r.summary ?? "fără nimic de făcut"}</span>}
-                {!r.ok && (
-                  <span className="text-red-300">
-                    {r.summary ? " · " : ""}
-                    {r.error ?? "eroare"}
-                  </span>
-                )}
-                {r.manual && <span className="text-primary"> · manual</span>}
-              </span>
-              <span
-                className="shrink-0 text-[10px] tabular-nums text-muted-foreground"
-                title={formatDateTime(r.finishedAt)}
-              >
-                {relativeTime(r.finishedAt)} · {formatDuration(r.durationMs)}
-              </span>
-            </div>
-          ))}
+            ),
+          )}
         </div>
       )}
+    </div>
+  );
+}
+
+function RunRow({ r }: { r: WatcherRun }) {
+  return (
+    <div className="flex items-start gap-2 leading-relaxed">
+      <span
+        className={`mt-[0.45em] h-1.5 w-1.5 shrink-0 rounded-full ${r.ok ? "bg-emerald-400" : "bg-red-400"}`}
+      />
+      <span className="min-w-0 flex-1">
+        {/* O rulare parțial eșuată are și rezumat (ce a apucat să facă). */}
+        {(r.ok || r.summary) && <span>{r.summary ?? "fără nimic de făcut"}</span>}
+        {!r.ok && (
+          <span className="text-red-300">
+            {r.summary ? " · " : ""}
+            {r.error ?? "eroare"}
+          </span>
+        )}
+        {r.manual && <span className="text-primary"> · manual</span>}
+      </span>
+      <span
+        className="shrink-0 text-[10px] tabular-nums text-muted-foreground"
+        title={formatDateTime(r.finishedAt)}
+      >
+        {relativeTime(r.finishedAt)} · {formatDuration(r.durationMs)}
+      </span>
+    </div>
+  );
+}
+
+// Inline, nu drawer peste drawer (c76ce30); câte una deschisă.
+function MetaRow({
+  e,
+  isOpen,
+  onToggle,
+}: {
+  e: ActivityEntry;
+  isOpen: boolean;
+  onToggle: () => void;
+}) {
+  const n = metaItems(e).length;
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={isOpen}
+        className="flex w-full items-start gap-2 text-left leading-relaxed transition-colors hover:text-foreground"
+      >
+        <span className="mt-[0.45em] h-1.5 w-1.5 shrink-0 rounded-full bg-sky-400" />
+        <span className="min-w-0 flex-1">Detalii TMDB: {e.message.replace(/^Metadate: /, "")}</span>
+        <span
+          className="shrink-0 text-[10px] tabular-nums text-muted-foreground"
+          title={formatDateTime(e.timestamp)}
+        >
+          {relativeTime(e.timestamp)}
+        </span>
+        <ChevronDown
+          className={`mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200 ${isOpen ? "rotate-180" : ""} ${n === 0 ? "opacity-40" : ""}`}
+        />
+      </button>
+      <div
+        className={`grid transition-[grid-template-rows] duration-200 ease-out ${isOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}
+      >
+        <div className="overflow-hidden">
+          <div className="pt-1 pb-1.5 pl-3.5">
+            <MetaRefreshDetails entry={e} />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

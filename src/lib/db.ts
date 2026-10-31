@@ -1195,6 +1195,29 @@ function applyCleanups(database: DatabaseSync): void {
       console.log("[db] Migrare v48: adăugat media.watch_last_result");
       database.exec("PRAGMA user_version = 48");
     }
+
+    if (version < 49) {
+      // v49: istoricul „Seriale și filme” fără metadate — le arată Tehnic din
+      // jurnal, alături de rulări; rămase și aici, ar apărea de două ori.
+      const removed = database
+        .prepare(
+          `DELETE FROM watcher_runs WHERE task_id = 'show-watch' AND ok = 1 AND manual = 0
+             AND summary IS NOT NULL AND summary NOT LIKE 'Pornite:%'`,
+        )
+        .run();
+      database.exec(
+        `UPDATE watcher_runs SET summary = NULL
+          WHERE task_id = 'show-watch' AND summary IS NOT NULL AND summary NOT LIKE 'Pornite:%'`,
+      );
+      database.exec(
+        `UPDATE watcher_runs SET summary = substr(summary, 1, instr(summary, ' · Detalii TMDB:') - 1)
+          WHERE task_id = 'show-watch' AND instr(summary, ' · Detalii TMDB:') > 0`,
+      );
+      console.log(
+        `[db] Migrare v49: ${removed.changes} rulări doar cu metadate scoase din istoric`,
+      );
+      database.exec("PRAGMA user_version = 49");
+    }
   }
 }
 
