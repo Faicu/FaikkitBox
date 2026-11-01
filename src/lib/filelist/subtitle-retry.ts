@@ -55,14 +55,24 @@ export function approximateEpisodeKeys(torrentHash: string): ReadonlySet<string>
   return rows.length ? new Set(rows.map((r) => r.k)) : undefined;
 }
 
-// Câte titluri au fost scadente și câte au primit subtitrare.
-export async function retryMissingSubtitles(): Promise<{ checked: number; found: number }> {
+// Câte titluri au fost scadente și câte au primit subtitrare; `titles`
+// („Tulsa King S04E03 (negăsit)”) și `errors`, pentru istoricul Watcher-ului.
+export async function retryMissingSubtitles(): Promise<{
+  checked: number;
+  found: number;
+  titles: string[];
+  errors: string[];
+}> {
   const due = listTorrentsDueForSubtitleRetry();
-  if (due.length === 0) return { checked: 0, found: 0 };
+  if (due.length === 0) return { checked: 0, found: 0, titles: [], errors: [] };
   const { checkSubtitleForTorrent } = await import("./download");
   const { CORRECTED_OUTCOMES } = await import("./subtitle-outcomes");
+  const { torrentLabel } = await import("../media/scheduled-delete");
   let found = 0;
+  const titles: string[] = [];
+  const errors: string[] = [];
   for (const t of due) {
+    const label = torrentLabel(t.torrent_hash);
     try {
       const result = await checkSubtitleForTorrent(
         {
@@ -81,16 +91,25 @@ export async function retryMissingSubtitles(): Promise<{ checked: number; found:
           via: "retry",
         },
       );
-      if (result.status === "ok" && CORRECTED_OUTCOMES.includes(result.outcome)) found++;
+      if (result.status === "ok" && CORRECTED_OUTCOMES.includes(result.outcome)) {
+        found++;
+        titles.push(`${label} (găsit)`);
+      } else if (result.status === "ok") {
+        // Aproximativa se păstrează până apare una sigur mai bună.
+        titles.push(`${label} (${t.approximate === 1 ? "nimic mai bun" : "negăsit"})`);
+      } else {
+        errors.push(`${label}: ${result.error}`);
+      }
       console.log(
         `[subtitle-retry] „${t.torrent_name}" — ${result.status === "ok" ? result.outcome : result.error}`,
       );
     } catch (e) {
       console.warn(`[subtitle-retry] „${t.torrent_name}" — eroare:`, e);
+      errors.push(`${label}: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
-  return { checked: due.length, found };
+  return { checked: due.length, found, titles, errors };
 }
 
 // ---------------------------------------------------------------------------

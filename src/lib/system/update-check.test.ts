@@ -66,7 +66,9 @@ describe("checkForUpdates", () => {
       }),
     });
 
-    expect(r).toBe("notified");
+    expect(r).toEqual({
+      notified: ["Immich 3.2.2 → 3.2.3", "Ubuntu: 12 pachete", "Ubuntu cere repornire"],
+    });
     expect(journal()).toEqual([
       {
         type: "update_available",
@@ -91,7 +93,9 @@ describe("checkForUpdates", () => {
     );
 
     // Reamintire zilnică: tot neinstalat a doua zi → anunțat din nou.
-    expect(await check.checkForUpdates({ now: T0 + DAY, readVersions: plexNew })).toBe("notified");
+    expect(await check.checkForUpdates({ now: T0 + DAY, readVersions: plexNew })).toHaveProperty(
+      "notified",
+    );
     expect(journal()).toHaveLength(2);
   });
 

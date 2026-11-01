@@ -44,8 +44,6 @@ const SEC = 1000;
 const MIN = 60 * SEC;
 const HOUR = 60 * MIN;
 
-const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
-
 // Un pas eșuat nu-i oprește pe ceilalți; la final, rularea e marcată eșuată
 // cu numele pașilor.
 async function steps(list: Array<[string, () => Promise<void>]>, failed: string[]): Promise<void> {
@@ -307,7 +305,11 @@ export const WATCHER_TASKS: WatcherTask[] = [
       const r = await checkForUpdates({ force: manual });
       if (r === "failed") throw new Error("nicio sursă n-a răspuns, se reia peste o oră");
       const summary =
-        r === "skipped" ? null : r === "notified" ? "actualizări anunțate" : "nimic nou";
+        r === "skipped"
+          ? null
+          : r === "nothing"
+            ? "nimic nou"
+            : `Anunțate: ${r.notified.join(" · ")}`;
       return { summary, nextAt: nextUpdateCheckAt() };
     },
   },
@@ -326,7 +328,11 @@ export const WATCHER_TASKS: WatcherTask[] = [
       const { retryMissingSubtitles } = await import("../filelist/subtitle-retry");
       const r = await retryMissingSubtitles();
       if (r.checked === 0) return null;
-      return `${plural(r.checked, "titlu căutat", "titluri căutate")}, ${r.found} găsite`;
+      return {
+        summary: r.titles.length > 0 ? `Căutate: ${r.titles.join(", ")}` : null,
+        nextAt: null,
+        error: r.errors.length > 0 ? r.errors.join("; ") : undefined,
+      };
     },
   },
 ];

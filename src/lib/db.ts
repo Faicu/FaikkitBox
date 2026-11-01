@@ -1218,6 +1218,17 @@ function applyCleanups(database: DatabaseSync): void {
       );
       database.exec("PRAGMA user_version = 49");
     }
+
+    if (version < 50) {
+      // v50: rulările goale rămase de la prima versiune a Watcher-ului (salva
+      // și rulările fără nimic de făcut) — în istoric apăreau ca „fără nimic de
+      // făcut”.
+      const removed = database
+        .prepare("DELETE FROM watcher_runs WHERE ok = 1 AND manual = 0 AND summary IS NULL")
+        .run();
+      console.log(`[db] Migrare v50: ${removed.changes} rulări goale scoase din istoric`);
+      database.exec("PRAGMA user_version = 50");
+    }
   }
 }
 

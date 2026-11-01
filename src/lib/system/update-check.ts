@@ -71,7 +71,7 @@ export async function checkForUpdates(
       ubuntu: ServiceVersion;
     }>;
   } = {},
-): Promise<"skipped" | "nothing" | "notified" | "failed"> {
+): Promise<"skipped" | "nothing" | "failed" | { notified: string[] }> {
   const now = opts.now ?? Date.now();
   const db = getDb();
   const last = db.prepare("SELECT checked_at FROM update_check WHERE id = 1").get() as
@@ -98,5 +98,5 @@ export async function checkForUpdates(
     { items: summary.items.join(" · ") },
     { url: summary.url },
   );
-  return "notified";
+  return { notified: summary.items };
 }
