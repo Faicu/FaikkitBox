@@ -95,8 +95,13 @@ export async function retryMissingSubtitles(): Promise<{
         found++;
         titles.push(`${label} (${result.outcome === "retimed_srt" ? "resincronizat" : "găsit"})`);
       } else if (result.status === "ok") {
-        // Aproximativa se păstrează până apare una sigur mai bună.
-        titles.push(`${label} (${t.approximate === 1 ? "nimic mai bun" : "negăsit"})`);
+        // La un pachet se caută și episoade lipsă, și aproximative.
+        const nothing = result.outcome.startsWith("season_")
+          ? "nimic nou"
+          : t.approximate === 1
+            ? "nimic mai bun"
+            : "negăsit";
+        titles.push(`${label} (${nothing})`);
       } else {
         errors.push(`${label}: ${result.error}`);
       }

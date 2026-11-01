@@ -186,14 +186,14 @@ describe("runDueDeletions (sarcina din Watcher)", () => {
 
     const done = await del.runDueDeletions(new Date("2026-10-27T10:00:30Z").getTime());
 
-    expect(done).toEqual({ deleted: ["Dune S01E01"], errors: [] });
+    expect(done).toEqual({ deleted: ["Dune S01 (pachet)"], errors: [] });
     const left = db.prepare("SELECT DISTINCT torrent_hash AS h FROM media ORDER BY h").all();
     expect(left).toEqual([{ h: "later" }, { h: "none" }]);
     // Watcher-ul doarme până la următorul termen.
     expect(sched.nextScheduledDeletionAt()).toBe(new Date("2026-10-27T12:00:00Z").getTime());
     expect(logActivity).toHaveBeenCalledWith(
       "title_delete",
-      "Șters la termen: Dune S01E01 (programat de ana)",
+      "Șters la termen: Dune S01 (pachet) (programat de ana)",
       expect.objectContaining({ torrentHash: "due", action: "deleted_scheduled" }),
     );
   });
@@ -207,5 +207,18 @@ describe("runDueDeletions (sarcina din Watcher)", () => {
       errors: [],
     });
     expect(db.prepare("SELECT COUNT(*) AS n FROM media").get()).toEqual({ n: 1 });
+  });
+});
+
+describe("torrentLabel", () => {
+  it("un pachet desfăcut în episoade rămâne sezon (The Shield S01)", () => {
+    insertRow("p", { episode: 1 });
+    insertRow("p", { episode: 2 });
+    expect(sched.torrentLabel("p")).toBe("Dune S01 (pachet)");
+  });
+
+  it("un singur episod rămâne episod", () => {
+    insertRow("e", { episode: 4 });
+    expect(sched.torrentLabel("e")).toBe("Dune S01E04");
   });
 });

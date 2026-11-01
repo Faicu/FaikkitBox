@@ -113,9 +113,13 @@ export function listDueDeletions(
 
 // „Film (2024)”, „Serial S02E03”, „Serial S02 (pachet)” — pentru jurnal.
 export function torrentLabel(torrentHash: string): string {
+  // Un pachet desfăcut în episoade nu mai are rândul „pachet” — se recunoaște
+  // după numărul de episoade (The Shield S01 apărea „S01E01”).
   const row = getDb()
     .prepare(
-      `SELECT media_type, title, year, season, episode, is_season_pack FROM media
+      `SELECT media_type, title, year, season, episode, is_season_pack,
+              (SELECT COUNT(DISTINCT episode) FROM media WHERE torrent_hash = m.torrent_hash) AS episodes
+         FROM media m
         WHERE torrent_hash = ? ORDER BY is_season_pack DESC, id LIMIT 1`,
     )
     .get(torrentHash) as
@@ -126,13 +130,15 @@ export function torrentLabel(torrentHash: string): string {
         season: number | null;
         episode: number | null;
         is_season_pack: number;
+        episodes: number;
       }
     | undefined;
   if (!row) return "titlu necunoscut";
   if (row.media_type === "movie") return row.year ? `${row.title} (${row.year})` : row.title;
   const pad = (n: number) => String(n).padStart(2, "0");
   if (row.season == null) return row.title;
-  if (row.is_season_pack || row.episode == null) return `${row.title} S${pad(row.season)} (pachet)`;
+  if (row.is_season_pack || row.episode == null || row.episodes > 1)
+    return `${row.title} S${pad(row.season)} (pachet)`;
   return `${row.title} S${pad(row.season)}E${pad(row.episode)}`;
 }
 
