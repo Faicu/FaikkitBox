@@ -506,14 +506,26 @@ export async function correctSubtitleForMediaCore(
       };
     }
 
+    // Cu o subtitrare aproximativă, butonul caută una mai bună (sau o
+    // resincronizează), ca reîncercarea zilnică — altfel doar spunea că există.
+    const { approximateEpisodeKeys } = await import("./subtitle-retry");
+    const approximate = getDb()
+      .prepare("SELECT 1 FROM media WHERE torrent_hash = ? AND subtitle_approximate = 1 LIMIT 1")
+      .get(row.torrent_hash);
+    const isMovie = row.media_type === "movie";
     return checkSubtitleForTorrent(
       {
         torrentName: row.torrent_name,
         torrentHash: row.torrent_hash,
         imdbId: row.imdb_id,
-        isMovie: row.media_type === "movie",
+        isMovie,
       },
-      { logRun: "always" },
+      {
+        logRun: "always",
+        upgradeApproximate: !!approximate,
+        approximateEpisodes:
+          approximate && !isMovie ? approximateEpisodeKeys(row.torrent_hash) : undefined,
+      },
     );
   }
 }

@@ -57,38 +57,36 @@ export function parseSrtTiming(text: string): SrtTiming {
   return { starts, intervals, lastEnd };
 }
 
-// Corelația Pearson dintre „se vorbește / nu” pe felii de BIN_S secunde, la
-// cel mai bun decalaj constant. 1 = aceleași momente, ~0 = fără legătură.
-export function speechCorrelation(
-  candidate: Array<[number, number]>,
-  reference: Array<[number, number]>,
-): { score: number; offset: number } {
-  if (candidate.length === 0 || reference.length === 0) return { score: 0, offset: 0 };
-  const maxShift = Math.round(MAX_OFFSET_S / BIN_S);
-  const lastEnd = Math.max(...candidate.map((i) => i[1]), ...reference.map((i) => i[1]));
-  const n = Math.ceil(lastEnd / BIN_S) + 1;
-  const toBins = (ivs: Array<[number, number]>) => {
-    const v = new Uint8Array(n);
-    for (const [a, b] of ivs) {
-      for (
-        let i = Math.max(0, Math.floor(a / BIN_S));
-        i <= Math.min(n - 1, Math.floor(b / BIN_S));
-        i++
-      )
-        v[i] = 1;
-    }
-    return v;
-  };
-  const c = toBins(candidate);
-  const r = toBins(reference);
+// Felii de BIN_S secunde: 1 unde se vorbește.
+function toSpeechBins(ivs: Array<[number, number]>, n: number): Uint8Array {
+  const v = new Uint8Array(n);
+  for (const [a, b] of ivs) {
+    for (
+      let i = Math.max(0, Math.floor(a / BIN_S));
+      i <= Math.min(n - 1, Math.floor(b / BIN_S));
+      i++
+    )
+      v[i] = 1;
+  }
+  return v;
+}
 
+// Cel mai bun decalaj constant pentru feliile [lo, hi) ale candidatului.
+function bestShift(
+  c: Uint8Array,
+  r: Uint8Array,
+  maxShift: number,
+  lo = 0,
+  hi = c.length,
+): { score: number; offset: number } {
+  const n = c.length;
   let best = { score: -1, offset: 0 };
   for (let k = -maxShift; k <= maxShift; k++) {
     let m = 0;
     let sx = 0;
     let sy = 0;
     let sxy = 0;
-    for (let i = Math.max(0, -k); i < n && i + k < n; i++) {
+    for (let i = Math.max(lo, -k); i < hi && i + k < n; i++) {
       const x = c[i];
       const y = r[i + k];
       m++;
@@ -104,6 +102,130 @@ export function speechCorrelation(
     if (score > best.score) best = { score, offset: k * BIN_S };
   }
   return best;
+}
+
+function binCount(...sets: Array<Array<[number, number]>>): number {
+  let lastEnd = 0;
+  for (const ivs of sets) for (const i of ivs) lastEnd = Math.max(lastEnd, i[1]);
+  return Math.ceil(lastEnd / BIN_S) + 1;
+}
+
+// Corelația Pearson dintre „se vorbește / nu” pe felii de BIN_S secunde, la
+// cel mai bun decalaj constant. 1 = aceleași momente, ~0 = fără legătură.
+export function speechCorrelation(
+  candidate: Array<[number, number]>,
+  reference: Array<[number, number]>,
+): { score: number; offset: number } {
+  if (candidate.length === 0 || reference.length === 0) return { score: 0, offset: 0 };
+  const n = binCount(candidate, reference);
+  return bestShift(
+    toSpeechBins(candidate, n),
+    toSpeechBins(reference, n),
+    Math.round(MAX_OFFSET_S / BIN_S),
+  );
+}
+
+// Corecția timpilor: t' = t × ratio + shift.
+export interface Retime {
+  ratio: number;
+  shift: number;
+}
+
+// Conversiile obișnuite între cadre pe secundă. The Dog Stars (1 nov. 2026):
+// traducerea corectă aluneca de la 0,5 la 6 s pe film (24 față de 23,976) —
+// 0,56 măsurat, 0,86 fără decalaj după corecție.
+const FRAME_RATE_RATIOS: Array<{ ratio: number; label: string }> = [
+  { ratio: 1000 / 1001, label: "24 → 23,976 fps" },
+  { ratio: 1001 / 1000, label: "23,976 → 24 fps" },
+  { ratio: 24 / 25, label: "24 → 25 fps" },
+  { ratio: 25 / 24, label: "25 → 24 fps" },
+  { ratio: 24000 / 25025, label: "23,976 → 25 fps" },
+  { ratio: 25025 / 24000, label: "25 → 23,976 fps" },
+];
+// Cu cât trebuie să crească corelația ca o altă viteză să fie luată în seamă.
+const RATIO_MIN_GAIN = 0.1;
+// Verificarea corecției pe bucăți de film: fiecare trebuie să rămână fără
+// decalaj. Un alt montaj nu are un decalaj constant — fără verificare, o
+// deplasare l-ar fi făcut să pară sincronizat.
+const RETIME_SEGMENTS = 4;
+const RETIME_SEGMENT_MAX_OFFSET_S = 1;
+const RETIME_SEGMENT_MAX_SHIFT_S = 10;
+const RETIME_SEGMENT_MIN_SPEECH_BINS = 40;
+
+export function applyRetime(t: number, retime: Retime): number {
+  return Math.max(0, t * retime.ratio + retime.shift);
+}
+
+function retimeIntervals(ivs: Array<[number, number]>, retime: Retime): Array<[number, number]> {
+  return ivs.map(([a, b]) => [applyRetime(a, retime), applyRetime(b, retime)]);
+}
+
+// După corecție, fiecare bucată de film trebuie să vorbească în aceleași
+// momente cu referința.
+function retimeHoldsEverywhere(
+  candidate: Array<[number, number]>,
+  reference: Array<[number, number]>,
+  retime: Retime,
+): boolean {
+  const corrected = retimeIntervals(candidate, retime);
+  const n = binCount(corrected, reference);
+  const c = toSpeechBins(corrected, n);
+  const r = toSpeechBins(reference, n);
+  const seg = Math.floor(n / RETIME_SEGMENTS);
+  const maxShift = Math.round(RETIME_SEGMENT_MAX_SHIFT_S / BIN_S);
+  for (let s = 0; s < RETIME_SEGMENTS; s++) {
+    const lo = s * seg;
+    const hi = s === RETIME_SEGMENTS - 1 ? n : lo + seg;
+    let speech = 0;
+    for (let i = lo; i < hi; i++) speech += c[i];
+    // Bucăți aproape fără dialog (generic, scene mute) nu spun nimic.
+    if (speech < RETIME_SEGMENT_MIN_SPEECH_BINS) continue;
+    const { offset } = bestShift(c, r, maxShift, lo, hi);
+    if (Math.abs(offset) > RETIME_SEGMENT_MAX_OFFSET_S) return false;
+  }
+  return true;
+}
+
+// Sincronizarea, cu corecția timpilor dacă e nevoie de una: întâi viteza (doar
+// cu un câștig clar), apoi deplasarea. După corecție decalajul rămas e 0.
+export function measureSync(
+  candidate: Array<[number, number]>,
+  reference: Array<[number, number]>,
+): SyncMeasure {
+  const plain = speechCorrelation(candidate, reference);
+  let best: { score: number; offset: number; ratio: number; label?: string } = {
+    ...plain,
+    ratio: 1,
+  };
+  for (const { ratio, label } of FRAME_RATE_RATIOS) {
+    const m = speechCorrelation(retimeIntervals(candidate, { ratio, shift: 0 }), reference);
+    if (m.score >= plain.score + RATIO_MIN_GAIN && m.score > best.score)
+      best = { ...m, ratio, label };
+  }
+  if (best.ratio === 1 && Math.abs(best.offset) <= GOOD_SYNC_MAX_OFFSET_S) return plain;
+  const retime: Retime = { ratio: best.ratio, shift: best.offset };
+  if (!retimeHoldsEverywhere(candidate, reference, retime)) return plain;
+  return { score: best.score, offset: 0, retime: { ...retime, label: best.label } };
+}
+
+// Aplică corecția pe un SRT, păstrând restul textului neatins.
+export function retimeSrt(text: string, retime: Retime): string {
+  const fmt = (t: number) => {
+    const ms = Math.round(t * 1000);
+    const h = Math.floor(ms / 3_600_000);
+    const m = Math.floor((ms % 3_600_000) / 60_000);
+    const s = Math.floor((ms % 60_000) / 1000);
+    const pad = (v: number, w = 2) => String(v).padStart(w, "0");
+    return `${pad(h)}:${pad(m)}:${pad(s)},${pad(ms % 1000, 3)}`;
+  };
+  return text.replace(
+    /(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})(\s*-->\s*)(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})/g,
+    (_all, h1, m1, s1, ms1, arrow, h2, m2, s2, ms2) => {
+      const t = (h: string, mi: string, s: string, ms: string) =>
+        Number(h) * 3600 + Number(mi) * 60 + Number(s) + Number(ms.padEnd(3, "0")) / 1000;
+      return `${fmt(applyRetime(t(h1, m1, s1, ms1), retime))}${arrow}${fmt(applyRetime(t(h2, m2, s2, ms2), retime))}`;
+    },
+  );
 }
 
 async function mediaDurationSeconds(mediaAbsPath: string): Promise<number | null> {
@@ -196,7 +318,10 @@ const GOOD_SYNC_MAX_OFFSET_S = 0.5;
 
 export interface SyncMeasure {
   score: number;
+  // Decalajul rămas; 0 când timpii se corectează (`retime`).
   offset: number;
+  // Corecția de aplicat la scriere; lipsește când nu e nevoie.
+  retime?: Retime & { label?: string };
 }
 
 export function isWellSynced(sync: SyncMeasure): boolean {
@@ -224,8 +349,12 @@ const SAME_SCORE_EPSILON = 0.02;
 // decalaj câștiga la o miime diferență.
 export function isBetterSync(candidate: SyncMeasure, best: SyncMeasure | null): boolean {
   if (!best) return true;
-  if (Math.abs(candidate.score - best.score) < SAME_SCORE_EPSILON)
+  if (Math.abs(candidate.score - best.score) < SAME_SCORE_EPSILON) {
+    // Apoi cea care nu trebuie corectată.
+    if (Math.abs(candidate.offset) === Math.abs(best.offset))
+      return !candidate.retime && !!best.retime;
     return Math.abs(candidate.offset) < Math.abs(best.offset);
+  }
   return candidate.score > best.score;
 }
 
@@ -256,21 +385,25 @@ export function createSubtitleVerifier(mediaAbsPath: string) {
     if (timing.starts.length === 0)
       return reject("nu conține nicio replică cu timp (nu e un SRT valid)", "nu e un SRT valid");
 
+    reference ??= embeddedReferenceTiming(mediaAbsPath);
+    const ref = await reference;
+    const sync =
+      ref && ref.starts.length >= MIN_CUES && timing.starts.length >= MIN_CUES
+        ? measureSync(timing.intervals, ref.intervals)
+        : null;
+
+    // Durata după corecție — o subtitrare pentru 25 fps e mai lungă înainte.
     duration ??= mediaDurationSeconds(mediaAbsPath);
     const d = await duration;
-    if (d != null && timing.lastEnd > d + DURATION_SLACK_S) {
+    const lastEnd = sync?.retime ? applyRetime(timing.lastEnd, sync.retime) : timing.lastEnd;
+    if (d != null && lastEnd > d + DURATION_SLACK_S) {
       return reject(
-        `ultima replică e la ${formatTime(timing.lastEnd)}, dar fișierul are doar ${formatTime(d)} — e pentru alt episod sau altă versiune`,
-        `mai lungă decât fișierul (${formatTime(timing.lastEnd)} față de ${formatTime(d)}) — alt episod sau altă versiune`,
+        `ultima replică e la ${formatTime(lastEnd)}, dar fișierul are doar ${formatTime(d)} — e pentru alt episod sau altă versiune`,
+        `mai lungă decât fișierul (${formatTime(lastEnd)} față de ${formatTime(d)}) — alt episod sau altă versiune`,
       );
     }
 
-    reference ??= embeddedReferenceTiming(mediaAbsPath);
-    const ref = await reference;
-    if (!ref || ref.starts.length < MIN_CUES || timing.starts.length < MIN_CUES) {
-      return { reason: null, sync: null };
-    }
-    const sync = speechCorrelation(timing.intervals, ref.intervals);
+    if (!sync) return { reason: null, sync: null };
     if (sync.score < MIN_SPEECH_CORRELATION) {
       return reject(
         `momentele de vorbire nu se potrivesc cu subtitrarea încorporată în fișier (corelație ${sync.score.toFixed(2)}, minimum ${MIN_SPEECH_CORRELATION}) — e pentru alt episod sau altă versiune`,
@@ -288,5 +421,16 @@ export function describeSync(sync: SyncMeasure): string {
     Math.abs(sync.offset) <= GOOD_SYNC_MAX_OFFSET_S
       ? "fără decalaj"
       : `decalaj ~${Math.abs(sync.offset).toFixed(1)} s`;
-  return `sincronizare măsurată: corelație ${sync.score.toFixed(2)}, ${offset}`;
+  return `sincronizare măsurată: corelație ${sync.score.toFixed(2)}, ${offset}${sync.retime ? `, ${describeRetime(sync.retime)}` : ""}`;
+}
+
+export function describeRetime(retime: Retime & { label?: string }): string {
+  const parts: string[] = [];
+  if (retime.ratio !== 1)
+    parts.push(`viteză ajustată ${retime.label ?? `×${retime.ratio.toFixed(4)}`}`);
+  if (Math.abs(retime.shift) > GOOD_SYNC_MAX_OFFSET_S)
+    parts.push(
+      `deplasată cu ${retime.shift > 0 ? "+" : "−"}${Math.abs(retime.shift).toFixed(1)} s`,
+    );
+  return `timpi corectați (${parts.join(", ")})`;
 }

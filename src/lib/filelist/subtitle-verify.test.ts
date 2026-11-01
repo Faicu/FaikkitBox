@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   isBetterSync,
   isConfidentSync,
+  measureSync,
   parseSrtTiming,
+  retimeSrt,
   pickReferenceStream,
   speechCorrelation,
 } from "./subtitle-verify";
@@ -40,6 +42,65 @@ describe("parseSrtTiming", () => {
 
 // Intervalele de vorbire ale unui episod, din începuturile de mai sus.
 const speech = (starts: number[]) => starts.map((s): [number, number] => [s, s + 1.2]);
+
+describe("measureSync", () => {
+  // ~1 h 50 min de dialog, cât un film.
+  const film = speech(episode(3, 1200));
+  const shifted = (ivs: Array<[number, number]>, f: (t: number) => number) =>
+    ivs.map(([a, b]): [number, number] => [f(a), f(b)]);
+
+  it("sincronizată: fără corecție", () => {
+    const m = measureSync(film, film);
+    expect(m.retime).toBeUndefined();
+    expect(m.score).toBeGreaterThan(0.95);
+  });
+
+  it("alunecare 24 față de 23,976 fps (The Dog Stars): corectează viteza", () => {
+    const m = measureSync(
+      shifted(film, (t) => t * 1.001 + 0.4),
+      film,
+    );
+    expect(m.retime?.ratio).toBeCloseTo(1000 / 1001, 6);
+    expect(m.offset).toBe(0);
+    expect(m.score).toBeGreaterThan(0.8);
+  });
+
+  it("decalaj constant: deplasează", () => {
+    const m = measureSync(
+      shifted(film, (t) => t + 3.5),
+      film,
+    );
+    expect(m.retime?.ratio).toBe(1);
+    expect(m.retime?.shift).toBeCloseTo(-3.5, 0);
+    expect(m.offset).toBe(0);
+  });
+
+  it("alt montaj (o scenă în plus la mijloc): nu corectează, rămâne decalajul", () => {
+    const half = film[Math.floor(film.length / 2)][0];
+    const m = measureSync(
+      shifted(film, (t) => (t < half ? t + 3 : t + 9)),
+      film,
+    );
+    expect(m.retime).toBeUndefined();
+    expect(Math.abs(m.offset)).toBeGreaterThan(0.5);
+  });
+});
+
+describe("retimeSrt", () => {
+  it("aplică viteza și deplasarea, restul textului rămâne", () => {
+    const out = retimeSrt("1\n01:00:00,000 --> 01:00:02,500\nSalut\n", {
+      ratio: 1000 / 1001,
+      shift: -1,
+    });
+    expect(out).toBe("1\n00:59:55,404 --> 00:59:57,901\nSalut\n");
+  });
+
+  it("nu coboară sub zero", () => {
+    expect(retimeSrt("00:00:00,500 --> 00:00:01,000", { ratio: 1, shift: -2 })).toBe(
+      "00:00:00,000 --> 00:00:00,000",
+    );
+  });
+});
 
 describe("speechCorrelation", () => {
   const e1 = speech(episode(1));

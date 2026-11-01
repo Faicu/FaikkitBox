@@ -17,7 +17,7 @@ import {
 } from "./subtitle-outcomes";
 import { fileExists } from "./subtitle-checks";
 import type { SubtitleCandidate } from "./subtitle-sources";
-import { describeSync, isConfidentSync, type SyncMeasure } from "./subtitle-verify";
+import { describeSync, isConfidentSync, retimeSrt, type SyncMeasure } from "./subtitle-verify";
 
 // O variantă ca text UTF-8 (null la eșec), fără scriere — pipeline-ul compară
 // întâi mai multe.
@@ -56,7 +56,10 @@ export async function writeChosenSubtitle(
   const encodingNote = fetched.wasConverted ? " (encoding convertit la UTF-8)" : "";
 
   try {
-    await writeFileWithRetry(destPath, fetched.text);
+    await writeFileWithRetry(
+      destPath,
+      sync?.retime ? retimeSrt(fetched.text, sync.retime) : fetched.text,
+    );
   } catch (e) {
     console.warn(`[subtitles] scriere .srt eșuată (${destPath}):`, e);
     return {

@@ -326,6 +326,7 @@ const HAS_ROMANIAN_OUTCOMES = new Set([
   "srt_already_ok",
   "renamed_srt",
   "reencoded_srt",
+  "retimed_srt",
   "downloaded",
   "downloaded_approximate",
   "season_corrected",
@@ -383,7 +384,9 @@ export function episodeSubtitleState(
     hasRo: HAS_ROMANIAN_OUTCOMES.has(file.outcome) ? 1 : 0,
     source: isDownloadOutcome(file.outcome)
       ? file.source
-      : (SUBTITLE_SOURCE_BY_OUTCOME[file.outcome] ?? null),
+      : file.outcome === "retimed_srt"
+        ? inherited.source
+        : (SUBTITLE_SOURCE_BY_OUTCOME[file.outcome] ?? null),
     detail: report.episodeDetails?.[key] ?? pack.subtitle_detail,
     approximate: file.outcome === "downloaded_approximate" ? 1 : 0,
     report: JSON.stringify(episodeReport(file, report.rejected ?? [])),
@@ -464,6 +467,8 @@ function writeSubtitleStatus(
   // (S.W.A.T. Exiles, 9 oct. 2026). Se actualizează doar data verificării.
   const keepPrevious = outcome === "srt_already_ok" || outcome === "season_already_ok";
   const keep = keepPrevious ? 1 : 0;
+  // Resincronizarea păstrează sursa (același fișier, alți timpi).
+  const keepSource = keepPrevious || outcome === "retimed_srt" ? 1 : 0;
   getDb()
     .prepare(
       `UPDATE media SET has_romanian_subtitle = ?,
@@ -480,7 +485,7 @@ function writeSubtitleStatus(
     )
     .run(
       HAS_ROMANIAN_OUTCOMES.has(outcome) ? 1 : 0,
-      keep,
+      keepSource,
       source,
       keep,
       detail,

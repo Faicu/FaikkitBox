@@ -29,10 +29,12 @@ import {
   isBetterSync,
   isConfidentSync,
   isWellSynced,
+  describeSync,
+  retimeSrt,
   type SyncMeasure,
 } from "./subtitle-verify";
 import { SUBTITLE_SOURCE_LABELS } from "./subtitle-outcomes";
-import { decodeToUtf8Text } from "./subtitle-encoding";
+import { decodeToUtf8Text, writeFileWithRetry } from "./subtitle-encoding";
 import { rankSubtitleCandidates } from "./subtitle-sources";
 import {
   handleTrackedSrt,
@@ -228,8 +230,26 @@ export async function processMediaFile(
   let upgrading: { sync: SyncMeasure | null } | null = null;
   if (await fileExists(sidecarAbsPath)) {
     const sidecarBuf = await readFile(sidecarAbsPath).catch(() => null);
-    const check = sidecarBuf ? await verify(decodeToUtf8Text(sidecarBuf).text) : null;
+    const sidecarText = sidecarBuf ? decodeToUtf8Text(sidecarBuf).text : null;
+    const check = sidecarText != null ? await verify(sidecarText) : null;
     const reason = check?.reason ?? null;
+    // Traducerea potrivită, doar cu timpii decalați: corectată pe loc, dacă
+    // iese sincronizată. Altfel rămâne cum e, ca înainte.
+    if (!reason && sidecarText != null && check?.sync?.retime && isWellSynced(check.sync)) {
+      const sync = check.sync;
+      try {
+        await writeFileWithRetry(sidecarAbsPath, retimeSrt(sidecarText, sync.retime!));
+        console.log(`[subtitles] .srt existent resincronizat → ${sidecarAbsPath}`);
+        return {
+          outcome: "retimed_srt",
+          detail: `subtitrarea existentă a fost resincronizată (${describeSync(sync)})`,
+          path: sidecarAbsPath,
+          sync: { score: sync.score, offset: sync.offset, good: true },
+        };
+      } catch (e) {
+        console.warn(`[subtitles] resincronizarea .srt-ului existent a eșuat:`, e);
+      }
+    }
     if (!reason) {
       // Deja bine sincronizată — nimic de îmbunătățit.
       if (!upgradeApproximate || (check?.sync && isWellSynced(check.sync))) {
@@ -366,7 +386,11 @@ export async function processMediaFile(
     maxCriteria: result.maxCriteria,
     source: result.source,
     sync: best.sync
-      ? { ...best.sync, good: isConfidentSync(best.sync, best.candidate) }
+      ? {
+          score: best.sync.score,
+          offset: best.sync.offset,
+          good: isConfidentSync(best.sync, best.candidate),
+        }
       : undefined,
     rejected,
     movedAside,

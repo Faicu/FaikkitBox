@@ -7,6 +7,8 @@ export type SubtitleOutcome =
   | "srt_already_ok"
   | "renamed_srt"
   | "reencoded_srt"
+  // .srt-ul existent, cu timpii corectați (viteză/decalaj).
+  | "retimed_srt"
   | "downloaded"
   | "downloaded_approximate"
   | "multiple_srt_skipped"
@@ -24,6 +26,7 @@ export type SubtitleOutcome =
 export const CORRECTED_OUTCOMES: SubtitleOutcome[] = [
   "renamed_srt",
   "reencoded_srt",
+  "retimed_srt",
   "downloaded",
   "downloaded_approximate",
   "season_corrected",
@@ -46,6 +49,7 @@ export const SHORT_LABELS: Record<SubtitleOutcome, string> = {
   srt_already_ok: "avea deja .srt corect denumit și codat",
   renamed_srt: "subtitrare corectată (.srt redenumit pentru Plex)",
   reencoded_srt: "subtitrare corectată (encoding UTF-8)",
+  retimed_srt: "subtitrare resincronizată (timpi corectați)",
   downloaded: "subtitrare descărcată automat",
   downloaded_approximate: "subtitrare aproximativă descărcată — verifică sincronizarea",
   multiple_srt_skipped: "mai multe .srt găsite, am sărit peste",
