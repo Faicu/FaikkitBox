@@ -13,9 +13,11 @@ export const MEDIA_EXTENSIONS = [".mkv", ".mp4", ".avi", ".m2ts", ".ts", ".wmv",
 const ROMANIAN_LANG_CODES = ["ro", "rum", "ron"];
 
 // Sezon + episod din numele unui fișier („…S08E01…” → {8, 1}) — asocierea
-// subtitrărilor într-un pachet și sezonul pachetului.
+// subtitrărilor într-un pachet și sezonul pachetului. Și forma „1x03” (arhivele
+// DVDRip de pe subs.ro: „The Shield - 1x03 - The Spread”); cifrele lipite de
+// alte cifre nu contează, ca „1920x1080” să nu fie un episod.
 export function parseSeasonEpisode(name: string): { season: number; episode: number } | null {
-  const m = name.match(/S(\d{1,3})E(\d{1,3})/i);
+  const m = name.match(/S(\d{1,3})E(\d{1,3})/i) ?? name.match(/(?<!\d)(\d{1,2})x(\d{2,3})(?!\d)/i);
   if (!m) return null;
   return { season: Number(m[1]), episode: Number(m[2]) };
 }

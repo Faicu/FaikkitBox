@@ -27,7 +27,9 @@ const MIN_SPEECH_CORRELATION = 0.45;
 // Prea puține replici fac comparația nesigură — atunci nu decidem.
 const MIN_CUES = 40;
 // Decalajul maxim căutat între cele două subtitrări și rezoluția comparației.
-const MAX_OFFSET_S = 60;
+// The Shield S01 pe Amazon (1 nov. 2026): 60–95 s în plus la început față de
+// DVD/BluRay — cu 60 s, traducerile corecte ieșeau „alt montaj”.
+const MAX_OFFSET_S = 180;
 const BIN_S = 0.5;
 
 const TEXT_SUBTITLE_CODECS = ["subrip", "ass", "ssa", "mov_text", "webvtt", "text"];
@@ -126,10 +128,12 @@ export function speechCorrelation(
   );
 }
 
-// Corecția timpilor: t' = t × ratio + shift.
+// Corecția timpilor: t' = t × ratio + shift; după fiecare tăietură `at` (în
+// timpul subtitrării după viteză) deplasarea devine a ei.
 export interface Retime {
   ratio: number;
   shift: number;
+  cuts?: Array<{ at: number; shift: number }>;
 }
 
 // Conversiile obișnuite între cadre pe secundă. The Dog Stars (1 nov. 2026):
@@ -153,12 +157,17 @@ const RETIME_SEGMENT_MAX_OFFSET_S = 1;
 const RETIME_SEGMENT_MAX_SHIFT_S = 10;
 const RETIME_SEGMENT_MIN_SPEECH_BINS = 40;
 
-export function applyRetime(t: number, retime: Retime): number {
-  return Math.max(0, t * retime.ratio + retime.shift);
+// `anchor` = începutul replicii: o replică peste o tăietură se mută întreagă,
+// altfel sfârșitul ei ar putea ajunge înaintea începutului.
+export function applyRetime(t: number, retime: Retime, anchor = t): number {
+  const at = anchor * retime.ratio;
+  let shift = retime.shift;
+  for (const cut of retime.cuts ?? []) if (at >= cut.at) shift = cut.shift;
+  return Math.max(0, t * retime.ratio + shift);
 }
 
 function retimeIntervals(ivs: Array<[number, number]>, retime: Retime): Array<[number, number]> {
-  return ivs.map(([a, b]) => [applyRetime(a, retime), applyRetime(b, retime)]);
+  return ivs.map(([a, b]) => [applyRetime(a, retime), applyRetime(b, retime, a)]);
 }
 
 // După corecție, fiecare bucată de film trebuie să vorbească în aceleași
@@ -187,8 +196,92 @@ function retimeHoldsEverywhere(
   return true;
 }
 
+// Decalaj constant pe bucăți: ediția are câteva secunde în plus într-un loc
+// (The Shield S01E13 pe Amazon: −1,5 s până la jumătate, −11 s după; E03:
+// −62 s, apoi −67 s). Ferestrele cu același decalaj se grupează; tăietura
+// dintre grupuri se caută la jumătate de secundă.
+const PIECE_WINDOWS = 8;
+const PIECE_MAX_GROUPS = 3;
+const PIECE_MIN_WINDOWS = 2;
+const PIECE_GROUP_TOLERANCE_S = 1.5;
+
+function piecewiseRetime(
+  candidate: Array<[number, number]>,
+  reference: Array<[number, number]>,
+  ratio: number,
+): Retime | null {
+  const scaled = retimeIntervals(candidate, { ratio, shift: 0 });
+  const n = binCount(scaled, reference);
+  const c = toSpeechBins(scaled, n);
+  const r = toSpeechBins(reference, n);
+  const maxShift = Math.round(MAX_OFFSET_S / BIN_S);
+  const w = Math.floor(n / PIECE_WINDOWS);
+  if (w === 0) return null;
+
+  const groups: Array<{ lo: number; hi: number; offsets: number[] }> = [];
+  for (let s = 0; s < PIECE_WINDOWS; s++) {
+    const lo = s * w;
+    const hi = s === PIECE_WINDOWS - 1 ? n : lo + w;
+    let speech = 0;
+    for (let i = lo; i < hi; i++) speech += c[i];
+    const last = groups[groups.length - 1];
+    // Fără dialog: lipită de grupul curent, nu decide nimic.
+    if (speech < RETIME_SEGMENT_MIN_SPEECH_BINS) {
+      if (last) last.hi = hi;
+      continue;
+    }
+    const { score, offset } = bestShift(c, r, maxShift, lo, hi);
+    if (score < MIN_SPEECH_CORRELATION) return null;
+    if (last && Math.abs(offset - last.offsets[0]) <= PIECE_GROUP_TOLERANCE_S) {
+      last.hi = hi;
+      last.offsets.push(offset);
+    } else {
+      groups.push({ lo, hi, offsets: [offset] });
+    }
+  }
+  if (groups.length < 2 || groups.length > PIECE_MAX_GROUPS) return null;
+  if (groups.some((g) => g.offsets.length < PIECE_MIN_WINDOWS)) return null;
+
+  // Deplasarea exactă a fiecărui grup, pe tot grupul.
+  const near = Math.round(3 / BIN_S);
+  const shifts = groups.map((g) => {
+    const mid = g.offsets[Math.floor(g.offsets.length / 2)] / BIN_S;
+    let best = { score: -1, k: Math.round(mid) };
+    for (let k = Math.round(mid) - near; k <= Math.round(mid) + near; k++) {
+      // Feliile potrivite cu referința mutată cu k.
+      let x = 0;
+      for (let i = Math.max(g.lo, -k); i < g.hi && i + k < n; i++) x += c[i] & r[i + k];
+      if (x > best.score) best = { score: x, k };
+    }
+    return best.k;
+  });
+
+  // Tăietura dintre două grupuri: poziția care potrivește cele mai multe
+  // felii, cu deplasarea din stânga înainte și cea din dreapta după.
+  const cuts: Array<{ at: number; shift: number }> = [];
+  for (let g = 0; g + 1 < groups.length; g++) {
+    const ka = shifts[g];
+    const kb = shifts[g + 1];
+    const lo = groups[g].lo + Math.floor((groups[g].hi - groups[g].lo) / 2);
+    const hi = groups[g + 1].lo + Math.floor((groups[g + 1].hi - groups[g + 1].lo) / 2);
+    const hit = (i: number, k: number) => (i + k >= 0 && i + k < n ? c[i] & r[i + k] : 0);
+    let right = 0;
+    for (let i = lo; i < hi; i++) right += hit(i, kb);
+    let left = 0;
+    let best = { score: right, p: lo };
+    for (let p = lo; p < hi; p++) {
+      left += hit(p, ka);
+      right -= hit(p, kb);
+      if (left + right > best.score) best = { score: left + right, p: p + 1 };
+    }
+    cuts.push({ at: best.p * BIN_S, shift: kb * BIN_S });
+  }
+  return { ratio, shift: shifts[0] * BIN_S, cuts };
+}
+
 // Sincronizarea, cu corecția timpilor dacă e nevoie de una: întâi viteza (doar
-// cu un câștig clar), apoi deplasarea. După corecție decalajul rămas e 0.
+// cu un câștig clar), apoi deplasarea — una singură sau, dacă nu ține peste
+// tot, pe bucăți. După corecție decalajul rămas e 0.
 export function measureSync(
   candidate: Array<[number, number]>,
   reference: Array<[number, number]>,
@@ -203,10 +296,23 @@ export function measureSync(
     if (m.score >= plain.score + RATIO_MIN_GAIN && m.score > best.score)
       best = { ...m, ratio, label };
   }
-  if (best.ratio === 1 && Math.abs(best.offset) <= GOOD_SYNC_MAX_OFFSET_S) return plain;
-  const retime: Retime = { ratio: best.ratio, shift: best.offset };
-  if (!retimeHoldsEverywhere(candidate, reference, retime)) return plain;
-  return { score: best.score, offset: 0, retime: { ...retime, label: best.label } };
+  const single: Retime = { ratio: best.ratio, shift: best.offset };
+  const identity = best.ratio === 1 && Math.abs(best.offset) <= GOOD_SYNC_MAX_OFFSET_S;
+  if (retimeHoldsEverywhere(candidate, reference, identity ? { ratio: 1, shift: 0 } : single)) {
+    if (identity) return plain;
+    return { score: best.score, offset: 0, retime: { ...single, label: best.label } };
+  }
+
+  const pieces = piecewiseRetime(candidate, reference, best.ratio);
+  if (pieces && retimeHoldsEverywhere(candidate, reference, pieces)) {
+    const after = speechCorrelation(retimeIntervals(candidate, pieces), reference);
+    if (
+      after.score >= plain.score + RATIO_MIN_GAIN &&
+      Math.abs(after.offset) <= GOOD_SYNC_MAX_OFFSET_S
+    )
+      return { score: after.score, offset: 0, retime: { ...pieces, label: best.label } };
+  }
+  return plain;
 }
 
 // Aplică corecția pe un SRT, păstrând restul textului neatins.
@@ -224,7 +330,8 @@ export function retimeSrt(text: string, retime: Retime): string {
     (_all, h1, m1, s1, ms1, arrow, h2, m2, s2, ms2) => {
       const t = (h: string, mi: string, s: string, ms: string) =>
         Number(h) * 3600 + Number(mi) * 60 + Number(s) + Number(ms.padEnd(3, "0")) / 1000;
-      return `${fmt(applyRetime(t(h1, m1, s1, ms1), retime))}${arrow}${fmt(applyRetime(t(h2, m2, s2, ms2), retime))}`;
+      const start = t(h1, m1, s1, ms1);
+      return `${fmt(applyRetime(start, retime))}${arrow}${fmt(applyRetime(t(h2, m2, s2, ms2), retime, start))}`;
     },
   );
 }
@@ -303,6 +410,141 @@ async function embeddedReferenceTiming(mediaAbsPath: string): Promise<SrtTiming 
   }
 }
 
+// Referința de rezervă, fără subtitrare text încorporată (BluRay-urile au de
+// obicei doar PGS): momentele de vorbire din audio — canalul central la 5.1/7.1
+// (aproape doar dialog), altfel amestecul. Mult mai zgomotoasă decât o
+// subtitrare (corelații 0,15–0,45 pentru varianta corectă, The Shield S01
+// ROVERS, 1 nov. 2026), dar decalajul îl găsește — deci doar pentru el.
+export async function audioSpeechIntervals(
+  mediaAbsPath: string,
+): Promise<Array<[number, number]> | null> {
+  try {
+    const { stdout } = await execFileAsync(
+      "ffprobe",
+      [
+        "-v",
+        "error",
+        "-select_streams",
+        "a:0",
+        "-show_entries",
+        "stream=channels,channel_layout",
+        "-of",
+        "json",
+        mediaAbsPath,
+      ],
+      { timeout: 20_000 },
+    );
+    const stream = (
+      JSON.parse(stdout) as { streams?: Array<{ channels?: number; channel_layout?: string }> }
+    ).streams?.[0];
+    if (!stream?.channels) return null;
+    const pan =
+      stream.channels >= 6
+        ? "pan=mono|c0=FC,"
+        : stream.channels === 2
+          ? "pan=mono|c0=0.5*c0+0.5*c1,"
+          : "";
+    // silencedetect scrie în stderr; ~3 s pe un episod de 45 min.
+    const { stderr } = await execFileAsync(
+      "ffmpeg",
+      [
+        "-nostats",
+        "-v",
+        "info",
+        "-i",
+        mediaAbsPath,
+        "-map",
+        "0:a:0",
+        "-vn",
+        "-sn",
+        "-dn",
+        "-af",
+        `${pan}highpass=f=200,lowpass=f=3500,silencedetect=noise=-32dB:d=0.35`,
+        "-f",
+        "null",
+        "-",
+      ],
+      { timeout: 300_000, maxBuffer: 64 * 1024 * 1024 },
+    );
+    const intervals: Array<[number, number]> = [];
+    let speechStart = 0;
+    for (const m of stderr.matchAll(/silence_(start|end): (-?[\d.]+)/g)) {
+      const t = Number(m[2]);
+      if (m[1] === "start") {
+        if (t > speechStart) intervals.push([speechStart, t]);
+      } else speechStart = t;
+    }
+    const d = await mediaDurationSeconds(mediaAbsPath);
+    if (d != null && d > speechStart) intervals.push([speechStart, d]);
+    return intervals.length >= MIN_CUES ? intervals : null;
+  } catch {
+    return null;
+  }
+}
+
+// Deplasarea după audio: doar când decalajul e mare și același în cel puțin
+// trei sferturi din fișier. Precizia e ~1 s la decalajele mari (The Shield:
+// −59,3 față de −59, −75 față de −75), dar la cele mici greșea cu până la
+// 2,5 s (E07: −3,4 față de −1) — sub 5 s nu atingem nimic. Nu respinge nimic:
+// corelațiile cu audio sunt prea mici ca să judece traducerea.
+const AUDIO_MIN_SHIFT_S = 5;
+const AUDIO_ONSET_TOLERANCE_S = 0.5;
+const AUDIO_QUARTER_TOLERANCE_S = 1;
+const AUDIO_MIN_AGREEING_QUARTERS = 3;
+
+export function audioShift(
+  candidate: Array<[number, number]>,
+  speech: Array<[number, number]>,
+): Retime | null {
+  const n = binCount(candidate, speech);
+  const c = toSpeechBins(candidate, n);
+  const r = toSpeechBins(speech, n);
+  const global = bestShift(c, r, Math.round(MAX_OFFSET_S / BIN_S));
+  if (Math.abs(global.offset) <= AUDIO_MIN_SHIFT_S) return null;
+  const q = Math.floor(n / 4);
+  const near = Math.round(10 / BIN_S);
+  const k = Math.round(global.offset / BIN_S);
+  let agreeing = 0;
+  for (let s = 0; s < 4; s++) {
+    const lo = s * q;
+    const hi = s === 3 ? n : lo + q;
+    // Fereastra ±10 s în jurul decalajului global: deplasăm candidatul cu k.
+    let best = { hits: -1, k: 0 };
+    for (let j = k - near; j <= k + near; j++) {
+      let hits = 0;
+      for (let i = Math.max(lo, -j); i < hi && i + j < n; i++) hits += c[i] & r[i + j];
+      if (hits > best.hits) best = { hits, k: j };
+    }
+    if (Math.abs(best.k - k) * BIN_S <= AUDIO_QUARTER_TOLERANCE_S) agreeing++;
+  }
+  if (agreeing < AUDIO_MIN_AGREEING_QUARTERS) return null;
+  return { ratio: 1, shift: refineAudioShift(candidate, speech, global.offset) };
+}
+
+// Rafinarea la 0,1 s: câte începuturi de replică cad lângă un început de
+// vorbire (±0,5 s), în ±3 s de decalajul grosier.
+function refineAudioShift(
+  candidate: Array<[number, number]>,
+  speech: Array<[number, number]>,
+  coarse: number,
+): number {
+  const starts = candidate.map((c) => c[0]).sort((a, b) => a - b);
+  const onsets = speech.map((s) => s[0]).sort((a, b) => a - b);
+  let best = { hits: -1, shift: coarse };
+  for (let step = -30; step <= 30; step++) {
+    const shift = coarse + step / 10;
+    let hits = 0;
+    let j = 0;
+    for (const s of starts) {
+      const t = s + shift;
+      while (j < onsets.length && onsets[j] < t - AUDIO_ONSET_TOLERANCE_S) j++;
+      if (j < onsets.length && onsets[j] <= t + AUDIO_ONSET_TOLERANCE_S) hits++;
+    }
+    if (hits > best.hits) best = { hits, shift: Math.round(shift * 10) / 10 };
+  }
+  return best.shift;
+}
+
 function formatTime(s: number): string {
   const m = Math.floor(s / 60);
   return `${m}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
@@ -366,6 +608,9 @@ export interface SubtitleCheck {
   short?: string;
   // Sincronizarea față de subtitrarea încorporată; null fără una.
   sync: SyncMeasure | null;
+  // Fără subtitrare încorporată: deplasarea găsită după audio, de aplicat la
+  // scriere. Nu spune nimic despre calitatea traducerii.
+  audioRetime?: Retime;
 }
 
 // Un verificator per fișier: durata și referința se citesc o singură dată
@@ -373,6 +618,7 @@ export interface SubtitleCheck {
 export function createSubtitleVerifier(mediaAbsPath: string) {
   let duration: Promise<number | null> | null = null;
   let reference: Promise<SrtTiming | null> | null = null;
+  let audio: Promise<Array<[number, number]> | null> | null = null;
 
   return async function verify(text: string): Promise<SubtitleCheck> {
     const reject = (reason: string, short: string): SubtitleCheck => ({
@@ -404,7 +650,13 @@ export function createSubtitleVerifier(mediaAbsPath: string) {
       );
     }
 
-    if (!sync) return { reason: null, sync: null };
+    if (!sync) {
+      if (ref || timing.starts.length < MIN_CUES) return { reason: null, sync: null };
+      audio ??= audioSpeechIntervals(mediaAbsPath);
+      const speech = await audio;
+      const shift = speech ? audioShift(timing.intervals, speech) : null;
+      return { reason: null, sync: null, ...(shift ? { audioRetime: shift } : {}) };
+    }
     if (sync.score < MIN_SPEECH_CORRELATION) {
       return reject(
         `momentele de vorbire nu se potrivesc cu subtitrarea încorporată în fișier (corelație ${num(sync.score)}, minimum ${num(MIN_SPEECH_CORRELATION)}) — e pentru alt episod sau altă versiune`,
@@ -425,12 +677,30 @@ export function describeSync(sync: SyncMeasure): string {
   return `sincronizare măsurată: corelație ${num(sync.score)}, ${offset}${sync.retime ? `, ${describeRetime(sync.retime)}` : ""}`;
 }
 
+const signedSeconds = (v: number) => `${v > 0 ? "+" : "−"}${num(Math.abs(v), 1)} s`;
+
+// Deplasarea, ca text: una singură, sau pe bucăți cu momentul fiecărei schimbări.
+function shiftParts(retime: Retime): { short: string; long: string } | null {
+  if (retime.cuts?.length) {
+    const steps = retime.cuts.map((c) => `${signedSeconds(c.shift)} de la ${formatTime(c.at)}`);
+    return {
+      short: `pe bucăți: ${[signedSeconds(retime.shift), ...retime.cuts.map((c) => signedSeconds(c.shift))].join(" / ")}`,
+      long: `deplasată pe bucăți: ${signedSeconds(retime.shift)}, apoi ${steps.join(", apoi ")}`,
+    };
+  }
+  if (Math.abs(retime.shift) <= GOOD_SYNC_MAX_OFFSET_S) return null;
+  return {
+    short: signedSeconds(retime.shift),
+    long: `deplasată cu ${signedSeconds(retime.shift)}`,
+  };
+}
+
 // Varianta scurtă, pentru eticheta din jurnal.
 export function retimeLabel(retime: Retime & { label?: string }): string {
   const parts: string[] = [];
   if (retime.ratio !== 1) parts.push(retime.label ?? `×${retime.ratio.toFixed(4)}`);
-  if (Math.abs(retime.shift) > GOOD_SYNC_MAX_OFFSET_S)
-    parts.push(`${retime.shift > 0 ? "+" : "−"}${num(Math.abs(retime.shift), 1)} s`);
+  const shift = shiftParts(retime);
+  if (shift) parts.push(shift.short);
   return parts.join(", ");
 }
 
@@ -438,7 +708,7 @@ export function describeRetime(retime: Retime & { label?: string }): string {
   const parts: string[] = [];
   if (retime.ratio !== 1)
     parts.push(`viteză ajustată ${retime.label ?? `×${retime.ratio.toFixed(4)}`}`);
-  if (Math.abs(retime.shift) > GOOD_SYNC_MAX_OFFSET_S)
-    parts.push(`deplasată cu ${retime.shift > 0 ? "+" : "−"}${num(Math.abs(retime.shift), 1)} s`);
+  const shift = shiftParts(retime);
+  if (shift) parts.push(shift.long);
   return `timpi corectați (${parts.join(", ")})`;
 }

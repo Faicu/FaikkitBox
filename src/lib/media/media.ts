@@ -508,6 +508,18 @@ function writeSubtitleStatus(
   const keep = keepPrevious ? 1 : 0;
   // Resincronizarea păstrează sursa (același fișier, alți timpi).
   const keepSource = keepPrevious || outcome === "retimed_srt" ? 1 : 0;
+  // Resincronizată doar după audio (fără sincronizare măsurată): rămâne cât de
+  // sigură era — audio corectează decalajul, nu confirmă traducerea.
+  let unmeasured = false;
+  if (outcome === "retimed_srt" && report) {
+    try {
+      const parsed = JSON.parse(report) as { file?: { syncScore?: number | null } };
+      unmeasured = parsed.file != null && parsed.file.syncScore == null;
+    } catch {
+      // Raport corupt: tratat ca măsurat.
+    }
+  }
+  const keepApproximate = keep || unmeasured ? 1 : 0;
   getDb()
     .prepare(
       `UPDATE media SET has_romanian_subtitle = ?,
@@ -530,7 +542,7 @@ function writeSubtitleStatus(
       detail,
       keep,
       report,
-      keep,
+      keepApproximate,
       outcome === "downloaded_approximate" ? 1 : 0,
       outcome === "audio_already_romanian" ? 1 : 0,
       ...whereArgs,

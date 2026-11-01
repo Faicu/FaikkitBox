@@ -29,9 +29,11 @@ import {
   isBetterSync,
   isConfidentSync,
   isWellSynced,
+  describeRetime,
   describeSync,
   retimeLabel,
   retimeSrt,
+  type Retime,
   type SyncMeasure,
 } from "./subtitle-verify";
 import { SUBTITLE_SOURCE_LABELS } from "./subtitle-outcomes";
@@ -80,6 +82,8 @@ export interface ProcessMediaFileResult {
   // Sursa externă a subtitrării descărcate.
   source?: SubtitleSource;
   sync?: SubtitleSync;
+  // Corecția timpilor fără sincronizare măsurată (după audio).
+  retime?: string;
   // Pentru jurnalul structurat (SubtitleFileReport).
   rejected?: RejectedVariant[];
   movedAside?: string;
@@ -256,6 +260,22 @@ export async function processMediaFile(
         console.warn(`[subtitles] resincronizarea .srt-ului existent a eșuat:`, e);
       }
     }
+    // La fel fără subtitrare încorporată, cu decalajul găsit după audio.
+    if (!reason && sidecarText != null && check?.audioRetime) {
+      const retime = check.audioRetime;
+      try {
+        await writeFileWithRetry(sidecarAbsPath, retimeSrt(sidecarText, retime));
+        console.log(`[subtitles] .srt existent resincronizat după audio → ${sidecarAbsPath}`);
+        return {
+          outcome: "retimed_srt",
+          detail: `subtitrarea existentă a fost resincronizată după pista audio (${describeRetime(retime)})`,
+          path: sidecarAbsPath,
+          retime: `după audio, ${retimeLabel(retime)}`,
+        };
+      } catch (e) {
+        console.warn(`[subtitles] resincronizarea .srt-ului existent a eșuat:`, e);
+      }
+    }
     if (!reason) {
       // Deja bine sincronizată — nimic de îmbunătățit.
       if (!upgradeApproximate || (check?.sync && isWellSynced(check.sync))) {
@@ -319,6 +339,7 @@ export async function processMediaFile(
     candidate: (typeof candidates)[number];
     fetched: { text: string; wasConverted: boolean };
     sync: SyncMeasure | null;
+    audioRetime?: Retime;
   } | null = null;
   let compared = 0;
   for (const candidate of candidates) {
@@ -347,7 +368,7 @@ export async function processMediaFile(
       continue;
     }
     if (!check.sync) {
-      best = { candidate, fetched, sync: null };
+      best = { candidate, fetched, sync: null, audioRetime: check.audioRetime };
       break;
     }
     compared++;
@@ -377,7 +398,13 @@ export async function processMediaFile(
       movedAside,
     };
   }
-  const result = await writeChosenSubtitle(best.candidate, destPath, best.fetched, best.sync);
+  const result = await writeChosenSubtitle(
+    best.candidate,
+    destPath,
+    best.fetched,
+    best.sync,
+    best.audioRetime,
+  );
   const notes = [
     upgrading ? "a înlocuit subtitrarea aproximativă de dinainte" : null,
     compared > 1 ? `aleasă după sincronizare dintre ${compared} variante` : null,
@@ -399,6 +426,7 @@ export async function processMediaFile(
           retime: best.sync.retime ? retimeLabel(best.sync.retime) : undefined,
         }
       : undefined,
+    retime: best.audioRetime ? `după audio, ${retimeLabel(best.audioRetime)}` : undefined,
     rejected,
     movedAside,
     compared,

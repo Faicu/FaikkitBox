@@ -4,6 +4,7 @@ import {
   agreedEpisodeKey,
   extractEpisodeKey,
   osResultMatchesEpisode,
+  parseSeasonEpisode,
   pickRomanianSrt,
   srtContentLanguage,
   srtLanguageTag,
@@ -182,5 +183,23 @@ describe("srtContentLanguage", () => {
     expect(srtContentLanguage("¿Qué es esto? Te dije que es el final y lo sabes muy bien.")).toBe(
       "other",
     );
+  });
+});
+
+describe("parseSeasonEpisode — forma 1x03", () => {
+  it("arhivele DVDRip de pe subs.ro (The Shield - 1x03 - The Spread)", () => {
+    expect(parseSeasonEpisode("The Shield - 1x03 - The Spread.srt")).toEqual({
+      season: 1,
+      episode: 3,
+    });
+    expect(parseSeasonEpisode("The.Shield.1x13.Circles.WS.XviDVD-TNS.srt")).toEqual({
+      season: 1,
+      episode: 13,
+    });
+  });
+
+  it("rezoluțiile și codecurile nu sunt episoade", () => {
+    expect(parseSeasonEpisode("Film.1920x1080.x264.srt")).toBeNull();
+    expect(parseSeasonEpisode("Film.2026.1080p.WEB-DL.DDP5.1.x264-GRP.srt")).toBeNull();
   });
 });

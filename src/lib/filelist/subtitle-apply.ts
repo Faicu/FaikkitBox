@@ -17,7 +17,14 @@ import {
 } from "./subtitle-outcomes";
 import { fileExists } from "./subtitle-checks";
 import type { SubtitleCandidate } from "./subtitle-sources";
-import { describeSync, isConfidentSync, retimeSrt, type SyncMeasure } from "./subtitle-verify";
+import {
+  describeRetime,
+  describeSync,
+  isConfidentSync,
+  retimeSrt,
+  type Retime,
+  type SyncMeasure,
+} from "./subtitle-verify";
 
 // O variantă ca text UTF-8 (null la eșec), fără scriere — pipeline-ul compară
 // întâi mai multe.
@@ -41,6 +48,8 @@ export async function writeChosenSubtitle(
   destPath: string,
   fetched: { text: string; wasConverted: boolean },
   sync: SyncMeasure | null,
+  // Fără sincronizare măsurată: decalajul găsit după audio.
+  audioRetime?: Retime,
 ): Promise<{
   outcome: SubtitleOutcome;
   detail: string;
@@ -52,14 +61,16 @@ export async function writeChosenSubtitle(
   const { matchedCriteria, maxCriteria } = chosen;
   const isPerfect = maxCriteria > 0 && matchedCriteria === maxCriteria;
   const confident = sync ? isConfidentSync(sync, chosen) : chosen.confident;
-  const syncNote = sync ? `; ${describeSync(sync)}` : "";
+  const syncNote = sync
+    ? `; ${describeSync(sync)}`
+    : audioRetime
+      ? `; după pista audio: ${describeRetime(audioRetime)}`
+      : "";
+  const retime = sync?.retime ?? audioRetime;
   const encodingNote = fetched.wasConverted ? " (encoding convertit la UTF-8)" : "";
 
   try {
-    await writeFileWithRetry(
-      destPath,
-      sync?.retime ? retimeSrt(fetched.text, sync.retime) : fetched.text,
-    );
+    await writeFileWithRetry(destPath, retime ? retimeSrt(fetched.text, retime) : fetched.text);
   } catch (e) {
     console.warn(`[subtitles] scriere .srt eșuată (${destPath}):`, e);
     return {

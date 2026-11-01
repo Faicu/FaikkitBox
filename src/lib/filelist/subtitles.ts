@@ -56,7 +56,7 @@ function reportsOf(
       syncScore: r.sync?.score ?? null,
       syncOffset: r.sync?.offset ?? null,
       syncGood: r.sync?.good ?? null,
-      syncRetime: r.sync?.retime ?? null,
+      syncRetime: r.sync?.retime ?? r.retime ?? null,
       compared: r.compared ?? null,
       movedAside: r.movedAside ?? null,
       replacedApproximate: r.replacedApproximate ?? false,

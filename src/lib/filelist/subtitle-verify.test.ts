@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   isBetterSync,
+  audioShift,
   isConfidentSync,
   measureSync,
   parseSrtTiming,
@@ -75,14 +76,51 @@ describe("measureSync", () => {
     expect(m.offset).toBe(0);
   });
 
-  it("alt montaj (o scenă în plus la mijloc): nu corectează, rămâne decalajul", () => {
+  it("o scenă în plus la mijloc (The Shield S01E13): corectează pe bucăți", () => {
     const half = film[Math.floor(film.length / 2)][0];
     const m = measureSync(
       shifted(film, (t) => (t < half ? t + 3 : t + 9)),
       film,
     );
+    expect(m.retime?.shift).toBeCloseTo(-3, 0);
+    expect(m.retime?.cuts).toHaveLength(1);
+    expect(m.retime?.cuts?.[0].shift).toBeCloseTo(-9, 0);
+    // Tăietura cade lângă locul real (în timpul subtitrării, +3 s).
+    expect(Math.abs(m.retime!.cuts![0].at - (half + 3))).toBeLessThan(15);
+    expect(m.offset).toBe(0);
+    expect(m.score).toBeGreaterThan(0.9);
+  });
+
+  it("decalaj schimbat peste tot (alt montaj): nu corectează", () => {
+    const step = film[film.length - 1][0] / 6;
+    const m = measureSync(
+      shifted(film, (t) => t + 4 * Math.floor(t / step)),
+      film,
+    );
     expect(m.retime).toBeUndefined();
-    expect(Math.abs(m.offset)).toBeGreaterThan(0.5);
+  });
+
+  it("decalaj de peste un minut (Amazon cu intro, The Shield): îl găsește", () => {
+    const m = measureSync(
+      shifted(film, (t) => t + 75),
+      film,
+    );
+    expect(m.retime?.shift).toBeCloseTo(-75, 0);
+  });
+});
+
+describe("audioShift", () => {
+  const film = speech(episode(5, 600));
+  const shifted = (ivs: Array<[number, number]>, d: number) =>
+    ivs.map(([a, b]): [number, number] => [a + d, b + d]);
+
+  it("decalaj mare: îl găsește, la ~0,1 s", () => {
+    const r = audioShift(shifted(film, 60), film);
+    expect(r?.shift).toBeCloseTo(-60, 0);
+  });
+
+  it("decalaj mic (sub 5 s): nu atinge nimic — audio nu e destul de precis", () => {
+    expect(audioShift(shifted(film, 2), film)).toBeNull();
   });
 });
 
@@ -93,6 +131,15 @@ describe("retimeSrt", () => {
       shift: -1,
     });
     expect(out).toBe("1\n00:59:55,404 --> 00:59:57,901\nSalut\n");
+  });
+
+  it("pe bucăți: o replică peste tăietură se mută întreagă", () => {
+    const out = retimeSrt("00:10:00,000 --> 00:10:04,000\n\n00:20:00,000 --> 00:20:01,000", {
+      ratio: 1,
+      shift: -1,
+      cuts: [{ at: 601, shift: -10 }],
+    });
+    expect(out).toBe("00:09:59,000 --> 00:10:03,000\n\n00:19:50,000 --> 00:19:51,000");
   });
 
   it("nu coboară sub zero", () => {
