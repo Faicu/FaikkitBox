@@ -283,7 +283,7 @@ describe("updateMediaSubtitleStatus — subtitle_approximate", () => {
 });
 
 describe("getSubtitleRetryStatus", () => {
-  it("în căutare (14 zile), încheiate fără subtitrare, aproximativele doar cât durează căutarea", () => {
+  it("în căutare (14 zile), apoi încheiate separat: fără subtitrare și aproximative", () => {
     add("a", { completedDaysAgo: 2, episode: 4 });
     add("b", { completedDaysAgo: 20, episode: 5 });
     add("c", { completedDaysAgo: 3, ro: 1, approximate: 1, episode: 6 });
@@ -296,6 +296,7 @@ describe("getSubtitleRetryStatus", () => {
       ["Serial S01E04", "missing"],
     ]);
     expect(s.ended.map((t) => t.title)).toEqual(["Serial S01E05"]);
+    expect(s.endedApproximate.map((t) => t.title)).toEqual(["Serial S01E07"]);
   });
 
   it("un pachet apare o singură dată, ca sezon", () => {

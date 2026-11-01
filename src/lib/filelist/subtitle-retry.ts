@@ -136,6 +136,8 @@ export interface SubtitleRetryStatus {
   searching: SubtitleRetryTitle[];
   // Fereastra s-a încheiat în ultimele 30 de zile — doar „Corectează”.
   ended: SubtitleRetryTitle[];
+  // La fel, dar cu o subtitrare aproximativă, care rămâne pusă.
+  endedApproximate: SubtitleRetryTitle[];
   // Subtitrări găsite de reîncercare, din jurnal (ultimele 10).
   found: Array<{ id: string; timestamp: string; message: string }>;
 }
@@ -216,9 +218,12 @@ export function getSubtitleRetryStatus(): SubtitleRetryStatus {
 
   return {
     searching: rows.filter((r) => r.until > now).map(toItem),
-    // Aproximativele expirate au totuși subtitrare.
     ended: rows
       .filter((r) => r.until <= now && !r.hasRo)
+      .map(toItem)
+      .reverse(),
+    endedApproximate: rows
+      .filter((r) => r.until <= now && r.hasRo && r.approximate)
       .map(toItem)
       .reverse(),
     found,

@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Tv, Tag, Film, History, Captions, CaptionsOff, CheckCircle2 } from "lucide-react";
 import { Orb } from "@/components/ui/orb";
@@ -10,6 +11,7 @@ import {
   wantedMoviesQuery,
 } from "@/lib/queries";
 import type { ActivityEntry } from "@/lib/activity-log.functions";
+import type { SubtitleRetryTitle } from "@/lib/filelist/subtitle-retry";
 import { relativeTime, formatDateTime } from "./utils";
 import { useFlashOnChange } from "@/hooks/use-flash-on-change";
 import { nextEpisodeWhen } from "@/components/biblioteca/utils";
@@ -212,6 +214,44 @@ const sqliteDate = (v: string) => new Date(`${v.replace(" ", "T")}Z`);
 const shortDay = (v: string) =>
   sqliteDate(v).toLocaleDateString("ro-RO", { day: "numeric", month: "short" });
 
+// Titlurile cu fereastra de 14 zile încheiată: de aici rămâne doar butonul.
+function EndedCard({
+  icon,
+  label,
+  titles,
+  approximate = false,
+}: {
+  icon: ReactNode;
+  label: string;
+  titles: SubtitleRetryTitle[];
+  approximate?: boolean;
+}) {
+  return (
+    <div className="rounded-2xl glass-card p-3 text-xs">
+      <div className="mb-2 flex items-center gap-1.5 text-muted-foreground">
+        {icon} {label}
+        <span className="ml-auto tabular-nums">{titles.length}</span>
+      </div>
+      <div className="space-y-1.5">
+        {titles.map((t) => (
+          <div key={t.mediaId} className="rounded-lg bg-muted/40 px-2 py-1.5">
+            <div className="truncate font-medium">{t.title}</div>
+            {t.approximateEpisodes.length > 0 && (
+              <div className="mt-0.5 text-[10px] text-amber-400/80">
+                aproximative: {t.approximateEpisodes.join(", ")}
+              </div>
+            )}
+            <div className="mt-0.5 text-[10px] leading-relaxed text-muted-foreground">
+              încheiată pe {shortDay(t.until)} · din Bibliotecă, cu „Corectează subtitrare”
+              {approximate ? " poți căuta una mai bună" : ""}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // Reîncercarea subtitrărilor: ce se caută, ce s-a încheiat fără rezultat și ce
 // a găsit. O căutare fără rezultat nu scrie în jurnal, deci aici e dovada că
 // lucrează.
@@ -278,22 +318,20 @@ export function SubtitleRetryCards() {
       </div>
 
       {data.ended.length > 0 && (
-        <div className="rounded-2xl glass-card p-3 text-xs">
-          <div className="mb-2 flex items-center gap-1.5 text-muted-foreground">
-            <CaptionsOff className="h-3.5 w-3.5" /> Căutare încheiată, fără rezultat
-            <span className="ml-auto tabular-nums">{data.ended.length}</span>
-          </div>
-          <div className="space-y-1.5">
-            {data.ended.map((t) => (
-              <div key={t.mediaId} className="rounded-lg bg-muted/40 px-2 py-1.5">
-                <div className="truncate font-medium">{t.title}</div>
-                <div className="mt-0.5 text-[10px] leading-relaxed text-muted-foreground">
-                  încheiată pe {shortDay(t.until)} · din Bibliotecă, cu „Corectează subtitrare”
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+        <EndedCard
+          icon={<CaptionsOff className="h-3.5 w-3.5" />}
+          label="Căutare încheiată, fără rezultat"
+          titles={data.ended}
+        />
+      )}
+
+      {data.endedApproximate.length > 0 && (
+        <EndedCard
+          icon={<Captions className="h-3.5 w-3.5 text-amber-400" />}
+          label="Căutare încheiată, subtitrare tot aproximativă"
+          titles={data.endedApproximate}
+          approximate
+        />
       )}
 
       <div className="rounded-2xl glass-card p-3 text-xs">
