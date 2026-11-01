@@ -113,6 +113,9 @@ export function FileReport({
   showEpisode: boolean;
 }) {
   const hasSync = file.syncScore != null;
+  const retimeChip = file.syncRetime && (
+    <Chip tone="muted">timpi corectați · {file.syncRetime}</Chip>
+  );
   return (
     <div className="space-y-1.5">
       <div className="flex items-start gap-2">
@@ -147,10 +150,19 @@ export function FileReport({
                 nume release {file.matchedCriteria}/{file.maxCriteria}
               </Chip>
             )}
+            {retimeChip}
             {file.compared != null && file.compared > 1 && (
               <Chip tone="muted">aleasă dintre {file.compared} variante</Chip>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Resincronizarea .srt-ului existent: fără sursă/release de afișat. */}
+      {!(file.source && file.release) && retimeChip && (
+        <div className="ml-5.5 flex flex-wrap gap-1">
+          {hasSync && <Chip tone="good">sincronizată · {num(file.syncScore!)}</Chip>}
+          {retimeChip}
         </div>
       )}
 

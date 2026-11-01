@@ -30,6 +30,7 @@ import {
   isConfidentSync,
   isWellSynced,
   describeSync,
+  retimeLabel,
   retimeSrt,
   type SyncMeasure,
 } from "./subtitle-verify";
@@ -244,7 +245,12 @@ export async function processMediaFile(
           outcome: "retimed_srt",
           detail: `subtitrarea existentă a fost resincronizată (${describeSync(sync)})`,
           path: sidecarAbsPath,
-          sync: { score: sync.score, offset: sync.offset, good: true },
+          sync: {
+            score: sync.score,
+            offset: sync.offset,
+            good: true,
+            retime: retimeLabel(sync.retime!),
+          },
         };
       } catch (e) {
         console.warn(`[subtitles] resincronizarea .srt-ului existent a eșuat:`, e);
@@ -390,6 +396,7 @@ export async function processMediaFile(
           score: best.sync.score,
           offset: best.sync.offset,
           good: isConfidentSync(best.sync, best.candidate),
+          retime: best.sync.retime ? retimeLabel(best.sync.retime) : undefined,
         }
       : undefined,
     rejected,

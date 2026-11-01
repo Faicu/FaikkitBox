@@ -424,6 +424,17 @@ export function describeSync(sync: SyncMeasure): string {
   return `sincronizare măsurată: corelație ${sync.score.toFixed(2)}, ${offset}${sync.retime ? `, ${describeRetime(sync.retime)}` : ""}`;
 }
 
+// Varianta scurtă, pentru eticheta din jurnal.
+export function retimeLabel(retime: Retime & { label?: string }): string {
+  const parts: string[] = [];
+  if (retime.ratio !== 1) parts.push(retime.label ?? `×${retime.ratio.toFixed(4)}`);
+  if (Math.abs(retime.shift) > GOOD_SYNC_MAX_OFFSET_S)
+    parts.push(
+      `${retime.shift > 0 ? "+" : "−"}${Math.abs(retime.shift).toFixed(1).replace(".", ",")} s`,
+    );
+  return parts.join(", ");
+}
+
 export function describeRetime(retime: Retime & { label?: string }): string {
   const parts: string[] = [];
   if (retime.ratio !== 1)

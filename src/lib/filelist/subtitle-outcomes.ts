@@ -75,6 +75,8 @@ export interface SubtitleSync {
   score: number;
   offset: number;
   good: boolean;
+  // Corecția timpilor aplicată („24 → 23,976 fps, −3,5 s”).
+  retime?: string;
 }
 
 // O variantă găsită, dar nefolosită — afișată în jurnal sub „Respinse".
@@ -100,6 +102,8 @@ export interface SubtitleFileReport {
   syncScore: number | null;
   syncOffset: number | null;
   syncGood: boolean | null;
+  // Corecția timpilor aplicată; lipsește la rapoartele de dinainte de 1 nov. 2026.
+  syncRetime?: string | null;
   // Câte variante au fost comparate după sincronizare.
   compared: number | null;
   // Motivul pentru care .srt-ul de dinainte a fost mutat deoparte.
