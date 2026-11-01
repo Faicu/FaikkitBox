@@ -329,6 +329,7 @@ const HAS_ROMANIAN_OUTCOMES = new Set([
   "retimed_srt",
   "downloaded",
   "downloaded_approximate",
+  "approximate_kept",
   "season_corrected",
   "season_already_ok",
 ]);
@@ -384,13 +385,48 @@ export function episodeSubtitleState(
     hasRo: HAS_ROMANIAN_OUTCOMES.has(file.outcome) ? 1 : 0,
     source: isDownloadOutcome(file.outcome)
       ? file.source
-      : file.outcome === "retimed_srt"
+      : file.outcome === "retimed_srt" || file.outcome === "approximate_kept"
         ? inherited.source
         : (SUBTITLE_SOURCE_BY_OUTCOME[file.outcome] ?? null),
     detail: report.episodeDetails?.[key] ?? pack.subtitle_detail,
-    approximate: file.outcome === "downloaded_approximate" ? 1 : 0,
+    approximate:
+      file.outcome === "downloaded_approximate" || file.outcome === "approximate_kept" ? 1 : 0,
     report: JSON.stringify(episodeReport(file, report.rejected ?? [])),
   };
+}
+
+// Resincronizarea rescrie același .srt, deci sursa și release-ul rămân cele
+// din raportul de dinainte — pipeline-ul nu le mai știe. Completate înainte de
+// jurnal și de DB, ca să apară la fel în ambele.
+export function fillRetimedSources(torrentHash: string, files: SubtitleFileReport[]): void {
+  const retimed = files.filter((f) => f.outcome === "retimed_srt" && !f.source);
+  if (retimed.length === 0) return;
+  const previous = new Map<string | null, SubtitleFileReport>();
+  const rows = getDb()
+    .prepare(
+      "SELECT subtitle_report FROM media WHERE torrent_hash = ? AND subtitle_report IS NOT NULL",
+    )
+    .all(torrentHash) as unknown as { subtitle_report: string }[];
+  for (const row of rows) {
+    try {
+      const parsed = JSON.parse(row.subtitle_report) as Partial<
+        FileSubtitleReport & PackSubtitleReport
+      >;
+      for (const f of parsed.files ?? (parsed.file ? [parsed.file] : [])) {
+        if (f.source && !previous.has(f.episode)) previous.set(f.episode, f);
+      }
+    } catch {
+      // Raport corupt: sursa rămâne necunoscută.
+    }
+  }
+  for (const f of retimed) {
+    const prev = previous.get(f.episode);
+    if (!prev) continue;
+    f.source = prev.source;
+    f.release = prev.release;
+    f.matchedCriteria = prev.matchedCriteria;
+    f.maxCriteria = prev.maxCriteria;
+  }
 }
 
 // După fiecare verificare/corectare de subtitrare: întâi starea torrentului,
@@ -465,7 +501,10 @@ function writeSubtitleStatus(
   // `season_already_ok`) nu rescrie sursa, detaliul și raportul — altfel un
   // .srt de pe subs.ro devenea „.srt din torrent” la primul „Corectează”
   // (S.W.A.T. Exiles, 9 oct. 2026). Se actualizează doar data verificării.
-  const keepPrevious = outcome === "srt_already_ok" || outcome === "season_already_ok";
+  const keepPrevious =
+    outcome === "srt_already_ok" ||
+    outcome === "season_already_ok" ||
+    outcome === "approximate_kept";
   const keep = keepPrevious ? 1 : 0;
   // Resincronizarea păstrează sursa (același fișier, alți timpi).
   const keepSource = keepPrevious || outcome === "retimed_srt" ? 1 : 0;

@@ -16,6 +16,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { looksRomanian } from "./subtitle-checks";
+import { formatSubtitleNumber as num } from "./subtitle-outcomes";
 
 const execFileAsync = promisify(execFile);
 
@@ -406,8 +407,8 @@ export function createSubtitleVerifier(mediaAbsPath: string) {
     if (!sync) return { reason: null, sync: null };
     if (sync.score < MIN_SPEECH_CORRELATION) {
       return reject(
-        `momentele de vorbire nu se potrivesc cu subtitrarea încorporată în fișier (corelație ${sync.score.toFixed(2)}, minimum ${MIN_SPEECH_CORRELATION}) — e pentru alt episod sau altă versiune`,
-        `nesincronizată (${sync.score.toFixed(2).replace(".", ",")}) — alt episod sau alt montaj`,
+        `momentele de vorbire nu se potrivesc cu subtitrarea încorporată în fișier (corelație ${num(sync.score)}, minimum ${num(MIN_SPEECH_CORRELATION)}) — e pentru alt episod sau altă versiune`,
+        `nesincronizată (${num(sync.score)}) — alt episod sau alt montaj`,
       );
     }
     return { reason: null, sync };
@@ -420,8 +421,8 @@ export function describeSync(sync: SyncMeasure): string {
   const offset =
     Math.abs(sync.offset) <= GOOD_SYNC_MAX_OFFSET_S
       ? "fără decalaj"
-      : `decalaj ~${Math.abs(sync.offset).toFixed(1)} s`;
-  return `sincronizare măsurată: corelație ${sync.score.toFixed(2)}, ${offset}${sync.retime ? `, ${describeRetime(sync.retime)}` : ""}`;
+      : `decalaj ~${num(Math.abs(sync.offset), 1)} s`;
+  return `sincronizare măsurată: corelație ${num(sync.score)}, ${offset}${sync.retime ? `, ${describeRetime(sync.retime)}` : ""}`;
 }
 
 // Varianta scurtă, pentru eticheta din jurnal.
@@ -429,9 +430,7 @@ export function retimeLabel(retime: Retime & { label?: string }): string {
   const parts: string[] = [];
   if (retime.ratio !== 1) parts.push(retime.label ?? `×${retime.ratio.toFixed(4)}`);
   if (Math.abs(retime.shift) > GOOD_SYNC_MAX_OFFSET_S)
-    parts.push(
-      `${retime.shift > 0 ? "+" : "−"}${Math.abs(retime.shift).toFixed(1).replace(".", ",")} s`,
-    );
+    parts.push(`${retime.shift > 0 ? "+" : "−"}${num(Math.abs(retime.shift), 1)} s`);
   return parts.join(", ");
 }
 
@@ -440,8 +439,6 @@ export function describeRetime(retime: Retime & { label?: string }): string {
   if (retime.ratio !== 1)
     parts.push(`viteză ajustată ${retime.label ?? `×${retime.ratio.toFixed(4)}`}`);
   if (Math.abs(retime.shift) > GOOD_SYNC_MAX_OFFSET_S)
-    parts.push(
-      `deplasată cu ${retime.shift > 0 ? "+" : "−"}${Math.abs(retime.shift).toFixed(1)} s`,
-    );
+    parts.push(`deplasată cu ${retime.shift > 0 ? "+" : "−"}${num(Math.abs(retime.shift), 1)} s`);
   return `timpi corectați (${parts.join(", ")})`;
 }

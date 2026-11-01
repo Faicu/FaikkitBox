@@ -270,9 +270,9 @@ export async function processMediaFile(
       movedAside = check?.short ?? reason;
     }
   }
-  // Fără variantă mai bună: .srt-ul rămâne, starea nu se schimbă.
+  // Fără variantă mai bună: .srt-ul rămâne, starea din DB nu se schimbă.
   const keepExisting = (why: string): ProcessMediaFileResult => ({
-    outcome: "srt_already_ok",
+    outcome: "approximate_kept",
     detail: `subtitrarea aproximativă existentă rămâne — ${why}`,
   });
   const withRejected = (detail: string) =>

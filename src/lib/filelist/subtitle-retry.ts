@@ -93,7 +93,7 @@ export async function retryMissingSubtitles(): Promise<{
       );
       if (result.status === "ok" && CORRECTED_OUTCOMES.includes(result.outcome)) {
         found++;
-        titles.push(`${label} (găsit)`);
+        titles.push(`${label} (${result.outcome === "retimed_srt" ? "resincronizat" : "găsit"})`);
       } else if (result.status === "ok") {
         // Aproximativa se păstrează până apare una sigur mai bună.
         titles.push(`${label} (${t.approximate === 1 ? "nimic mai bun" : "negăsit"})`);

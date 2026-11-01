@@ -11,6 +11,8 @@ export type SubtitleOutcome =
   | "retimed_srt"
   | "downloaded"
   | "downloaded_approximate"
+  // Subtitrarea aproximativă rămâne: nicio variantă sigur mai bună.
+  | "approximate_kept"
   | "multiple_srt_skipped"
   | "season_pack_skipped"
   | "no_imdb"
@@ -37,10 +39,15 @@ export const OK_OUTCOMES: SubtitleOutcome[] = [
   "already_embedded",
   "audio_already_romanian",
   "srt_already_ok",
+  "approximate_kept",
   "season_already_ok",
 ];
 
-export const APPROXIMATE_OUTCOMES: SubtitleOutcome[] = ["downloaded_approximate"];
+// Cu subtitrare, dar de verificat (iconiță galbenă).
+export const APPROXIMATE_OUTCOMES: SubtitleOutcome[] = [
+  "downloaded_approximate",
+  "approximate_kept",
+];
 
 // Eticheta scurtă din jurnal și push (detaliul complet e în drawer).
 export const SHORT_LABELS: Record<SubtitleOutcome, string> = {
@@ -52,6 +59,7 @@ export const SHORT_LABELS: Record<SubtitleOutcome, string> = {
   retimed_srt: "subtitrare resincronizată (timpi corectați)",
   downloaded: "subtitrare descărcată automat",
   downloaded_approximate: "subtitrare aproximativă descărcată — verifică sincronizarea",
+  approximate_kept: "subtitrarea aproximativă rămâne — nicio variantă mai bună",
   multiple_srt_skipped: "mai multe .srt găsite, am sărit peste",
   season_pack_skipped: "pachet de episoade, am sărit peste",
   no_imdb: "fără subtitrare și fără IMDb id pentru căutare",
@@ -146,9 +154,10 @@ export function shortLabelFor(
   // Cu sincronizarea măsurată, ea spune cât de bună e subtitrarea — The Invite
   // apărea „(1/5)” deși era perfect sincronizată.
   if (info?.sync) {
+    const retimed = info.sync.retime ? ", timpi corectați" : "";
     return info.sync.good
-      ? `subtitrare descărcată${sourceNote} (sincronizare verificată)`
-      : `subtitrare aproximativă descărcată${sourceNote} (decalaj ~${Math.abs(info.sync.offset).toFixed(1).replace(".", ",")} s) — verifică sincronizarea`;
+      ? `subtitrare descărcată${sourceNote} (sincronizare verificată${retimed})`
+      : `subtitrare aproximativă descărcată${sourceNote} (${syncProblem(info.sync)}${retimed}) — verifică sincronizarea`;
   }
   const { matchedCriteria: matched, maxCriteria: max } = info ?? {};
   const matchNote =
@@ -159,6 +168,39 @@ export function shortLabelFor(
   return outcome === "downloaded"
     ? `subtitrare descărcată${sourceNote}${matchNote}`
     : `subtitrare aproximativă descărcată${sourceNote}${matchNote} — verifică sincronizarea`;
+}
+
+// Numerele în formatul românesc („0,86”).
+export const formatSubtitleNumber = (n: number, digits = 2) => n.toFixed(digits).replace(".", ",");
+
+// Ce nu e sigur la o sincronizare nebifată: decalajul, sau, fără decalaj
+// (de exemplu după corecție), corelația prea mică. 0,5 s = pragul din
+// subtitle-verify.ts (GOOD_SYNC_MAX_OFFSET_S).
+export function syncProblem(sync: { score: number; offset: number }): string {
+  return Math.abs(sync.offset) > 0.5
+    ? `decalaj ~${formatSubtitleNumber(Math.abs(sync.offset), 1)} s`
+    : `sincronizare incertă, ${formatSubtitleNumber(sync.score)}`;
+}
+
+// Titlul rezultatului unui fișier, același în drawer-ul tehnic, Bibliotecă și
+// toast-ul butonului. „Nicio subtitrare găsită” ar fi înșelător când au existat
+// variante, dar toate au fost respinse.
+export function subtitleHeadline(outcome: SubtitleOutcome, rejectedCount = 0): string {
+  if (outcome === "downloaded") return "Subtitrare descărcată";
+  if (outcome === "no_subtitle_found" && rejectedCount > 0) return "Nicio variantă potrivită";
+  if (outcome === "downloaded_approximate")
+    return "Subtitrare aproximativă — verifică sincronizarea";
+  const label = SHORT_LABELS[outcome] ?? outcome;
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+// Tonul rezultatului: corectat, de verificat, nimic de făcut, eșuat.
+export function subtitleOutcomeTone(outcome: SubtitleOutcome): "good" | "warn" | "ok" | "bad" {
+  if (APPROXIMATE_OUTCOMES.includes(outcome) || outcome === "season_no_subtitle_found")
+    return "warn";
+  if (CORRECTED_OUTCOMES.includes(outcome)) return "good";
+  if (OK_OUTCOMES.includes(outcome)) return "ok";
+  return "bad";
 }
 
 // Eticheta pentru `media.subtitle_source` (în DB sunt slug-uri).

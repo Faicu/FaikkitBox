@@ -130,13 +130,15 @@ export const WATCHER_TASK_INFO: Record<string, WatcherTaskInfo> = {
     icon: <ArrowUpCircle className="h-3.5 w-3.5 text-sky-400" />,
   },
   "subtitle-retry": {
-    summary: "Caută zilnic subtitrările care lipsesc, 14 zile de la descărcare.",
+    summary:
+      "Caută zilnic subtitrările care lipsesc sau sunt aproximative, 14 zile de la descărcare.",
     points: [
       "Prima căutare, la finalul descărcării, vine exact când e cel mai puțin probabil să existe ceva: traducerile românești apar abia peste una-trei zile.",
       "Doar traduceri făcute de om, pe subs.ro și OpenSubtitles, pentru episodul exact (verificat după nume și după conținut), alese după sincronizare.",
-      "O subtitrare aproximativă e înlocuită doar cu una sigur mai bună.",
+      "O subtitrare aproximativă e înlocuită doar cu una sigur mai bună. Dacă traducerea e bună, dar timpii alunecă (alt număr de cadre pe secundă) sau sunt decalați, e resincronizată pe loc.",
+      "După cele 14 zile, „Corectează subtitrare” din Bibliotecă face aceeași căutare, oricând.",
       "Ceasul fiecărui titlu stă în baza de date, deci „Rulează acum” caută doar ce e scadent — OpenSubtitles are o limită de 20 de descărcări pe zi.",
-      "Jurnal și push doar când pune o subtitrare.",
+      "Jurnal și push doar când pune sau resincronizează o subtitrare.",
     ],
     icon: <Captions className="h-3.5 w-3.5 text-teal-400" />,
   },

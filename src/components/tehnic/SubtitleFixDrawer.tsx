@@ -21,7 +21,9 @@ import {
   CORRECTED_OUTCOMES as CORRECTED_OUTCOMES_LIST,
   OK_OUTCOMES as OK_OUTCOMES_LIST,
   APPROXIMATE_OUTCOMES as APPROXIMATE_OUTCOMES_LIST,
-  SHORT_LABELS,
+  formatSubtitleNumber,
+  subtitleHeadline,
+  syncProblem,
   SUBTITLE_SOURCE_LABELS,
   type SubtitleFileReport,
   type SubtitleOutcome,
@@ -61,20 +63,7 @@ function outcomeIcon(outcome: string, size = "h-3.5 w-3.5") {
   return <XCircle className={`${size} text-red-400 shrink-0 mt-0.5`} />;
 }
 
-const num = (n: number, digits = 2) => n.toFixed(digits).replace(".", ",");
-
-// Titlul rezultatului unui fișier. La descărcări sursa și calitatea potrivirii
-// apar dedesubt, pe rânduri proprii — aici doar ce s-a întâmplat.
-function headline(outcome: string, rejectedCount = 0): string {
-  if (outcome === "downloaded") return "Subtitrare descărcată";
-  // „Nicio subtitrare găsită" ar fi înșelător când au existat variante, dar
-  // toate au fost respinse — ele apar dedesubt, cu motivul.
-  if (outcome === "no_subtitle_found" && rejectedCount > 0) return "Nicio variantă potrivită";
-  if (outcome === "downloaded_approximate")
-    return "Subtitrare aproximativă — verifică sincronizarea";
-  const label = SHORT_LABELS[outcome as SubtitleOutcome] ?? outcome;
-  return label.charAt(0).toUpperCase() + label.slice(1);
-}
+const num = formatSubtitleNumber;
 
 function Chip({ tone, children }: { tone: "good" | "warn" | "muted"; children: ReactNode }) {
   const cls =
@@ -124,7 +113,7 @@ export function FileReport({
           {showEpisode && file.episode && (
             <span className="mr-1.5 font-mono text-muted-foreground">{file.episode}</span>
           )}
-          {headline(file.outcome, rejected.length)}
+          {subtitleHeadline(file.outcome as SubtitleOutcome, rejected.length)}
         </div>
       </div>
 
@@ -142,7 +131,7 @@ export function FileReport({
                 <Chip tone="good">sincronizată · {num(file.syncScore!)}</Chip>
               ) : (
                 <Chip tone="warn">
-                  decalaj ~{num(Math.abs(file.syncOffset ?? 0), 1)} s · {num(file.syncScore!)}
+                  {syncProblem({ score: file.syncScore!, offset: file.syncOffset ?? 0 })}
                 </Chip>
               ))}
             {file.maxCriteria != null && file.maxCriteria > 0 && (
@@ -218,8 +207,11 @@ function StructuredItem({
 }) {
   const isPack = files.length > 1;
   const rejectedOf = (f: SubtitleFileReport) => rejected.filter((r) => r.episode === f.episode);
-  const okFiles = isPack ? files.filter((f) => OK_OUTCOMES.has(f.outcome)) : [];
-  const shown = isPack ? files.filter((f) => !OK_OUTCOMES.has(f.outcome)) : files;
+  // Aproximativele păstrate au tot ceva de verificat — nu intră la „în regulă”.
+  const isFine = (f: SubtitleFileReport) =>
+    OK_OUTCOMES.has(f.outcome) && !APPROXIMATE_OUTCOMES.has(f.outcome);
+  const okFiles = isPack ? files.filter(isFine) : [];
+  const shown = isPack ? files.filter((f) => !isFine(f)) : files;
 
   return (
     <div className="space-y-2.5 px-3 py-2.5 text-xs">
@@ -286,7 +278,9 @@ function LegacyItem({ it }: { it: SubtitleRunItemMeta }) {
                   : "bg-amber-500/15 text-amber-400"
               }`}
             >
-              {it.syncGood ? "sincronizată" : `decalaj ~${num(Math.abs(it.syncOffset ?? 0), 1)} s`}
+              {it.syncGood
+                ? "sincronizată"
+                : syncProblem({ score: it.syncScore, offset: it.syncOffset ?? 0 })}
             </span>
           ) : (
             it.maxCriteria != null &&

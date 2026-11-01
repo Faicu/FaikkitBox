@@ -428,6 +428,8 @@ export interface PlexTitleDetail {
   year: number | null;
   quality: string | null;
   hasRomanianSubtitle: boolean;
+  // Subtitrarea română e „aproximativă” (de verificat sincronizarea).
+  subtitleApproximate: boolean;
   hasRomanianAudio: boolean;
   summary: string | null;
   genres: string[];
@@ -583,10 +585,14 @@ function subtitleRetryOf(row: MediaRow): PlexTitleDetail["subtitleRetry"] {
       lastCheckedAt: row.subtitle_checked_at,
     };
   }
-  // După fereastră, o aproximativă rămâne subtitrarea titlului.
-  return missing
-    ? { state: "ended", kind: "missing", until, lastCheckedAt: row.subtitle_checked_at }
-    : null;
+  // După fereastră, o aproximativă rămâne subtitrarea titlului — butonul
+  // poate căuta în continuare una mai bună.
+  return {
+    state: "ended",
+    kind: missing ? "missing" : "approximate",
+    until,
+    lastCheckedAt: row.subtitle_checked_at,
+  };
 }
 
 // Detaliile unui titlu, doar din SELECT-uri; „cine a văzut” rămâne live
@@ -793,6 +799,7 @@ async function buildDetailFromMediaRow(
     year: row.year,
     quality: row.quality,
     hasRomanianSubtitle: !!row.has_romanian_subtitle,
+    subtitleApproximate: !!row.has_romanian_subtitle && !!row.subtitle_approximate,
     hasRomanianAudio: !!row.has_romanian_audio,
     // Descrierea episodului; a serialului doar ca rezervă.
     summary: isEpisode ? (row.episode_overview ?? row.overview_ro) : row.overview_ro,

@@ -144,6 +144,7 @@ export async function finalizeDownload(t: {
       imdbId,
       mediaType: t.isMovie ? "movie" : "tv",
     });
+    media.fillRetimedSources(torrentHash, subtitleItem.files ?? []);
     await logSubtitleRun([subtitleItem], "download");
     media.updateMediaSubtitleStatus(torrentHash, subtitleItem);
   } catch (e) {
@@ -571,10 +572,11 @@ export async function checkSubtitleForTorrent(
     approximateEpisodes: opts.approximateEpisodes,
   });
 
+  const { updateMediaSubtitleStatus, fillRetimedSources } = await import("../media/media");
+  fillRetimedSources(row.torrentHash, result.files ?? []);
   const corrected = CORRECTED_OUTCOMES.includes(result.outcome);
   if (opts.logRun === "always" || corrected)
     await logSubtitleRun([result], "download", { via: opts.via });
-  const { updateMediaSubtitleStatus } = await import("../media/media");
   updateMediaSubtitleStatus(row.torrentHash, result);
   if (corrected) {
     await refreshPlexLibrary(plexType).catch(() => {});

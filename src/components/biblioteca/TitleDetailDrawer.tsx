@@ -41,7 +41,11 @@ import type { PlexTitleDetail } from "@/lib/services/plex-browse";
 import { correctSubtitleForMedia, deleteSubtitleForMedia } from "@/lib/filelist.functions";
 import { setShowWatch, checkShowNow } from "@/lib/media/media.functions";
 import { formatMs, formatBytes, formatSpeed, formatEta } from "@/lib/format";
-import { subtitleSourceDisplay } from "@/lib/filelist/subtitle-outcomes";
+import {
+  subtitleHeadline,
+  subtitleOutcomeTone,
+  subtitleSourceDisplay,
+} from "@/lib/filelist/subtitle-outcomes";
 import { FileReport } from "@/components/tehnic/SubtitleFixDrawer";
 import { Progress } from "@/components/ui/progress";
 import { StatusBadge } from "./StatusBadge";
@@ -234,7 +238,17 @@ export function TitleDetailDrawer({
       toast.error("Eroare la corectarea subtitrării", { id: toastId, description: res.error });
       return;
     }
-    toast.success("Subtitrare verificată", {
+    // Titlul și culoarea după rezultat, ca în jurnal.
+    const tone = subtitleOutcomeTone(res.outcome);
+    const show =
+      tone === "good"
+        ? toast.success
+        : tone === "warn"
+          ? toast.warning
+          : tone === "ok"
+            ? toast.info
+            : toast.error;
+    show(subtitleHeadline(res.outcome), {
       id: toastId,
       description: res.detail,
       duration: 6000,
@@ -376,7 +390,15 @@ export function TitleDetailDrawer({
                     // Cât se descarcă, subtitrarea nu e încă verificată — o insignă
                     // „doar engleză” ar fi falsă.
                     d.status !== "downloading" &&
-                    (d.hasRomanianSubtitle ? (
+                    (d.subtitleApproximate ? (
+                      <span
+                        title="Sincronizarea nu e sigură"
+                        className="flex items-center gap-1 rounded-full bg-amber-500/15 text-amber-400 px-1.5 py-0.5 font-medium"
+                      >
+                        <Captions className="h-3 w-3" />
+                        Subtitrare aproximativă
+                      </span>
+                    ) : d.hasRomanianSubtitle ? (
                       <span className="flex items-center gap-1 rounded-full bg-emerald-500/15 text-emerald-400 px-1.5 py-0.5 font-medium">
                         <Captions className="h-3 w-3" />
                         Subtitrare RO
@@ -1030,8 +1052,10 @@ function SubtitleRetryLine({ retry }: { retry: NonNullable<PlexTitleDetail["subt
       <div className="flex items-start gap-1.5 text-[11px] leading-snug text-muted-foreground">
         <CaptionsOff className="mt-px h-3 w-3 shrink-0" />
         <span>
-          Căutarea automată a subtitrării s-a încheiat pe {retryDay(retry.until)} — poți încerca din
-          nou cu „Corectează subtitrare”.
+          {retry.kind === "approximate"
+            ? "Căutarea automată a unei subtitrări mai bune"
+            : "Căutarea automată a subtitrării"}{" "}
+          s-a încheiat pe {retryDay(retry.until)} — poți încerca din nou cu „Corectează subtitrare”.
         </span>
       </div>
     );
