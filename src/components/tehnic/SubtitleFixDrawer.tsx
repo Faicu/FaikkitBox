@@ -357,7 +357,8 @@ export function SubtitleFixDrawer({
             <div className="flex flex-wrap items-center gap-2 text-xs">
               {nCorrected > 0 && (
                 <span className="flex items-center gap-1 rounded-full bg-emerald-500/15 text-emerald-400 px-2 py-0.5 font-medium">
-                  <CheckCircle2 className="h-3 w-3" /> {nCorrected} corectate
+                  <CheckCircle2 className="h-3 w-3" /> {nCorrected}{" "}
+                  {nCorrected === 1 ? "corectată" : "corectate"}
                 </span>
               )}
               {nOk > 0 && (
