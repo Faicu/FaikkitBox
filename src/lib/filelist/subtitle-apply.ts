@@ -224,6 +224,12 @@ export async function moveTrackedSrt(
   return false;
 }
 
+// Sufixele .srt-urilor din torrent puse deoparte prin qBittorrent (seed-ul
+// continuă, Plex le ignoră): originalul înlocuit de o copie resincronizată și
+// cel scos de „Șterge subtitrare”.
+export const TRACKED_ORIGINAL_SUFFIX = ".original";
+export const TRACKED_DELETED_SUFFIX = ".sters";
+
 // Un .srt străin, nici român, nici englez: pus deoparte (`.respins`, ignorat de
 // Plex), șters odată cu titlul.
 export function moveAsideTrackedSrt(

@@ -677,7 +677,11 @@ export function describeSync(sync: SyncMeasure): string {
   return `sincronizare măsurată: corelație ${num(sync.score)}, ${offset}${sync.retime ? `, ${describeRetime(sync.retime)}` : ""}`;
 }
 
-const signedSeconds = (v: number) => `${v > 0 ? "+" : "−"}${num(Math.abs(v), 1)} s`;
+// „−85 s”, „−1,5 s” — fără „,0” la valorile întregi.
+const signedSeconds = (v: number) => {
+  const abs = Math.abs(v);
+  return `${v > 0 ? "+" : "−"}${Number.isInteger(abs) ? abs : num(abs, 1)} s`;
+};
 
 // Deplasarea, ca text: una singură, sau pe bucăți cu momentul fiecărei schimbări.
 function shiftParts(retime: Retime): { short: string; long: string } | null {

@@ -43,6 +43,8 @@ import {
   handleTrackedSrt,
   handleSidecarSrt,
   fetchCandidateText,
+  moveTrackedSrt,
+  TRACKED_ORIGINAL_SUFFIX,
   writeChosenSubtitle,
   moveAsideTrackedSrt,
   tagTrackedSrtEnglish,
@@ -159,9 +161,15 @@ export async function processMediaFile(
   // străine care ar încurca Plex (singurul .srt, cel nemarcat de lângă video,
   // un „.ro.srt” greșit) primesc „.en” dacă sunt în engleză, altfel `.respins`.
   // Cele marcate deja cu altă limbă rămân. Totul prin qBittorrent.
-  if (ownSrtFiles.length > 0) {
+  // Originalul pus deoparte de o resincronizare contează doar dacă a dispărut
+  // copia — altfel ar suprascrie-o la fiecare verificare.
+  const copyPresent = await fileExists(join(savePath, targetSrtRelPath));
+  const trackedSrtFiles = ownSrtFiles.filter(
+    (f) => !(f.name.endsWith(TRACKED_ORIGINAL_SUFFIX) && copyPresent),
+  );
+  if (trackedSrtFiles.length > 0) {
     const read = await Promise.all(
-      ownSrtFiles.map(async (file) => {
+      trackedSrtFiles.map(async (file) => {
         const buf = await readFile(join(savePath, file.name)).catch(() => null);
         const language = buf ? srtContentLanguage(decodeToUtf8Text(buf).text) : null;
         return { file, buf, language, romanian: language === "ro" };
@@ -187,18 +195,65 @@ export async function processMediaFile(
         const occupant = read.find((r) => r.file.name === targetSrtRelPath);
         if (occupant) await clearNonRomanian(occupant);
       }
+      // Cu timpii decalați (The Originals S01E18, playWEB): originalul nu se
+      // atinge — e al torrentului, seed-ul ar suferi. Rămâne în torrent ca
+      // „.ro.srt.original” (ignorat de Plex), iar lângă el scriem copia
+      // corectată, a aplicației, ca orice subtitrare descărcată.
+      const romanianBuf = read.find((r) => r.file === romanian)?.buf;
+      const romanianText = romanianBuf ? decodeToUtf8Text(romanianBuf).text : null;
+      const check = romanianText != null ? await verify(romanianText) : null;
+      const syncRetime =
+        check && !check.reason && check.sync?.retime && isWellSynced(check.sync)
+          ? check.sync.retime
+          : null;
+      const retime = syncRetime ?? (check && !check.reason ? check.audioRetime : undefined);
+      if (romanianText != null && retime) {
+        const originalRelPath = `${targetSrtRelPath}${TRACKED_ORIGINAL_SUFFIX}`;
+        if (await moveTrackedSrt(romanian.name, originalRelPath, trackedCtx)) {
+          try {
+            await writeFileWithRetry(
+              join(savePath, targetSrtRelPath),
+              retimeSrt(romanianText, retime),
+            );
+            console.log(`[subtitles] .srt din torrent resincronizat, copie → ${targetSrtRelPath}`);
+            const how = syncRetime
+              ? describeSync(check!.sync!)
+              : `după pista audio: ${describeRetime(retime)}`;
+            return {
+              outcome: "retimed_srt",
+              detail: `subtitrarea din torrent a fost resincronizată (${how}); originalul rămâne în torrent ca „${basename(originalRelPath)}”, seed-ul nu e afectat`,
+              path: targetSrtRelPath,
+              ...(syncRetime
+                ? {
+                    sync: {
+                      score: check!.sync!.score,
+                      offset: check!.sync!.offset,
+                      good: true,
+                      retime: retimeLabel(syncRetime),
+                    },
+                  }
+                : { retime: `după audio, ${retimeLabel(retime)}` }),
+            };
+          } catch (e) {
+            // Originalul e deja deoparte: îl punem la loc, ca titlul să nu
+            // rămână fără subtitrare.
+            console.warn(`[subtitles] scrierea copiei resincronizate a eșuat:`, e);
+            await moveTrackedSrt(originalRelPath, targetSrtRelPath, trackedCtx);
+          }
+        }
+      }
       const { outcome, detail } = await handleTrackedSrt(
         romanian,
         targetSrtRelPath,
         mediaFile.piece_range,
         trackedCtx,
       );
-      const others = ownSrtFiles.length - 1;
+      const others = trackedSrtFiles.length - 1;
       return {
         outcome,
         detail:
           others > 0
-            ? `${detail} (ales după conținut dintre ${ownSrtFiles.length} fișiere .srt)`
+            ? `${detail} (ales după conținut dintre ${trackedSrtFiles.length} fișiere .srt)`
             : detail,
         path: targetSrtRelPath,
       };
@@ -211,7 +266,8 @@ export async function processMediaFile(
     );
     for (const entry of ordered) {
       const name = entry.file.name;
-      if (ownSrtFiles.length === 1 || name === plainRelPath || name === targetSrtRelPath) {
+      if (name.endsWith(TRACKED_ORIGINAL_SUFFIX)) continue;
+      if (trackedSrtFiles.length === 1 || name === plainRelPath || name === targetSrtRelPath) {
         await clearNonRomanian(entry);
       }
     }

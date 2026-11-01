@@ -8,8 +8,9 @@
 import { readdir, rm, stat } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 
-// `.respins` opțional: subtitrările puse deoparte sunt tot ale titlului.
-const SUBTITLE_EXT_RE = /\.(srt|sub|idx|ass|ssa)(\.respins)?$/i;
+// Sufixul opțional: subtitrările puse deoparte (`.respins`, `.original`,
+// `.sters`) sunt tot ale titlului.
+const SUBTITLE_EXT_RE = /\.(srt|sub|idx|ass|ssa)(\.(respins|original|sters))?$/i;
 
 // Subtitrările de lângă un video: același nume + sufixe de limbă opționale +
 // extensie („Film.mkv” → „Film.ro.srt”, „Film.ro.forced.srt”, „Film.ro.srt.respins”).

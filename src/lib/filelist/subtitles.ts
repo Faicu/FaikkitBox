@@ -11,6 +11,7 @@
 import { readdir, unlink } from "node:fs/promises";
 import { join, dirname, basename, extname } from "node:path";
 import { qbitGet, qbitListFiles, type QbitFileInfo } from "../qbit-client";
+import { moveTrackedSrt, TRACKED_DELETED_SUFFIX, TRACKED_ORIGINAL_SUFFIX } from "./subtitle-apply";
 import {
   searchSubtitles,
   searchEpisodeSubtitles,
@@ -37,6 +38,13 @@ import {
 import { lookupTitleByImdbId, searchImdbIdByReleaseName } from "../tmdb/tmdb-title-lookup";
 import { MEDIA_EXTENSIONS, parseSeasonEpisode, extractEpisodeKey } from "./subtitle-checks";
 import { processMediaFile, type ProcessMediaFileResult } from "./subtitle-pipeline";
+
+// .srt-urile din torrent de luat în seamă: și originalul pus deoparte de o
+// resincronizare (pipeline-ul îl refolosește doar dacă a dispărut copia).
+function isTrackedSubtitleName(name: string): boolean {
+  const lower = name.toLowerCase();
+  return lower.endsWith(".srt") || lower.endsWith(`.srt${TRACKED_ORIGINAL_SUFFIX}`);
+}
 
 // Rezultatul unui fișier media, ca rapoarte pentru jurnalul structurat.
 function reportsOf(
@@ -200,7 +208,7 @@ export async function ensureRomanianSubtitle(
     );
   }
 
-  const matchingSrtFiles = downloadedFiles.filter((f) => f.name.toLowerCase().endsWith(".srt"));
+  const matchingSrtFiles = downloadedFiles.filter((f) => isTrackedSubtitleName(f.name));
 
   // Episod individual: toți candidații trec prin filtrul de episod
   // (resolveBestSubtitle) — S.W.A.T. Exiles S01E02 primise subtitrarea lui
@@ -290,6 +298,10 @@ export async function deleteRomanianSubtitle(params: {
     return { status: "error", deleted: [], error: "niciun fișier media recunoscut în torrent" };
   }
 
+  // Ce e al torrentului nu se șterge — qBittorrent l-ar găsi lipsă și seed-ul
+  // ar suferi. Se pune deoparte (`.sters`), ignorat de Plex și de căutare.
+  const tracked = new Set(files.map((f) => f.name));
+  const trackedCtx = { qbitUrl, torrentHash, qbitUser, qbitPass, savePath };
   const deleted: string[] = [];
   for (const mediaFile of mediaFiles) {
     const mediaBaseName = basename(mediaFile.name, extname(mediaFile.name)).toLowerCase();
@@ -303,11 +315,23 @@ export async function deleteRomanianSubtitle(params: {
     }
     for (const entry of entries) {
       const lower = entry.toLowerCase();
-      if (!lower.endsWith(".srt") || !lower.startsWith(mediaBaseName)) continue;
+      if (!lower.startsWith(mediaBaseName) || !isTrackedSubtitleName(entry)) continue;
+      const relPath = mediaDir === "." ? entry : `${mediaDir}/${entry}`;
+      if (tracked.has(relPath)) {
+        const asideRelPath = `${relPath.replace(/\.original$/i, "")}${TRACKED_DELETED_SUFFIX}`;
+        if (await moveTrackedSrt(relPath, asideRelPath, trackedCtx)) {
+          deleted.push(
+            `${relPath} (din torrent: pus deoparte ca „${basename(asideRelPath)}”, seed-ul continuă)`,
+          );
+        }
+        continue;
+      }
+      // O copie a aplicației cu numele unui .original n-ar trebui să existe.
+      if (!lower.endsWith(".srt")) continue;
       const absPath = join(dirAbsPath, entry);
       try {
         await unlink(absPath);
-        deleted.push(mediaDir === "." ? entry : `${mediaDir}/${entry}`);
+        deleted.push(relPath);
       } catch (e) {
         console.warn(`[subtitles] ștergere .srt eșuată (${absPath}):`, e);
       }
@@ -417,7 +441,7 @@ async function processSeasonPack(params: ProcessSeasonPackParams): Promise<Subti
     }
 
     const matchingSrtFiles = downloadedFiles.filter(
-      (f) => f.name.toLowerCase().endsWith(".srt") && extractEpisodeKey(f.name) === episodeKey,
+      (f) => isTrackedSubtitleName(f.name) && extractEpisodeKey(f.name) === episodeKey,
     );
 
     const result = await processMediaFile({

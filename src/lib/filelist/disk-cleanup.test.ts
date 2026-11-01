@@ -23,10 +23,18 @@ describe("sidecarSubtitleNames", () => {
         "Film.ro.srt.respins",
         "Film.srt.respins",
         "Film.ro.forced.srt",
+        "Film.ro.srt.original",
+        "Film.ro.srt.sters",
         "Film.Extended.ro.srt",
         "Film.mkv.respins",
       ]),
-    ).toEqual(["Film.ro.srt.respins", "Film.srt.respins", "Film.ro.forced.srt"]);
+    ).toEqual([
+      "Film.ro.srt.respins",
+      "Film.srt.respins",
+      "Film.ro.forced.srt",
+      "Film.ro.srt.original",
+      "Film.ro.srt.sters",
+    ]);
   });
 });
 

@@ -6,6 +6,7 @@ import {
   isConfidentSync,
   measureSync,
   parseSrtTiming,
+  retimeLabel,
   retimeSrt,
   pickReferenceStream,
   speechCorrelation,
@@ -121,6 +122,15 @@ describe("audioShift", () => {
 
   it("decalaj mic (sub 5 s): nu atinge nimic — audio nu e destul de precis", () => {
     expect(audioShift(shifted(film, 2), film)).toBeNull();
+  });
+});
+
+describe("retimeLabel", () => {
+  it("fără „,0” la secundele întregi", () => {
+    expect(retimeLabel({ ratio: 1, shift: -85, cuts: [{ at: 1480, shift: -93 }] })).toBe(
+      "pe bucăți: −85 s / −93 s",
+    );
+    expect(retimeLabel({ ratio: 1, shift: -1.5 })).toBe("−1,5 s");
   });
 });
 

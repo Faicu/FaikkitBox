@@ -240,8 +240,12 @@ function StructuredItem({
         >
           <CircleDashed className="h-3.5 w-3.5 shrink-0 mt-0.5" />
           <div className="min-w-0">
-            {okFiles.length === files.length ? "Toate episoadele" : `${okFiles.length} episoade`}{" "}
-            aveau deja subtitrare în regulă
+            {okFiles.length === files.length
+              ? "Toate episoadele aveau"
+              : okFiles.length === 1
+                ? "1 episod avea"
+                : `${okFiles.length} episoade aveau`}{" "}
+            deja subtitrare în regulă
             <div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 font-mono text-[10px] text-muted-foreground/70">
               {okFiles.map((f) => (
                 <span key={f.episode}>{f.episode}</span>
