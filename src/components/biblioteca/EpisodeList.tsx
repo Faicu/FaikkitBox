@@ -3,7 +3,13 @@ import { ChevronRight, CircleDashed, Eye, EyeOff, Tv } from "lucide-react";
 
 import type { ShowEpisodeEntry } from "@/lib/services/plex-browse";
 import { formatMs } from "@/lib/format";
-import { airDateShort, displayEpisodeTitle, groupBySeason, stillThumb } from "./utils";
+import {
+  airDateShort,
+  displayEpisodeTitle,
+  groupBySeason,
+  stillThumb,
+  type SeasonGroup,
+} from "./utils";
 import { DeleteTimerBadge } from "./ScheduledDelete";
 
 // Lista de episoade din drawer-ul unui serial, pe sezoane.
@@ -13,8 +19,8 @@ import { DeleteTimerBadge } from "./ScheduledDelete";
 // greu. Acum: miniatura cadrului, numele la mărime normală, data difuzării și
 // durata, iar lista urcă imediat sub descriere (vezi TitleDetailDrawer).
 //
-// Cel mai nou sezon primul și singurul deschis; celelalte se deschid la
-// atingere. Componenta se montează din nou pentru fiecare serial (key în
+// Sezoanele în ordine crescătoare; deschis e doar sezonul curent (vezi
+// currentSeason), celelalte se deschid la atingere. Componenta se montează din nou pentru fiecare serial (key în
 // drawer), deci starea sezoanelor deschise nu trece de la un serial la altul.
 export function EpisodeList({
   episodes,
@@ -26,7 +32,7 @@ export function EpisodeList({
   const groups = groupBySeason(episodes);
   const collapsible = groups.length > 1;
   const [open, setOpen] = useState<Set<number | null>>(
-    () => new Set(groups.length > 0 ? [groups[0].season] : []),
+    () => new Set(groups.length > 0 ? [currentSeason(groups)] : []),
   );
 
   function toggle(season: number | null) {
@@ -75,6 +81,17 @@ export function EpisodeList({
       })}
     </div>
   );
+}
+
+// Sezonul la care ești: cel mai vechi cu episoade nevăzute în Plex. Cele încă
+// în descărcare nu contează — un sezon nou care se descarcă nu trebuie să ia
+// locul celui început. Fără nimic nevăzut, ultimul sezon.
+function currentSeason(groups: SeasonGroup[]): number | null {
+  const numbered = groups.filter((g) => g.season != null);
+  const pending = numbered.find((g) =>
+    g.episodes.some((e) => e.status === "in_library" && !e.watchedByMe),
+  );
+  return (pending ?? numbered.at(-1) ?? groups[0]).season;
 }
 
 function EpisodeRow({ ep, onOpen }: { ep: ShowEpisodeEntry; onOpen: () => void }) {

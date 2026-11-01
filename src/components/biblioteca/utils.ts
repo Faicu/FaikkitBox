@@ -33,8 +33,8 @@ export function addedDate(unixSec: number): string {
 }
 
 // Episoadele unui serial pe sezoane (pe sezonul real — ordonarea după data
-// adăugării dădea un al doilea „Sezonul N”). Cel mai nou sezon primul, „Fără
-// sezon” la coadă; în sezon, E1 → En.
+// adăugării dădea un al doilea „Sezonul N”). Crescător, „Fără sezon” la coadă;
+// în sezon, E1 → En.
 export type SeasonGroup = { season: number | null; episodes: ShowEpisodeEntry[] };
 
 export function groupBySeason(episodes: ShowEpisodeEntry[]): SeasonGroup[] {
@@ -46,7 +46,7 @@ export function groupBySeason(episodes: ShowEpisodeEntry[]): SeasonGroup[] {
   }
   return [...bySeason.entries()]
     .map(([season, eps]) => ({ season, episodes: eps }))
-    .sort((a, b) => (b.season ?? -Infinity) - (a.season ?? -Infinity));
+    .sort((a, b) => (a.season ?? Infinity) - (b.season ?? Infinity));
 }
 
 export function matchesQuery(item: PlexBrowseItem, q: string): boolean {
