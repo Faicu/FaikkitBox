@@ -163,19 +163,22 @@ Detectarea:
 
 ## Subtitrare română automată
 
+Schema completă a modulului — puncte de intrare, decizii pe fiecare fișier, verificarea sincronizării, rezultate, fișierele de pe disc și unde se vede totul: **[docs/subtitrari.md](docs/subtitrari.md)**.
+
 La finalul fiecărei descărcări (înainte de refresh-ul Plex), `ensureRomanianSubtitle` (`src/lib/filelist/subtitles.ts`) rulează pipeline-ul din `subtitle-pipeline.ts` **per fișier** — o dată la un film, per episod la un pachet de sezon:
 
 1. **Verificări** (`subtitle-checks.ts`) — subtitrare sau **audio** românesc încorporat (`ffprobe`), `.srt` din torrent, subtitrare deja pe disc. Ce e deja bun nu se atinge.
-2. **`.srt`-urile din torrent, după limbă** (verificată după conținut — diacritice, inclusiv ş/ţ cu sedilă, apoi cuvinte uzuale — nu după nume): cel român devine `.ro.srt`, cel englez primește `.en`, altă limbă e pusă deoparte ca `.respins`. Se aplică singurului `.srt`, celui nemarcat de lângă video și unui `.ro.srt` greșit; cele marcate deja cu altă limbă rămân neatinse. Totul **prin API-ul qBittorrent** (`torrents/renameFile`), cu așteptare până mută efectiv — altfel qBittorrent pierde evidența fișierului.
-3. **Căutare externă**, dacă tot lipsește — **OpenSubtitles** (după IMDb, până la 5 pagini) și **subs.ro** (până la 6 arhive, filtrate pe limbă după conținut, inclusiv arhivele „Sezoanele 1-2”). La seriale, candidații sunt filtrați pe `SxxExx` exact. Traducerile automate nemarcate sunt ignorate (uploaderul `os-auto`, traducătorul „Ai”).
-4. **Alegere și verificare** (`subtitle-sources.ts`, `release-scoring.ts`, `subtitle-verify.ts`) — candidații sunt ordonați după numele release-ului (sursa și grupul contează mult, rezoluția aproape deloc; la egalitate câștigă subs.ro), apoi încercați pe rând până trece unul de verificarea de conținut: limba, durata (ultima replică nu poate fi mult după sfârșitul fișierului) și **sincronizarea** — corelația intervalelor de vorbire cu o subtitrare text deja încorporată (de obicei engleza). Episodul corect dă 0,72–1,00, altul ≤ 0,29; pragul e 0,45. Când există o referință, câștigă varianta cea mai bine sincronizată.
-5. **Scriere** (`subtitle-encoding.ts`, `subtitle-apply.ts`) — conversie la UTF-8 (Plex nu detectează encoding-ul), scriere lângă video cu numele lui + `.ro.srt`. Fără o potrivire sigură, se scrie cea mai apropiată, marcată **aproximativă**.
+2. **`.srt`-urile din torrent, după limbă** (verificată după conținut — diacritice, inclusiv ş/ţ cu sedilă, apoi cuvinte uzuale — nu după nume): cel român devine `.ro.srt`, cel englez primește `.en`, altă limbă e pusă deoparte ca `.respins`. Totul **prin API-ul qBittorrent** (`torrents/renameFile`), cu așteptare până mută efectiv — altfel qBittorrent pierde evidența fișierului. Fișierele din torrent **nu se modifică și nu se șterg niciodată**: dacă cel român are timpii decalați, originalul rămâne în torrent ca `.ro.srt.original` (seedat în continuare) și lângă el se scrie o copie corectată.
+3. **Căutare externă**, dacă tot lipsește — **OpenSubtitles** (după IMDb, până la 5 pagini) și **subs.ro** (până la 6 arhive, filtrate pe limbă după conținut, inclusiv arhivele „Sezoanele 1-2”). La seriale, candidații sunt filtrați pe episodul exact (`S01E03` sau `1x03`). Traducerile automate nemarcate sunt ignorate (uploaderul `os-auto`, traducătorul „Ai”).
+4. **Alegere și verificare** (`subtitle-sources.ts`, `release-scoring.ts`, `subtitle-verify.ts`) — candidații sunt ordonați după numele release-ului, apoi verificați pe conținut: limba, durata și **sincronizarea** — corelația intervalelor de vorbire cu o subtitrare text încorporată (de obicei engleza). Episodul corect dă 0,72–1,00, altul ≤ 0,29; pragul e 0,45. Câștigă varianta cea mai bine sincronizată.
+5. **Corecția timpilor** (`measureSync`) — o traducere bună cu timpii greșiți e reparată, nu respinsă: **viteza** (24↔23,976, 25↔24, 25↔23,976 fps), **decalajul constant** (până la ±180 s — ediții cu intro mai lung) și **decalajul pe bucăți** (o ediție cu câteva secunde în plus într-un loc). Fiecare corecție trebuie să țină pe toate sferturile filmului, ca un alt montaj să nu pară sincronizat. Fără subtitrare text încorporată (BluRay-uri cu PGS), decalajul se caută după vorbirea din audio — doar peste 5 s, fără să respingă ceva.
+6. **Scriere** (`subtitle-encoding.ts`, `subtitle-apply.ts`) — conversie la UTF-8 (Plex nu detectează encoding-ul), cu timpii corectați, lângă video cu numele lui + `.ro.srt`. Fără o potrivire sigură, se scrie cea mai apropiată, marcată **aproximativă**.
 
-**Reîncercare zilnică** (sarcina „Reîncercare subtitrări”, `src/lib/filelist/subtitle-retry.ts`) — traducerile apar des la una-trei zile după episod. Timp de **14 zile** de la descărcare, o dată pe zi, se reverifică orice torrent fără subtitrare română și orice subtitrare aproximativă; aproximativa se înlocuiește doar cu una sigur mai bună. Ceasul e `subtitle_checked_at` din DB. Jurnal și push doar când se găsește ceva; starea e vizibilă în Bibliotecă și în Watcher.
+**Reîncercare zilnică** (sarcina „Reîncercare subtitrări”, `src/lib/filelist/subtitle-retry.ts`) — traducerile apar des la una-trei zile după episod. Timp de **14 zile** de la descărcare, o dată pe zi, se reverifică orice torrent fără subtitrare română și orice subtitrare aproximativă; aproximativa se înlocuiește doar cu una sigur mai bună sau se resincronizează. Ceasul e `subtitle_checked_at` din DB. Jurnal și push doar când se pune sau se resincronizează ceva; starea e vizibilă în Bibliotecă și în Watcher (inclusiv titlurile cu căutarea încheiată).
 
-**Corectare manuală** — „Corectează subtitrare” din drawer-ul Bibliotecii rulează aceeași verificare (`checkSubtitleForTorrent`), pentru admin sau cel care a adăugat titlul.
+**Corectare manuală** — „Corectează subtitrare” din drawer-ul Bibliotecii rulează aceeași verificare (`checkSubtitleForTorrent`), pentru admin sau cel care a adăugat titlul, oricând (și după cele 14 zile). Toast-ul arată rezultatul cu aceleași texte ca jurnalul. **„Șterge subtitrare”** șterge copiile aplicației, iar ce e al torrentului e doar redenumit `.sters`, ca seed-ul să continue.
 
-**Raportul** fiecărei verificări (varianta aleasă, sincronizarea măsurată, variantele respinse cu motivul) se salvează structurat pe rândul din `media` (`subtitle_report`) și în jurnal, categoria Subtitrări.
+**Raportul** fiecărei verificări (varianta aleasă, sincronizarea măsurată, corecția timpilor, variantele respinse cu motivul) se salvează structurat pe rândul din `media` (`subtitle_report`) și în jurnal, categoria Subtitrări. Titlurile și culorile rezultatelor sunt definite într-un singur loc (`subtitle-outcomes.ts`), folosit de jurnal, panoul tehnic, Bibliotecă și toast.
 
 OpenSubtitles e servit prin Cloudflare cu cache comun de până la 24 h; cererile de căutare adaugă un parametru `_` ca să-l ocolească.
 
@@ -203,7 +206,7 @@ Două module simetrice, conduse de sarcina „Seriale și filme” a Watcher-ulu
 
 **Până la final** — sarcina „Descărcări” a Watcher-ului (`src/lib/filelist/download-tracker.ts`) citește din `media` torrentele neterminate și le cere stadiul într-o singură cerere qBittorrent. Un torrent terminat e **finalizat** separat (`finalizeDownload`): ID-ul IMDb în numele fișierelor, `completed_at`, notificare, subtitrare română, refresh Plex. Apoi e **legat la Plex** — la fiecare rulare în primele 30 de minute, apoi la 10 minute, până la 72h (`plex-link-reconciler.ts`). Pachetele de sezon sunt desfăcute în câte un rând per episod. Totul e în DB, deci un restart sau un deploy nu întrerupe nimic. O descărcare e urmărită cel mult 14 zile de la adăugare.
 
-**Ștergerea completă** (`deleteMediaEntry`, `log.ts`, și `delete-title.ts`) — torrent + fișiere prin qBittorrent, apoi reziduul de pe disc pe care qBittorrent nu-l consideră al lui: subtitrările scrise de aplicație, inclusiv `.respins` și cele cu sufix dublu (`disk-cleanup.ts`, cu garda `isInsideMediaRoot` — nu șterge niciodată `Filme/`/`Seriale/` ca întreg), apoi rândurile din `media` și rescanarea Plex.
+**Ștergerea completă** (`deleteMediaEntry`, `log.ts`, și `delete-title.ts`) — torrent + fișiere prin qBittorrent, apoi reziduul de pe disc pe care qBittorrent nu-l consideră al lui: subtitrările scrise de aplicație, inclusiv cele puse deoparte (`.respins`, `.original`, `.sters`) și cele cu sufix dublu (`disk-cleanup.ts`, cu garda `isInsideMediaRoot` — nu șterge niciodată `Filme/`/`Seriale/` ca întreg), apoi rândurile din `media` și rescanarea Plex.
 
 **Ștergerea programată** (`src/lib/media/scheduled-delete.ts`) — în primele 24 h de la descărcare, o cerere de ștergere sau anulare se programează la împlinirea lor (hit and run pe Filelist); torrentul continuă să se descarce și să facă seed, iar titlul apare în Bibliotecă cu un timer. Oricine poate renunța la ștergere și devine proprietarul titlului; adminul poate șterge pe loc („Șterge acum”). Termenul stă în `media`, iar sarcina „Ștergeri programate” rulează exact la el.
 
@@ -223,7 +226,7 @@ Toate sarcinile periodice ale aplicației rulează sub un singur tact de o secun
 | Backup bază de date     | zilnic                                | copie `VACUUM INTO`, vezi [Întreținere](#întreținere-backup-actualizări-retenție)              |
 | Rating-uri IMDb         | zilnic                                | datasetul oficial IMDb                                                                         |
 | Actualizări disponibile | zilnic                                | Plex, Immich, Ubuntu                                                                           |
-| Reîncercare subtitrări  | zilnic / titlu                        | subtitrările care lipsesc, 14 zile                                                             |
+| Reîncercare subtitrări  | zilnic / titlu                        | subtitrările care lipsesc sau sunt aproximative, 14 zile                                       |
 | Acțiuni întrerupte      | la pornire                            | închide acțiunile Restart/Update rămase „în curs”                                              |
 
 - **Starea e în DB** (`watcher_tasks`, `watcher_runs`): ora următoarei rulări rămâne peste un deploy, iar plugin-ul și server functions (copii separate ale modulelor) comunică prin bază.
@@ -372,6 +375,7 @@ server/
   routes/api/         GitHub webhook, SSE auto-reload, proxy postere Plex
 deploy/
   hardening/          unit systemd, sudoers și scripturi pentru contul dedicat
+docs/                 documentația pe module (subtitrari.md — schema subtitrărilor)
 public/               assets statice, Service Worker
 data/                 faikkitbox.db, imdb-ratings.db, backups/ (în afara git)
 ```

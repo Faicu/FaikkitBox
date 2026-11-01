@@ -235,10 +235,10 @@ export async function processMediaFile(
                 : { retime: `după audio, ${retimeLabel(retime)}` }),
             };
           } catch (e) {
-            // Originalul e deja deoparte: îl punem la loc, ca titlul să nu
-            // rămână fără subtitrare.
+            // Originalul e deja deoparte: îl punem la loc, pe numele lui, ca
+            // pasul următor (redenumirea obișnuită) să-l găsească.
             console.warn(`[subtitles] scrierea copiei resincronizate a eșuat:`, e);
-            await moveTrackedSrt(originalRelPath, targetSrtRelPath, trackedCtx);
+            await moveTrackedSrt(originalRelPath, romanian.name, trackedCtx);
           }
         }
       }
