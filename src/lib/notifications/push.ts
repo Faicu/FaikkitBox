@@ -16,6 +16,8 @@ function ensureVapid() {
 // prima secundă după un reboot, când serviciul pornește odată cu
 // network-online.target, dar resolverul încă nu răspunde. Merită reîncercate;
 // orice altceva (răspuns HTTP de la FCM, chei greșite) nu.
+// Pașii însumează ~3 min ca să acopere și restartul săptămânal al routerului
+// (duminică 04:50, internet căzut ~2 min).
 const TRANSIENT_CODES = new Set([
   "EAI_AGAIN",
   "ENOTFOUND",
@@ -25,7 +27,7 @@ const TRANSIENT_CODES = new Set([
   "ENETUNREACH",
   "EHOSTUNREACH",
 ]);
-const RETRY_DELAYS_MS = [3_000, 10_000];
+const RETRY_DELAYS_MS = [3_000, 10_000, 30_000, 60_000, 90_000];
 
 async function sendWithRetry(
   subscription: webpush.PushSubscription,
