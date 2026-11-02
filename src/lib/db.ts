@@ -1263,6 +1263,21 @@ function applyCleanups(database: DatabaseSync): void {
       console.log(`[db] Migrare v51: titluri completate la ${fixed} ștergeri programate`);
       database.exec("PRAGMA user_version = 51");
     }
+
+    if (version < 52) {
+      // v52: „Pornite: …” din istoricul „Seriale și filme” devine „Descărcare
+      // pornită” / „Descărcări pornite” — titlurile sunt separate prin „, ”.
+      const renamed = database
+        .prepare(
+          `UPDATE watcher_runs
+              SET summary = CASE WHEN instr(summary, ', ') > 0 THEN 'Descărcări pornite' ELSE 'Descărcare pornită' END
+                            || substr(summary, length('Pornite') + 1)
+            WHERE task_id = 'show-watch' AND summary LIKE 'Pornite:%'`,
+        )
+        .run();
+      console.log(`[db] Migrare v52: ${renamed.changes} rulări „Pornite” redenumite`);
+      database.exec("PRAGMA user_version = 52");
+    }
   }
 }
 

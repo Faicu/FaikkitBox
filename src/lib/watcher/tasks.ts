@@ -218,7 +218,10 @@ export const WATCHER_TASKS: WatcherTask[] = [
         ...(failed.length ? [`pași eșuați: ${failed.join(", ")}`] : []),
       ];
       return {
-        summary: started.length > 0 ? `Pornite: ${started.join(", ")}` : null,
+        summary:
+          started.length > 0
+            ? `${started.length === 1 ? "Descărcare pornită" : "Descărcări pornite"}: ${started.join(", ")}`
+            : null,
         nextAt: null,
         error: errors.length > 0 ? errors.join("; ") : undefined,
       };

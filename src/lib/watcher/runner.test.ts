@@ -62,7 +62,7 @@ vi.mock("./tasks", () => ({
       everyMs: 600_000,
       controllable: true,
       run: async () => ({
-        summary: "Pornite: Insula Iubirii S10E15",
+        summary: "Descărcare pornită: Insula Iubirii S10E15",
         nextAt: null,
         error: "Fjord: Filelist API HTTP 503",
       }),
@@ -259,7 +259,7 @@ describe("Watcher", () => {
     expect(row("partial").last_ok).toBe(0);
     expect(row("partial").last_error).toBe("Fjord: Filelist API HTTP 503");
     expect(row("partial").next_run_at).toBe(T0 + 90_000_000 + 600_000);
-    expect(runs("partial").at(-1)?.summary).toBe("Pornite: Insula Iubirii S10E15");
+    expect(runs("partial").at(-1)?.summary).toBe("Descărcare pornită: Insula Iubirii S10E15");
 
     at(90_600_000);
     runner.tick();
