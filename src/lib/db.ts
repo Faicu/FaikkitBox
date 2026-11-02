@@ -1229,6 +1229,40 @@ function applyCleanups(database: DatabaseSync): void {
       console.log(`[db] Migrare v50: ${removed.changes} rulări goale scoase din istoric`);
       database.exec("PRAGMA user_version = 50");
     }
+
+    if (version < 51) {
+      // v51: rulările „Ștergeri programate” de dinainte de a05a835 aveau doar
+      // „N titlu(ri) șters(e)”; titlurile se iau din jurnal, scris în aceeași rulare.
+      const runs = database
+        .prepare(
+          `SELECT id, started_at, finished_at FROM watcher_runs
+            WHERE task_id = 'scheduled-delete' AND summary GLOB '[0-9]* titl* șters*'`,
+        )
+        .all() as { id: number; started_at: number; finished_at: number }[];
+      const entries = (
+        database
+          .prepare(
+            `SELECT timestamp, message FROM activity
+              WHERE type = 'title_delete' AND message LIKE 'Șters la termen: %'`,
+          )
+          .all() as { timestamp: string; message: string }[]
+      ).map((e) => ({
+        at: Date.parse(e.timestamp),
+        label: e.message.replace(/^Șters la termen: /, "").replace(/ \(programat de [^)]*\)$/, ""),
+      }));
+      const update = database.prepare("UPDATE watcher_runs SET summary = ? WHERE id = ?");
+      let fixed = 0;
+      for (const run of runs) {
+        const labels = entries
+          .filter((e) => e.at >= run.started_at && e.at <= run.finished_at)
+          .map((e) => e.label);
+        if (labels.length === 0) continue;
+        update.run(`Șterse: ${labels.join(", ")}`, run.id);
+        fixed++;
+      }
+      console.log(`[db] Migrare v51: titluri completate la ${fixed} ștergeri programate`);
+      database.exec("PRAGMA user_version = 51");
+    }
   }
 }
 
