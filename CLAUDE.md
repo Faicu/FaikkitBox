@@ -19,6 +19,9 @@ La finalul fiecărei sarcini care implică modificări de fișiere, execută în
 
 Nu raporta sarcina ca finalizată până când toți cei 4 pași nu au fost executați cu succes (serviciul activ, la final).
 
+**Fără `Co-Authored-By` în mesajele de commit** (nici alte rânduri de atribuire):
+autorul e doar Faicu, ca lista de colaboratori de pe GitHub să nu crească.
+
 **Nu face `git push` singur.** Push-ul către GitHub se face manual, de utilizator,
 din pagina Tehnic (buton dedicat) — vezi `pushToGitHub` în
 `src/lib/github.functions.ts`. Commit-urile locale rămân nepublicate până când
