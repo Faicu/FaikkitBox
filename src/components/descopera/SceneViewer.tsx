@@ -56,6 +56,12 @@ export function SceneViewer({ item, onClose }: { item: DiscoverTitle; onClose: (
         <DrawerContent className="max-h-[90vh]">
           <DrawerHeader className="text-left pb-0">
             <DrawerTitle>{item.title}</DrawerTitle>
+            {item.secondaryTitle && (
+              // pr-1: `truncate` ar tăia aplecarea ultimei litere italice.
+              <p className="truncate pr-1 text-xs text-muted-foreground italic">
+                {item.secondaryTitle}
+              </p>
+            )}
             {releaseDateLabel && (
               <p className="text-xs text-muted-foreground">{releaseDateLabel}</p>
             )}

@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { tmdbFetch } from "./tmdb-client";
 import { interleaveSearchResults } from "./search-merge";
+import { isLatinTitle } from "../media/title-label";
 
 interface TmdbApiSearchResult {
   id: number;
@@ -153,6 +154,8 @@ export interface TmdbDetails {
   originalTitle: string;
   // Titlul romanizat („Gunche” pentru 군체), ca pe IMDb și Filelist; null fără.
   literalTitle: string | null;
+  // Engleza, doar când originalul nu e în alfabet latin (afișată sub nume).
+  englishTitle: string | null;
   imdbId: string | null;
   // Lansarea (film) / primul episod (serial), „YYYY-MM-DD”; null neanunțat.
   releaseDate: string | null;
@@ -215,6 +218,9 @@ export async function getTmdbDetailsInternal(
         title,
         originalTitle: movie.original_title ?? movie.title ?? "",
         literalTitle: findLiteralTitle(movie.alternative_titles?.titles),
+        englishTitle: isLatinTitle(movie.original_title ?? "")
+          ? null
+          : (await enMovie())?.title?.trim() || null,
         imdbId: movie.external_ids?.imdb_id ?? movie.imdb_id ?? null,
         releaseDate: movie.release_date || null,
         tvStatus: null,
@@ -255,6 +261,9 @@ export async function getTmdbDetailsInternal(
         title,
         originalTitle: show.original_name ?? show.name ?? "",
         literalTitle: findLiteralTitle(show.alternative_titles?.results),
+        englishTitle: isLatinTitle(show.original_name ?? "")
+          ? null
+          : (await enShow())?.name?.trim() || null,
         imdbId: show.external_ids?.imdb_id ?? null,
         releaseDate: show.first_air_date || null,
         tvStatus: show.status ?? null,
@@ -282,6 +291,7 @@ export async function getTmdbDetailsInternal(
       title: "",
       originalTitle: "",
       literalTitle: null,
+      englishTitle: null,
       imdbId: null,
       releaseDate: null,
       tvStatus: null,

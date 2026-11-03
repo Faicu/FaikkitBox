@@ -7,6 +7,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { SUBTITLE_RETRY_DAYS as RETRY_DAYS } from "../filelist/subtitle-outcomes";
 import type { FileSubtitleReport } from "../filelist/subtitle-outcomes";
+import { secondaryTitle } from "../media/title-label";
 
 // Un rând = un film SAU un serial întreg; episoadele se văd doar în drawer.
 // (Lista per episod, grupată în client, arăta un serial de mai multe ori.)
@@ -468,7 +469,8 @@ export interface PlexTitleDetail {
   // Doar adminul poate ocoli programarea și șterge pe loc.
   canDeleteImmediately: boolean;
   tmdbId: number | null;
-  originalTitle: string | null;
+  // Rândul de sub nume (secondaryTitle din title-label.ts).
+  secondaryTitle: string | null;
   // Vizibil pentru toți — butonul spre IMDb.
   imdbId: string | null;
   // La 'tv_show': episoadele deținute, în ordine, pentru lista pe sezoane.
@@ -521,6 +523,7 @@ interface MediaRow {
   media_type: string;
   title: string;
   original_title: string | null;
+  english_title: string | null;
   imdb_id: string | null;
   tmdb_id: number | null;
   season: number | null;
@@ -821,7 +824,7 @@ async function buildDetailFromMediaRow(
     deleteScheduled,
     canDeleteImmediately: isAdmin,
     tmdbId: row.tmdb_id,
-    originalTitle: row.original_title,
+    secondaryTitle: secondaryTitle(row.title, row.original_title, row.english_title),
     imdbId: row.imdb_id,
     episodes,
     tvStatus: row.tv_status,
@@ -874,7 +877,10 @@ export const getPlexTitleDetail = createServerFn({ method: "GET" })
            episode_overview, episode_still, episode_air_date,
            tv_status, auto_download, auto_download_quality, auto_download_fallback_quality,
            auto_download_from, watch_last_checked_at,
-           next_episode, next_episode_air_date, next_episode_airstamp
+           next_episode, next_episode_air_date, next_episode_airstamp,
+           -- Episoadele noi îl primesc abia la următoarea trecere prin serial.
+           COALESCE(english_title, (SELECT p.english_title FROM media p WHERE p.id = media.parent_id))
+             AS english_title
            FROM media WHERE id = ?`,
         )
         .get(data.mediaId) as MediaRow | undefined;

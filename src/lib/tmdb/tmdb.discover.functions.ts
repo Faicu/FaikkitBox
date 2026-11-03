@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { tmdbFetch } from "./tmdb-client";
+import { hasRomanianTitle, secondaryTitle } from "../media/title-label";
 
 export type DiscoverMediaType = "movie" | "tv";
 export type DiscoverSort = "trending" | "popular_all_time" | "newest";
@@ -7,12 +8,11 @@ export type DiscoverSort = "trending" | "popular_all_time" | "newest";
 export interface DiscoverTitle {
   id: number;
   mediaType: DiscoverMediaType;
+  // Ca în Bibliotecă: română, altfel engleza — sau numele din `media`, dacă
+  // titlul e deja acolo (applyLibraryTitles).
   title: string;
-  // Titlul original (nu neapărat englez) — afișat în grilă/feed, unde
-  // titlul RO abia deschis (SceneViewer/FeedCard) rămâne pe `title`, ca
-  // înainte. Nu afectează ce se salvează în `media` la descărcare (wizard-ul
-  // continuă să primească `title`, RO).
-  originalTitle: string;
+  // Rândul de sub nume (secondaryTitle din title-label.ts).
+  secondaryTitle: string | null;
   year: string | null;
   posterUrl: string | null;
   // Nota și voturile de pe IMDb (datasetul zilnic, vezi imdb/imdb-ratings.ts)
@@ -29,6 +29,7 @@ interface TmdbApiDiscoverItem {
   name?: string;
   original_title?: string;
   original_name?: string;
+  original_language?: string;
   release_date?: string;
   first_air_date?: string;
   poster_path?: string | null;
@@ -38,15 +39,23 @@ interface TmdbApiDiscoverResponse {
   results?: TmdbApiDiscoverItem[];
 }
 
-function mapItem(mediaType: DiscoverMediaType, r: TmdbApiDiscoverItem): DiscoverTitle {
+const nameOf = (r: TmdbApiDiscoverItem | undefined) => (r?.title ?? r?.name)?.trim() || "";
+
+// `en` = același rezultat cerut în engleză (aceeași pagină, aceeași ordine).
+function mapItem(
+  mediaType: DiscoverMediaType,
+  r: TmdbApiDiscoverItem,
+  en: TmdbApiDiscoverItem | undefined,
+): DiscoverTitle {
+  const ro = nameOf(r);
+  const original = (r.original_title ?? r.original_name)?.trim() || ro;
+  const english = nameOf(en) || null;
+  const title = hasRomanianTitle(ro, original, r.original_language) ? ro : english || ro;
   return {
     id: r.id,
     mediaType,
-    title: mediaType === "movie" ? (r.title ?? r.name ?? "") : (r.name ?? r.title ?? ""),
-    originalTitle:
-      mediaType === "movie"
-        ? (r.original_title ?? r.original_name ?? r.title ?? "")
-        : (r.original_name ?? r.original_title ?? r.name ?? ""),
+    title,
+    secondaryTitle: secondaryTitle(title, original, english),
     year: (mediaType === "movie" ? r.release_date : r.first_air_date)?.slice(0, 4) || null,
     posterUrl: r.poster_path ? `https://image.tmdb.org/t/p/w342${r.poster_path}` : null,
     imdbRating: null,
@@ -61,18 +70,27 @@ async function fetchDiscoverPage(
 ): Promise<DiscoverTitle[]> {
   let path: string;
   if (sort === "trending") {
-    path = `/trending/${mediaType}/week?page=${page}&language=ro-RO`;
+    path = `/trending/${mediaType}/week?page=${page}`;
   } else if (sort === "newest") {
     const dateField = mediaType === "movie" ? "primary_release_date" : "first_air_date";
     const today = new Date().toISOString().slice(0, 10);
     path =
-      `/discover/${mediaType}?sort_by=${dateField}.desc&page=${page}&language=ro-RO` +
+      `/discover/${mediaType}?sort_by=${dateField}.desc&page=${page}` +
       `&${dateField}.lte=${today}&vote_count.gte=5`;
   } else {
-    path = `/discover/${mediaType}?sort_by=popularity.desc&page=${page}&language=ro-RO&vote_count.gte=200`;
+    path = `/discover/${mediaType}?sort_by=popularity.desc&page=${page}&vote_count.gte=200`;
   }
-  const json = await tmdbFetch<TmdbApiDiscoverResponse>(path);
-  return (json.results ?? []).filter((r) => r.poster_path).map((r) => mapItem(mediaType, r));
+  // Engleza, pentru titlurile fără traducere românească — fără ea, rămâne românul.
+  const [json, enJson] = await Promise.all([
+    tmdbFetch<TmdbApiDiscoverResponse>(`${path}&language=ro-RO`),
+    tmdbFetch<TmdbApiDiscoverResponse>(`${path}&language=en-US`).catch(() => null),
+  ]);
+  const enById = new Map((enJson?.results ?? []).map((r) => [r.id, r]));
+  const items = (json.results ?? [])
+    .filter((r) => r.poster_path)
+    .map((r) => mapItem(mediaType, r, enById.get(r.id)));
+  const { applyLibraryTitles } = await import("./discover-library-titles");
+  return applyLibraryTitles(items);
 }
 
 export interface DiscoverPageResult {

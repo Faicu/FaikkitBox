@@ -18,6 +18,7 @@ import {
 } from "./fallback-quality";
 import { getDb } from "../db";
 import { rankTorrents, type RankableTorrent } from "./torrent-rank";
+import { mediaLabel, secondaryTitle } from "./title-label";
 
 // 12h, nu 3h ca la seriale: un film poate lipsi luni întregi, iar fiecare
 // verificare e o căutare pe Filelist.
@@ -141,7 +142,7 @@ async function checkMovieInner(movieId: number): Promise<MovieWatchOutcome> {
   }
   const result: MovieWatchOutcome = {
     mediaId: movieId,
-    title: row.title,
+    title: mediaLabel({ title: row.title, year: row.year }),
     downloaded: null,
     fallbackQuality: null,
     skipped: null,
@@ -519,7 +520,8 @@ export interface WantedMovieDetail {
   tmdbId: number | null;
   imdbId: string | null;
   title: string;
-  originalTitle: string | null;
+  // Rândul de sub nume (secondaryTitle din title-label.ts).
+  secondaryTitle: string | null;
   year: number | null;
   posterPath: string | null;
   overview: string | null;
@@ -539,7 +541,7 @@ export function getWantedMovieDetailCore(mediaId: number): WantedMovieDetail | n
   const db = getDb();
   const r = db
     .prepare(
-      `SELECT m.id, m.tmdb_id, m.imdb_id, m.title, m.original_title, m.year,
+      `SELECT m.id, m.tmdb_id, m.imdb_id, m.title, m.original_title, m.english_title, m.year,
               m.poster_path, m.overview_ro, m.genres, m.auto_download_quality,
               m.auto_download_fallback_quality, m.added_at, m.watch_last_checked_at, m.requested_by_user_id,
               u.username AS requested_by_username
@@ -555,6 +557,7 @@ export function getWantedMovieDetailCore(mediaId: number): WantedMovieDetail | n
         imdb_id: string | null;
         title: string;
         original_title: string | null;
+        english_title: string | null;
         year: number | null;
         poster_path: string | null;
         overview_ro: string | null;
@@ -573,7 +576,7 @@ export function getWantedMovieDetailCore(mediaId: number): WantedMovieDetail | n
     tmdbId: r.tmdb_id,
     imdbId: r.imdb_id,
     title: r.title,
-    originalTitle: r.original_title,
+    secondaryTitle: secondaryTitle(r.title, r.original_title, r.english_title),
     year: r.year,
     posterPath: r.poster_path,
     overview: r.overview_ro,

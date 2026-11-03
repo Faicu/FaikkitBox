@@ -35,7 +35,8 @@ import {
   type SubtitleFileReport,
   type SubtitleRejectionReport,
 } from "./subtitle-outcomes";
-import { lookupTitleByImdbId, searchImdbIdByReleaseName } from "../tmdb/tmdb-title-lookup";
+import { buildTorrentDisplayName, searchImdbIdByReleaseName } from "../tmdb/tmdb-title-lookup";
+import { torrentDisplay } from "../media/torrent-display";
 import { MEDIA_EXTENSIONS, parseSeasonEpisode, extractEpisodeKey } from "./subtitle-checks";
 import { processMediaFile, type ProcessMediaFileResult } from "./subtitle-pipeline";
 
@@ -149,12 +150,13 @@ export async function ensureRomanianSubtitle(
     // Fără IMDb id (torrent adăugat direct în qBittorrent) îl căutăm pe TMDB
     // după titlul din numele lansării — altfel n-am avea cum căuta pe
     // OpenSubtitles.
-    params.imdbId
-      ? lookupTitleByImdbId(params.imdbId).then((title) => ({ imdbId: params.imdbId!, title }))
-      : searchImdbIdByReleaseName(torrentName, params.mediaType),
+    params.imdbId ? null : searchImdbIdByReleaseName(torrentName, params.mediaType),
   ]);
   const imdbId: string | null = params.imdbId ?? imdbLookup?.imdbId ?? null;
-  const displayTitle = imdbLookup?.title ?? torrentName;
+  // Numele din `media`, ca în restul jurnalului; TMDB doar fără rând.
+  const displayTitle =
+    torrentDisplay(torrentHash)?.label ??
+    (await buildTorrentDisplayName(torrentName, imdbId).catch(() => torrentName));
   if (!files.length || !savePath) {
     return item(
       torrentName,

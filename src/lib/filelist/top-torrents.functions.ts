@@ -82,7 +82,10 @@ async function buildTopList(torrents: FilelistTorrent[], hours: TopPeriodHours) 
     );
   }
 
-  const items = groupTopTorrents(inPeriod, tmdbByImdb, parseSeasonEpisodeFromName, MAX_PER_TYPE);
+  const { applyLibraryTitles } = await import("../tmdb/discover-library-titles");
+  const items = applyLibraryTitles(
+    groupTopTorrents(inPeriod, tmdbByImdb, parseSeasonEpisodeFromName, MAX_PER_TYPE),
+  );
   return attachImdbRatings(items, (item) => item.imdbId);
 }
 

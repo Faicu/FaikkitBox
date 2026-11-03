@@ -3,6 +3,7 @@
 import type { TmdbBasicInfo } from "../tmdb/tmdb-title-lookup";
 import type { DiscoverTitle } from "../tmdb/tmdb.discover.functions";
 import type { FilelistTorrent } from "./types";
+import { secondaryTitle } from "../media/title-label";
 
 export interface TopTorrentTitle extends DiscoverTitle {
   // Cheie unică în listă — același serial poate apărea cu episoade diferite.
@@ -60,7 +61,7 @@ export function groupTopTorrents(
       id: info.id,
       mediaType: info.mediaType,
       title: info.title,
-      originalTitle: info.originalTitle,
+      secondaryTitle: secondaryTitle(info.title, info.originalTitle, info.englishTitle),
       year: info.year,
       posterUrl: info.posterPath ? `https://image.tmdb.org/t/p/w342${info.posterPath}` : null,
       imdbRating: null,

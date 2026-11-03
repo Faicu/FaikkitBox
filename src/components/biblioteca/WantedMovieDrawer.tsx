@@ -120,7 +120,7 @@ export function WantedMovieDrawer({
             <span className="min-w-0 flex-1 truncate">{d?.title ?? "Se încarcă…"}</span>
           </DrawerTitle>
           <DrawerDescription className="text-left">
-            {d?.originalTitle && d.originalTitle !== d.title ? d.originalTitle : "Film așteptat"}
+            {d?.secondaryTitle ?? "Film așteptat"}
             {d?.year ? ` · ${d.year}` : ""}
           </DrawerDescription>
         </DrawerHeader>

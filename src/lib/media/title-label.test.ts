@@ -1,0 +1,39 @@
+import { describe, it, expect } from "vitest";
+import { hasRomanianTitle, isLatinTitle, mediaLabel, secondaryTitle } from "./title-label";
+
+describe("mediaLabel", () => {
+  it("film cu an, episod, pachet", () => {
+    expect(mediaLabel({ title: "Halloween", year: 2018 })).toBe("Halloween (2018)");
+    expect(mediaLabel({ title: "Elita", season: 6, episode: 4 })).toBe("Elita — S06E04");
+    expect(mediaLabel({ title: "Elita", season: 6, episode: 4, isSeasonPack: true })).toBe(
+      "Elita — Sezonul 6",
+    );
+    expect(mediaLabel({ title: "Elita", season: 6, episode: null })).toBe("Elita — Sezonul 6");
+  });
+});
+
+describe("secondaryTitle", () => {
+  it("originalul, engleza doar la alt alfabet", () => {
+    expect(secondaryTitle("Primii vampiri", "The Originals", null)).toBe("The Originals");
+    expect(secondaryTitle("Hope: Atacul final", "호프", "Hope")).toBe("Hope");
+    expect(secondaryTitle("Apocalipsa Z", "Apocalipsis Z", "Apocalypse Z")).toBe("Apocalipsis Z");
+    expect(secondaryTitle("Verity", "Verity", null)).toBeNull();
+    // Fără engleză rămâne originalul.
+    expect(secondaryTitle("Hope", "호프", null)).toBe("호프");
+  });
+
+  it("isLatinTitle", () => {
+    expect(isLatinTitle("Băiat de milioane")).toBe(true);
+    expect(isLatinTitle("Drive – The Pretenders")).toBe(true);
+    expect(isLatinTitle("ゴジラ-0.0")).toBe(false);
+    expect(isLatinTitle("ग़ज़ब रात")).toBe(false);
+  });
+});
+
+describe("hasRomanianTitle", () => {
+  it("identic cu originalul = fără traducere, mai puțin la românești", () => {
+    expect(hasRomanianTitle("Imperiul Mafiei", "MobLand", "en")).toBe(true);
+    expect(hasRomanianTitle("ゴジラ-0.0", "ゴジラ-0.0", "ja")).toBe(false);
+    expect(hasRomanianTitle("Băiat de milioane", "Băiat de milioane", "ro")).toBe(true);
+  });
+});

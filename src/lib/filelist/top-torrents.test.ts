@@ -28,6 +28,7 @@ function info(id: number, mediaType: "movie" | "tv", title = `T${id}`): TmdbBasi
     mediaType,
     title,
     originalTitle: title,
+    englishTitle: null,
     year: "2026",
     posterPath: null,
     voteAverage: null,

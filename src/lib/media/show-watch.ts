@@ -20,6 +20,7 @@ import {
   type FallbackSeen,
 } from "./fallback-quality";
 import { compareTorrents, isExcludedTorrent } from "./torrent-rank";
+import { seasonEpisodeLabel } from "./title-label";
 import { advancedWatchFrom, type EpisodeKey } from "./watch-position";
 import { getDb } from "../db";
 import {
@@ -154,6 +155,7 @@ async function writeShowMeta(
         SET title = COALESCE(NULLIF(?, ''), title),
             original_title = COALESCE(NULLIF(?, ''), original_title),
             literal_title = COALESCE(?, literal_title),
+            english_title = COALESCE(?, english_title),
             year = COALESCE(?, year),
             overview_ro = COALESCE(NULLIF(?, ''), overview_ro),
             genres = COALESCE(?, genres),
@@ -169,6 +171,7 @@ async function writeShowMeta(
     details.title,
     details.originalTitle,
     details.literalTitle ?? null,
+    details.englishTitle ?? null,
     Number.isFinite(year) ? year : null,
     details.overview ?? null,
     genres,
@@ -190,10 +193,18 @@ async function writeShowMeta(
     `UPDATE media
         SET title = COALESCE(NULLIF(?, ''), title),
             original_title = COALESCE(NULLIF(?, ''), original_title),
+            english_title = COALESCE(?, english_title),
             overview_ro = COALESCE(NULLIF(?, ''), overview_ro),
             genres = COALESCE(?, genres)
       WHERE parent_id = ?`,
-  ).run(details.title, details.originalTitle, details.overview ?? null, genres, showId);
+  ).run(
+    details.title,
+    details.originalTitle,
+    details.englishTitle ?? null,
+    details.overview ?? null,
+    genres,
+    showId,
+  );
 
   const after = readShow.get(showId) as Record<string, unknown> | undefined;
   return diffFields(before, after, SHOW_FIELDS, ["title", "original_title", "next_episode"]);
@@ -493,10 +504,7 @@ async function checkShowInner(showId: number): Promise<ShowWatchOutcome> {
     }
     for (const k of coversNow) covered.add(k);
     downloadedNow.push(...coversNowKeys);
-    const label =
-      p.episode == null
-        ? `Sezonul ${p.season} (pachet)`
-        : formatEpisodeKey({ season: p.season, episode: p.episode });
+    const label = seasonEpisodeLabel(p.season, p.episode)!;
     result.downloaded.push(
       c.quality === wantedQuality ? label : `${label} (${c.quality}, rezervă)`,
     );
@@ -572,7 +580,7 @@ export async function checkDueShows(): Promise<{ started: string[]; errors: stri
       const outcome = await checkShow(id);
       if (outcome.downloaded.length > 0) {
         console.log(`[show-watch] "${outcome.title}" — pornite ${outcome.downloaded.length}`);
-        report.started.push(`${outcome.title} ${outcome.downloaded.join(", ")}`);
+        report.started.push(`${outcome.title} — ${outcome.downloaded.join(", ")}`);
       } else if (outcome.skipped) {
         console.log(`[show-watch] "${outcome.title}" — sărit: ${outcome.skipped}`);
       }

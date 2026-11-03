@@ -637,43 +637,6 @@ export function listRecentlyCompletedUnlinked(minutes: number): string[] {
   return rows.map((r) => r.torrent_hash);
 }
 
-// Titlul și posterul deja scrise în `media` pentru un torrent — notificările
-// le citesc de aici, nu recalculează printr-un lookup TMDB paralel (TMDB rămâne
-// doar rezervă, pentru torrente fără rând).
-export function getMediaDisplayByTorrentHash(torrentHash: string): {
-  title: string;
-  posterPath: string | null;
-  season: number | null;
-  episode: number | null;
-  isSeasonPack: boolean;
-} | null {
-  const row = getDb()
-    .prepare(
-      // ORDER BY: cât se desface un pachet, rândul-pachet coexistă cu
-      // episoadele lui pe același hash — notificarea trebuie să spună
-      // „Sezonul N”, nu un episod oarecare.
-      `SELECT title, poster_path, season, episode, is_season_pack FROM media
-         WHERE torrent_hash = ? ORDER BY is_season_pack DESC, id LIMIT 1`,
-    )
-    .get(torrentHash) as
-    | {
-        title: string;
-        poster_path: string | null;
-        season: number | null;
-        episode: number | null;
-        is_season_pack: number;
-      }
-    | undefined;
-  if (!row) return null;
-  return {
-    title: row.title,
-    posterPath: row.poster_path,
-    season: row.season,
-    episode: row.episode,
-    isSeasonPack: !!row.is_season_pack,
-  };
-}
-
 // La „Șterge titlul complet”: torrentul șters dispare și din `media`.
 export function deleteMediaByTorrentHash(torrentHash: string): void {
   getDb().prepare("DELETE FROM media WHERE torrent_hash = ?").run(torrentHash);

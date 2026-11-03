@@ -131,6 +131,9 @@ export function getDb(): DatabaseSync {
       title TEXT NOT NULL,
       original_title TEXT,
       literal_title TEXT,
+      -- Titlul englez, doar când originalul nu e în alfabet latin — atunci se
+      -- afișează el sub nume (title-label.ts).
+      english_title TEXT,
       year INTEGER,
       season INTEGER,
       episode INTEGER,
@@ -395,7 +398,7 @@ function runCleanups(database: DatabaseSync): void {
 // Versiunea curentă a schemei. O bază nouă primește direct schema de mai sus;
 // migrările v1–v52 au fost scoase pe 3 nov 2026, după ce producția și toate
 // backup-urile trecuseră de ele (sunt în istoricul git al fișierului).
-const SCHEMA_VERSION = 53;
+const SCHEMA_VERSION = 54;
 
 function applyCleanups(database: DatabaseSync): void {
   const row = database.prepare("PRAGMA user_version").get() as { user_version: number };
@@ -418,5 +421,16 @@ function applyCleanups(database: DatabaseSync): void {
     database.exec("DROP TABLE IF EXISTS one_time_jobs");
     console.log("[db] Migrare v53: tabela one_time_jobs eliminată");
     database.exec("PRAGMA user_version = 53");
+  }
+
+  if (version < 54) {
+    // v54: media.english_title. Reîmprospătarea metadatelor o completează;
+    // marcajul șters ca să treacă acum prin toate titlurile, nu peste 12h.
+    database.exec("ALTER TABLE media ADD COLUMN english_title TEXT");
+    database.exec(
+      "UPDATE media SET meta_refreshed_at = NULL WHERE media_type IN ('movie', 'tv_show')",
+    );
+    console.log("[db] Migrare v54: coloana media.english_title");
+    database.exec("PRAGMA user_version = 54");
   }
 }

@@ -7,6 +7,7 @@ import {
   buildPlexWatchStartMessage,
   buildPlexWatchStopMessage,
 } from "./notifications/notifications";
+import { mediaLabel } from "./media/title-label";
 
 // ---------------------------------------------------------------------------
 // Tipuri
@@ -215,6 +216,39 @@ export async function trackPlexSessions(
     return row?.title || null;
   }
 
+  // Textul din jurnal: din `media` în formatul din title-label.ts, plus numele
+  // episodului din Plex. Trailerele și extra-urile Plex n-au rând — rămân cu
+  // numele din Plex.
+  function watchLabel(
+    ratingKey: string | null | undefined,
+    title: string,
+    grandparent?: string | null,
+  ): string {
+    const row = ratingKey
+      ? (db
+          .prepare(
+            `SELECT media_type, title, year, season, episode FROM media
+              WHERE plex_rating_key = ? AND media_type IN ('movie', 'episode') LIMIT 1`,
+          )
+          .get(ratingKey) as
+          | {
+              media_type: string;
+              title: string;
+              year: number | null;
+              season: number | null;
+              episode: number | null;
+            }
+          | undefined)
+      : undefined;
+    if (row?.media_type === "movie") return mediaLabel({ title: row.title, year: row.year });
+    if (row) {
+      const label = mediaLabel({ title: row.title, season: row.season, episode: row.episode });
+      // „Episodul 9” ar repeta S10E09.
+      return title && !/^(Episodul|Episode) \d+$/i.test(title) ? `${label} · ${title}` : label;
+    }
+    return grandparent ? `${grandparent} — ${title}` : title;
+  }
+
   const stored = db.prepare("SELECT * FROM plex_active_sessions").all() as Array<{
     key: string;
     started_at: string;
@@ -254,7 +288,7 @@ export async function trackPlexSessions(
         continue;
       }
       db.prepare("DELETE FROM plex_active_sessions WHERE key = ?").run(key);
-      const what = row.grandparent_title ? `${row.grandparent_title} — ${row.title}` : row.title;
+      const what = watchLabel(row.rating_key, row.title, row.grandparent_title);
       const progress = fmtProgress(row.last_view_offset_ms, row.duration_ms);
       await logActivity(
         "plex_watch_stop",
@@ -325,9 +359,7 @@ export async function trackPlexSessions(
         s.ratingKey ?? null,
       );
 
-      const what = displayGrandparentTitle
-        ? `${displayGrandparentTitle} — ${displayTitle}`
-        : displayTitle;
+      const what = watchLabel(s.ratingKey, displayTitle, displayGrandparentTitle);
       await logActivity(
         "plex_watch_start",
         buildPlexWatchStartMessage(s.user, what),

@@ -3,41 +3,13 @@
 
 import { tmdbFetch } from "./tmdb-client";
 import { parseSeasonEpisodeFromName } from "../media/torrent-name-parse";
+import { hasRomanianTitle, mediaLabel } from "../media/title-label";
 
-interface TmdbFindResponse {
-  movie_results?: Array<{ title?: string }>;
-  tv_results?: Array<{ name?: string }>;
-}
-
-const titleCache = new Map<string, { expiresAt: number; title: string | null }>();
 const TITLE_CACHE_TTL = 60 * 60_000; // titlurile nu se schimbă — cache lung
 
-// Fail-soft: null la orice eroare — apelantul cade pe numele lansării.
-export async function lookupTitleByImdbId(imdbId: string): Promise<string | null> {
-  const key = imdbId.trim();
-  if (!key) return null;
-
-  const cached = titleCache.get(key);
-  if (cached && cached.expiresAt > Date.now()) return cached.title;
-
-  let title: string | null;
-  try {
-    const data = await tmdbFetch<TmdbFindResponse>(
-      `/find/${encodeURIComponent(key)}?external_source=imdb_id`,
-    );
-    title = data.movie_results?.[0]?.title || data.tv_results?.[0]?.name || null;
-  } catch {
-    title = null;
-  }
-
-  titleCache.set(key, { expiresAt: Date.now() + TITLE_CACHE_TTL, title });
-  return title;
-}
-
 // ---------------------------------------------------------------------------
-// Numele afișat în jurnal și push: titlul românesc (sau englez) + anul la
-// filme; la seriale „Titlu — SxxEyy — Titlu episod” când numele are SxxEyy.
-// Fail-soft: altfel numele tehnic al lansării.
+// Numele afișat în jurnal și push pentru torrentele fără rând în `media`, în
+// formatul din title-label.ts. Fail-soft: altfel numele tehnic al lansării.
 // ---------------------------------------------------------------------------
 
 interface TmdbFindItem {
@@ -46,6 +18,7 @@ interface TmdbFindItem {
   name?: string;
   original_title?: string;
   original_name?: string;
+  original_language?: string;
   release_date?: string;
   first_air_date?: string;
   poster_path?: string | null;
@@ -67,7 +40,7 @@ interface TmdbAlternativeTitlesResponse {
 }
 
 // Fără traducere ro-RO, TMDB are des un titlu românesc „AKA” (alternative_titles
-// RO), ca pe IMDb. Cerut doar când traducerea a căzut pe engleză.
+// RO), ca pe IMDb. Cerut doar când lipsește traducerea.
 export async function findRomanianAkaTitle(
   mediaType: "movie" | "tv",
   id: number,
@@ -89,6 +62,7 @@ export interface TmdbBasicInfo {
   mediaType: "movie" | "tv";
   title: string;
   originalTitle: string;
+  englishTitle: string | null;
   year: string | null;
   posterPath: string | null;
   voteAverage: number | null;
@@ -120,16 +94,17 @@ export async function lookupTmdbInfoByImdbId(imdbId: string): Promise<TmdbBasicI
       const enMovie = en?.movie_results?.[0];
       const roTitle = movie.title?.trim();
       const enTitle = enMovie?.title?.trim();
+      // Fără traducere reală: AKA românesc, apoi engleza (ca getTmdbDetailsInternal).
       let title = roTitle || enTitle || "";
-      // Fără traducere reală — încercăm AKA.
-      if (!roTitle || roTitle === enTitle) {
-        title = (await findRomanianAkaTitle("movie", movie.id)) || title;
+      if (!hasRomanianTitle(roTitle, movie.original_title, movie.original_language)) {
+        title = (await findRomanianAkaTitle("movie", movie.id)) || enTitle || title;
       }
       info = {
         id: movie.id,
         mediaType: "movie",
         title,
         originalTitle: movie.original_title || enTitle || title,
+        englishTitle: enTitle || null,
         year: (movie.release_date || enMovie?.release_date || "").slice(0, 4) || null,
         posterPath: movie.poster_path || enMovie?.poster_path || null,
         voteAverage: typeof movie.vote_average === "number" ? movie.vote_average : null,
@@ -139,14 +114,15 @@ export async function lookupTmdbInfoByImdbId(imdbId: string): Promise<TmdbBasicI
       const roTitle = show.name?.trim();
       const enTitle = enShow?.name?.trim();
       let title = roTitle || enTitle || "";
-      if (!roTitle || roTitle === enTitle) {
-        title = (await findRomanianAkaTitle("tv", show.id)) || title;
+      if (!hasRomanianTitle(roTitle, show.original_name, show.original_language)) {
+        title = (await findRomanianAkaTitle("tv", show.id)) || enTitle || title;
       }
       info = {
         id: show.id,
         mediaType: "tv",
         title,
         originalTitle: show.original_name || enTitle || title,
+        englishTitle: enTitle || null,
         year: (show.first_air_date || enShow?.first_air_date || "").slice(0, 4) || null,
         posterPath: show.poster_path || enShow?.poster_path || null,
         voteAverage: typeof show.vote_average === "number" ? show.vote_average : null,
@@ -174,24 +150,15 @@ export async function buildTorrentDisplayName(
   const info = await lookupTmdbInfoByImdbId(imdbId);
   if (!info || !info.title) return torrentName;
 
-  if (info.mediaType === "movie") {
-    return info.year ? `${info.title} (${info.year})` : info.title;
-  }
-
+  if (info.mediaType === "movie") return mediaLabel({ title: info.title, year: info.year });
+  // Fără Exx = pachet de sezon.
   const parsed = parseSeasonEpisodeFromName(torrentName);
-  if (!parsed) return info.title;
-
-  const seasonPad = String(parsed.season).padStart(2, "0");
-  if (parsed.episode === null) {
-    // Pachet de sezon (fără Exx) — Filelist înlocuiește des episoadele cu un
-    // pachet după ultimul episod.
-    return `${info.title} — Sezonul ${parsed.season} (pachet complet)`;
-  }
-
-  const { getTmdbSeasonEpisodesInternal, findEpisodeTitle } = await import("./tmdb.functions");
-  const episodes = await getTmdbSeasonEpisodesInternal(info.id, parsed.season);
-  const epTitle = findEpisodeTitle(episodes, parsed.episode);
-  return `${info.title} — S${seasonPad}E${String(parsed.episode).padStart(2, "0")} — ${epTitle}`;
+  return mediaLabel({
+    title: info.title,
+    season: parsed?.season,
+    episode: parsed?.episode,
+    isSeasonPack: parsed?.episode === null,
+  });
 }
 
 // ---------------------------------------------------------------------------
