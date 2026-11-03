@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Readuce serviciul pe root, dacă ceva nu merge după apply.sh.
+# Readuce serviciul pe root, dacă ceva nu merge cu contul dedicat.
 # Grupul `media` și drepturile pe /media/ssd2tb rămân — sunt inofensive.
 set -euo pipefail
 [[ $EUID -eq 0 ]] || { echo "Trebuie rulat ca root." >&2; exit 1; }
