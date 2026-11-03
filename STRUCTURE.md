@@ -134,7 +134,7 @@ transversale, fără un singur domeniu clar.
 
 | Fișier                      | Ce conține                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Folosit de                                                                                            |
 | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `db.ts`                     | Schema SQLite completă (`CREATE TABLE IF NOT EXISTS`) + migrări incrementale versionate cu `PRAGMA user_version` (`runCleanups`). Singurul loc unde se definește schema. Tot aici, tabela `one_time_jobs` (nume + `done_at`): munca de pornire care se face **o singură dată pe instalare** și care atinge rețeaua, deci nu poate sta într-o migrare sincronă.                                                                                                                    | Orice fișier care face `getDb()`.                                                                     |
+| `db.ts`                     | Schema SQLite completă (`CREATE TABLE IF NOT EXISTS`) + migrări incrementale versionate cu `PRAGMA user_version` (`runCleanups`); o bază nouă primește direct `SCHEMA_VERSION`. Singurul loc unde se definește schema.                                                                                                                                                                                                                                                            | Orice fișier care face `getDb()`.                                                                     |
 | `client-ip.server.ts`       | `getClientIp`: IP-ul real al vizitatorului — antetul Cloudflare `CF-Connecting-IP`, crezut doar când cererea vine din rețeaua Docker a tunelului (172.20.0.0/16); altfel IP-ul socket-ului.                                                                                                                                                                                                                                                                                       | `auth/admin.functions.ts` (login), `auth/registration.functions.ts`, `errors/error-log.functions.ts`. |
 | `prefetch.ts`               | `prefetchAppData`: la deschiderea aplicației, cere în fundal datele și codul (`router.preloadRoute`) tuturor paginilor la care contul are acces (adminul și Tehnic, qBit, Sistem, Immich, Utilizatori) și le păstrează în memorie (`gcTime: Infinity`), ca fiecare pagină să se deschidă direct cu ele. La ieșirea din cont, `AppHeader` golește memoria.                                                                                                                         | `routes/__root.tsx` (`AppPrefetch`).                                                                  |
 | `queries.ts`                | TOATE `queryOptions(...)` reutilizate în mai multe componente — sursă unică pentru `queryKey`/`queryFn`/`staleTime`. Intervalele live sunt funcții, nu constante, ca ritmul reglabil din Sistem să aibă efect imediat.                                                                                                                                                                                                                                                            | Peste tot unde se face `useQuery(xQuery)` — printre cele mai importate fișiere (17).                  |
@@ -477,12 +477,12 @@ fost eliminate 2026-08-16, nefolosite niciodată.
 
 ## Analiză cantitativă
 
-Regenerată cu `node scripts/structure-stats.mjs --write` pe 2026-11-01 (linii,
+Regenerată cu `node scripts/structure-stats.mjs --write` pe 2026-11-03 (linii,
 funcții numite, fan-in rezolvat prin importurile `@/` și relative, inclusiv
 `import()` dinamic). Tabelul e integral generat — nu are rânduri actualizate
 manual, deci nu poate fi parțial vechi.
 
-**Total: 284 fișiere, ~47 809 linii, ~1 172 funcții**
+**Total: 284 fișiere, ~46 989 linii, ~1 170 funcții**
 
 (numărătoare aproximativă — funcții numite, `const x = (...) =>` și
 `createServerFn`, fără metode de clasă sau funcții anonime inline)
@@ -492,7 +492,7 @@ manual, deci nu poate fi parțial vechi.
 | Zonă                                | Fișiere |  Linii |
 | ----------------------------------- | ------: | -----: |
 | `src/routes/` (pagini)              |      12 |  3 284 |
-| `src/lib/` (rădăcină, transversale) |      20 |  3 750 |
+| `src/lib/` (rădăcină, transversale) |      20 |  2 927 |
 | `src/lib/auth/`                     |      13 |  1 183 |
 | `src/lib/tmdb/`                     |       9 |  1 314 |
 | `src/lib/media/`                    |      33 |  6 902 |
@@ -506,14 +506,14 @@ manual, deci nu poate fi parțial vechi.
 | `src/hooks/`                        |       5 |    315 |
 | `server/plugins/`                   |       2 |     62 |
 | `server/routes/api/`                |       3 |    230 |
-| altele                              |      16 |  2 737 |
+| altele                              |      16 |  2 740 |
 
 ### Fișiere-hub (fan-in mare)
 
 | Fișier                                      | Fan-in | Linii |
 | ------------------------------------------- | -----: | ----: |
 | `src/start.ts`                              |     62 |    26 |
-| `src/lib/db.ts`                             |     55 |  1246 |
+| `src/lib/db.ts`                             |     55 |   423 |
 | `src/server.ts`                             |     41 |    72 |
 | `src/lib/auth/admin.server.ts`              |     31 |   133 |
 | `src/lib/filelist/log.ts`                   |     31 |   140 |
@@ -529,11 +529,10 @@ manual, deci nu poate fi parțial vechi.
 
 | Fișier                                                        | Linii | Funcții | Fan-in |
 | ------------------------------------------------------------- | ----: | ------: | -----: |
-| `src/lib/db.ts`                                               |  1246 |       6 |     55 |
 | `src/components/biblioteca/TitleDetailDrawer.tsx`             |  1084 |      13 |      1 |
 | `src/lib/services/plex-browse.ts`                             |  1023 |      14 |      6 |
-| `src/lib/media/media.ts`                                      |   998 |      25 |     22 |
-| `src/lib/media/show-watch.ts`                                 |   910 |      19 |     11 |
+| `src/lib/media/media.ts`                                      |   998 |      25 |     21 |
+| `src/lib/media/show-watch.ts`                                 |   910 |      19 |     10 |
 | `src/routes/contributii.tsx`                                  |   732 |      10 |      5 |
 | `src/lib/filelist/subtitle-verify.ts`                         |   719 |      33 |      3 |
 | `src/lib/services/plex.ts`                                    |   688 |      16 |     15 |
@@ -553,6 +552,7 @@ manual, deci nu poate fi parțial vechi.
 | `src/lib/github.functions.ts`                                 |   461 |      14 |      6 |
 | `src/components/tehnic/UserDetailDrawer.tsx`                  |   435 |       4 |      1 |
 | `src/components/principala/wizard/ResultStep.tsx`             |   426 |       6 |      1 |
+| `src/lib/db.ts`                                               |   423 |       4 |     55 |
 | `src/components/tehnic/SubtitleFixDrawer.tsx`                 |   407 |       9 |      2 |
 | `src/components/principala/wizard/WizardControls.tsx`         |   390 |       9 |      4 |
 | `src/components/tehnic/sections/ActivityLogSection.tsx`       |   371 |       4 |      1 |
@@ -561,7 +561,7 @@ manual, deci nu poate fi parțial vechi.
 | `src/lib/services/plex-shared.ts`                             |   360 |      10 |      7 |
 | `src/routes/users.tsx`                                        |   359 |       7 |      9 |
 | `src/lib/services/plex-library.ts`                            |   358 |      15 |      6 |
-| `src/lib/watcher/tasks.ts`                                    |   343 |       3 |      3 |
+| `src/lib/watcher/tasks.ts`                                    |   346 |       3 |      3 |
 | `src/components/biblioteca/BibliotecaList.tsx`                |   341 |       3 |      1 |
 | `src/lib/system/service-jobs.ts`                              |   339 |      14 |      3 |
 | `src/lib/auth/users.functions.ts`                             |   338 |       6 |      3 |
@@ -789,7 +789,7 @@ manual, deci nu poate fi parțial vechi.
 | `src/components/principala/wizard/useHdrDeviceHint.ts`        |    25 |       2 |      2 |
 | `src/components/ui/orb.tsx`                                   |    25 |       1 |      8 |
 | `src/components/ui/sonner.tsx`                                |    25 |       1 |     24 |
-| `src/lib/auth/password.ts`                                    |    24 |       2 |      8 |
+| `src/lib/auth/password.ts`                                    |    24 |       2 |      7 |
 | `src/components/tehnic/Metric.tsx`                            |    23 |       1 |      1 |
 | `src/lib/auth/session-compat.test.ts`                         |    23 |       0 |      0 |
 | `src/lib/client-ip.server.test.ts`                            |    20 |       0 |      0 |
