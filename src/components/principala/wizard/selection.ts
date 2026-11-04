@@ -110,9 +110,6 @@ export function matchesForQuality(
       return q.is4kHdr;
     }),
     kind,
-    // TEMPORAR: wizardul vede și torrentele fără seederi (ex. Élite S08 4K).
-    // Revenire: `false` aici.
-    true,
   );
 }
 

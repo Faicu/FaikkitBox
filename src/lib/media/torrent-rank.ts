@@ -69,8 +69,8 @@ export function isFullDisc(name: string): boolean {
   );
 }
 
-export function isExcludedTorrent(t: RankableTorrent, allowNoSeeders = false): boolean {
-  if (!allowNoSeeders && !(t.seeders > 0)) return true;
+export function isExcludedTorrent(t: RankableTorrent): boolean {
+  if (!(t.seeders > 0)) return true;
   const n = t.name.toLowerCase();
   const tail = releaseTail(n);
   if (LOW_QUALITY_SOURCE.test(tail)) return true;
@@ -111,10 +111,6 @@ function uploadedAt(t: RankableTorrent): number {
 }
 
 // Fără cele excluse, cel mai bun primul. Lucrează pe o copie.
-export function rankTorrents<T extends RankableTorrent>(
-  list: T[],
-  kind: TorrentKind,
-  allowNoSeeders = false,
-): T[] {
-  return list.filter((t) => !isExcludedTorrent(t, allowNoSeeders)).sort(compareTorrents(kind));
+export function rankTorrents<T extends RankableTorrent>(list: T[], kind: TorrentKind): T[] {
+  return list.filter((t) => !isExcludedTorrent(t)).sort(compareTorrents(kind));
 }
