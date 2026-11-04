@@ -70,6 +70,9 @@ export const WATCHER_TASKS: WatcherTask[] = [
     async run() {
       const { markInterruptedJobs } = await import("../system/service-jobs");
       await markInterruptedJobs();
+      // Torrente pornite temporar de verificarea trackerelor: de oprit la loc.
+      const { recoverTrackerCheck } = await import("../services/qbit-tracker-check");
+      await recoverTrackerCheck();
       return null;
     },
   },

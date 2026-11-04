@@ -279,6 +279,22 @@ export function getDb(): DatabaseSync {
       checked_at TEXT NOT NULL
     );
 
+    -- Verificarea trackerelor din qBittorrent (qbit-tracker-check.ts): un singur
+    -- rând, ca să ajungă și la copiile separate ale modulelor. resumed = torrentele
+    -- oprite pe care le-am pornit temporar — de oprit la loc și după un restart.
+    CREATE TABLE IF NOT EXISTS qbit_tracker_check (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      running INTEGER NOT NULL DEFAULT 0,
+      phase TEXT,
+      done INTEGER NOT NULL DEFAULT 0,
+      total INTEGER NOT NULL DEFAULT 0,
+      started_at TEXT,
+      finished_at TEXT,
+      error TEXT,
+      result TEXT,
+      resumed TEXT NOT NULL DEFAULT '[]'
+    );
+
     CREATE TABLE IF NOT EXISTS immich_upload_tracker (
       id INTEGER PRIMARY KEY CHECK (id = 1),
       checked_until TEXT NOT NULL,

@@ -23,6 +23,7 @@ import { Meter } from "@/components/Meter";
 import { ErrorCard } from "@/components/ErrorCard";
 import { ServiceHeaderActions, ServiceJobOutput } from "@/components/ServiceHeaderActions";
 import { useServiceRecovery } from "@/components/useServiceRecovery";
+import { TrackerCheckCard } from "@/components/qbit/TrackerCheckCard";
 import { TehnicSubNav } from "@/components/tehnic/TehnicSubNav";
 import { qbitQuery } from "@/lib/queries";
 import { requireAdminBeforeLoad } from "@/lib/auth/admin-route-guard";
@@ -217,6 +218,8 @@ function QbitPage() {
               <b className="block text-lg">{data.counts.paused}</b>Oprite
             </button>
           </div>
+
+          <TrackerCheckCard />
 
           {openList &&
             (() => {
