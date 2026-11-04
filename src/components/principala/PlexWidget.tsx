@@ -6,6 +6,7 @@ import { useCountUp } from "@/hooks/use-count-up";
 import { useFlashOnChange } from "@/hooks/use-flash-on-change";
 import { UserAvatar } from "@/components/principala/UserAvatar";
 import type { PlexData, PlexSession } from "@/lib/services/plex";
+import { episodeLine } from "@/lib/media/title-label";
 import { BorderFlowSweep } from "@/components/BorderFlowSweep";
 
 // Cardul Plex de pe Acasă: cine se uită acum, cifrele zilei, bibliotecile.
@@ -173,6 +174,11 @@ function SessionRow({ session: s, offsetMs }: { session: PlexSession; offsetMs: 
               <div className="truncate text-sm font-semibold leading-tight">
                 {isEpisode ? s.grandparentTitle : s.title}
               </div>
+              {s.clip && (
+                <span className="shrink-0 rounded bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-medium text-sky-400">
+                  {s.clip === "trailer" ? "Trailer" : "Extra"}
+                </span>
+              )}
               {paused ? (
                 <span className="shrink-0 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-400">
                   ⏸ Pauză
@@ -183,7 +189,11 @@ function SessionRow({ session: s, offsetMs }: { session: PlexSession; offsetMs: 
                 </span>
               )}
             </div>
-            {isEpisode && <div className="truncate text-[11px] text-foreground/70">{s.title}</div>}
+            {isEpisode && (
+              <div className="truncate text-[11px] text-foreground/70">
+                {episodeLine(s.season, s.episode, s.title)}
+              </div>
+            )}
             <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
               <UserAvatar name={s.user} />
               <span className="truncate">

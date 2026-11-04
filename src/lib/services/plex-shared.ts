@@ -66,6 +66,8 @@ export interface PlexMetadataItem {
   // Titlul original, când Plex afișează altul (biblioteca e în română).
   originalTitle?: string;
   type?: string;
+  // La clipuri (type „clip”): trailer, behindTheScenes, sceneOrSample…
+  subtype?: string;
   index?: number;
   parentIndex?: number;
   grandparentTitle?: string;

@@ -29,6 +29,47 @@ export function mediaLabel(m: {
   return m.year ? `${m.title} (${m.year})` : m.title;
 }
 
+// Plex numește episoadele fără nume „Episodul 9” — ar repeta S10E09.
+export function isGenericEpisodeName(name: string | null | undefined): boolean {
+  return !name || /^(Episodul|Episode) \d+$/i.test(name.trim());
+}
+
+// Clipurile Plex (type „clip”) nu sunt filme: trailerele și celelalte extra-uri.
+export type ClipKind = "trailer" | "extra";
+
+export function clipKindOf(type?: string | null, subtype?: string | null): ClipKind | null {
+  if (type !== "clip") return null;
+  return subtype === "trailer" ? "trailer" : "extra";
+}
+
+// Rândul de sub numele serialului: „S02E04 · Nume episod” (fără nume generic).
+export function episodeLine(
+  season: number | null | undefined,
+  episode: number | null | undefined,
+  name: string | null | undefined,
+): string {
+  const code = seasonEpisodeLabel(season, episode);
+  const named = isGenericEpisodeName(name) ? null : name;
+  return [code, named].filter(Boolean).join(" · ");
+}
+
+// O vizionare în text: „Film (2026)”, „Serial — S02E04 · Nume episod”,
+// „Trailer: Nume”. `show` = titlul serialului; `title` = filmul sau episodul.
+export function watchLabel(w: {
+  clip?: ClipKind | null;
+  show?: string | null;
+  title: string;
+  year?: number | null;
+  season?: number | null;
+  episode?: number | null;
+}): string {
+  if (w.clip) return `${w.clip === "trailer" ? "Trailer" : "Extra"}: ${w.title}`;
+  if (!w.show) return mediaLabel({ title: w.title, year: w.year });
+  if (w.season == null) return w.title ? `${w.show} — ${w.title}` : w.show;
+  const base = mediaLabel({ title: w.show, season: w.season, episode: w.episode });
+  return isGenericEpisodeName(w.title) ? base : `${base} · ${w.title}`;
+}
+
 // Cu language=ro-RO, TMDB pune titlul original când lipsește traducerea —
 // identic cu originalul înseamnă „fără titlu românesc”, mai puțin la
 // producțiile românești.

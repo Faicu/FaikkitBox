@@ -18,6 +18,7 @@ import { PlexWidget } from "@/components/principala/PlexWidget";
 import { RecentWatchesWidget } from "@/components/principala/RecentWatchesWidget";
 import { plexQuery, plexSessionsQuery, adminStatusQuery, recentWatchesQuery } from "@/lib/queries";
 import { BorderFlowSweep } from "@/components/BorderFlowSweep";
+import { watchLabel } from "@/lib/media/title-label";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -125,13 +126,7 @@ function Overview() {
             {plex.data?.status === "ok" && (plex.data.todayViews?.length ?? 0) > 0 ? (
               <ul className="rounded-2xl glass-card divide-y divide-border stagger-in">
                 {plex.data.todayViews!.map((e, i) => {
-                  const seasonEp =
-                    e.season != null && e.episode != null
-                      ? `S${String(e.season).padStart(2, "0")}E${String(e.episode).padStart(2, "0")}`
-                      : null;
-                  const heading = e.show
-                    ? `${e.show}${seasonEp ? ` — ${seasonEp}` : ""}${e.title ? ` · ${e.title}` : ""}`
-                    : e.title;
+                  const heading = watchLabel(e);
                   return (
                     <li key={i} className="px-3 py-2 text-sm">
                       <div className="truncate">{heading}</div>

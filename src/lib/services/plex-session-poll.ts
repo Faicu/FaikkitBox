@@ -39,6 +39,8 @@ export async function pollPlexSessions(): Promise<void> {
         title?: string;
         grandparentTitle?: string;
         ratingKey?: string;
+        type?: string;
+        subtype?: string;
         User?: { title?: string };
         Player?: { title?: string };
       }>;
@@ -61,6 +63,8 @@ export async function pollPlexSessions(): Promise<void> {
         title: s.title ?? "",
         grandparentTitle: s.grandparentTitle || undefined,
         ratingKey: s.ratingKey || undefined,
+        type: s.type,
+        subtype: s.subtype,
         player: s.Player?.title || undefined,
         viewOffsetMs: off,
         durationMs: dur,

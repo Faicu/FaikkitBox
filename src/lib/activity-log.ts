@@ -7,7 +7,7 @@ import {
   buildPlexWatchStartMessage,
   buildPlexWatchStopMessage,
 } from "./notifications/notifications";
-import { mediaLabel } from "./media/title-label";
+import { clipKindOf, watchLabel, type ClipKind } from "./media/title-label";
 
 // ---------------------------------------------------------------------------
 // Tipuri
@@ -198,6 +198,9 @@ export async function trackPlexSessions(
     title: string;
     grandparentTitle?: string;
     ratingKey?: string;
+    // type „clip” = trailer / extra (title-label.ts), fără rând în `media`.
+    type?: string;
+    subtype?: string;
     player?: string;
     viewOffsetMs?: number;
     durationMs?: number;
@@ -216,37 +219,24 @@ export async function trackPlexSessions(
     return row?.title || null;
   }
 
-  // Textul din jurnal: din `media` în formatul din title-label.ts, plus numele
-  // episodului din Plex. Trailerele și extra-urile Plex n-au rând — rămân cu
-  // numele din Plex.
-  function watchLabel(
+  // Textul din jurnal, în formatul din title-label.ts; numele vin din `media`
+  // (watch-display.ts). Trailerele și extra-urile rămân cu numele din Plex.
+  async function whatOf(
     ratingKey: string | null | undefined,
     title: string,
-    grandparent?: string | null,
-  ): string {
-    const row = ratingKey
-      ? (db
-          .prepare(
-            `SELECT media_type, title, year, season, episode FROM media
-              WHERE plex_rating_key = ? AND media_type IN ('movie', 'episode') LIMIT 1`,
-          )
-          .get(ratingKey) as
-          | {
-              media_type: string;
-              title: string;
-              year: number | null;
-              season: number | null;
-              episode: number | null;
-            }
-          | undefined)
-      : undefined;
-    if (row?.media_type === "movie") return mediaLabel({ title: row.title, year: row.year });
-    if (row) {
-      const label = mediaLabel({ title: row.title, season: row.season, episode: row.episode });
-      // „Episodul 9” ar repeta S10E09.
-      return title && !/^(Episodul|Episode) \d+$/i.test(title) ? `${label} · ${title}` : label;
-    }
-    return grandparent ? `${grandparent} — ${title}` : title;
+    grandparent: string | null | undefined,
+    clip: ClipKind | null,
+  ): Promise<string> {
+    const { resolveWatch } = await import("./media/watch-display");
+    return watchLabel(
+      resolveWatch({
+        ratingKey,
+        type: clip ? "clip" : undefined,
+        subtype: clip === "trailer" ? "trailer" : undefined,
+        title,
+        show: grandparent,
+      }),
+    );
   }
 
   const stored = db.prepare("SELECT * FROM plex_active_sessions").all() as Array<{
@@ -258,6 +248,7 @@ export async function trackPlexSessions(
     title: string;
     grandparent_title: string | null;
     rating_key: string | null;
+    clip: string | null;
     missed: number;
   }>;
   const storedMap = new Map(stored.map((r) => [r.key, r]));
@@ -288,7 +279,8 @@ export async function trackPlexSessions(
         continue;
       }
       db.prepare("DELETE FROM plex_active_sessions WHERE key = ?").run(key);
-      const what = watchLabel(row.rating_key, row.title, row.grandparent_title);
+      const stopClip = (row.clip as ClipKind | null) ?? null;
+      const what = await whatOf(row.rating_key, row.title, row.grandparent_title, stopClip);
       const progress = fmtProgress(row.last_view_offset_ms, row.duration_ms);
       await logActivity(
         "plex_watch_stop",
@@ -297,6 +289,7 @@ export async function trackPlexSessions(
           user: row.user,
           title: row.title,
           grandparentTitle: row.grandparent_title || undefined,
+          clip: stopClip ?? undefined,
         },
         { tag: `plex-${key}` },
       );
@@ -315,7 +308,7 @@ export async function trackPlexSessions(
           createRecentWatchUpserter(db)({
             ratingKey: row.rating_key,
             username: row.user,
-            title: row.grandparent_title ? "" : row.title,
+            title: row.grandparent_title ? "" : stopClip ? what : row.title,
             show: row.grandparent_title || null,
             season: mediaRow?.season ?? null,
             episode: mediaRow?.episode ?? null,
@@ -336,6 +329,7 @@ export async function trackPlexSessions(
   for (const s of sessions) {
     const key = sessionKey(s.user, s.title, s.grandparentTitle);
     if (!storedMap.has(key)) {
+      const clip = clipKindOf(s.type, s.subtype);
       // Titlul românesc, stocat — oprirea îl citește din DB.
       const displayGrandparentTitle = s.grandparentTitle
         ? (resolveDisplayTitle(s.ratingKey, true) ?? s.grandparentTitle)
@@ -346,8 +340,8 @@ export async function trackPlexSessions(
 
       db.prepare(
         `INSERT OR REPLACE INTO plex_active_sessions
-         (key, started_at, last_view_offset_ms, duration_ms, user, title, grandparent_title, rating_key)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+         (key, started_at, last_view_offset_ms, duration_ms, user, title, grandparent_title, rating_key, clip)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         key,
         new Date().toISOString(),
@@ -357,9 +351,10 @@ export async function trackPlexSessions(
         displayTitle,
         displayGrandparentTitle ?? null,
         s.ratingKey ?? null,
+        clip,
       );
 
-      const what = watchLabel(s.ratingKey, displayTitle, displayGrandparentTitle);
+      const what = await whatOf(s.ratingKey, displayTitle, displayGrandparentTitle, clip);
       await logActivity(
         "plex_watch_start",
         buildPlexWatchStartMessage(s.user, what),
@@ -367,6 +362,7 @@ export async function trackPlexSessions(
           user: s.user,
           title: displayTitle,
           grandparentTitle: displayGrandparentTitle,
+          clip: clip ?? undefined,
           player: s.player,
         },
         { tag: `plex-${key}` },

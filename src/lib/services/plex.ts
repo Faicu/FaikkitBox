@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { cachedAsync, fetchJson, errMsg, type ServiceStatus } from "./shared";
+import type { ClipKind } from "../media/title-label";
 import {
   discoverPlexUrl,
   plexQualityFromMedia,
@@ -18,6 +19,13 @@ export interface PlexSession {
   grandparentTitle?: string;
   ratingKey?: string;
   type: string;
+  // Trailer sau extra (clip Plex) — titlul rămâne cel din Plex.
+  clip?: ClipKind;
+  subtype?: string;
+  // Numerotarea episodului și anul filmului, din `media` (resolveWatches).
+  season?: number;
+  episode?: number;
+  year?: number;
   user: string;
   device: string;
   player: string;
@@ -73,6 +81,7 @@ export interface PlexHistoryEntry {
   show?: string;
   season?: number;
   episode?: number;
+  year?: number;
   ratingKey?: string;
   type: string;
   viewedAt: number;
@@ -430,6 +439,7 @@ async function fetchPlexHistory(
         show: e.grandparentTitle ? String(e.grandparentTitle) : undefined,
         season: e.parentIndex != null ? Number(e.parentIndex) : undefined,
         episode: e.index != null ? Number(e.index) : undefined,
+        ratingKey,
         type: String(e.type ?? "unknown"),
         viewedAt,
         player: typeof e?.Player?.title === "string" ? e.Player.title : undefined,
@@ -503,6 +513,9 @@ function mapPlexSessions(sessionsMd: PlexMetadataItem[]): PlexSession[] {
       grandparentTitle: s.grandparentTitle,
       ratingKey: s.ratingKey,
       type: s.type ?? "",
+      subtype: s.subtype,
+      season: s.parentIndex != null ? Number(s.parentIndex) : undefined,
+      episode: s.index != null ? Number(s.index) : undefined,
       user: s?.User?.title ?? "?",
       device: s?.Player?.device ?? s?.Player?.product ?? "?",
       player: s?.Player?.title ?? "?",
@@ -529,6 +542,22 @@ function mapPlexSessions(sessionsMd: PlexMetadataItem[]): PlexSession[] {
       burnedSubtitle: ts?.subtitleDecision === "burn",
     };
   });
+}
+
+// Sesiunile cu numele din `media` (watch-display.ts) — doar pentru răspunsuri.
+// Urmărirea în jurnal primește sesiunile brute: cheile ei depind de numele Plex.
+async function withLibraryNames(sessions: PlexSession[]): Promise<PlexSession[]> {
+  const { resolveWatches } = await import("../media/watch-display");
+  const shown = resolveWatches(sessions.map((s) => ({ ...s, show: s.grandparentTitle })));
+  return sessions.map((s, i) => ({
+    ...s,
+    title: shown[i].title,
+    grandparentTitle: shown[i].show ?? undefined,
+    season: shown[i].season ?? undefined,
+    episode: shown[i].episode ?? undefined,
+    year: shown[i].year ?? undefined,
+    clip: shown[i].clip ?? undefined,
+  }));
 }
 
 // La transcodare, `Media`/`Part` descriu fluxul LIVRAT; rezoluția sursei apare
@@ -571,7 +600,7 @@ async function collectPlexSessions(): Promise<{
       const { url } = await discoverPlexUrl(token, process.env.PLEX_URL);
       const sessionsJson = await fetchJson<PlexApiResponse>(`${url}/status/sessions`, { headers });
       const sessionsMd = sessionsJson?.MediaContainer?.Metadata ?? [];
-      return { status: "ok", sessions: mapPlexSessions(sessionsMd) };
+      return { status: "ok", sessions: await withLibraryNames(mapPlexSessions(sessionsMd)) };
     } catch (e) {
       return { status: "error", error: errMsg(e), sessions: [] };
     }
@@ -656,23 +685,36 @@ export const getPlex = createServerFn({ method: "GET" }).handler(async (): Promi
         title: s.title,
         grandparentTitle: s.grandparentTitle,
         ratingKey: s.ratingKey,
+        type: s.type,
+        subtype: s.subtype,
         player: s.player,
         viewOffsetMs: s.viewOffsetMs,
         durationMs: s.durationMs,
       })),
     ).catch(() => {});
 
+    // Numele din `media`, doar în răspuns: urmărirea de mai sus și cache-ul
+    // istoricului rămân pe numele din Plex (cheile lor depind de ele).
+    const { resolveWatches } = await import("../media/watch-display");
+    const shownViews = resolveWatches(history.todayViews);
     return {
       status: "ok" as const,
       serverName: mc.friendlyName,
       version: mc.version ? `${mc.version} · ${discovered.source}` : discovered.source,
       platform: mc.platform,
-      sessions,
+      sessions: await withLibraryNames(sessions),
       libraries,
       episodesToday: history.episodesToday,
       activeUsersToday: history.activeUsersToday,
       userHistory: history.userHistory,
-      todayViews: history.todayViews,
+      todayViews: history.todayViews.map((v, i) => ({
+        ...v,
+        title: shownViews[i].title,
+        show: shownViews[i].show ?? undefined,
+        season: shownViews[i].season ?? undefined,
+        episode: shownViews[i].episode ?? undefined,
+        year: shownViews[i].year ?? undefined,
+      })),
       activeUsersTodayList: history.activeUsersTodayList,
     };
   } catch (e) {

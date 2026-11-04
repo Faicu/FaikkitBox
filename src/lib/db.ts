@@ -76,6 +76,8 @@ export function getDb(): DatabaseSync {
       title TEXT NOT NULL,
       grandparent_title TEXT,
       rating_key TEXT,
+      -- 'trailer' / 'extra' la clipurile Plex (title-label.ts), altfel NULL.
+      clip TEXT,
       -- Verificări la rând în care sesiunea a lipsit (vezi trackPlexSessions).
       missed INTEGER NOT NULL DEFAULT 0
     );
@@ -398,7 +400,7 @@ function runCleanups(database: DatabaseSync): void {
 // Versiunea curentă a schemei. O bază nouă primește direct schema de mai sus;
 // migrările v1–v52 au fost scoase pe 3 nov 2026, după ce producția și toate
 // backup-urile trecuseră de ele (sunt în istoricul git al fișierului).
-const SCHEMA_VERSION = 54;
+const SCHEMA_VERSION = 55;
 
 function applyCleanups(database: DatabaseSync): void {
   const row = database.prepare("PRAGMA user_version").get() as { user_version: number };
@@ -432,5 +434,11 @@ function applyCleanups(database: DatabaseSync): void {
     );
     console.log("[db] Migrare v54: coloana media.english_title");
     database.exec("PRAGMA user_version = 54");
+  }
+
+  if (version < 55) {
+    database.exec("ALTER TABLE plex_active_sessions ADD COLUMN clip TEXT");
+    console.log("[db] Migrare v55: plex_active_sessions.clip");
+    database.exec("PRAGMA user_version = 55");
   }
 }
