@@ -6,6 +6,7 @@ import {
   isConfidentSync,
   measureSync,
   parseSrtTiming,
+  dialogueOnly,
   retimeLabel,
   retimeSrt,
   pickReferenceStream,
@@ -274,5 +275,17 @@ describe("pickReferenceStream", () => {
         stream(4, "eng", { codec: "hdmv_pgs_subtitle" }),
       ]),
     ).toBeNull();
+  });
+});
+
+describe("dialogueOnly", () => {
+  it("scoate efectele sonore și muzica, păstrează dialogul", () => {
+    const srt = [
+      "1\n00:00:05,000 --> 00:00:08,000\n[ BIRDS CHIRPING ]",
+      "2\n00:00:09,000 --> 00:00:10,000\n**",
+      "3\n00:00:11,000 --> 00:00:12,000\n-HEY, FRED.\n-HEY.",
+    ].join("\n\n");
+    const t = parseSrtTiming(dialogueOnly(srt));
+    expect(t.starts).toEqual([11]);
   });
 });

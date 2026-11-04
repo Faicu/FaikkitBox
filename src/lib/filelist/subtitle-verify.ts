@@ -60,6 +60,21 @@ export function parseSrtTiming(text: string): SrtTiming {
   return { starts, intervals, lastEnd };
 }
 
+// Referința în engleză e adesea pentru surzi: „[BIRDS CHIRPING]”, „**” pentru
+// muzică. Traducerile române au doar dialog, deci replicile astea strică
+// corelația (Manhunt S01: 0,33 → 0,74 după filtrare, subtitrări corecte respinse).
+export function dialogueOnly(srt: string): string {
+  return srt
+    .replace(/\r/g, "")
+    .split(/\n{2,}/)
+    .filter((block) => {
+      const text = block.split("\n").slice(2).join(" ").trim();
+      if (!text) return false;
+      return !/^[[(].*[\])]$/.test(text) && !/^[*♪#\s-]+$/.test(text);
+    })
+    .join("\n\n");
+}
+
 // Felii de BIN_S secunde: 1 unde se vorbește.
 function toSpeechBins(ivs: Array<[number, number]>, n: number): Uint8Array {
   const v = new Uint8Array(n);
@@ -404,7 +419,7 @@ async function embeddedReferenceTiming(mediaAbsPath: string): Promise<SrtTiming 
       ["-v", "error", "-i", mediaAbsPath, "-map", `0:${ref.index}`, "-f", "srt", "-"],
       { timeout: 180_000, maxBuffer: 32 * 1024 * 1024 },
     );
-    return parseSrtTiming(srt);
+    return parseSrtTiming(dialogueOnly(srt));
   } catch {
     return null;
   }
