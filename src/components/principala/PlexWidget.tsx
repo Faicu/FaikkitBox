@@ -6,7 +6,7 @@ import { useCountUp } from "@/hooks/use-count-up";
 import { useFlashOnChange } from "@/hooks/use-flash-on-change";
 import { UserAvatar } from "@/components/principala/UserAvatar";
 import type { PlexData, PlexSession } from "@/lib/services/plex";
-import { episodeLine } from "@/lib/media/title-label";
+import { episodeLine, watchLabel } from "@/lib/media/title-label";
 import { BorderFlowSweep } from "@/components/BorderFlowSweep";
 
 // Cardul Plex de pe Acasă: cine se uită acum, cifrele zilei, bibliotecile.
@@ -99,7 +99,7 @@ export function PlexWidget({
             >
               {(data.todayViews ?? []).slice(0, 5).map((v, i) => (
                 <div key={i} className="truncate">
-                  {v.show ?? v.title}
+                  {watchLabel(v)}
                 </div>
               ))}
             </StatTile>

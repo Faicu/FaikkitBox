@@ -514,8 +514,9 @@ function mapPlexSessions(sessionsMd: PlexMetadataItem[]): PlexSession[] {
       ratingKey: s.ratingKey,
       type: s.type ?? "",
       subtype: s.subtype,
-      season: s.parentIndex != null ? Number(s.parentIndex) : undefined,
-      episode: s.index != null ? Number(s.index) : undefined,
+      // La muzică parentIndex/index sunt disc/piesă, nu sezon/episod.
+      season: s.type === "episode" && s.parentIndex != null ? Number(s.parentIndex) : undefined,
+      episode: s.type === "episode" && s.index != null ? Number(s.index) : undefined,
       user: s?.User?.title ?? "?",
       device: s?.Player?.device ?? s?.Player?.product ?? "?",
       player: s?.Player?.title ?? "?",
