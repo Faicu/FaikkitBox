@@ -25,7 +25,8 @@ export function mergeConsecutiveEpisodes(items: RecentWatch[]): RecentWatch[] {
     // Ora celei mai recente vizionări, intervalul în ordine crescătoare.
     const latest = run.reduce((a, b) => (b.viewedAt > a.viewedAt ? b : a));
     const nums = run.map((r) => r.episode ?? 0).sort((a, b) => a - b);
-    merged.push({ ...latest, episode: nums[0], episodeEnd: nums[nums.length - 1] });
+    // Fără numele episodului: un interval (S05E05-E06) n-are unul singur.
+    merged.push({ ...latest, title: "", episode: nums[0], episodeEnd: nums[nums.length - 1] });
     run = [];
   };
 

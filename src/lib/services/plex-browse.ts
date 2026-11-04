@@ -7,7 +7,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { SUBTITLE_RETRY_DAYS as RETRY_DAYS } from "../filelist/subtitle-outcomes";
 import type { FileSubtitleReport } from "../filelist/subtitle-outcomes";
-import { secondaryTitle } from "../media/title-label";
+import { isGenericEpisodeName, secondaryTitle } from "../media/title-label";
 
 // Un rând = un film SAU un serial întreg; episoadele se văd doar în drawer.
 // (Lista per episod, grupată în client, arăta un serial de mai multe ori.)
@@ -976,7 +976,10 @@ export const getRecentWatches = createServerFn({ method: "GET" }).handler(
       const cached = db
         .prepare(
           `SELECT plex_rating_key, username, title, show, season, episode, poster_path, viewed_at,
-                  view_offset_ms, duration_ms, completed
+                  view_offset_ms, duration_ms, completed,
+                  (SELECT episode_title FROM media
+                    WHERE plex_rating_key = recent_watch_cache.plex_rating_key
+                      AND media_type = 'episode' LIMIT 1) AS episode_title
            FROM recent_watch_cache
            WHERE viewed_at >= ?
            ORDER BY viewed_at DESC
@@ -989,6 +992,7 @@ export const getRecentWatches = createServerFn({ method: "GET" }).handler(
         show: string | null;
         season: number | null;
         episode: number | null;
+        episode_title: string | null;
         poster_path: string | null;
         viewed_at: number;
         view_offset_ms: number | null;
@@ -998,7 +1002,13 @@ export const getRecentWatches = createServerFn({ method: "GET" }).handler(
 
       const items: RecentWatch[] = cached.map((row) => ({
         ratingKey: row.plex_rating_key,
-        title: row.show ? "" : row.title,
+        // La episoade, numele din `media` (gol dacă lipsește sau e generic);
+        // intervalele unite îl pierd în mergeConsecutiveEpisodes.
+        title: row.show
+          ? isGenericEpisodeName(row.episode_title)
+            ? ""
+            : row.episode_title!
+          : row.title,
         show: row.show,
         season: row.season,
         episode: row.episode,

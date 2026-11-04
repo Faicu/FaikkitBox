@@ -59,6 +59,18 @@ function labels(items: RecentWatch[]): string[] {
 }
 
 describe("mergeConsecutiveEpisodes", () => {
+  it("un interval unit nu păstrează numele unui singur episod; vizionarea singură îl are", () => {
+    const out = mergeConsecutiveEpisodes([
+      ep(6, 30, "ana", { title: "Șase" }),
+      ep(5, 20, "ana", { title: "Cinci" }),
+      ep(9, 10, "ana", { title: "Nouă" }),
+    ]);
+    expect(out.map((r) => [r.episode, r.episodeEnd, r.title])).toEqual([
+      [5, 6, ""],
+      [9, null, "Nouă"],
+    ]);
+  });
+
   it("unește un maraton neîntrerupt într-un singur card", () => {
     const out = mergeConsecutiveEpisodes([ep(1, 100), ep(2, 200), ep(3, 300)]);
     expect(labels(out)).toEqual(["E01-E03"]);
