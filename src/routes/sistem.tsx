@@ -26,7 +26,6 @@ import {
 import { TehnicSubNav } from "@/components/tehnic/TehnicSubNav";
 import { hostQuery } from "@/lib/queries";
 import { requireAdminBeforeLoad } from "@/lib/auth/admin-route-guard";
-import { RefreshRateCard } from "@/components/sistem/RefreshRateCard";
 import { useLiveCounter } from "@/hooks/use-live-counter";
 
 import { formatBytes, formatSpeed, formatDurationHMS } from "@/lib/format";
@@ -79,8 +78,6 @@ function HostPage() {
       <ServiceJobOutput service="ubuntu" />
 
       <PushNotificationsCard push={push} />
-
-      <RefreshRateCard />
 
       {isLoading && (
         <div className="grid grid-cols-2 gap-2">

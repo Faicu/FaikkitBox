@@ -20,7 +20,7 @@ import {
   getUnpushedCommits,
 } from "./github.functions";
 import { getPlexLibraryBrowse, getRecentWatches } from "./services.functions";
-import { getRefreshMs, getFastRefreshMs, REFRESH_DEFAULT_MS } from "./refresh-rate";
+import { REFRESH_MS } from "./refresh-rate";
 import { getNetworkLink } from "./system/network-link.functions";
 import { getDbBackupStatus } from "./system/db-backup.functions";
 import { getShowWatchStatus } from "./media/media.functions";
@@ -38,17 +38,13 @@ import {
   type DiscoverSort,
 } from "./tmdb/tmdb.discover.functions";
 
-// Ritmul statisticilor live e reglabil din Sistem (refresh-rate.ts);
-// `refetchInterval` e o funcție, deci schimbarea are efect imediat. La 1s fix,
-// fiecare tab cerea pe secundă procese, Docker, torrente și Immich — monitorul
-// ajunsese principalul consumator de CPU. Acum serverul cachează (cachedAsync),
-// deci N tab-uri costă cât unul.
+// Statisticile live se cer la 1s (refresh-rate.ts). Serverul cachează
+// (cachedAsync), deci N tab-uri costă cât unul.
 
-// Listele care se schimbă rar au un ritm propriu, dar urmează și ele un ritm
-// cerut mai lent (economie de baterie).
-const slower = (factor: number) => () => getRefreshMs() * factor;
+// Listele care se schimbă rar au un ritm propriu, multiplu al celui de bază.
+const slower = (factor: number) => REFRESH_MS * factor;
 
-// Pulsul Bibliotecii: 30s la implicitul de 3s, 5 min la 30s.
+// Pulsul Bibliotecii: 10s când nu se descarcă nimic.
 const LIBRARY_IDLE_FACTOR = 10;
 
 // Datele vechi rămân afișate cât se încarcă cele noi.
@@ -67,7 +63,7 @@ export const plexQuery = queryOptions({
 export const plexSessionsQuery = queryOptions({
   queryKey: ["plexSessions"],
   queryFn: () => getPlexSessions(),
-  refetchInterval: () => getFastRefreshMs(),
+  refetchInterval: REFRESH_MS,
   refetchIntervalInBackground: false,
   staleTime: 1_000,
   ...keepPrev,
@@ -76,7 +72,7 @@ export const plexSessionsQuery = queryOptions({
 export const immichQuery = queryOptions({
   queryKey: ["immich"],
   queryFn: () => getImmich(),
-  refetchInterval: () => getRefreshMs(),
+  refetchInterval: REFRESH_MS,
   staleTime: 0,
   ...keepPrev,
 });
@@ -93,7 +89,7 @@ export const immichTrackerQuery = queryOptions({
 export const qbitQuery = queryOptions({
   queryKey: ["qbit"],
   queryFn: () => getQbit(),
-  refetchInterval: () => getRefreshMs(),
+  refetchInterval: REFRESH_MS,
   staleTime: 0,
   ...keepPrev,
 });
@@ -101,7 +97,7 @@ export const qbitQuery = queryOptions({
 export const hostQuery = queryOptions({
   queryKey: ["host"],
   queryFn: () => getHost(),
-  refetchInterval: () => getRefreshMs(),
+  refetchInterval: REFRESH_MS,
   // Fără cereri cu tabul minimizat — nimeni nu le vede.
   refetchIntervalInBackground: false,
   staleTime: 0,
@@ -239,18 +235,18 @@ export const speedtestStateQuery = queryOptions({
 export const plexLibraryBrowseQuery = queryOptions({
   queryKey: ["plexLibraryBrowse"],
   queryFn: () => getPlexLibraryBrowse(),
-  // Cât se descarcă ceva: ritmul ales (progres live). Altfel un puls lent, ca
+  // Cât se descarcă ceva: ritmul de bază (progres live). Altfel un puls lent, ca
   // un titlu adăugat de pe alt dispozitiv să apară singur. Rulează doar cât
   // pagina Bibliotecă e deschisă și citește doar din `media`.
   refetchInterval: (query) => {
     const data = query.state.data;
     const items = data?.status === "ok" ? data.items : [];
     return items.some((it) => it.status === "downloading")
-      ? getRefreshMs()
-      : slower(LIBRARY_IDLE_FACTOR)();
+      ? REFRESH_MS
+      : slower(LIBRARY_IDLE_FACTOR);
   },
   // staleTime aliniat la puls.
-  staleTime: LIBRARY_IDLE_FACTOR * REFRESH_DEFAULT_MS,
+  staleTime: LIBRARY_IDLE_FACTOR * REFRESH_MS,
   // La revenirea în tab, reîmprospătare imediată.
   refetchOnWindowFocus: true,
 });
