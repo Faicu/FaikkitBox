@@ -41,19 +41,13 @@ import {
 // Statisticile live se cer la 1s (refresh-rate.ts). Serverul cachează
 // (cachedAsync), deci N tab-uri costă cât unul.
 
-// Listele care se schimbă rar au un ritm propriu, multiplu al celui de bază.
-const slower = (factor: number) => REFRESH_MS * factor;
-
-// Pulsul Bibliotecii: 10s când nu se descarcă nimic.
-const LIBRARY_IDLE_FACTOR = 10;
-
 // Datele vechi rămân afișate cât se încarcă cele noi.
 const keepPrev = { placeholderData: <T>(prev: T) => prev };
 
 export const plexQuery = queryOptions({
   queryKey: ["plex"],
   queryFn: () => getPlex(),
-  refetchInterval: slower(3),
+  refetchInterval: REFRESH_MS,
   refetchIntervalInBackground: false,
   staleTime: 10_000,
   ...keepPrev,
@@ -132,7 +126,7 @@ export const activityLogQuery = queryOptions({
     return { entries: res.entries, cursor: res.cursor, fullAt: Date.now() };
   },
   select: (data) => data.entries,
-  refetchInterval: slower(2),
+  refetchInterval: REFRESH_MS,
   staleTime: 2_000,
   ...keepPrev,
 });
@@ -140,7 +134,7 @@ export const activityLogQuery = queryOptions({
 export const errorLogQuery = queryOptions({
   queryKey: ["errorLog"],
   queryFn: () => getErrorLogs(),
-  refetchInterval: slower(5),
+  refetchInterval: REFRESH_MS,
   staleTime: 5_000,
   ...keepPrev,
 });
@@ -235,18 +229,9 @@ export const speedtestStateQuery = queryOptions({
 export const plexLibraryBrowseQuery = queryOptions({
   queryKey: ["plexLibraryBrowse"],
   queryFn: () => getPlexLibraryBrowse(),
-  // Cât se descarcă ceva: ritmul de bază (progres live). Altfel un puls lent, ca
-  // un titlu adăugat de pe alt dispozitiv să apară singur. Rulează doar cât
-  // pagina Bibliotecă e deschisă și citește doar din `media`.
-  refetchInterval: (query) => {
-    const data = query.state.data;
-    const items = data?.status === "ok" ? data.items : [];
-    return items.some((it) => it.status === "downloading")
-      ? REFRESH_MS
-      : slower(LIBRARY_IDLE_FACTOR);
-  },
-  // staleTime aliniat la puls.
-  staleTime: LIBRARY_IDLE_FACTOR * REFRESH_MS,
+  // Rulează doar cât pagina Bibliotecă e deschisă și citește doar din `media`.
+  refetchInterval: REFRESH_MS,
+  staleTime: REFRESH_MS,
   // La revenirea în tab, reîmprospătare imediată.
   refetchOnWindowFocus: true,
 });
