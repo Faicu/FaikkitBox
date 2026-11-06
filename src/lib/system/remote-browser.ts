@@ -38,7 +38,9 @@ function isPrivateIp(ip: string): boolean {
   if (ip.includes(":")) {
     const l = ip.toLowerCase();
     if (l.startsWith("::ffff:")) return isPrivateIp(l.slice(7));
-    return l === "::1" || l === "::" || l.startsWith("fc") || l.startsWith("fd") || l.startsWith("fe80");
+    return (
+      l === "::1" || l === "::" || l.startsWith("fc") || l.startsWith("fd") || l.startsWith("fe80")
+    );
   }
   const [a, b] = ip.split(".").map(Number);
   return (
@@ -57,7 +59,12 @@ const hostCache = new Map<string, boolean>();
 // true dacă hostul duce în rețeaua locală / serverul însuși.
 async function isInternalHost(host: string): Promise<boolean> {
   const h = host.replace(/^\[|\]$/g, "").toLowerCase();
-  if (h === "localhost" || h.endsWith(".localhost") || h.endsWith(".local") || h.endsWith(".internal")) {
+  if (
+    h === "localhost" ||
+    h.endsWith(".localhost") ||
+    h.endsWith(".local") ||
+    h.endsWith(".internal")
+  ) {
     return true;
   }
   if (isIP(h)) return isPrivateIp(h);

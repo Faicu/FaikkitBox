@@ -77,9 +77,7 @@ function BrowserPage() {
     const url = address.trim();
     if (!url) return;
     void send(
-      hasSession
-        ? { type: "goto", url }
-        : { type: "open", width: VIEW_W, height: VIEW_H, url },
+      hasSession ? { type: "goto", url } : { type: "open", width: VIEW_W, height: VIEW_H, url },
     );
   };
 
@@ -104,7 +102,7 @@ function BrowserPage() {
     };
     img.addEventListener("wheel", onWheel, { passive: false });
     return () => img.removeEventListener("wheel", onWheel);
-  }); // eslint-disable-line react-hooks/exhaustive-deps
+  });
 
   // Derulare cu degetul pe telefon.
   const touch = useRef<{ y: number; x: number } | null>(null);
@@ -177,7 +175,6 @@ function BrowserPage() {
           style={{ width: "100%", maxWidth: VIEW_W }}
         >
           {shot ? (
-            // eslint-disable-next-line @next/next/no-img-element
             <img
               ref={imgRef}
               src={shot.image}
