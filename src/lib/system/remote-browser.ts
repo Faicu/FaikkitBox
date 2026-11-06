@@ -116,6 +116,12 @@ async function launch(width: number, height: number): Promise<Session> {
       locale: "ro-RO",
       acceptDownloads: false,
       serviceWorkers: "block",
+      // Unele site-uri (eMag) răspund 410 la „HeadlessChrome”: trimitem UA-ul
+      // unui Chrome obișnuit, cu aceeași versiune ca browserul lansat.
+      userAgent: `Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${browser.version().split(".")[0]}.0.0.0 Safari/537.36`,
+    });
+    await context.addInitScript(() => {
+      Object.defineProperty(navigator, "webdriver", { get: () => false });
     });
     // Fiecare cerere (inclusiv subresursele și redirecturile) trece prin filtrul de rețea locală.
     await context.route("**/*", async (route) => {
