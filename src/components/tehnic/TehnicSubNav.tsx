@@ -7,6 +7,7 @@ const items = [
   { to: "/users", label: "Utilizatori" },
   { to: "/contributii", label: "Contribuții" },
   { to: "/sistem", label: "Sistem" },
+  { to: "/browser", label: "Browser" },
 ] as const;
 
 export function TehnicSubNav() {
