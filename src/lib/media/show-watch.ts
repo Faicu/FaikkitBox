@@ -129,13 +129,8 @@ async function writeShowMeta(
     const { getTvmazeAirstampsInternal } = await import("../tvmaze/tvmaze.functions");
     const stamps = await getTvmazeAirstampsInternal(imdbId).catch(() => []);
     // Doar dacă e chiar același episod — vezi next-episode-airstamp.ts.
-    const { matchingAirstamp } = await import("./next-episode-airstamp");
-    airstamp = matchingAirstamp(
-      stamps.find(
-        (a) => a.seasonNumber === next.seasonNumber && a.episodeNum === next.episodeNumber,
-      )?.airstamp ?? null,
-      next.airDate ?? null,
-    );
+    const { pickAirstamp } = await import("./next-episode-airstamp");
+    airstamp = pickAirstamp(stamps, next);
   }
 
   // Titlurile, descrierea, genurile și posterul se împrospătează la fiecare
