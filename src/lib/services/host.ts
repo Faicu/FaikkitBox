@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import type { Systeminformation } from "systeminformation";
 import { cachedAsync, errMsg, type ServiceStatus } from "./shared";
+import { counterRate, normalizeContainerCpu, type CounterSnapshot } from "./host-rates";
 
 export interface HostData {
   status: ServiceStatus;
@@ -15,7 +16,6 @@ export interface HostData {
   memPercent?: number;
   memUsedBytes?: number;
   memTotalBytes?: number;
-  swapPercent?: number;
   disks?: Array<{
     mount: string;
     percent: number;
@@ -35,7 +35,6 @@ export interface HostData {
     netTx?: number;
     source: "process" | "container";
   }>;
-  diskIO?: Array<{ name: string; ioRead: number; ioWrite: number }>;
 }
 
 // Cache pentru datele statice.
@@ -51,6 +50,9 @@ interface DiskSnapshot {
   ts: number;
 }
 const prevDiskStats: Record<string, DiskSnapshot> = {};
+
+// Contoarele de rețea ale containerelor sunt cumulative; viteza o calculăm noi.
+const prevContainerNet = new Map<string, { rx: CounterSnapshot; wx: CounterSnapshot }>();
 
 async function readProcDiskstats(): Promise<Record<string, { rSec: number; wSec: number }>> {
   try {
@@ -170,11 +172,16 @@ async function collectHostData(): Promise<HostData> {
         ? [{ label: "CPU", value: cpuTemp.main, unit: "°C" }]
         : [];
 
-    const topProcesses = (processes.list ?? [])
-      .slice()
-      .sort((a, b) => Number(b.cpu ?? 0) - Number(a.cpu ?? 0))
-      .slice(0, 6)
-      .map((p) => ({ name: p.name || "?", cpu: Number(p.cpu ?? 0), mem: Number(p.mem ?? 0) }));
+    // Același nume (ex. mai multe procese „Plex”) → un singur rând, însumat.
+    const byName = new Map<string, { name: string; cpu: number; mem: number }>();
+    for (const p of processes.list ?? []) {
+      const name = p.name || "?";
+      const row = byName.get(name) ?? { name, cpu: 0, mem: 0 };
+      row.cpu += Number(p.cpu ?? 0);
+      row.mem += Number(p.mem ?? 0);
+      byName.set(name, row);
+    }
+    const topProcesses = [...byName.values()].sort((a, b) => b.cpu - a.cpu).slice(0, 6);
 
     // Containerele Docker (Plex, Immich), după nume/imagine; qBittorrent e
     // proces systemd, căutat în lista de procese.
@@ -193,10 +200,21 @@ async function collectHostData(): Promise<HostData> {
         Promise.all(
           dockerContainers.map(async (c) => {
             try {
-              const stats = await si.dockerContainerStats(c.id);
-              return { container: c, stats: Array.isArray(stats) ? stats[0] : stats };
+              const raw = await si.dockerContainerStats(c.id);
+              const stats = Array.isArray(raw) ? raw[0] : raw;
+              const ts = Date.now();
+              const rx = Number(stats?.netIO?.rx ?? 0);
+              const wx = Number(stats?.netIO?.wx ?? 0);
+              const prev = prevContainerNet.get(c.id);
+              prevContainerNet.set(c.id, { rx: { value: rx, ts }, wx: { value: wx, ts } });
+              return {
+                container: c,
+                stats,
+                rxSec: counterRate(prev?.rx, rx, ts),
+                txSec: counterRate(prev?.wx, wx, ts),
+              };
             } catch {
-              return { container: c, stats: null };
+              return { container: c, stats: null, rxSec: undefined, txSec: undefined };
             }
           }),
         ),
@@ -210,14 +228,14 @@ async function collectHostData(): Promise<HostData> {
       if (matchedContainers.length > 0) {
         let cpuSum = 0;
         let memSum = 0;
-        let rxSum = 0;
-        let txSum = 0;
-        for (const { stats } of matchedContainers) {
+        let rxSum: number | undefined;
+        let txSum: number | undefined;
+        for (const { stats, rxSec, txSec } of matchedContainers) {
           if (!stats) continue;
-          cpuSum += Number(stats.cpuPercent ?? 0);
+          cpuSum += normalizeContainerCpu(Number(stats.cpuPercent ?? 0), cpu.cores);
           memSum += Number(stats.memPercent ?? 0);
-          rxSum += Number(stats.netIO?.rx ?? 0);
-          txSum += Number(stats.netIO?.wx ?? 0);
+          if (rxSec != null) rxSum = (rxSum ?? 0) + rxSec;
+          if (txSec != null) txSum = (txSum ?? 0) + txSec;
         }
         return {
           name,
@@ -249,15 +267,11 @@ async function collectHostData(): Promise<HostData> {
       memPercent: mem.total ? (mem.active / mem.total) * 100 : 0,
       memUsedBytes: mem.active,
       memTotalBytes: mem.total,
-      swapPercent: mem.swaptotal ? (mem.swapused / mem.swaptotal) * 100 : 0,
       disks,
       net,
       sensors,
       topProcesses,
       apps,
-      // I/O per proces nu e disponibil portabil — mai bine listă goală decât
-      // date incorecte.
-      diskIO: [],
     };
   } catch (e) {
     return { status: "error", configured: true, error: errMsg(e) };

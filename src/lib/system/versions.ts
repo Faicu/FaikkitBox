@@ -17,6 +17,7 @@ export type ServiceVersion = {
   // Doar Ubuntu: câte pachete ar instala Update și dacă sistemul cere reboot.
   pending?: number;
   rebootRequired?: boolean;
+  rebootPackages?: string[];
 };
 
 function normalize(v?: string) {
@@ -131,6 +132,7 @@ async function ubuntuVersion(): Promise<ServiceVersion> {
     const st = await readUbuntuStatus();
     v.pending = st.pending;
     v.rebootRequired = st.rebootRequired;
+    v.rebootPackages = st.rebootPackages;
     v.upToDate = st.pending === 0;
   } catch (e) {
     v.error = `Ubuntu: ${(e as Error).message}`;
