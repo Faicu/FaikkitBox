@@ -920,6 +920,12 @@ function AudienceCard({
               <div key={u.username} className="flex items-baseline justify-between gap-3">
                 <span className="min-w-0 truncate font-medium">{u.username}</span>
                 <span className="shrink-0 text-[10px] text-muted-foreground">
+                  {u.lastEpisode && (
+                    <>
+                      <span className="font-medium text-foreground/80">{u.lastEpisode}</span>
+                      {` · ${u.episodesWatched} din ${d.episodes.length} · `}
+                    </>
+                  )}
                   {dayTimeLabel(u.viewedAt)}
                 </span>
               </div>

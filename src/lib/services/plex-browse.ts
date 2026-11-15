@@ -7,7 +7,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { SUBTITLE_RETRY_DAYS as RETRY_DAYS } from "../filelist/subtitle-outcomes";
 import type { FileSubtitleReport } from "../filelist/subtitle-outcomes";
-import { isGenericEpisodeName, secondaryTitle } from "../media/title-label";
+import { isGenericEpisodeName, seasonEpisodeLabel, secondaryTitle } from "../media/title-label";
 
 // Un rând = un film SAU un serial întreg; episoadele se văd doar în drawer.
 // (Lista per episod, grupată în client, arăta un serial de mai multe ori.)
@@ -436,7 +436,13 @@ export interface PlexTitleDetail {
   genres: string[];
   watchedByMe: boolean;
   watchedByMeAt: number | null;
-  watchedByOthers: Array<{ username: string; viewedAt: number }>;
+  // La serial: ultimul episod văzut (după dată) și câte, din `episodes.length`.
+  watchedByOthers: Array<{
+    username: string;
+    viewedAt: number;
+    lastEpisode?: string | null;
+    episodesWatched?: number;
+  }>;
   addedByUsername: string | null;
   status: "in_library" | "downloading" | "processing";
   // Progres live din qBittorrent — vezi PlexBrowseItem.
@@ -668,14 +674,26 @@ async function buildDetailFromMediaRow(
           episode: row.episode,
         },
       ];
-  const watchedByAll: Array<{ username: string; viewedAt: number }> = [];
+  const watchedByAll: PlexTitleDetail["watchedByOthers"] = [];
   for (const [username, index] of Object.entries(allWatchedIndexes)) {
     // La serial: cea mai recentă vizionare, un rând per utilizator.
-    const viewedAts = matchUnits
-      .map((u) => getWatchedAt(index, u))
-      .filter((v): v is number => v != null);
-    if (viewedAts.length === 0) continue;
-    watchedByAll.push({ username, viewedAt: Math.max(...viewedAts) });
+    let last: { unit: (typeof matchUnits)[number]; viewedAt: number } | null = null;
+    let count = 0;
+    for (const u of matchUnits) {
+      const viewedAt = getWatchedAt(index, u);
+      if (viewedAt == null) continue;
+      count++;
+      if (!last || viewedAt >= last.viewedAt) last = { unit: u, viewedAt };
+    }
+    if (!last) continue;
+    watchedByAll.push({
+      username,
+      viewedAt: last.viewedAt,
+      ...(isShow && {
+        lastEpisode: seasonEpisodeLabel(last.unit.season, last.unit.episode),
+        episodesWatched: count,
+      }),
+    });
   }
 
   if (!isShow && row.plex_rating_key && !watchedByAll.some((w) => w.username === myHistoryName)) {
