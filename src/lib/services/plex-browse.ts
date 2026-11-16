@@ -1000,8 +1000,7 @@ export const getRecentWatches = createServerFn({ method: "GET" }).handler(
                       AND media_type = 'episode' LIMIT 1) AS episode_title
            FROM recent_watch_cache
            WHERE viewed_at >= ?
-           ORDER BY viewed_at DESC
-           LIMIT 100`,
+           ORDER BY viewed_at DESC`,
         )
         .all(cutoff) as unknown as Array<{
         plex_rating_key: string;
@@ -1046,8 +1045,8 @@ export const getRecentWatches = createServerFn({ method: "GET" }).handler(
       }));
       const merged = mergeConsecutiveEpisodes(items);
       merged.sort((a, b) => b.viewedAt - a.viewedAt);
-      // Toată fereastra de 30 de zile (max 100); cardul arată 8 și desfășoară
-      // restul la cerere.
+      // Toată fereastra de 30 de zile, fără plafon — un plafon tăia fereastra
+      // la câteva zile. Cardul arată 8 și desfășoară restul la cerere.
       return { status: "ok", items: merged };
     } catch (e) {
       return { status: "error", error: e instanceof Error ? e.message : String(e) };

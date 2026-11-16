@@ -21,6 +21,12 @@ export function RecentWatchesWidget({ items }: { items: RecentWatch[] }) {
   // iconiță.
   const [broken, setBroken] = useState<Set<string>>(new Set());
 
+  // Vizionările reale, nu cardurile: un interval unit (S02E03-E05) înseamnă trei.
+  const watchCount = items.reduce(
+    (n, it) => n + (it.episodeEnd != null && it.episode != null ? it.episodeEnd - it.episode + 1 : 1),
+    0,
+  );
+
   const visible = expanded ? items : items.slice(0, COLLAPSED);
   const groups = groupByDay(visible);
 
@@ -33,7 +39,7 @@ export function RecentWatchesWidget({ items }: { items: RecentWatch[] }) {
         <div className="min-w-0 flex-1">
           <div className="font-semibold leading-tight">Vizionări recente</div>
           <div className="text-[11px] text-muted-foreground">
-            {pluralRo(items.length, "vizionare", "vizionări")} în ultimele 30 de zile
+            {pluralRo(watchCount, "vizionare", "vizionări")} în ultimele 30 de zile
           </div>
         </div>
       </div>
