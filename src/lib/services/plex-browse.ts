@@ -1013,22 +1013,38 @@ async function syncRecentWatchCache(db: import("node:sqlite").DatabaseSync): Pro
     ).map((m) => [m.plex_rating_key, m]),
   );
   // Un titlu șters apare în istoric fără ratingKey, dar rândul lui poate fi
-  // deja în cache sub cheia veche — aceeași vizionare, aceeași oră.
-  const sameMoment = db.prepare(
+  // deja în cache sub cheia veche, cu ora opririi (minute după cea din Plex)
+  // și alt titlu (originalul în loc de cel românesc) — deci după oră și
+  // episod, nu după titlu.
+  const alreadyCached = db.prepare(
     `SELECT 1 FROM recent_watch_cache
-     WHERE username = ? AND viewed_at BETWEEN ? AND ? LIMIT 1`,
+     WHERE username = ? AND plex_rating_key NOT LIKE '${HISTORY_KEY_PREFIX}%'
+       AND ((? IS NULL AND season IS NULL AND abs(viewed_at - ?) < 1200)
+         OR (season = ? AND episode = ? AND abs(viewed_at - ?) < 21600))
+     LIMIT 1`,
   );
 
   let maxViewedAt = historySyncedUpTo;
   db.exec("BEGIN");
   try {
+    // Rândurile fără ratingKey vin doar de aici — la prima trecere se refac
+    // de la zero, ca o regulă de potrivire schimbată să se aplice și lor.
+    if (historySyncedUpTo === 0) {
+      db.prepare(`DELETE FROM recent_watch_cache WHERE plex_rating_key LIKE ?`).run(
+        `${HISTORY_KEY_PREFIX}%`,
+      );
+    }
     for (const e of entries) {
       maxViewedAt = Math.max(maxViewedAt, e.viewedAt);
       const isEpisode = e.type === "episode";
       let key = e.ratingKey;
       if (!key) {
         if (!e.historyId) continue;
-        if (sameMoment.get(e.user!, e.viewedAt - 60, e.viewedAt + 60)) continue;
+        const season = e.season ?? null;
+        const episode = e.episode ?? null;
+        if (alreadyCached.get(e.user!, season, e.viewedAt, season, episode, e.viewedAt) != null) {
+          continue;
+        }
         key = HISTORY_KEY_PREFIX + e.historyId;
       }
       const m = mediaByKey.get(key);
@@ -1056,7 +1072,8 @@ async function syncRecentWatchCache(db: import("node:sqlite").DatabaseSync): Pro
 }
 
 export const getRecentWatches = createServerFn({ method: "GET" })
-  .validator((data: { limit: number }) => data)
+  // Fără `data` din taburile deschise înainte de paginare.
+  .validator((data?: { limit?: number }) => ({ limit: data?.limit ?? 10 }))
   .handler(
     async ({
       data,
