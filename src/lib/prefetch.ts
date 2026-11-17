@@ -35,6 +35,7 @@ import {
   qbitQuery,
   recentCommitsQuery,
   recentWatchesQuery,
+  watchStatsQuery,
   serviceJobsQuery,
   showWatchStatusQuery,
   speedtestHistoryQuery,
@@ -52,7 +53,8 @@ import {
 const USER_QUERIES = [
   plexQuery,
   plexSessionsQuery,
-  recentWatchesQuery,
+  recentWatchesQuery(),
+  watchStatsQuery,
   plexLibraryBrowseQuery,
   wantedMoviesQuery,
 ];

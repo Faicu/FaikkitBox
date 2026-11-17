@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Plus, LogIn, UserPlus, Sparkles } from "lucide-react";
 import { useState } from "react";
 
@@ -16,7 +16,16 @@ import { FilelistSection } from "@/components/filelist/FilelistSection";
 import { SupportWidget } from "@/components/principala/SupportWidget";
 import { PlexWidget } from "@/components/principala/PlexWidget";
 import { RecentWatchesWidget } from "@/components/principala/RecentWatchesWidget";
-import { plexQuery, plexSessionsQuery, adminStatusQuery, recentWatchesQuery } from "@/lib/queries";
+import { WatchStatsWidget } from "@/components/principala/WatchStatsWidget";
+import {
+  plexQuery,
+  plexSessionsQuery,
+  adminStatusQuery,
+  recentWatchesQuery,
+  watchStatsQuery,
+  RECENT_WATCHES_INITIAL,
+  RECENT_WATCHES_STEP,
+} from "@/lib/queries";
 import { BorderFlowSweep } from "@/components/BorderFlowSweep";
 import { watchLabel } from "@/lib/media/title-label";
 
@@ -39,11 +48,15 @@ function Overview() {
   const isAdmin = !!adminData?.isAdmin;
   const plex = useQuery({ ...plexQuery, enabled: isAuthenticated });
   const plexSessions = useQuery({ ...plexSessionsQuery, enabled: isAuthenticated });
+  const [recentLimit, setRecentLimit] = useState(RECENT_WATCHES_INITIAL);
   const recentWatches = useQuery({
-    ...recentWatchesQuery,
+    ...recentWatchesQuery(recentLimit),
     enabled: isAuthenticated,
+    // Lista rămâne pe ecran cât se încarcă pagina următoare.
+    placeholderData: keepPreviousData,
   });
-  const recentWatchItems = recentWatches.data?.status === "ok" ? recentWatches.data.items : [];
+  const recentWatchesData = recentWatches.data?.status === "ok" ? recentWatches.data : null;
+  const watchStats = useQuery({ ...watchStatsQuery, enabled: isAuthenticated });
   const sessions =
     plexSessions.data?.status === "ok" ? plexSessions.data.sessions : plex.data?.sessions;
   const [plexDrawer, setPlexDrawer] = useState<"views" | "users" | null>(null);
@@ -110,9 +123,22 @@ function Overview() {
         />
       )}
 
-      {isAuthenticated && recentWatchItems.length > 0 && (
-        <RecentWatchesWidget items={recentWatchItems} />
+      {isAuthenticated && recentWatchesData && recentWatchesData.items.length > 0 && (
+        <RecentWatchesWidget
+          items={recentWatchesData.items}
+          totalCards={recentWatchesData.totalCards}
+          totals={recentWatchesData.totals}
+          initial={RECENT_WATCHES_INITIAL}
+          step={RECENT_WATCHES_STEP}
+          onMore={() => setRecentLimit((n) => n + RECENT_WATCHES_STEP)}
+          onLess={() => setRecentLimit(RECENT_WATCHES_INITIAL)}
+          loadingMore={recentWatches.isPlaceholderData}
+        />
       )}
+
+      {isAuthenticated &&
+        watchStats.data?.status === "ok" &&
+        watchStats.data.stats.month.total > 0 && <WatchStatsWidget stats={watchStats.data.stats} />}
 
       <Drawer open={plexDrawer === "views"} onOpenChange={(o) => !o && setPlexDrawer(null)}>
         <DrawerContent className="max-h-[85vh]">

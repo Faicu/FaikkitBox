@@ -3,32 +3,50 @@ import { CheckCircle2, Eye, Film } from "lucide-react";
 
 import { UserAvatar } from "@/components/principala/UserAvatar";
 import { relativeTime } from "@/components/tehnic/utils";
-import { pluralRo } from "@/lib/format";
+import { countRo } from "@/lib/format";
 import { resizePosterUrl } from "@/lib/tmdb/poster";
-import type { RecentWatch } from "@/lib/services/recent-watch-types";
+import type { RecentWatch, RecentWatchTotals } from "@/lib/services/recent-watch-types";
 
-// Câte vizionări arată cardul de pe Acasă înainte de "Arată mai multe".
-// Serverul trimite tot ce e în fereastra de 30 de zile, deci tăierea e aici,
-// unde contează — pe lungimea paginii principale.
-const COLLAPSED = 8;
 const TZ = "Europe/Bucharest";
 
-// Cronologia vizionărilor din ultimele 30 de zile, grupată pe zile.
-export function RecentWatchesWidget({ items }: { items: RecentWatch[] }) {
-  const [expanded, setExpanded] = useState(false);
+// Cronologia vizionărilor, grupată pe zile. Serverul trimite primele `limit`
+// carduri; „Arată mai multe” cere încă un rând de pagini.
+export function RecentWatchesWidget({
+  items,
+  totalCards,
+  totals,
+  initial,
+  step,
+  onMore,
+  onLess,
+  loadingMore,
+}: {
+  items: RecentWatch[];
+  totalCards: number;
+  totals: RecentWatchTotals;
+  initial: number;
+  step: number;
+  onMore: () => void;
+  onLess: () => void;
+  loadingMore: boolean;
+}) {
   // Miniaturile vin din Plex prin proxy; dacă item-ul a dispărut între timp,
   // imaginea ar rămâne o casetă goală — ținem minte ce n-a mers și cădem pe
   // iconiță.
   const [broken, setBroken] = useState<Set<string>>(new Set());
 
-  // Vizionările reale, nu cardurile: un interval unit (S02E03-E05) înseamnă trei.
-  const watchCount = items.reduce(
-    (n, it) => n + (it.episodeEnd != null && it.episode != null ? it.episodeEnd - it.episode + 1 : 1),
-    0,
-  );
-
-  const visible = expanded ? items : items.slice(0, COLLAPSED);
-  const groups = groupByDay(visible);
+  const groups = groupByDay(items);
+  // Rândurile apărute la „Arată mai multe” își încep cascada de la zero.
+  const firstNew = items.length > initial ? Math.max(initial, items.length - step) : 0;
+  const remaining = totalCards - items.length;
+  const since =
+    totals.since != null
+      ? new Date(totals.since * 1000).toLocaleDateString("ro-RO", {
+          month: "short",
+          year: "numeric",
+          timeZone: TZ,
+        })
+      : null;
 
   return (
     <div className="corner-glow corner-glow-emerald rounded-2xl glass-card p-4">
@@ -39,7 +57,11 @@ export function RecentWatchesWidget({ items }: { items: RecentWatch[] }) {
         <div className="min-w-0 flex-1">
           <div className="font-semibold leading-tight">Vizionări recente</div>
           <div className="text-[11px] text-muted-foreground">
-            {pluralRo(watchCount, "vizionare", "vizionări")} în ultimele 30 de zile
+            {countRo(totals.last30Days, "vizionare", "vizionări")} în ultimele 30 de zile
+          </div>
+          <div className="text-[11px] text-muted-foreground/80">
+            {countRo(totals.all, "vizionare", "vizionări")} în total
+            {since ? ` (din ${since})` : ""}
           </div>
         </div>
       </div>
@@ -60,9 +82,7 @@ export function RecentWatchesWidget({ items }: { items: RecentWatch[] }) {
                 <WatchRow
                   key={`${it.ratingKey}-${it.username}-${it.viewedAt}`}
                   item={it}
-                  // Rândurile apărute la „Arată mai multe” își încep cascada
-                  // de la zero, nu după primele opt.
-                  delayMs={Math.min((index < COLLAPSED ? index : index - COLLAPSED) * 45, 600)}
+                  delayMs={Math.min((index < firstNew ? index : index - firstNew) * 45, 600)}
                   showImage={!!it.thumbUrl && !broken.has(it.thumbUrl)}
                   onImageError={() => setBroken((prev) => new Set(prev).add(it.thumbUrl!))}
                   today={g.today}
@@ -73,14 +93,28 @@ export function RecentWatchesWidget({ items }: { items: RecentWatch[] }) {
         ))}
       </div>
 
-      {items.length > COLLAPSED && (
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          className="mt-3 w-full rounded-xl border border-white/5 bg-muted/30 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground active:scale-[0.99]"
-        >
-          {expanded ? "Arată mai puține" : `Arată mai multe (${items.length - COLLAPSED})`}
-        </button>
+      {(remaining > 0 || items.length > initial) && (
+        <div className="mt-3 flex gap-2">
+          {remaining > 0 && (
+            <button
+              type="button"
+              onClick={onMore}
+              disabled={loadingMore}
+              className="flex-1 rounded-xl border border-white/5 bg-muted/30 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground active:scale-[0.99] disabled:opacity-60"
+            >
+              {loadingMore ? "Se încarcă…" : `Arată mai multe (${Math.min(step, remaining)})`}
+            </button>
+          )}
+          {items.length > initial && (
+            <button
+              type="button"
+              onClick={onLess}
+              className="flex-1 rounded-xl border border-white/5 bg-muted/30 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground active:scale-[0.99]"
+            >
+              Arată mai puține
+            </button>
+          )}
+        </div>
       )}
     </div>
   );

@@ -16,3 +16,28 @@ export interface RecentWatch {
   progressMinutes: number | null;
   durationMinutes: number | null;
 }
+
+export interface RecentWatchTotals {
+  all: number;
+  last30Days: number;
+  // Cea mai veche vizionare păstrată (secunde), null cât tabelul e gol.
+  since: number | null;
+}
+
+export interface WatchStatsBucket {
+  key: string;
+  label: string;
+  count: number;
+}
+
+export interface WatchStatsPeriod {
+  buckets: WatchStatsBucket[];
+  users: Array<{ username: string; count: number }>;
+  total: number;
+}
+
+export interface RecentWatchStats {
+  day: WatchStatsPeriod;
+  week: WatchStatsPeriod;
+  month: WatchStatsPeriod;
+}

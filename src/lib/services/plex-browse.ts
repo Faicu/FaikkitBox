@@ -910,144 +910,276 @@ export const getPlexTitleDetail = createServerFn({ method: "GET" })
   );
 
 // ---------------------------------------------------------------------------
-// „Vizionări recente” (Acasă). Sursa e `recent_watch_cache`, care supraviețuiește
-// ștergerii titlului; aici adăugăm vizionările noi din istoricul Plex, cât
-// timp titlul mai e în `media`.
+// „Vizionări recente” (Acasă). Sursa e `recent_watch_cache`, păstrat fără
+// limită de timp și completat din tot istoricul Plex, inclusiv titlurile șterse.
 // ---------------------------------------------------------------------------
 
-export type { RecentWatch } from "./recent-watch-types";
-import type { RecentWatch } from "./recent-watch-types";
+export type {
+  RecentWatch,
+  RecentWatchStats,
+  RecentWatchTotals,
+  WatchStatsPeriod,
+} from "./recent-watch-types";
+import type { RecentWatch, RecentWatchStats, RecentWatchTotals } from "./recent-watch-types";
 import { mergeConsecutiveEpisodes } from "./recent-watch-merge";
 
 const RECENT_WATCH_WINDOW_SECONDS = 30 * 24 * 60 * 60;
 const RECENT_TITLES_LIMIT = 200;
+// Cheia rândurilor din istoricul Plex fără ratingKey: titlurile șterse îl pierd.
+const HISTORY_KEY_PREFIX = "h:";
 
-export const getRecentWatches = createServerFn({ method: "GET" }).handler(
+// Până unde e copiat istoricul Plex în cache, în procesul ăsta. La pornire 0:
+// o trecere completă, apoi doar intrările noi.
+let historySyncedUpTo = 0;
+
+async function syncRecentWatchCache(db: import("node:sqlite").DatabaseSync): Promise<void> {
+  const rows = db
+    .prepare(
+      `SELECT plex_rating_key, media_type, title, original_title, season, episode, poster_path
+       FROM media
+       WHERE media_type IN ('movie', 'episode')
+         AND plex_rating_key IS NOT NULL
+       ORDER BY added_at DESC
+       LIMIT ?`,
+    )
+    .all(RECENT_TITLES_LIMIT) as unknown as Array<{
+    plex_rating_key: string | null;
+    media_type: string;
+    title: string;
+    original_title: string | null;
+    season: number | null;
+    episode: number | null;
+    poster_path: string | null;
+  }>;
+
+  const { getAllPlexWatchedIndexes, getWatchedAt, getAllPlexHistoryEntries } =
+    await import("./plex");
+  const { createRecentWatchUpserter } = await import("./recent-watch-cache");
+  const upsert = createRecentWatchUpserter(db);
+
+  // Întâi titlurile din `media`, potrivite și după titlu (ratingKey-ul se
+  // schimbă la redescărcare), ca numele și posterul lor să câștige mai jos.
+  if (rows.length > 0) {
+    const allWatchedIndexes = await getAllPlexWatchedIndexes();
+    for (const row of rows) {
+      const isEpisode = row.media_type === "episode";
+      const titleForMatch = row.original_title || row.title;
+      for (const [username, index] of Object.entries(allWatchedIndexes)) {
+        const viewedAt = getWatchedAt(index, {
+          ratingKey: row.plex_rating_key,
+          title: titleForMatch,
+          show: isEpisode ? titleForMatch : null,
+          season: row.season,
+          episode: row.episode,
+        });
+        if (viewedAt == null) continue;
+        upsert({
+          ratingKey: row.plex_rating_key!,
+          username,
+          title: isEpisode ? "" : row.title,
+          show: isEpisode ? row.title : null,
+          season: row.season,
+          episode: row.episode,
+          posterPath: row.poster_path,
+          viewedAt,
+          viewOffsetMs: null,
+          durationMs: null,
+          completed: true,
+        });
+      }
+    }
+  }
+
+  // Apoi restul istoricului Plex. O zi de rezervă: o intrare poate apărea în
+  // istoric cu ora începutului.
+  const since = historySyncedUpTo - 86_400;
+  const entries = (await getAllPlexHistoryEntries()).filter(
+    (e) => e.viewedAt > since && (e.type === "movie" || e.type === "episode") && e.user,
+  );
+  if (entries.length === 0) return;
+
+  const mediaByKey = new Map(
+    (
+      db
+        .prepare(
+          `SELECT plex_rating_key, title, poster_path FROM media
+           WHERE plex_rating_key IS NOT NULL AND media_type IN ('movie', 'episode')`,
+        )
+        .all() as unknown as Array<{
+        plex_rating_key: string;
+        title: string;
+        poster_path: string | null;
+      }>
+    ).map((m) => [m.plex_rating_key, m]),
+  );
+  // Un titlu șters apare în istoric fără ratingKey, dar rândul lui poate fi
+  // deja în cache sub cheia veche — aceeași vizionare, aceeași oră.
+  const sameMoment = db.prepare(
+    `SELECT 1 FROM recent_watch_cache
+     WHERE username = ? AND viewed_at BETWEEN ? AND ? LIMIT 1`,
+  );
+
+  let maxViewedAt = historySyncedUpTo;
+  db.exec("BEGIN");
+  try {
+    for (const e of entries) {
+      maxViewedAt = Math.max(maxViewedAt, e.viewedAt);
+      const isEpisode = e.type === "episode";
+      let key = e.ratingKey;
+      if (!key) {
+        if (!e.historyId) continue;
+        if (sameMoment.get(e.user!, e.viewedAt - 60, e.viewedAt + 60)) continue;
+        key = HISTORY_KEY_PREFIX + e.historyId;
+      }
+      const m = mediaByKey.get(key);
+      upsert({
+        ratingKey: key,
+        username: e.user!,
+        // La episoade, numele episodului din Plex — rezervă pentru cele fără rând în `media`.
+        title: isEpisode ? e.title : (m?.title ?? e.title),
+        show: isEpisode ? (m?.title ?? e.show ?? null) : null,
+        season: e.season ?? null,
+        episode: e.episode ?? null,
+        posterPath: m?.poster_path ?? null,
+        viewedAt: e.viewedAt,
+        viewOffsetMs: null,
+        durationMs: null,
+        completed: true,
+      });
+    }
+    db.exec("COMMIT");
+  } catch (err) {
+    db.exec("ROLLBACK");
+    throw err;
+  }
+  historySyncedUpTo = maxViewedAt;
+}
+
+export const getRecentWatches = createServerFn({ method: "GET" })
+  .validator((data: { limit: number }) => data)
+  .handler(
+    async ({
+      data,
+    }): Promise<
+      | { status: "ok"; items: RecentWatch[]; totalCards: number; totals: RecentWatchTotals }
+      | { status: "error"; error: string }
+    > => {
+      await (await import("../auth/admin.server")).requireAuth();
+      try {
+        const { getDb } = await import("../db");
+        const db = getDb();
+        await syncRecentWatchCache(db);
+
+        const { plexThumbUrl } = await import("./recent-watch-cache");
+        const cutoff = Math.floor(Date.now() / 1000) - RECENT_WATCH_WINDOW_SECONDS;
+
+        const totalsRow = db
+          .prepare(
+            `SELECT COUNT(*) AS total, COALESCE(SUM(viewed_at >= ?), 0) AS last30, MIN(viewed_at) AS since
+             FROM recent_watch_cache`,
+          )
+          .get(cutoff) as { total: number; last30: number; since: number | null };
+
+        // Tot istoricul: unirea episoadelor consecutive trebuie făcută înainte
+        // de tăiere, altfel un maraton s-ar rupe la marginea paginii.
+        const cached = db
+          .prepare(
+            `SELECT plex_rating_key, username, title, show, season, episode, poster_path, viewed_at,
+                    view_offset_ms, duration_ms, completed
+             FROM recent_watch_cache
+             ORDER BY viewed_at DESC`,
+          )
+          .all() as unknown as Array<{
+          plex_rating_key: string;
+          username: string;
+          title: string;
+          show: string | null;
+          season: number | null;
+          episode: number | null;
+          poster_path: string | null;
+          viewed_at: number;
+          view_offset_ms: number | null;
+          duration_ms: number | null;
+          completed: number;
+        }>;
+
+        const items: RecentWatch[] = cached.map((row) => ({
+          ratingKey: row.plex_rating_key,
+          // La episoade, numele vine din `media`, după tăiere; intervalele
+          // unite îl pierd în mergeConsecutiveEpisodes.
+          title: row.title,
+          show: row.show,
+          season: row.season,
+          episode: row.episode,
+          episodeEnd: null,
+          completed: !!row.completed,
+          progressMinutes:
+            !row.completed && row.view_offset_ms != null
+              ? Math.round(row.view_offset_ms / 60_000)
+              : null,
+          durationMinutes:
+            !row.completed && row.duration_ms != null ? Math.round(row.duration_ms / 60_000) : null,
+          // Trailerele n-au rând în `media` — miniatura din Plex, prin proxy-ul
+          // autentificat. Titlurile șterse din Plex n-au nici atât.
+          thumbUrl:
+            row.poster_path ??
+            (row.plex_rating_key.startsWith(HISTORY_KEY_PREFIX)
+              ? null
+              : plexThumbUrl(row.plex_rating_key)),
+          username: row.username,
+          viewedAt: row.viewed_at,
+        }));
+        const merged = mergeConsecutiveEpisodes(items);
+        merged.sort((a, b) => b.viewedAt - a.viewedAt);
+        const page = merged.slice(0, Math.max(1, data.limit));
+
+        const episodeTitle = db.prepare(
+          `SELECT episode_title FROM media
+           WHERE plex_rating_key = ? AND media_type = 'episode' LIMIT 1`,
+        );
+        for (const it of page) {
+          if (!it.show) continue;
+          if (it.episodeEnd != null) {
+            it.title = "";
+            continue;
+          }
+          const fromMedia = (episodeTitle.get(it.ratingKey) as { episode_title: string | null })
+            ?.episode_title;
+          const name = fromMedia ?? it.title;
+          it.title = isGenericEpisodeName(name) ? "" : name;
+        }
+
+        return {
+          status: "ok",
+          items: page,
+          totalCards: merged.length,
+          totals: {
+            all: totalsRow.total,
+            last30Days: totalsRow.last30,
+            since: totalsRow.since,
+          },
+        };
+      } catch (e) {
+        return { status: "error", error: e instanceof Error ? e.message : String(e) };
+      }
+    },
+  );
+
+// Statisticile de sub „Vizionări recente”: fiecare episod e o vizionare.
+export const getWatchStats = createServerFn({ method: "GET" }).handler(
   async (): Promise<
-    { status: "ok"; items: RecentWatch[] } | { status: "error"; error: string }
+    { status: "ok"; stats: RecentWatchStats } | { status: "error"; error: string }
   > => {
     await (await import("../auth/admin.server")).requireAuth();
     try {
       const { getDb } = await import("../db");
-      const db = getDb();
-
-      const rows = db
-        .prepare(
-          `SELECT plex_rating_key, media_type, title, original_title, season, episode, poster_path
-           FROM media
-           WHERE media_type IN ('movie', 'episode')
-             AND plex_rating_key IS NOT NULL
-           ORDER BY added_at DESC
-           LIMIT ?`,
-        )
-        .all(RECENT_TITLES_LIMIT) as unknown as Array<{
-        plex_rating_key: string | null;
-        media_type: string;
-        title: string;
-        original_title: string | null;
-        season: number | null;
-        episode: number | null;
-        poster_path: string | null;
-      }>;
-
-      const cutoff = Math.floor(Date.now() / 1000) - RECENT_WATCH_WINDOW_SECONDS;
-
-      // Recalculat doar cât titlul mai e în `media`; ținut minte în cache, ca
-      // să rămână vizibil și după ștergere.
-      if (rows.length > 0) {
-        const { getAllPlexWatchedIndexes, getWatchedAt } = await import("./plex");
-        const { createRecentWatchUpserter } = await import("./recent-watch-cache");
-        const allWatchedIndexes = await getAllPlexWatchedIndexes();
-        const upsert = createRecentWatchUpserter(db);
-        for (const row of rows) {
-          const isEpisode = row.media_type === "episode";
-          const titleForMatch = row.original_title || row.title;
-          for (const [username, index] of Object.entries(allWatchedIndexes)) {
-            const viewedAt = getWatchedAt(index, {
-              ratingKey: row.plex_rating_key,
-              title: titleForMatch,
-              show: isEpisode ? titleForMatch : null,
-              season: row.season,
-              episode: row.episode,
-            });
-            if (viewedAt == null || viewedAt < cutoff) continue;
-            upsert({
-              ratingKey: row.plex_rating_key!,
-              username,
-              title: isEpisode ? "" : row.title,
-              show: isEpisode ? row.title : null,
-              season: row.season,
-              episode: row.episode,
-              posterPath: row.poster_path,
-              viewedAt,
-              viewOffsetMs: null,
-              durationMs: null,
-              completed: true,
-            });
-          }
-        }
-      }
-
-      const { plexThumbUrl } = await import("./recent-watch-cache");
-
-      db.prepare("DELETE FROM recent_watch_cache WHERE viewed_at < ?").run(cutoff);
-      const cached = db
-        .prepare(
-          `SELECT plex_rating_key, username, title, show, season, episode, poster_path, viewed_at,
-                  view_offset_ms, duration_ms, completed,
-                  (SELECT episode_title FROM media
-                    WHERE plex_rating_key = recent_watch_cache.plex_rating_key
-                      AND media_type = 'episode' LIMIT 1) AS episode_title
-           FROM recent_watch_cache
-           WHERE viewed_at >= ?
-           ORDER BY viewed_at DESC`,
-        )
-        .all(cutoff) as unknown as Array<{
-        plex_rating_key: string;
-        username: string;
-        title: string;
-        show: string | null;
-        season: number | null;
-        episode: number | null;
-        episode_title: string | null;
-        poster_path: string | null;
-        viewed_at: number;
-        view_offset_ms: number | null;
-        duration_ms: number | null;
-        completed: number;
-      }>;
-
-      const items: RecentWatch[] = cached.map((row) => ({
-        ratingKey: row.plex_rating_key,
-        // La episoade, numele din `media` (gol dacă lipsește sau e generic);
-        // intervalele unite îl pierd în mergeConsecutiveEpisodes.
-        title: row.show
-          ? isGenericEpisodeName(row.episode_title)
-            ? ""
-            : row.episode_title!
-          : row.title,
-        show: row.show,
-        season: row.season,
-        episode: row.episode,
-        episodeEnd: null,
-        completed: !!row.completed,
-        progressMinutes:
-          !row.completed && row.view_offset_ms != null
-            ? Math.round(row.view_offset_ms / 60_000)
-            : null,
-        durationMinutes:
-          !row.completed && row.duration_ms != null ? Math.round(row.duration_ms / 60_000) : null,
-        // Trailerele n-au rând în `media` — miniatura din Plex, prin proxy-ul
-        // autentificat (la citire, ca să acopere și rândurile vechi).
-        thumbUrl: row.poster_path ?? plexThumbUrl(row.plex_rating_key),
-        username: row.username,
-        viewedAt: row.viewed_at,
-      }));
-      const merged = mergeConsecutiveEpisodes(items);
-      merged.sort((a, b) => b.viewedAt - a.viewedAt);
-      // Toată fereastra de 30 de zile, fără plafon — un plafon tăia fereastra
-      // la câteva zile. Cardul arată 8 și desfășoară restul la cerere.
-      return { status: "ok", items: merged };
+      const { computeWatchStats } = await import("./recent-watch-stats");
+      // Fereastra cea mai lungă e de 12 luni; 400 de zile o acoperă.
+      const from = Math.floor(Date.now() / 1000) - 400 * 86_400;
+      const rows = getDb()
+        .prepare("SELECT viewed_at, username FROM recent_watch_cache WHERE viewed_at >= ?")
+        .all(from) as unknown as Array<{ viewed_at: number; username: string }>;
+      return { status: "ok", stats: computeWatchStats(rows, Math.floor(Date.now() / 1000)) };
     } catch (e) {
       return { status: "error", error: e instanceof Error ? e.message : String(e) };
     }

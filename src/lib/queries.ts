@@ -19,7 +19,7 @@ import {
   getGitPushStatus,
   getUnpushedCommits,
 } from "./github.functions";
-import { getPlexLibraryBrowse, getRecentWatches } from "./services.functions";
+import { getPlexLibraryBrowse, getRecentWatches, getWatchStats } from "./services.functions";
 import { REFRESH_MS } from "./refresh-rate";
 import { getNetworkLink } from "./system/network-link.functions";
 import { getDbBackupStatus } from "./system/db-backup.functions";
@@ -236,11 +236,24 @@ export const plexLibraryBrowseQuery = queryOptions({
   refetchOnWindowFocus: true,
 });
 
-export const recentWatchesQuery = queryOptions({
-  queryKey: ["recentWatches"],
-  queryFn: () => getRecentWatches(),
-  staleTime: 60_000,
-  refetchInterval: 60_000,
+// Câte carduri arată „Vizionări recente” la început; „Arată mai multe” cere
+// încă RECENT_WATCHES_STEP.
+export const RECENT_WATCHES_INITIAL = 10;
+export const RECENT_WATCHES_STEP = 25;
+
+export const recentWatchesQuery = (limit = RECENT_WATCHES_INITIAL) =>
+  queryOptions({
+    queryKey: ["recentWatches", limit],
+    queryFn: () => getRecentWatches({ data: { limit } }),
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+  });
+
+export const watchStatsQuery = queryOptions({
+  queryKey: ["watchStats"],
+  queryFn: () => getWatchStats(),
+  staleTime: 5 * 60_000,
+  refetchInterval: 5 * 60_000,
 });
 
 // Viteza legăturii Ethernet — se schimbă doar la evenimente fizice; componenta

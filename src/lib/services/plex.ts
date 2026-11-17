@@ -87,6 +87,9 @@ export interface PlexHistoryEntry {
   viewedAt: number;
   player?: string;
   user?: string;
+  // Id-ul intrării din istoricul Plex — singurul identificator al vizionărilor
+  // unor titluri șterse, care nu mai au ratingKey.
+  historyId?: string;
 }
 
 // ---------- Istoric vizionare (agregare + cache) ----------
@@ -210,6 +213,7 @@ let plexHistoryCache: {
   activeUsersTodayList: Array<{ user: string; count: number }>;
   viewsByAccount: Record<string, PlexView[]>;
   accountNames: Record<string, string>;
+  allEntries: PlexHistoryEntry[];
   expiresAt: number;
 } | null = null;
 
@@ -290,6 +294,19 @@ export async function getAllPlexWatchedIndexes(): Promise<Record<string, PlexWat
   }
 }
 
+// Tot istoricul Plex, câte o intrare pe vizionare, cu numele userului.
+export async function getAllPlexHistoryEntries(): Promise<PlexHistoryEntry[]> {
+  const token = process.env.PLEX_TOKEN;
+  if (!token) return [];
+  try {
+    const { url } = await discoverPlexUrl(token, process.env.PLEX_URL);
+    const headers = { Accept: "application/json", "X-Plex-Token": token };
+    return (await fetchPlexHistory(url, headers)).allEntries;
+  } catch {
+    return [];
+  }
+}
+
 const HISTORY_PAGE_SIZE = 1000;
 
 async function fetchPlexHistory(
@@ -304,6 +321,7 @@ async function fetchPlexHistory(
   activeUsersTodayList: Array<{ user: string; count: number }>;
   viewsByAccount: Record<string, PlexView[]>;
   accountNames: Record<string, string>;
+  allEntries: PlexHistoryEntry[];
 }> {
   if (plexHistoryCache && plexHistoryCache.url === url && plexHistoryCache.expiresAt > Date.now()) {
     return {
@@ -315,6 +333,7 @@ async function fetchPlexHistory(
       activeUsersTodayList: plexHistoryCache.activeUsersTodayList,
       viewsByAccount: plexHistoryCache.viewsByAccount,
       accountNames: plexHistoryCache.accountNames,
+      allEntries: plexHistoryCache.allEntries,
     };
   }
   // Tot istoricul, pe pagini de 1000, fără plafon (~1000 de intrări pe an).
@@ -381,6 +400,7 @@ async function fetchPlexHistory(
   const todayUsers = new Set<string>();
   const todayViews: PlexHistoryEntry[] = [];
   const todayUserCounts = new Map<string, number>();
+  const allEntries: PlexHistoryEntry[] = [];
 
   for (const e of entries) {
     const viewedAt = Number(e.viewedAt ?? 0);
@@ -395,6 +415,19 @@ async function fetchPlexHistory(
     const season = e.parentIndex != null ? Number(e.parentIndex) : undefined;
     const episode = e.index != null ? Number(e.index) : undefined;
     const ratingKey = e.ratingKey != null ? String(e.ratingKey) : undefined;
+    const historyId =
+      typeof e.historyKey === "string" ? e.historyKey.split("/").pop() || undefined : undefined;
+    allEntries.push({
+      title,
+      show,
+      season,
+      episode,
+      ratingKey,
+      type: String(e.type ?? "unknown"),
+      viewedAt,
+      user,
+      historyId,
+    });
 
     if (accountId != null) {
       (viewsByAccount[String(accountId)] ??= []).push({
@@ -470,6 +503,7 @@ async function fetchPlexHistory(
     accountNames: Object.fromEntries(
       Array.from(accountMap.entries(), ([id, name]) => [String(id), name]),
     ),
+    allEntries,
   };
   plexHistoryCache = { url, ...result, expiresAt: Date.now() + 60_000 };
   return result;

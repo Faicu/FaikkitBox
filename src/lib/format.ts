@@ -62,6 +62,11 @@ export function pluralRo(n: number, one: string, many: string): string {
   return n >= 20 && (rest === 0 || rest >= 20) ? `${n} de ${many}` : `${n} ${many}`;
 }
 
+// „1.389 de vizionări” — pluralRo cu separator de mii.
+export function countRo(n: number, one: string, many: string): string {
+  return pluralRo(n, one, many).replace(/^\d+/, n.toLocaleString("ro-RO"));
+}
+
 // Număr scurt, ca pe IMDb: 850, 12K, 125K, 1.3M.
 export function formatCompact(n: number): string {
   if (n < 1000) return String(n);

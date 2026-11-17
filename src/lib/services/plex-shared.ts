@@ -61,6 +61,8 @@ export interface PlexTranscodeSession {
 
 export interface PlexMetadataItem {
   ratingKey?: string;
+  // Doar în istoric: „/status/sessions/history/<id>”.
+  historyKey?: string;
   key?: string;
   title?: string;
   // Titlul original, când Plex afișează altul (biblioteca e în română).
