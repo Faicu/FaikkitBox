@@ -1,6 +1,7 @@
 // Sursă unică pentru datele unui titlu (schema `media` în db.ts), populată de
 // căile de descărcare — vezi upsertMediaEntry.
 
+import { sqliteUtcMs } from "../format";
 import { getDb } from "../db";
 import { DELETE_DELAY_HOURS } from "./scheduled-delete";
 // Doar tipuri: `import type` nu trage modulele Plex în graf.
@@ -853,10 +854,7 @@ export async function resolveSeasonPackPlexLinks(torrentHash: string): Promise<b
   if (!links || links.size === 0) return false;
 
   const expected = await airedEpisodeCountForSeason(row.tmdb_id, row.season);
-  // completed_at e în formatul SQLite (UTC), ca în plex-browse.ts.
-  const completedMs = row.completed_at
-    ? new Date(`${row.completed_at.replace(" ", "T")}Z`).getTime()
-    : null;
+  const completedMs = row.completed_at ? sqliteUtcMs(row.completed_at) : null;
   const graceExpired = completedMs == null || Date.now() - completedMs > SEASON_PACK_INDEX_GRACE_MS;
   const isComplete = expected == null || links.size >= expected || graceExpired;
 

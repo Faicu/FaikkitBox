@@ -1,5 +1,7 @@
+import { sqliteUtcMs } from "@/lib/format";
 import { formatDateTime } from "@/components/tehnic/utils";
-import type { PlexBrowseItem, ShowEpisodeEntry } from "@/lib/services/plex-browse";
+import type { PlexBrowseItem } from "@/lib/services/plex-browse";
+import type { ShowEpisodeEntry } from "@/lib/services/plex-title-detail";
 
 function norm(s: string): string {
   return s
@@ -161,14 +163,14 @@ export function dayTimeLabel(unixSec: number, withTime = true): string {
 // ar citi-o ca oră locală).
 export function lastCheckedLabel(sqliteUtc: string | null): string {
   if (!sqliteUtc) return "Încă neverificat";
-  const ms = new Date(`${sqliteUtc.replace(" ", "T")}Z`).getTime();
+  const ms = sqliteUtcMs(sqliteUtc);
   if (Number.isNaN(ms)) return "Încă neverificat";
   return `Verificat ${dayTimeLabel(Math.floor(ms / 1000))}`;
 }
 
 // Data SQLite (UTC) → „27 oct., 14:05” — termenul unei ștergeri programate.
 export function deleteTimeLabel(at: string): string {
-  return new Date(`${at.replace(" ", "T")}Z`).toLocaleString("ro-RO", {
+  return new Date(sqliteUtcMs(at)).toLocaleString("ro-RO", {
     day: "numeric",
     month: "short",
     hour: "2-digit",

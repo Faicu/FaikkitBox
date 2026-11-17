@@ -323,62 +323,11 @@ export interface TmdbEpisode {
   stillUrl?: string | null;
 }
 
-// Titlul unui episod dintr-o listă deja încărcată — comun wizard-ului și
-// notificărilor.
-export function findEpisodeTitle(episodes: TmdbEpisode[], episodeNum: number): string {
-  return episodes.find((e) => e.episodeNum === episodeNum)?.title ?? `Episodul ${episodeNum}`;
-}
-
 // Fără traducere, TMDB nu întoarce gol, ci „Episodul {N}” — verificat explicit.
 function isGenericEpisodePlaceholder(name: string | undefined, episodeNumber: number): boolean {
   const n = name?.trim();
   if (!n) return true;
   return new RegExp(`^episodul\\s*${episodeNumber}$`, "i").test(n);
-}
-
-// Fără createServerFn — pentru apelurile din alt cod de server.
-export async function getTmdbSeasonEpisodesInternal(
-  tmdbId: number,
-  seasonNum: number,
-): Promise<TmdbEpisode[]> {
-  try {
-    const path = `/tv/${tmdbId}/season/${seasonNum}`;
-    // Cache-bust: CDN-ul TMDB ține cache pe URL, iar un episod abia difuzat
-    // rămânea ore întregi cu placeholder-ul, deși TMDB avea titlul (House of
-    // the Dragon S03E08, 9 aug. 2026).
-    const bust = `_=${Date.now()}`;
-    const season = await tmdbFetch<TmdbApiSeason>(`${path}?language=ro-RO&${bust}`);
-    // Engleza doar pentru episoadele fără traducere, nu pentru tot sezonul.
-    const missingRo = (season.episodes ?? []).some((e) =>
-      isGenericEpisodePlaceholder(e.name, e.episode_number),
-    );
-    const seasonEn = missingRo
-      ? await tmdbFetch<TmdbApiSeason>(`${path}?${bust}`).catch(() => null)
-      : null;
-    const enByNum = new Map((seasonEn?.episodes ?? []).map((e) => [e.episode_number, e.name]));
-
-    const todayStr = new Date().toISOString().slice(0, 10);
-    return (season.episodes ?? []).map((e) => {
-      const airDate = e.air_date ?? null;
-      const enName = enByNum.get(e.episode_number)?.trim();
-      // Placeholder și în engleză: păstrăm varianta curată în română.
-      const enIsGeneric =
-        enName && new RegExp(`^episode\\s*${e.episode_number}$`, "i").test(enName);
-      const title = isGenericEpisodePlaceholder(e.name, e.episode_number)
-        ? enName && !enIsGeneric
-          ? enName
-          : `Episodul ${e.episode_number}`
-        : e.name!.trim();
-      return {
-        episodeNum: Number(e.episode_number),
-        title,
-        airDate,
-        aired: airDate ? airDate < todayStr : false,
-      };
-    });
-  } catch {
-    return [];
-  }
 }
 
 export interface TmdbSeasonSchema {
@@ -402,6 +351,8 @@ export async function getTmdbAllSeasonsInternal(
   if (seasonNumbers.length > 40) return [];
 
   try {
+    // CDN-ul TMDB ține cache pe URL: fără asta, un episod abia difuzat rămânea
+    // ore întregi cu placeholder-ul, deși TMDB avea titlul.
     const bust = `_=${Date.now()}`;
     const append = seasonNumbers.map((n) => `season/${n}`).join(",");
     const roJson = await tmdbFetch<Record<string, TmdbApiSeason>>(

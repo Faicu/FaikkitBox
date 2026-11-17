@@ -8,12 +8,11 @@
 // devenind proprietarul titlului. Totul în DB: un restart nu pierde ștergerea.
 // ---------------------------------------------------------------------------
 
+import { sqliteUtcMs } from "../format";
 import { getDb } from "../db";
 import { torrentDisplay } from "./torrent-display";
 
 export const DELETE_DELAY_HOURS = 48;
-
-const sqliteMs = (v: string) => new Date(`${v.replace(" ", "T")}Z`).getTime();
 
 // null = ștergerea se face pe loc; `until` = termenul (SQLite, UTC), sau null
 // cât torrentul încă se descarcă. MIN pe hash: un pachet de sezon se șterge întreg.
@@ -29,7 +28,7 @@ export function deleteDelay(torrentHash: string, nowMs = Date.now()): DeleteDela
     .get(torrentHash) as { done: number; until: string | null } | undefined;
   if (!row) return null;
   if (!row.done) return { until: null };
-  return row.until && sqliteMs(row.until) > nowMs ? { until: row.until } : null;
+  return row.until && sqliteUtcMs(row.until) > nowMs ? { until: row.until } : null;
 }
 
 export interface ScheduledDeletion {
@@ -88,7 +87,7 @@ export function nextScheduledDeletionAt(): number | null {
         WHERE delete_scheduled_at IS NOT NULL AND torrent_hash IS NOT NULL`,
     )
     .get() as { at: string | null } | undefined;
-  return row?.at ? sqliteMs(row.at) : null;
+  return row?.at ? sqliteUtcMs(row.at) : null;
 }
 
 // Torrentele cu termenul de ștergere atins — câte unul, cu primul lui rând.
@@ -126,7 +125,7 @@ export function usernameOf(userId: number | null): string | null {
 
 // Data SQLite (UTC) → „27.10.2026, 14:05”, ora României.
 export function formatDeleteTime(v: string): string {
-  return new Date(sqliteMs(v)).toLocaleString("ro-RO", {
+  return new Date(sqliteUtcMs(v)).toLocaleString("ro-RO", {
     timeZone: "Europe/Bucharest",
     dateStyle: "short",
     timeStyle: "short",

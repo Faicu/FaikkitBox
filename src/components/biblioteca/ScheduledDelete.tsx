@@ -3,13 +3,12 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { Loader2, Trash2, Undo2, Zap } from "lucide-react";
 
+import { sqliteUtcMs } from "@/lib/format";
 import { cancelMediaDeletion } from "@/lib/filelist.functions";
 import { deleteTimeLabel } from "./utils";
 
 // Ștergerea programată a unui titlu (vezi src/lib/media/scheduled-delete.ts):
 // insigna cu timer din listă și cardul din drawer, cu renunțarea la ștergere.
-
-const sqliteMs = (v: string) => new Date(`${v.replace(" ", "T")}Z`).getTime();
 
 // Ora curentă, reîmprospătată periodic — null până la montare, ca randarea de
 // pe server și hidratarea să nu difere prin minutul afișat.
@@ -36,7 +35,7 @@ function remainingLabel(ms: number, compact: boolean): string {
 // `at` null — se șterge la 48 h după finalizarea descărcării, încă necunoscută.
 export function DeleteTimerBadge({ at }: { at: string | null }) {
   const now = useNow();
-  const left = now == null || at == null ? null : sqliteMs(at) - now;
+  const left = now == null || at == null ? null : sqliteUtcMs(at) - now;
   return (
     <span
       title={
@@ -73,7 +72,7 @@ export function ScheduledDeleteCard({
   const now = useNow();
   const cancelFn = useServerFn(cancelMediaDeletion);
   const [busy, setBusy] = useState(false);
-  const left = now == null || at == null ? null : sqliteMs(at) - now;
+  const left = now == null || at == null ? null : sqliteUtcMs(at) - now;
   const due = left != null && left <= 0;
 
   async function cancel() {

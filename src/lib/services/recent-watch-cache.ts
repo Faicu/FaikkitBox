@@ -2,7 +2,7 @@ import type { DatabaseSync } from "node:sqlite";
 
 // Scrie/actualizează o intrare din `recent_watch_cache` — sursa unică pentru
 // widgetul "Vizionări recente" de pe Acasă. Există doi scriitori posibili
-// pentru același rând (plex_rating_key, username): plex-browse.ts (confirmă
+// pentru același rând (plex_rating_key, username): recent-watch.functions.ts (confirmă
 // vizionarea completă din istoricul Plex) și activity-log.ts (progres
 // parțial, la oprirea unei sesiuni) — logica de conflict e comună aici ca să
 // nu diverge între ele.

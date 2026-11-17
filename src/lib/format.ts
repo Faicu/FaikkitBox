@@ -1,3 +1,9 @@
+// Datele scrise de SQLite (`datetime('now')`) sunt UTC, fără „Z” — new Date()
+// le-ar citi ca oră locală.
+export function sqliteUtcMs(v: string): number {
+  return new Date(`${v.replace(" ", "T")}Z`).getTime();
+}
+
 export function formatBytes(bytes: number, digits = 1): string {
   if (!bytes || bytes < 0) return "0 B";
   const units = ["B", "KB", "MB", "GB", "TB", "PB"];

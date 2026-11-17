@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ChevronRight, CircleDashed, Eye, EyeOff, Tv } from "lucide-react";
 
-import type { ShowEpisodeEntry } from "@/lib/services/plex-browse";
+import type { ShowEpisodeEntry } from "@/lib/services/plex-title-detail";
 import { formatMs } from "@/lib/format";
 import {
   airDateShort,

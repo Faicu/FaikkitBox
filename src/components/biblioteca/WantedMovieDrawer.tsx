@@ -11,6 +11,7 @@ import {
   DrawerTitle,
   DrawerDescription,
 } from "@/components/ui/drawer";
+import { sqliteUtcMs } from "@/lib/format";
 import { getWantedMovieDetail, setMovieWatch, checkMovieNow } from "@/lib/media/media.functions";
 import { Orb } from "@/components/ui/orb";
 import { dayTimeLabel, lastCheckedLabel } from "./utils";
@@ -255,10 +256,7 @@ export function WantedMovieDrawer({
                   <span className="font-medium">{d.requestedByUsername ?? "necunoscut"}</span>
                   <span className="text-muted-foreground">
                     {" "}
-                    ·{" "}
-                    {dayTimeLabel(
-                      Math.floor(new Date(`${d.addedAt.replace(" ", "T")}Z`).getTime() / 1000),
-                    )}
+                    · {dayTimeLabel(Math.floor(sqliteUtcMs(d.addedAt) / 1000))}
                   </span>
                 </span>
               </div>

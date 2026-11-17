@@ -26,8 +26,7 @@ export function findLoginAccount(
   if (!value) return null;
   if (!value.includes("@")) {
     const row = db.prepare(`SELECT ${LOGIN_COLUMNS} FROM users WHERE username = ?`).get(value) as
-      | LoginRow
-      | undefined;
+      LoginRow | undefined;
     return row ? { row } : null;
   }
   const rows = db

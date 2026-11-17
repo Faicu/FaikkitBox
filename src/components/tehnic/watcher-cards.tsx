@@ -12,6 +12,7 @@ import {
 } from "@/lib/queries";
 import type { ActivityEntry } from "@/lib/activity-log.functions";
 import type { SubtitleRetryTitle } from "@/lib/filelist/subtitle-retry";
+import { sqliteUtcMs } from "@/lib/format";
 import { relativeTime, formatDateTime } from "./utils";
 import { useFlashOnChange } from "@/hooks/use-flash-on-change";
 import { nextEpisodeWhen } from "@/components/biblioteca/utils";
@@ -209,10 +210,8 @@ function FlashValue({
   return <span className={`tabular-nums ${flash ? "tick-flash" : ""}`}>{children}</span>;
 }
 
-// Data în formatul SQLite (UTC) → Date.
-const sqliteDate = (v: string) => new Date(`${v.replace(" ", "T")}Z`);
 const shortDay = (v: string) =>
-  sqliteDate(v).toLocaleDateString("ro-RO", { day: "numeric", month: "short" });
+  new Date(sqliteUtcMs(v)).toLocaleDateString("ro-RO", { day: "numeric", month: "short" });
 
 // Titlurile cu fereastra de 14 zile încheiată: de aici rămâne doar butonul.
 function EndedCard({
@@ -260,7 +259,7 @@ export function SubtitleRetryCards() {
   if (!data) return null;
   const now = Date.now();
   const daysLeft = (until: string) =>
-    Math.max(0, Math.ceil((sqliteDate(until).getTime() - now) / (24 * 60 * 60 * 1000)));
+    Math.max(0, Math.ceil((sqliteUtcMs(until) - now) / (24 * 60 * 60 * 1000)));
 
   return (
     <>

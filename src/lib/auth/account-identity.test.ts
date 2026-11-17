@@ -11,7 +11,7 @@ type Identity = typeof import("./account-identity.server");
 
 let findLoginAccount: Identity["findLoginAccount"];
 let validateNewAccount: Identity["validateNewAccount"];
-let db: ReturnType<typeof import("../db")["getDb"]>;
+let db: ReturnType<(typeof import("../db"))["getDb"]>;
 
 function insertUser(username: string, email: string | null): number {
   db.prepare(

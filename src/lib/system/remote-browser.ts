@@ -183,10 +183,6 @@ export async function closeBrowserSession(): Promise<void> {
   await s.browser.close().catch(() => {});
 }
 
-export function isBrowserOpen(): boolean {
-  return session !== null;
-}
-
 async function shot(s: Session): Promise<BrowserShot> {
   const vp = s.page.viewportSize() ?? { width: 0, height: 0 };
   const buf = await s.page.screenshot({ type: "jpeg", quality: 60, timeout: 10_000 });
