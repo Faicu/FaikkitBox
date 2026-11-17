@@ -24,15 +24,21 @@ export interface RecentWatchTotals {
   since: number | null;
 }
 
+export interface WatchStatsUser {
+  username: string;
+  count: number;
+}
+
 export interface WatchStatsBucket {
   key: string;
   label: string;
   count: number;
+  users: WatchStatsUser[];
 }
 
 export interface WatchStatsPeriod {
   buckets: WatchStatsBucket[];
-  users: Array<{ username: string; count: number }>;
+  users: WatchStatsUser[];
   total: number;
 }
 

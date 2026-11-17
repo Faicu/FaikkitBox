@@ -1088,14 +1088,20 @@ export const getRecentWatches = createServerFn({ method: "GET" })
         await syncRecentWatchCache(db);
 
         const { plexThumbUrl } = await import("./recent-watch-cache");
-        const cutoff = Math.floor(Date.now() / 1000) - RECENT_WATCH_WINDOW_SECONDS;
+        const { countInLastDays } = await import("./recent-watch-stats");
+        const nowSec = Math.floor(Date.now() / 1000);
 
         const totalsRow = db
-          .prepare(
-            `SELECT COUNT(*) AS total, COALESCE(SUM(viewed_at >= ?), 0) AS last30, MIN(viewed_at) AS since
-             FROM recent_watch_cache`,
-          )
-          .get(cutoff) as { total: number; last30: number; since: number | null };
+          .prepare(`SELECT COUNT(*) AS total, MIN(viewed_at) AS since FROM recent_watch_cache`)
+          .get() as { total: number; since: number | null };
+        // O zi în plus față de fereastră; countInLastDays taie la miezul nopții.
+        const recentTimes = (
+          db
+            .prepare("SELECT viewed_at FROM recent_watch_cache WHERE viewed_at >= ?")
+            .all(nowSec - RECENT_WATCH_WINDOW_SECONDS - 86_400) as unknown as Array<{
+            viewed_at: number;
+          }>
+        ).map((r) => r.viewed_at);
 
         // Tot istoricul: unirea episoadelor consecutive trebuie făcută înainte
         // de tăiere, altfel un maraton s-ar rupe la marginea paginii.
@@ -1172,7 +1178,7 @@ export const getRecentWatches = createServerFn({ method: "GET" })
           totalCards: merged.length,
           totals: {
             all: totalsRow.total,
-            last30Days: totalsRow.last30,
+            last30Days: countInLastDays(recentTimes, nowSec, 30),
             since: totalsRow.since,
           },
         };

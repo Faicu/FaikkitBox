@@ -29,6 +29,7 @@ describe("computeWatchStats", () => {
       { username: "b", count: 2 },
       { username: "a", count: 1 },
     ]);
+    expect(s.week.buckets.at(-2)!.users).toEqual([{ username: "b", count: 1 }]);
   });
 
   it("ignoră ce e în afara ferestrei", () => {

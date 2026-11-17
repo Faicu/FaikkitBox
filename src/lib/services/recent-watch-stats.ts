@@ -1,7 +1,7 @@
 // Statisticile vizionărilor pe zi / săptămână / lună și pe user — funcție
 // pură, în ora României (o vizionare de la 01:00 e a zilei noi, nu a celei din UTC).
 
-import type { RecentWatchStats, WatchStatsPeriod } from "./recent-watch-types";
+import type { RecentWatchStats, WatchStatsPeriod, WatchStatsUser } from "./recent-watch-types";
 
 const TZ = "Europe/Bucharest";
 const DAY_MS = 86_400_000;
@@ -23,29 +23,43 @@ const monthKey = (ms: number) => new Date(ms).toISOString().slice(0, 7);
 const fmt = (ms: number, opts: Intl.DateTimeFormatOptions) =>
   new Date(ms).toLocaleDateString("ro-RO", { ...opts, timeZone: "UTC" });
 
+// Descrescător după număr, la egalitate alfabetic.
+function ranked(users: Map<string, number>): WatchStatsUser[] {
+  return [...users]
+    .map(([username, count]) => ({ username, count }))
+    .sort((a, b) => b.count - a.count || a.username.localeCompare(b.username));
+}
+
 function period(
   rows: Array<{ viewed_at: number; username: string }>,
   keys: Array<{ key: string; label: string }>,
   keyOf: (dayMs: number) => string,
 ): WatchStatsPeriod {
-  const counts = new Map(keys.map((k) => [k.key, 0]));
+  const perBucket = new Map(keys.map((k) => [k.key, new Map<string, number>()]));
   const users = new Map<string, number>();
   let total = 0;
   for (const r of rows) {
-    const key = keyOf(localDayMs(r.viewed_at));
-    const c = counts.get(key);
-    if (c == null) continue;
-    counts.set(key, c + 1);
+    const bucket = perBucket.get(keyOf(localDayMs(r.viewed_at)));
+    if (!bucket) continue;
+    bucket.set(r.username, (bucket.get(r.username) ?? 0) + 1);
     users.set(r.username, (users.get(r.username) ?? 0) + 1);
     total++;
   }
   return {
-    buckets: keys.map((k) => ({ ...k, count: counts.get(k.key)! })),
-    users: [...users]
-      .map(([username, count]) => ({ username, count }))
-      .sort((a, b) => b.count - a.count || a.username.localeCompare(b.username)),
+    buckets: keys.map((k) => {
+      const bucketUsers = ranked(perBucket.get(k.key)!);
+      return { ...k, count: bucketUsers.reduce((n, u) => n + u.count, 0), users: bucketUsers };
+    }),
+    users: ranked(users),
     total,
   };
+}
+
+// Câte vizionări cad în ultimele `days` zile din calendar, azi inclusiv — la
+// fel ca bara „Zi”, ca cele două cifre de pe Acasă să se potrivească.
+export function countInLastDays(viewedAts: number[], nowSec: number, days: number): number {
+  const first = localDayMs(nowSec) - (days - 1) * DAY_MS;
+  return viewedAts.filter((v) => localDayMs(v) >= first).length;
 }
 
 // Ultimele 30 de zile, 12 săptămâni (de luni) și 12 luni, inclusiv cea curentă.

@@ -13,11 +13,15 @@ const PERIODS: Array<{ key: PeriodKey; tab: string; window: string; current: str
   { key: "month", tab: "Lună", window: "în ultimele 12 luni", current: "Luna asta" },
 ];
 
-// Vizionări pe zi / săptămână / lună și topul userilor pentru aceeași perioadă.
+// Vizionări pe zi / săptămână / lună și topul userilor — pe toată perioada
+// sau, cu o bară aleasă, doar pe intervalul ei.
 export function WatchStatsWidget({ stats }: { stats: RecentWatchStats }) {
   const [periodKey, setPeriodKey] = useState<PeriodKey>("day");
-  // Bara atinsă; fără selecție, citirea arată perioada curentă (ultima bară).
-  const [selected, setSelected] = useState<number | null>(null);
+  // Bara fixată prin atingere/click și cea de sub mouse (doar mouse — la
+  // atingere, evenimentele de mouse emulate ar anula fixarea).
+  const [pinned, setPinned] = useState<number | null>(null);
+  const [hovered, setHovered] = useState<number | null>(null);
+  const selected = hovered ?? pinned;
 
   const meta = PERIODS.find((p) => p.key === periodKey)!;
   const period = stats[periodKey];
@@ -25,9 +29,10 @@ export function WatchStatsWidget({ stats }: { stats: RecentWatchStats }) {
   const max = Math.max(1, ...buckets.map((b) => b.count));
   const shownIndex = selected ?? buckets.length - 1;
   const shown = buckets[shownIndex];
-  const userMax = Math.max(1, ...period.users.map((u) => u.count));
+  const users = selected == null ? period.users : shown.users;
+  const userMax = Math.max(1, ...users.map((u) => u.count));
   // Etichete selective pe axă: prima, mijlocul, ultima.
-  const axisIdx = new Set([0, Math.floor((buckets.length - 1) / 2), buckets.length - 1]);
+  const axisIdx = [0, Math.floor((buckets.length - 1) / 2), buckets.length - 1];
 
   return (
     <div className="corner-glow corner-glow-emerald mt-4 rounded-2xl glass-card p-4">
@@ -52,7 +57,8 @@ export function WatchStatsWidget({ stats }: { stats: RecentWatchStats }) {
             aria-selected={p.key === periodKey}
             onClick={() => {
               setPeriodKey(p.key);
-              setSelected(null);
+              setPinned(null);
+              setHovered(null);
             }}
             className={`flex-1 rounded-lg py-1.5 text-xs font-medium transition-colors ${
               p.key === periodKey
@@ -74,57 +80,75 @@ export function WatchStatsWidget({ stats }: { stats: RecentWatchStats }) {
         </span>
       </div>
 
-      <div className="relative mt-2 h-32">
-        {/* Linia maximului, discretă, cu valoarea ei. */}
-        <div className="pointer-events-none absolute inset-x-0 top-0 border-t border-dashed border-white/10" />
-        <span className="pointer-events-none absolute top-0 right-0 -translate-y-full pb-0.5 text-[10px] text-muted-foreground/70 tabular-nums">
+      {/* Coloana din dreapta ține valoarea maximului, în afara barelor. */}
+      <div className="mt-2 flex gap-1.5">
+        <div className="relative h-32 flex-1">
+          <div className="pointer-events-none absolute inset-x-0 top-0 border-t border-dashed border-white/10" />
+          <div
+            className="flex h-full items-end gap-[2px]"
+            onPointerLeave={(e) => e.pointerType === "mouse" && setHovered(null)}
+          >
+            {buckets.map((b, i) => {
+              const pct = (b.count / max) * 100;
+              const active = i === shownIndex;
+              return (
+                <button
+                  key={b.key}
+                  type="button"
+                  aria-label={`${b.label}: ${countRo(b.count, "vizionare", "vizionări")}`}
+                  aria-pressed={pinned === i}
+                  onPointerEnter={(e) => e.pointerType === "mouse" && setHovered(i)}
+                  onClick={() => setPinned((p) => (p === i ? null : i))}
+                  className="flex h-full flex-1 items-end"
+                >
+                  <span
+                    className={`block w-full rounded-t-[4px] transition-colors ${
+                      b.count === 0
+                        ? "bg-white/10"
+                        : active
+                          ? "bg-emerald-300"
+                          : "bg-emerald-400/60"
+                    }`}
+                    style={{ height: b.count === 0 ? "2px" : `max(${pct}%, 3px)` }}
+                  />
+                </button>
+              );
+            })}
+          </div>
+          {/* Etichetele stau sub bara lor; marginile se aliniază la capete,
+              ca să nu iasă din card. */}
+          <div className="pointer-events-none absolute inset-x-0 top-full mt-1 h-4 text-[10px] whitespace-nowrap text-muted-foreground/80">
+            {axisIdx.map((i, n) => (
+              <span
+                key={buckets[i].key}
+                className="absolute"
+                style={
+                  n === 0
+                    ? { left: 0 }
+                    : n === axisIdx.length - 1
+                      ? { right: 0 }
+                      : {
+                          left: `${((i + 0.5) / buckets.length) * 100}%`,
+                          transform: "translateX(-50%)",
+                        }
+                }
+              >
+                {buckets[i].label}
+              </span>
+            ))}
+          </div>
+        </div>
+        <span className="-mt-1.5 w-6 shrink-0 text-right text-[10px] text-muted-foreground/70 tabular-nums">
           {max}
         </span>
-        <div className="flex h-full items-end gap-[2px]" onMouseLeave={() => setSelected(null)}>
-          {buckets.map((b, i) => {
-            const pct = (b.count / max) * 100;
-            const active = i === shownIndex;
-            return (
-              <button
-                key={b.key}
-                type="button"
-                aria-label={`${b.label}: ${countRo(b.count, "vizionare", "vizionări")}`}
-                onMouseEnter={() => setSelected(i)}
-                onFocus={() => setSelected(i)}
-                onClick={() => setSelected(i)}
-                className="flex h-full flex-1 items-end"
-              >
-                <span
-                  className={`block w-full rounded-t-[4px] transition-colors ${
-                    b.count === 0 ? "bg-white/10" : active ? "bg-emerald-300" : "bg-emerald-400/60"
-                  }`}
-                  style={{ height: b.count === 0 ? "2px" : `max(${pct}%, 3px)` }}
-                />
-              </button>
-            );
-          })}
-        </div>
-      </div>
-      <div className="mt-1 flex gap-[2px] text-[10px] text-muted-foreground/80">
-        {buckets.map((b, i) => (
-          <span
-            key={b.key}
-            className={`flex-1 whitespace-nowrap ${
-              i === 0 ? "text-left" : i === buckets.length - 1 ? "text-right" : "text-center"
-            }`}
-            style={{ visibility: axisIdx.has(i) ? "visible" : "hidden", minWidth: 0 }}
-          >
-            <span className="inline-block">{b.label}</span>
-          </span>
-        ))}
       </div>
 
-      {period.users.length > 0 && (
-        <div className="mt-4 space-y-1.5">
+      {users.length > 0 ? (
+        <div className="mt-8 space-y-1.5">
           <div className="text-[11px] font-semibold tracking-wider text-emerald-300/80 uppercase">
-            Pe utilizator
+            Pe utilizator · {selected == null ? meta.window.replace(/^în /, "") : shown.label}
           </div>
-          {period.users.map((u) => (
+          {users.map((u) => (
             <div key={u.username} className="flex items-center gap-2 text-xs">
               <UserAvatar name={u.username} />
               <span className="w-28 shrink-0 truncate text-foreground/90">{u.username}</span>
@@ -137,6 +161,10 @@ export function WatchStatsWidget({ stats }: { stats: RecentWatchStats }) {
               <span className="w-8 shrink-0 text-right font-medium tabular-nums">{u.count}</span>
             </div>
           ))}
+        </div>
+      ) : (
+        <div className="mt-8 text-center text-xs text-muted-foreground">
+          Nicio vizionare {selected == null ? meta.window : `în ${shown.label}`}
         </div>
       )}
     </div>
