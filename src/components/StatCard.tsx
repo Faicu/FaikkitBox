@@ -8,9 +8,11 @@ interface Props {
   sub?: ReactNode;
   icon?: ReactNode;
   accent?: string;
+  // Grafic de tendință, în fundalul cardului, sub text.
+  chart?: ReactNode;
 }
 
-export function StatCard({ label, value, sub, icon, accent }: Props) {
+export function StatCard({ label, value, sub, icon, accent, chart }: Props) {
   // Micro-flash whenever the displayed value changes
   const flash = useFlashOnChange(
     typeof value === "string" || typeof value === "number" ? String(value) : undefined,
@@ -29,6 +31,7 @@ export function StatCard({ label, value, sub, icon, accent }: Props) {
       {sub && (
         <div className="relative z-10 mt-0.5 text-xs text-muted-foreground tabular-nums">{sub}</div>
       )}
+      {chart && <div className="absolute inset-x-0 bottom-0 h-10 opacity-60">{chart}</div>}
     </div>
   );
 }

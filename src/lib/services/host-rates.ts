@@ -88,3 +88,64 @@ export const LEVEL_TEXT: Record<Level, string> = {
   warn: "text-amber-400",
   danger: "text-red-400",
 };
+
+// Discurile afișate, în ordine; restul montărilor (efi, overlay Docker) nu.
+export const DISK_MOUNTS = [
+  { mount: "/", label: "M.2 Bază" },
+  { mount: "/media/ssd2tb", label: "M.2 2TB" },
+  { mount: "/media/hddextern", label: "HDD Extern" },
+] as const;
+
+// Discul întreg al unei partiții: nvme1n1p2 → nvme1n1, sda1 → sda.
+export function baseBlockDevice(dev: string): string {
+  return /^nvme\d+n\d+/.exec(dev)?.[0] ?? dev.replace(/^(sd[a-z]+)\d+$/, "$1");
+}
+
+export interface SmartSummary {
+  model?: string;
+  passed: boolean | null;
+  tempC?: number;
+  powerOnHours?: number;
+  wearPercent?: number;
+  writtenBytes?: number;
+  criticalWarning?: number;
+  mediaErrors?: number;
+  reallocated?: number;
+  pending?: number;
+  uncorrectable?: number;
+  checkedAt: number;
+}
+
+// Praguri de temperatură pentru SSD: 75 / 80 °C, coborâte dacă firmware-ul
+// declară un prag mai mic (SSD-ul de 512 GB: 74,85 °C). HDD-urile țin mai puțin.
+export function diskTempLimits(kind: "ssd" | "hdd", firmwareMax?: number): [number, number] {
+  if (kind === "hdd") return [50, 55];
+  if (firmwareMax && firmwareMax < 80) return [firmwareMax - 5, firmwareMax];
+  return [75, 80];
+}
+
+// Problemele raportate de SMART, ca text scurt; gol = disc sănătos.
+export function smartProblems(s: SmartSummary): Array<{ level: Level; text: string }> {
+  const out: Array<{ level: Level; text: string }> = [];
+  if (s.passed === false) out.push({ level: "danger", text: "SMART: test eșuat" });
+  if (s.criticalWarning) out.push({ level: "danger", text: "SMART: avertizare critică" });
+  if (s.mediaErrors) out.push({ level: "warn", text: `${s.mediaErrors} erori de citire` });
+  if (s.wearPercent != null && s.wearPercent >= 80) {
+    out.push({ level: s.wearPercent >= 95 ? "danger" : "warn", text: `uzură ${s.wearPercent}%` });
+  }
+  const bad = (s.reallocated ?? 0) + (s.pending ?? 0) + (s.uncorrectable ?? 0);
+  if (bad > 0) out.push({ level: "warn", text: `${bad} sectoare defecte` });
+  return out;
+}
+
+// Un punct din istoricul de 10 minute (la 5 s), pentru graficele din carduri.
+export interface HostHistoryPoint {
+  ts: number;
+  cpu?: number;
+  mem?: number;
+  cpuTemp?: number;
+  gpuBusy?: number;
+  rx?: number;
+  tx?: number;
+  disks: Record<string, { r: number; w: number }>;
+}

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  baseBlockDevice,
   containerApp,
+  diskTempLimits,
+  smartProblems,
   containerCpuPercent,
   containerMemBytes,
   counterRate,
@@ -74,5 +77,41 @@ describe("windowedDiskRate", () => {
   });
   it("fără istoric → fără valoare", () => {
     expect(windowedDiskRate([], at(1000, 1), 5000)).toBeUndefined();
+  });
+});
+
+describe("baseBlockDevice", () => {
+  it("partiție → disc întreg", () => {
+    expect(baseBlockDevice("nvme1n1p2")).toBe("nvme1n1");
+    expect(baseBlockDevice("nvme0n1")).toBe("nvme0n1");
+    expect(baseBlockDevice("sda1")).toBe("sda");
+    expect(baseBlockDevice("sda")).toBe("sda");
+  });
+});
+
+describe("diskTempLimits", () => {
+  it("SSD: 75/80, coborâte la pragul firmware-ului dacă e mai mic", () => {
+    expect(diskTempLimits("ssd", 99.85)).toEqual([75, 80]);
+    expect(diskTempLimits("ssd", 74.85)).toEqual([69.85, 74.85]);
+    expect(diskTempLimits("ssd")).toEqual([75, 80]);
+  });
+  it("HDD: 50/55", () => {
+    expect(diskTempLimits("hdd")).toEqual([50, 55]);
+  });
+});
+
+describe("smartProblems", () => {
+  const ok = { passed: true, checkedAt: 0 };
+  it("disc sănătos → nimic", () => {
+    expect(smartProblems({ ...ok, wearPercent: 3, reallocated: 0, mediaErrors: 0 })).toEqual([]);
+  });
+  it("test eșuat, uzură, sectoare", () => {
+    expect(smartProblems({ ...ok, passed: false }).map((p) => p.level)).toEqual(["danger"]);
+    expect(smartProblems({ ...ok, wearPercent: 85 })).toEqual([
+      { level: "warn", text: "uzură 85%" },
+    ]);
+    expect(smartProblems({ ...ok, reallocated: 2, pending: 1 })).toEqual([
+      { level: "warn", text: "3 sectoare defecte" },
+    ]);
   });
 });

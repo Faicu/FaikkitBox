@@ -9,6 +9,8 @@ import {
   type PushSubscriptionRow,
 } from "@/lib/notifications/push.functions";
 import { pushSubscriptionsQuery } from "@/lib/queries";
+import { usePushNotifications } from "@/hooks/use-push-notifications";
+import { PushToggleCard } from "../PushToggleCard";
 import { formatDateTime, relativeTime } from "../utils";
 
 /**
@@ -48,15 +50,18 @@ export function PushSubscriptionsSection() {
   const [confirmId, setConfirmId] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery(pushSubscriptionsQuery);
+  const push = usePushNotifications();
 
-  // Coada endpoint-ului propriu, ca să putem marca rândul acestui dispozitiv.
+  // Coada endpoint-ului propriu, ca să putem marca rândul acestui dispozitiv;
+  // recitită (cu lista) când dispozitivul se abonează sau se dezabonează.
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
     navigator.serviceWorker.ready
       .then((reg) => reg.pushManager.getSubscription())
       .then((sub) => setMyTail(sub ? sub.endpoint.slice(-12) : null))
       .catch(() => setMyTail(null));
-  }, []);
+    void qc.invalidateQueries({ queryKey: ["pushSubscriptions"] });
+  }, [push.state, qc]);
 
   const remove = useMutation({
     mutationFn: (id: string) => del({ data: { id } }),
@@ -75,6 +80,8 @@ export function PushSubscriptionsSection() {
       <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
         <BellRing className="h-3.5 w-3.5" /> Abonamente notificări ({rows.length})
       </h2>
+
+      <PushToggleCard push={push} />
 
       {isLoading ? (
         <div className="space-y-2">

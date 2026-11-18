@@ -1,5 +1,12 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
-import { getPlex, getPlexSessions, getImmich, getQbit, getHost } from "./services.functions";
+import {
+  getPlex,
+  getPlexSessions,
+  getImmich,
+  getQbit,
+  getHost,
+  getHostHistory,
+} from "./services.functions";
 import { getAdminStatus } from "./auth/admin.functions";
 import { getVersions } from "./system/versions.functions";
 import { getServiceJobs, runningFrom } from "./system/service-jobs.functions";
@@ -93,6 +100,16 @@ export const hostQuery = queryOptions({
   queryFn: () => getHost(),
   refetchInterval: REFRESH_MS,
   // Fără cereri cu tabul minimizat — nimeni nu le vede.
+  refetchIntervalInBackground: false,
+  staleTime: 0,
+  ...keepPrev,
+});
+
+// Istoricul de 10 minute (un punct la 5 s) — graficele din pagina Sistem.
+export const hostHistoryQuery = queryOptions({
+  queryKey: ["hostHistory"],
+  queryFn: () => getHostHistory(),
+  refetchInterval: 5000,
   refetchIntervalInBackground: false,
   staleTime: 0,
   ...keepPrev,
