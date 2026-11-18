@@ -18,10 +18,39 @@ export function counterRate(
   return (value - prev.value) / dt;
 }
 
-// Docker raportează CPU pe un nucleu (până la nuclee × 100), spre deosebire de
-// procese și de cardul Procesor, care sunt raportate la toate nucleele.
-export function normalizeContainerCpu(dockerPercent: number, cores: number | undefined): number {
-  return cores && cores > 0 ? dockerPercent / cores : dockerPercent;
+// CPU-ul unui container din cgroup (`usage_usec` cumulativ), raportat la toate
+// nucleele, ca procesele și cardul Procesor.
+export function containerCpuPercent(
+  prev: CounterSnapshot | undefined,
+  usageUsec: number,
+  ts: number,
+  cores: number | undefined,
+): number | undefined {
+  const usecPerSec = counterRate(prev, usageUsec, ts);
+  if (usecPerSec == null) return undefined;
+  const onePerCore = usecPerSec / 10_000; // % dintr-un nucleu
+  return cores && cores > 0 ? onePerCore / cores : onePerCore;
+}
+
+// Memoria unui container ca la `docker stats`: fără cache-ul de fișiere
+// inactiv, pe care kernelul îl eliberează oricând.
+export function containerMemBytes(current: number, inactiveFile: number): number {
+  return Math.max(0, current - inactiveFile);
+}
+
+// Aplicația unui container, după liniile de comandă ale proceselor din el —
+// userul serviciului n-are acces la Docker, deci nici la numele containerelor.
+// Postgres-ul (cu extensia „vectors”) și Valkey sunt pe server doar ale Immich.
+const CONTAINER_APPS: Array<{ name: string; match: RegExp }> = [
+  { name: "Plex", match: /plex/i },
+  { name: "Immich", match: /immich|postgres: vectors|valkey-server/i },
+];
+
+export function containerApp(cmdlines: string[]): string | null {
+  for (const { name, match } of CONTAINER_APPS) {
+    if (cmdlines.some((c) => match.test(c))) return name;
+  }
+  return null;
 }
 
 export type Level = "ok" | "warn" | "danger";

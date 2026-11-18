@@ -1,7 +1,12 @@
 import { createServerFn } from "@tanstack/react-start";
 import type { Systeminformation } from "systeminformation";
 import { cachedAsync, errMsg, type ServiceStatus } from "./shared";
-import { counterRate, normalizeContainerCpu, type CounterSnapshot } from "./host-rates";
+import {
+  containerApp,
+  containerCpuPercent,
+  containerMemBytes,
+  type CounterSnapshot,
+} from "./host-rates";
 
 export interface HostData {
   status: ServiceStatus;
@@ -31,8 +36,6 @@ export interface HostData {
     name: string;
     cpu: number;
     mem: number;
-    netRx?: number;
-    netTx?: number;
     source: "process" | "container";
   }>;
 }
@@ -51,8 +54,66 @@ interface DiskSnapshot {
 }
 const prevDiskStats: Record<string, DiskSnapshot> = {};
 
-// Contoarele de rețea ale containerelor sunt cumulative; viteza o calculăm noi.
-const prevContainerNet = new Map<string, { rx: CounterSnapshot; wx: CounterSnapshot }>();
+// Containerele Docker citite direct din cgroup (userul serviciului n-are acces
+// la socket-ul Docker). CPU-ul e un contor cumulativ, deci ținem citirea
+// anterioară; aplicația unui container nu se schimbă, deci o ținem minte.
+const CGROUP_DIR = "/sys/fs/cgroup/system.slice";
+const prevContainerCpu = new Map<string, CounterSnapshot>();
+const containerAppById = new Map<string, string | null>();
+
+interface ContainerSample {
+  id: string;
+  app: string | null;
+  usageUsec: number;
+  memBytes: number;
+  ts: number;
+}
+
+async function readDockerCgroups(): Promise<ContainerSample[]> {
+  const { readdir, readFile } = await import("node:fs/promises");
+  let entries: string[];
+  try {
+    entries = (await readdir(CGROUP_DIR)).filter((e) => /^docker-[0-9a-f]+\.scope$/.test(e));
+  } catch {
+    return [];
+  }
+  const samples = await Promise.all(
+    entries.map(async (entry): Promise<ContainerSample | null> => {
+      const dir = `${CGROUP_DIR}/${entry}`;
+      try {
+        if (!containerAppById.has(entry)) {
+          const pids = (await readFile(`${dir}/cgroup.procs`, "utf8")).trim().split("\n");
+          const cmdlines = await Promise.all(
+            pids.map((pid) =>
+              readFile(`/proc/${pid}/cmdline`, "utf8")
+                .then((c) => c.replaceAll("\0", " "))
+                .catch(() => ""),
+            ),
+          );
+          containerAppById.set(entry, containerApp(cmdlines));
+        }
+        const [cpuStat, memCurrent, memStat] = await Promise.all([
+          readFile(`${dir}/cpu.stat`, "utf8"),
+          readFile(`${dir}/memory.current`, "utf8"),
+          readFile(`${dir}/memory.stat`, "utf8"),
+        ]);
+        const usageUsec = Number(/^usage_usec (\d+)/m.exec(cpuStat)?.[1] ?? 0);
+        const inactiveFile = Number(/^inactive_file (\d+)/m.exec(memStat)?.[1] ?? 0);
+        return {
+          id: entry,
+          app: containerAppById.get(entry) ?? null,
+          usageUsec,
+          memBytes: containerMemBytes(Number(memCurrent), inactiveFile),
+          ts: Date.now(),
+        };
+      } catch {
+        // Container oprit între readdir și citire.
+        return null;
+      }
+    }),
+  );
+  return samples.filter((x): x is ContainerSample => x !== null);
+}
 
 async function readProcDiskstats(): Promise<Record<string, { rSec: number; wSec: number }>> {
   try {
@@ -105,7 +166,7 @@ async function collectHostData(): Promise<HostData> {
     const { osInfo, cpu } = staticHostCache;
 
     // Dinamice — la fiecare refresh.
-    const [currentLoad, mem, fsSize, netStats, cpuTemp, processes, dockerContainers, diskStatsRaw] =
+    const [currentLoad, mem, fsSize, netStats, cpuTemp, processes, containers, diskStatsRaw] =
       await Promise.all([
         si.currentLoad(),
         si.mem(),
@@ -113,15 +174,7 @@ async function collectHostData(): Promise<HostData> {
         si.networkStats(),
         si.cpuTemperature().catch(() => null),
         cachedAsync("host:processes", HEAVY_TTL_MS, () => si.processes(), SWR),
-        cachedAsync(
-          "host:docker",
-          HEAVY_TTL_MS,
-          () =>
-            si
-              .dockerContainers()
-              .catch(() => [] as Awaited<ReturnType<typeof si.dockerContainers>>),
-          SWR,
-        ),
+        readDockerCgroups(),
         readProcDiskstats(),
       ]);
 
@@ -172,9 +225,25 @@ async function collectHostData(): Promise<HostData> {
         ? [{ label: "CPU", value: cpuTemp.main, unit: "°C" }]
         : [];
 
+    // Fără procesele pornite chiar de server (ps-ul cu care systeminformation
+    // citește lista): abia pornite, apăreau cu CPU 100%.
+    const ownPids = new Set([process.pid]);
+    for (let grew = true; grew;) {
+      grew = false;
+      for (const p of processes.list ?? []) {
+        if (!ownPids.has(p.pid) && ownPids.has(p.parentPid)) {
+          ownPids.add(p.pid);
+          grew = true;
+        }
+      }
+    }
+    const procList = (processes.list ?? []).filter(
+      (p) => p.pid === process.pid || !ownPids.has(p.pid),
+    );
+
     // Același nume (ex. mai multe procese „Plex”) → un singur rând, însumat.
     const byName = new Map<string, { name: string; cpu: number; mem: number }>();
-    for (const p of processes.list ?? []) {
+    for (const p of procList) {
       const name = p.name || "?";
       const row = byName.get(name) ?? { name, cpu: 0, mem: 0 };
       row.cpu += Number(p.cpu ?? 0);
@@ -183,77 +252,35 @@ async function collectHostData(): Promise<HostData> {
     }
     const topProcesses = [...byName.values()].sort((a, b) => b.cpu - a.cpu).slice(0, 6);
 
-    // Containerele Docker (Plex, Immich), după nume/imagine; qBittorrent e
-    // proces systemd, căutat în lista de procese.
-    const APP_MAP: Array<{ name: string; match: RegExp }> = [
-      { name: "Plex", match: /plex/i },
-      { name: "Immich", match: /immich/i },
-      { name: "qBittorrent", match: /qbittorrent|qbit/i },
-    ];
-
-    // Cel mai scump apel (~1,7s pentru 8 containere, 83% din total); fără cache,
-    // ritmul perceput al paginii Sistem urca de la 3s la ~5s.
-    const containerStats = await cachedAsync(
-      "host:containerStats",
-      HEAVY_TTL_MS,
-      () =>
-        Promise.all(
-          dockerContainers.map(async (c) => {
-            try {
-              const raw = await si.dockerContainerStats(c.id);
-              const stats = Array.isArray(raw) ? raw[0] : raw;
-              const ts = Date.now();
-              const rx = Number(stats?.netIO?.rx ?? 0);
-              const wx = Number(stats?.netIO?.wx ?? 0);
-              const prev = prevContainerNet.get(c.id);
-              prevContainerNet.set(c.id, { rx: { value: rx, ts }, wx: { value: wx, ts } });
-              return {
-                container: c,
-                stats,
-                rxSec: counterRate(prev?.rx, rx, ts),
-                txSec: counterRate(prev?.wx, wx, ts),
-              };
-            } catch {
-              return { container: c, stats: null, rxSec: undefined, txSec: undefined };
-            }
-          }),
+    // Plex și Immich sunt containere (toate containerele aplicației, însumate);
+    // qBittorrent e proces systemd. La prima citire după pornire CPU-ul
+    // containerelor nu are încă interval, deci 0.
+    const apps: NonNullable<HostData["apps"]> = [];
+    for (const name of ["Plex", "Immich"]) {
+      const own = containers.filter((c) => c.app === name);
+      if (own.length === 0) continue;
+      apps.push({
+        name,
+        cpu: own.reduce(
+          (s, c) =>
+            s +
+            (containerCpuPercent(prevContainerCpu.get(c.id), c.usageUsec, c.ts, cpu.cores) ?? 0),
+          0,
         ),
-      SWR,
-    );
-
-    const apps: HostData["apps"] = APP_MAP.map(({ name, match }) => {
-      const matchedContainers = containerStats.filter(
-        ({ container }) => match.test(container.name ?? "") || match.test(container.image ?? ""),
-      );
-      if (matchedContainers.length > 0) {
-        let cpuSum = 0;
-        let memSum = 0;
-        let rxSum: number | undefined;
-        let txSum: number | undefined;
-        for (const { stats, rxSec, txSec } of matchedContainers) {
-          if (!stats) continue;
-          cpuSum += normalizeContainerCpu(Number(stats.cpuPercent ?? 0), cpu.cores);
-          memSum += Number(stats.memPercent ?? 0);
-          if (rxSec != null) rxSum = (rxSum ?? 0) + rxSec;
-          if (txSec != null) txSum = (txSum ?? 0) + txSec;
-        }
-        return {
-          name,
-          cpu: cpuSum,
-          mem: memSum,
-          netRx: rxSum,
-          netTx: txSum,
-          source: "container" as const,
-        };
-      }
-      const matchedProcs = (processes.list ?? []).filter((p) =>
-        match.test(p.name ?? p.command ?? ""),
-      );
-      if (matchedProcs.length === 0) return null;
-      const cpuSum = matchedProcs.reduce((s, p) => s + Number(p.cpu ?? 0), 0);
-      const memSum = matchedProcs.reduce((s, p) => s + Number(p.mem ?? 0), 0);
-      return { name, cpu: cpuSum, mem: memSum, source: "process" as const };
-    }).filter((x): x is NonNullable<typeof x> => x !== null);
+        mem: mem.total ? (own.reduce((s, c) => s + c.memBytes, 0) / mem.total) * 100 : 0,
+        source: "container",
+      });
+    }
+    for (const c of containers) prevContainerCpu.set(c.id, { value: c.usageUsec, ts: c.ts });
+    const qbit = procList.filter((p) => /qbittorrent/i.test(p.name ?? ""));
+    if (qbit.length > 0) {
+      apps.push({
+        name: "qBittorrent",
+        cpu: qbit.reduce((s, p) => s + Number(p.cpu ?? 0), 0),
+        mem: qbit.reduce((s, p) => s + Number(p.mem ?? 0), 0),
+        source: "process",
+      });
+    }
 
     return {
       status: "ok",

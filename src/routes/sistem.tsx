@@ -174,18 +174,9 @@ function HostPage() {
                       </span>
                     </div>
                     <div className="shrink-0 text-right text-xs tabular-nums">
-                      <div>
-                        <span className="text-emerald-400">CPU {a.cpu.toFixed(1)}%</span>
-                        {" · "}
-                        <span className="text-emerald-400">MEM {a.mem.toFixed(1)}%</span>
-                      </div>
-                      {(a.netRx != null || a.netTx != null) && (
-                        <div className="text-[10px] text-muted-foreground">
-                          <span className="text-sky-400">↓ {formatSpeed(a.netRx ?? 0)}</span>
-                          {" · "}
-                          <span className="text-emerald-400">↑ {formatSpeed(a.netTx ?? 0)}</span>
-                        </div>
-                      )}
+                      <span className="text-emerald-400">CPU {a.cpu.toFixed(1)}%</span>
+                      {" · "}
+                      <span className="text-emerald-400">MEM {a.mem.toFixed(1)}%</span>
                     </div>
                   </li>
                 ))}

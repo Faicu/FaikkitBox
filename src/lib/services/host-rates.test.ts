@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { counterRate, levelFor, normalizeContainerCpu } from "./host-rates";
+import {
+  containerApp,
+  containerCpuPercent,
+  containerMemBytes,
+  counterRate,
+  levelFor,
+} from "./host-rates";
 
 describe("counterRate", () => {
   it("fără citire anterioară nu inventează viteza", () => {
@@ -16,12 +22,30 @@ describe("counterRate", () => {
   });
 });
 
-describe("normalizeContainerCpu", () => {
-  it("împarte la nuclee", () => {
-    expect(normalizeContainerCpu(160, 16)).toBe(10);
+describe("containerCpuPercent", () => {
+  it("1,6 nuclee ocupate din 16 → 10%", () => {
+    expect(containerCpuPercent({ value: 0, ts: 0 }, 3_200_000, 2000, 16)).toBe(10);
   });
-  it("fără nuclee știute, lasă valoarea", () => {
-    expect(normalizeContainerCpu(50, undefined)).toBe(50);
+  it("fără citire anterioară → fără valoare", () => {
+    expect(containerCpuPercent(undefined, 3_200_000, 2000, 16)).toBeUndefined();
+  });
+});
+
+describe("containerMemBytes", () => {
+  it("scade cache-ul inactiv", () => {
+    expect(containerMemBytes(1000, 300)).toBe(700);
+  });
+});
+
+describe("containerApp", () => {
+  it("recunoaște containerele după procese", () => {
+    expect(containerApp(["s6-svscan -t0", "/usr/lib/plexmediaserver/Plex Media Server"])).toBe(
+      "Plex",
+    );
+    expect(containerApp(["tini -- python -m immich_ml"])).toBe("Immich");
+    expect(containerApp(["postgres -c config_file=x", "postgres: vectors"])).toBe("Immich");
+    expect(containerApp(["valkey-server *:6379"])).toBe("Immich");
+    expect(containerApp(["cloudflared tunnel run"])).toBeNull();
   });
 });
 
