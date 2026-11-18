@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   agreedEpisodeKey,
   extractEpisodeKey,
+  isSampleFile,
   osResultMatchesEpisode,
   parseSeasonEpisode,
   pickRomanianSrt,
@@ -201,5 +202,23 @@ describe("parseSeasonEpisode — forma 1x03", () => {
   it("rezoluțiile și codecurile nu sunt episoade", () => {
     expect(parseSeasonEpisode("Film.1920x1080.x264.srt")).toBeNull();
     expect(parseSeasonEpisode("Film.2026.1080p.WEB-DL.DDP5.1.x264-GRP.srt")).toBeNull();
+  });
+});
+
+describe("isSampleFile", () => {
+  it("mostra din folderul Sample nu e un al doilea fișier media", () => {
+    expect(
+      isSampleFile(
+        "Ice.Age.2011.1080p.BluRay.x264-aAF/Sample/aaf-iceagemammothxmas.1080p-sample.mkv",
+      ),
+    ).toBe(true);
+    expect(isSampleFile("Film.2026.1080p/film.sample.mkv")).toBe(true);
+  });
+
+  it("titlurile care conțin „sample” în cuvânt rămân", () => {
+    expect(isSampleFile("Ice.Age.2011.1080p.BluRay.x264-aAF/aaf-iceagemammothxmas.1080p.mkv")).toBe(
+      false,
+    );
+    expect(isSampleFile("The.Samples.2020.1080p.mkv")).toBe(false);
   });
 });

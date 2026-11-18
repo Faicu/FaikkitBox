@@ -37,7 +37,12 @@ import {
 } from "./subtitle-outcomes";
 import { buildTorrentDisplayName, searchImdbIdByReleaseName } from "../tmdb/tmdb-title-lookup";
 import { torrentDisplay } from "../media/torrent-display";
-import { MEDIA_EXTENSIONS, parseSeasonEpisode, extractEpisodeKey } from "./subtitle-checks";
+import {
+  isSampleFile,
+  MEDIA_EXTENSIONS,
+  parseSeasonEpisode,
+  extractEpisodeKey,
+} from "./subtitle-checks";
 import { processMediaFile, type ProcessMediaFileResult } from "./subtitle-pipeline";
 
 // .srt-urile din torrent de luat în seamă: și originalul pus deoparte de o
@@ -170,8 +175,8 @@ export async function ensureRomanianSubtitle(
   // disc — un .srt „fantomă” ar da ENOENT sau s-ar asocia greșit.
   const downloadedFiles = files.filter((f) => Number(f.progress ?? 0) >= 1);
 
-  const mediaFiles = downloadedFiles.filter((f) =>
-    MEDIA_EXTENSIONS.includes(extname(f.name).toLowerCase()),
+  const mediaFiles = downloadedFiles.filter(
+    (f) => MEDIA_EXTENSIONS.includes(extname(f.name).toLowerCase()) && !isSampleFile(f.name),
   );
   if (!mediaFiles.length) {
     return item(
@@ -293,8 +298,8 @@ export async function deleteRomanianSubtitle(params: {
   }
 
   const downloadedFiles = files.filter((f) => Number(f.progress ?? 0) >= 1);
-  const mediaFiles = downloadedFiles.filter((f) =>
-    MEDIA_EXTENSIONS.includes(extname(f.name).toLowerCase()),
+  const mediaFiles = downloadedFiles.filter(
+    (f) => MEDIA_EXTENSIONS.includes(extname(f.name).toLowerCase()) && !isSampleFile(f.name),
   );
   if (!mediaFiles.length) {
     return { status: "error", deleted: [], error: "niciun fișier media recunoscut în torrent" };

@@ -10,6 +10,12 @@ import { findTag } from "./release-scoring";
 const execFileAsync = promisify(execFile);
 
 export const MEDIA_EXTENSIONS = [".mkv", ".mp4", ".avi", ".m2ts", ".ts", ".wmv", ".mov"];
+
+// Mostrele („Sample/…-sample.mkv”) nu intră în bibliotecă și nu se numără ca
+// fișiere media — altfel un film cu mostră pare pachet de episoade.
+export function isSampleFile(name: string): boolean {
+  return /(^|[\\/._ -])sample([\\/._ -]|$)/i.test(name);
+}
 const ROMANIAN_LANG_CODES = ["ro", "rum", "ron"];
 
 // Sezon + episod din numele unui fișier („…S08E01…” → {8, 1}) — asocierea

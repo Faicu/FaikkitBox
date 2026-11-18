@@ -10,7 +10,7 @@
 // ---------------------------------------------------------------------------
 
 import { basename, dirname, extname } from "node:path";
-import { MEDIA_EXTENSIONS } from "./subtitle-checks";
+import { isSampleFile, MEDIA_EXTENSIONS } from "./subtitle-checks";
 
 const HAS_HINT_RE = /\{(?:imdb|tmdb|tvdb)-[^}]*\}/i;
 
@@ -38,8 +38,7 @@ export function planPlexIdRenames(fileNames: string[], imdbId: string): PlannedR
 
   for (const name of fileNames) {
     if (!isVideo(name) || HAS_HINT_RE.test(name)) continue;
-    // Mostrele nu intră în bibliotecă.
-    if (/(^|[\\/._ -])sample([\\/._ -]|$)/i.test(name)) continue;
+    if (isSampleFile(name)) continue;
 
     const dir = dirname(name);
     const ext = extname(name);
