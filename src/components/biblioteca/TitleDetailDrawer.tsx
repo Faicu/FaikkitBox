@@ -113,7 +113,9 @@ export function TitleDetailDrawer({
                 />
               )}
 
-              {d.summary && <ClampedSummary key={activeId} text={d.summary} />}
+              {/* Chei cu prefix: aceeași valoare pe doi frați (rezumat și acțiuni,
+                  la film) dubla rezumatul la fiecare reîmprospătare. */}
+              {d.summary && <ClampedSummary key={`summary-${activeId}`} text={d.summary} />}
 
               {d.type === "tv_show" && (
                 <>
@@ -147,7 +149,7 @@ export function TitleDetailDrawer({
 
               {d.type !== "tv_show" && (
                 <TitleActions
-                  key={d.mediaId}
+                  key={`actions-${d.mediaId}`}
                   detail={d}
                   onChanged={invalidateAfterMutation}
                   onRequestDelete={onRequestDelete}
