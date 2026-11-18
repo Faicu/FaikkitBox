@@ -5,7 +5,9 @@ import {
   containerApp,
   containerCpuPercent,
   containerMemBytes,
+  windowedDiskRate,
   type CounterSnapshot,
+  type DiskCounters,
 } from "./host-rates";
 
 export interface HostData {
@@ -46,13 +48,10 @@ let staticHostCache: {
   cpu: Systeminformation.CpuData;
 } | null = null;
 
-// Cache pentru viteza I/O per disc (/proc/diskstats).
-interface DiskSnapshot {
-  rSec: number;
-  wSec: number;
-  ts: number;
-}
-const prevDiskStats: Record<string, DiskSnapshot> = {};
+// Citirile recente ale contoarelor per disc (/proc/diskstats), pentru viteza
+// mediată pe DISK_WINDOW_MS.
+const DISK_WINDOW_MS = 5000;
+const diskHistory: Record<string, DiskCounters[]> = {};
 
 // Containerele Docker citite direct din cgroup (userul serviciului n-are acces
 // la socket-ul Docker). CPU-ul e un contor cumulativ, deci ținem citirea
@@ -183,16 +182,12 @@ async function collectHostData(): Promise<HostData> {
     // Vitezele per disc, din contoarele cumulative.
     const now = Date.now();
     const diskSpeeds: Record<string, { readBps: number; writeBps: number }> = {};
-    for (const [dev, cur] of Object.entries(diskStatsRaw)) {
-      const prev = prevDiskStats[dev];
-      if (prev && now - prev.ts > 100) {
-        const dt = (now - prev.ts) / 1000;
-        diskSpeeds[dev] = {
-          readBps: Math.max(0, ((cur.rSec - prev.rSec) * 512) / dt),
-          writeBps: Math.max(0, ((cur.wSec - prev.wSec) * 512) / dt),
-        };
-      }
-      prevDiskStats[dev] = { rSec: cur.rSec, wSec: cur.wSec, ts: now };
+    for (const [dev, raw] of Object.entries(diskStatsRaw)) {
+      const cur = { readBytes: raw.rSec * 512, writeBytes: raw.wSec * 512, ts: now };
+      const history = diskHistory[dev] ?? [];
+      const rate = windowedDiskRate(history, cur, DISK_WINDOW_MS);
+      if (rate) diskSpeeds[dev] = rate;
+      diskHistory[dev] = [...history.filter((h) => now - h.ts < DISK_WINDOW_MS), cur];
     }
 
     const disks = fsSize

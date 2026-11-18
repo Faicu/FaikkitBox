@@ -209,10 +209,15 @@ function HostPage() {
                     />
                     {hasIO && (
                       <div className="flex gap-3 pl-0 text-[11px] tabular-nums">
-                        {/* ↓ = scriere (intră pe disc, ca un download), ↑ = citire (iese
-                            de pe disc, ca un upload) — aceeași convenție ca la rețea. */}
-                        <span className="text-sky-400">↓ {formatSpeed(d.writeBps ?? 0)}</span>
-                        <span className="text-emerald-400">↑ {formatSpeed(d.readBps ?? 0)}</span>
+                        {/* Medie pe ultimele 5 s (vezi windowedDiskRate). */}
+                        <span>
+                          <span className="text-muted-foreground">scriere </span>
+                          <span className="text-sky-400">{formatSpeed(d.writeBps ?? 0)}</span>
+                        </span>
+                        <span>
+                          <span className="text-muted-foreground">citire </span>
+                          <span className="text-emerald-400">{formatSpeed(d.readBps ?? 0)}</span>
+                        </span>
                       </div>
                     )}
                   </div>

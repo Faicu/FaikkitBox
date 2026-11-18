@@ -18,6 +18,30 @@ export function counterRate(
   return (value - prev.value) / dt;
 }
 
+// Viteza unui disc mediată pe ultimele secunde: kernelul scrie pe disc în
+// rafale (datele stau întâi în memorie), iar la o secundă pagina arăta 0 și
+// vârfuri. Bază = cea mai veche citire din fereastră; fără niciuna, ultima.
+export interface DiskCounters {
+  readBytes: number;
+  writeBytes: number;
+  ts: number;
+}
+
+export function windowedDiskRate(
+  history: DiskCounters[],
+  cur: DiskCounters,
+  windowMs: number,
+): { readBps: number; writeBps: number } | undefined {
+  const base = history.find((h) => cur.ts - h.ts <= windowMs) ?? history.at(-1);
+  if (!base) return undefined;
+  const dt = (cur.ts - base.ts) / 1000;
+  if (dt <= 0.1) return undefined;
+  return {
+    readBps: Math.max(0, (cur.readBytes - base.readBytes) / dt),
+    writeBps: Math.max(0, (cur.writeBytes - base.writeBytes) / dt),
+  };
+}
+
 // CPU-ul unui container din cgroup (`usage_usec` cumulativ), raportat la toate
 // nucleele, ca procesele și cardul Procesor.
 export function containerCpuPercent(

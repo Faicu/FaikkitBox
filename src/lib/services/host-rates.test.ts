@@ -5,6 +5,7 @@ import {
   containerMemBytes,
   counterRate,
   levelFor,
+  windowedDiskRate,
 } from "./host-rates";
 
 describe("counterRate", () => {
@@ -54,5 +55,24 @@ describe("levelFor", () => {
     expect(levelFor(79, 80, 90)).toBe("ok");
     expect(levelFor(80, 80, 90)).toBe("warn");
     expect(levelFor(90, 80, 90)).toBe("danger");
+  });
+});
+
+describe("windowedDiskRate", () => {
+  const at = (ts: number, w: number) => ({ readBytes: 0, writeBytes: w, ts });
+  it("mediază de la cea mai veche citire din fereastră", () => {
+    // Rafală de 10 MB între secunda 2 și 3, apoi nimic: media pe 5 s, nu 0.
+    const history = [at(0, 0), at(1000, 0), at(2000, 0), at(3000, 10e6), at(4000, 10e6)];
+    expect(windowedDiskRate(history, at(5000, 10e6), 5000)?.writeBps).toBe(2e6);
+  });
+  it("citirile mai vechi decât fereastra nu intră", () => {
+    const history = [at(0, 0), at(4000, 50e6)];
+    expect(windowedDiskRate(history, at(6000, 60e6), 5000)?.writeBps).toBe(5e6);
+  });
+  it("fără citire în fereastră, folosește ultima", () => {
+    expect(windowedDiskRate([at(0, 0)], at(60_000, 60e6), 5000)?.writeBps).toBe(1e6);
+  });
+  it("fără istoric → fără valoare", () => {
+    expect(windowedDiskRate([], at(1000, 1), 5000)).toBeUndefined();
   });
 });
