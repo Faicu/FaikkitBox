@@ -409,7 +409,7 @@ function DiskRow({
         {disk.temp != null && (
           <span
             className={`ml-auto flex items-center gap-0.5 ${LEVEL_TEXT[levelFor(disk.temp, ...disk.tempLimits)]}`}
-            title={disk.mount.includes("hdd") ? "Din SMART, citit din oră în oră" : undefined}
+            title={disk.tempFromSmart ? "Din SMART, citit din oră în oră" : undefined}
           >
             <Thermometer className="h-3 w-3" />
             {disk.temp.toFixed(0)}°C

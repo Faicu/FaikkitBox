@@ -41,6 +41,8 @@ export interface HostData {
     readBps?: number;
     writeBps?: number;
     temp?: number;
+    // HDD-ul: temperatura din SMART (orară), nu de la un senzor live.
+    tempFromSmart?: boolean;
     tempLimits: [number, number];
     smart?: SmartSummary;
   }>;
@@ -87,7 +89,9 @@ async function readDockerCgroups(): Promise<ContainerSample[]> {
     entries.map(async (entry): Promise<ContainerSample | null> => {
       const dir = `${CGROUP_DIR}/${entry}`;
       try {
-        if (!containerAppById.has(entry)) {
+        // Un container abia pornit poate să nu-și fi lansat încă procesele
+        // după care e recunoscut — necunoscutul se reîncearcă la citirea următoare.
+        if (containerAppById.get(entry) == null) {
           const pids = (await readFile(`${dir}/cgroup.procs`, "utf8")).trim().split("\n");
           const cmdlines = await Promise.all(
             pids.map((pid) =>
@@ -118,6 +122,13 @@ async function readDockerCgroups(): Promise<ContainerSample[]> {
       }
     }),
   );
+  // Containerele recreate primesc alt ID; cele dispărute nu mai țin memorie.
+  for (const id of containerAppById.keys()) {
+    if (!entries.includes(id)) {
+      containerAppById.delete(id);
+      prevContainerCpu.delete(id);
+    }
+  }
   return samples.filter((x): x is ContainerSample => x !== null);
 }
 
@@ -153,8 +164,9 @@ async function collectProcesses(memTotal: number): Promise<ProcessSummary> {
   const { readProcessOwnMemBytes } = await import("./host-sensors.server");
   const list = (await si.processes()).list ?? [];
 
-  // Fără procesele pornite chiar de server (ps-ul cu care systeminformation
-  // citește lista): abia pornite, apăreau cu CPU 100%.
+  // Fără ps/sh/cat pornite chiar de systeminformation ca să citească lista:
+  // abia pornite, apăreau cu CPU 100%. Restul copiilor serverului (ffmpeg la
+  // subtitrări) rămân — sunt muncă reală.
   const ownPids = new Set([process.pid]);
   for (let grew = true; grew;) {
     grew = false;
@@ -165,7 +177,9 @@ async function collectProcesses(memTotal: number): Promise<ProcessSummary> {
       }
     }
   }
-  const procs = list.filter((p) => p.pid === process.pid || !ownPids.has(p.pid));
+  const procs = list.filter(
+    (p) => p.pid === process.pid || !ownPids.has(p.pid) || !/^(ps|sh|cat)$/.test(p.name ?? ""),
+  );
 
   // Același nume (ex. mai multe procese „Plex”) → un singur rând, însumat.
   const byName = new Map<string, { name: string; cpu: number; pids: number[] }>();
@@ -206,8 +220,12 @@ async function readQbitSpeeds(): Promise<{ dl: number; up: number } | null> {
   if (!base || !user || !pass) return null;
   try {
     const { qbitGet } = await import("../qbit-client");
-    const res = await qbitGet(base.replace(/\/$/, ""), "/api/v2/transfer/info", user, pass);
-    if (!res.ok) return null;
+    // Un qBittorrent blocat nu are voie să țină pe loc toată pagina.
+    const res = await Promise.race([
+      qbitGet(base.replace(/\/$/, ""), "/api/v2/transfer/info", user, pass),
+      new Promise<null>((r) => setTimeout(() => r(null), 1500)),
+    ]);
+    if (!res?.ok) return null;
     const j = (await res.json()) as { dl_info_speed?: number; up_info_speed?: number };
     return { dl: Number(j.dl_info_speed ?? 0), up: Number(j.up_info_speed ?? 0) };
   } catch {
@@ -281,6 +299,7 @@ async function collectHostData(): Promise<HostData> {
         writeBps: io?.writeBps,
         // NVMe: senzorul live; HDD-ul doar din SMART (orar), fără senzor în kernel.
         temp: nvme?.temp ?? diskSmart?.tempC,
+        tempFromSmart: !nvme && diskSmart?.tempC != null,
         tempLimits: diskTempLimits(nvme || base.startsWith("nvme") ? "ssd" : "hdd", nvme?.max),
         smart: diskSmart,
       });

@@ -113,20 +113,24 @@ export function TitleDetailDrawer({
                 />
               )}
 
-              {/* Chei cu prefix: aceeași valoare pe doi frați (rezumat și acțiuni,
-                  la film) dubla rezumatul la fiecare reîmprospătare. */}
+              {/* Chei cu prefix peste tot: aceeași valoare pe doi frați dubla
+                  elemente la fiecare reîmprospătare. */}
               {d.summary && <ClampedSummary key={`summary-${activeId}`} text={d.summary} />}
 
               {d.type === "tv_show" && (
                 <>
-                  <ShowWatchCard key={d.mediaId} detail={d} onChanged={invalidateAfterMutation} />
+                  <ShowWatchCard
+                    key={`watch-${d.mediaId}`}
+                    detail={d}
+                    onChanged={invalidateAfterMutation}
+                  />
 
                   {/* Cine l-a adus și cine l-a văzut, apoi episoadele; detaliile
                       tehnice la coadă. */}
                   <AudienceCard detail={d} watchedEpisodes={watchedEpisodes} />
 
                   <EpisodeList
-                    key={d.mediaId}
+                    key={`episodes-${d.mediaId}`}
                     episodes={d.episodes}
                     onOpen={(episodeId) => setOpenEpisode({ showId: mediaId!, episodeId })}
                   />
