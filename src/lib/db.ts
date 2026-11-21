@@ -155,6 +155,8 @@ export function getDb(): DatabaseSync {
       freeleech INTEGER NOT NULL DEFAULT 0,
       internal INTEGER NOT NULL DEFAULT 0,
       save_path TEXT,
+      -- De unde a fost luat un .torrent adăugat de mână (Bibliotecă).
+      source_url TEXT,
       is_season_pack INTEGER NOT NULL DEFAULT 0,
       added_via TEXT,
       requested_by_user_id INTEGER,
@@ -416,7 +418,7 @@ function runCleanups(database: DatabaseSync): void {
 // Versiunea curentă a schemei. O bază nouă primește direct schema de mai sus;
 // migrările v1–v52 au fost scoase pe 3 nov 2026, după ce producția și toate
 // backup-urile trecuseră de ele (sunt în istoricul git al fișierului).
-const SCHEMA_VERSION = 55;
+const SCHEMA_VERSION = 56;
 
 function applyCleanups(database: DatabaseSync): void {
   const row = database.prepare("PRAGMA user_version").get() as { user_version: number };
@@ -456,5 +458,12 @@ function applyCleanups(database: DatabaseSync): void {
     database.exec("ALTER TABLE plex_active_sessions ADD COLUMN clip TEXT");
     console.log("[db] Migrare v55: plex_active_sessions.clip");
     database.exec("PRAGMA user_version = 55");
+  }
+
+  if (version < 56) {
+    // v56: media.source_url — de unde a fost luat un .torrent adăugat de mână.
+    database.exec("ALTER TABLE media ADD COLUMN source_url TEXT");
+    console.log("[db] Migrare v56: coloana media.source_url");
+    database.exec("PRAGMA user_version = 56");
   }
 }

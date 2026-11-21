@@ -132,6 +132,7 @@ export interface PlexTitleDetail {
     freeleech: boolean;
     internal: boolean;
     savePath: string | null;
+    sourceUrl: string | null;
     addedVia: string | null;
     completedAt: string | null;
     subtitleSource: string | null;
@@ -181,6 +182,7 @@ interface MediaRow {
   freeleech: number;
   internal: number;
   save_path: string | null;
+  source_url: string | null;
   added_via: string | null;
   plex_rating_key: string | null;
   is_season_pack: number;
@@ -488,6 +490,7 @@ async function buildDetailFromMediaRow(
           freeleech: !!row.freeleech,
           internal: !!row.internal,
           savePath: row.save_path,
+          sourceUrl: row.source_url,
           addedVia: row.added_via,
           completedAt: row.completed_at,
           subtitleSource: row.subtitle_source,
@@ -514,7 +517,7 @@ export const getPlexTitleDetail = createServerFn({ method: "GET" })
         .prepare(
           `SELECT id, media_type, title, original_title, imdb_id, tmdb_id, season, episode, poster_path, year,
            overview_ro, genres, quality, has_romanian_subtitle, has_romanian_audio, duration_ms, torrent_name, torrent_hash,
-           filelist_id, category_name, size, freeleech, internal, save_path, added_via,
+           filelist_id, category_name, size, freeleech, internal, save_path, source_url, added_via,
            plex_rating_key, is_season_pack, requested_by_user_id, added_at, completed_at,
            subtitle_source, subtitle_detail, subtitle_report, subtitle_checked_at, subtitle_approximate, episode_title,
            episode_overview, episode_still, episode_air_date,

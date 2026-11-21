@@ -1,6 +1,3 @@
-import { writeFile, unlink, readFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { createHash } from "node:crypto";
 import type { FilelistDownloadResult } from "./types";
 import { CATEGORY_NAMES, parseCategoryId, isMovieCategory, isSeriesCategory } from "./categories";
@@ -57,7 +54,7 @@ function bencodeSkip(buf: Buffer, start: number): number {
   throw new Error(`bencode invalid la offset ${start}`);
 }
 
-function computeTorrentInfoHash(torrentBuffer: ArrayBuffer): string | null {
+export function computeTorrentInfoHash(torrentBuffer: ArrayBuffer): string | null {
   try {
     const buf = Buffer.from(torrentBuffer);
     if (buf[0] !== 0x64 /* 'd' */) return null;
@@ -74,6 +71,45 @@ function computeTorrentInfoHash(torrentBuffer: ArrayBuffer): string | null {
     return null;
   } catch (e) {
     console.warn("[filelist] Nu am putut calcula infohash local din .torrent:", e);
+    return null;
+  }
+}
+
+// Numele și mărimea totală din dicționarul „info” — pentru fișierele .torrent
+// adăugate de mână. Mărimea adună `files[]` la torrentele cu mai multe fișiere.
+export function readTorrentInfo(buf: Buffer): { name: string; size: number } | null {
+  try {
+    if (buf[0] !== 0x64 /* 'd' */) return null;
+    let pos = 1;
+    while (buf[pos] !== 0x65) {
+      const key = bencodeStringAt(buf, pos);
+      pos = key.end;
+      if (key.value === "info") break;
+      pos = bencodeSkip(buf, pos);
+    }
+    if (buf[pos] !== 0x64) return null;
+    pos += 1;
+    let name = "";
+    let size = 0;
+    while (buf[pos] !== 0x65) {
+      const key = bencodeStringAt(buf, pos);
+      pos = key.end;
+      const valueEnd = bencodeSkip(buf, pos);
+      if (key.value === "name") {
+        // UTF-8, nu latin1 ca bencodeStringAt — altfel diacriticele se strică.
+        const colon = buf.indexOf(0x3a, pos);
+        name = buf.toString("utf8", colon + 1, valueEnd);
+      } else if (key.value === "length") {
+        size = Number(buf.toString("ascii", pos + 1, valueEnd - 1));
+      } else if (key.value === "files") {
+        for (const m of buf.toString("latin1", pos, valueEnd).matchAll(/6:lengthi(\d+)e/g)) {
+          size += Number(m[1]);
+        }
+      }
+      pos = valueEnd;
+    }
+    return name ? { name, size } : null;
+  } catch {
     return null;
   }
 }
@@ -187,7 +223,7 @@ export interface DownloadFilelistParams {
 
 // Metadatele TMDB pentru o descărcare din căutarea manuală, best-effort: după
 // IMDb id-ul confirmat de Filelist, altfel după numele lansării. null = fără.
-async function autoResolveManualMedia(
+export async function autoResolveManualMedia(
   torrentImdb: string | null | undefined,
   torrentName: string,
   isMovie: boolean,
@@ -248,25 +284,13 @@ async function resolveIsMovie(params: DownloadFilelistParams, catId: number): Pr
 export async function downloadFilelistCore(
   params: DownloadFilelistParams,
 ): Promise<FilelistDownloadResult> {
-  const username = process.env.FILELIST_USERNAME;
-  const passkey = process.env.FILELIST_PASSKEY;
-  const qbitBase = process.env.QBIT_URL ?? "http://192.168.1.192:25556";
-  const qbitUser = process.env.QBIT_USERNAME;
-  const qbitPass = process.env.QBIT_PASSWORD;
-  const moviesPath = process.env.MEDIA_MOVIES_PATH ?? "/media/ssd2tb/Filme";
-  const seriesPath = process.env.MEDIA_SERIES_PATH ?? "/media/ssd2tb/Seriale";
-
-  if (!username || !passkey) {
+  if (!process.env.FILELIST_USERNAME || !process.env.FILELIST_PASSKEY) {
     return { status: "error", error: "FILELIST_USERNAME / FILELIST_PASSKEY nu sunt configurate" };
-  }
-  if (!qbitUser || !qbitPass) {
-    return { status: "error", error: "QBIT_USERNAME / QBIT_PASSWORD nu sunt configurate" };
   }
 
   const catId =
     params.categoryId || (params.categoryName ? parseCategoryId(params.categoryName) : 0);
   const isMovie = await resolveIsMovie(params, catId);
-  const savePath = isMovie ? moviesPath : seriesPath;
 
   // 1. Descarcă fișierul .torrent de la Filelist
   let torrentBuffer: ArrayBuffer;
@@ -279,94 +303,106 @@ export async function downloadFilelistCore(
     };
   }
 
-  // 2. Scrie temporar fișierul .torrent pe disk
-  const safeName = params.torrentName.replace(/[^a-z0-9_\-. ]/gi, "_").slice(0, 80);
-  const tmpPath = join(tmpdir(), `faikkitbox_${params.torrentId}_${Date.now()}.torrent`);
-  await writeFile(tmpPath, Buffer.from(torrentBuffer));
+  const sent = await sendTorrentToQbit(torrentBuffer, params.torrentName, isMovie);
+  if (!sent.ok) return { status: "error", error: sent.error };
 
+  // 5–7 rulează în fundal: clientul n-are nevoie de hash ca să știe că
+  // trimiterea a reușit.
+  const catName = params.categoryName || CATEGORY_NAMES[catId] || `Cat ${catId}`;
+  finishFilelistDownload({
+    params,
+    catId,
+    catName,
+    savePath: sent.savePath,
+    isMovie,
+    torrentHash: computeTorrentInfoHash(torrentBuffer),
+  }).catch((e) => console.error("[filelist] Eroare la finalizarea descărcării în fundal:", e));
+
+  return { status: "ok", torrentName: params.torrentName, savePath: sent.savePath };
+}
+
+// Pașii 3–4: login și trimiterea la qBittorrent, în folderul filmelor sau al
+// serialelor. Comun cu adăugarea dintr-un fișier .torrent (torrent-file.ts).
+// `duplicate` = qBittorrent îl avea deja (răspunde 200 „Fails.”).
+export async function sendTorrentToQbit(
+  torrentBuffer: ArrayBuffer,
+  torrentName: string,
+  isMovie: boolean,
+): Promise<{ ok: true; savePath: string; duplicate: boolean } | { ok: false; error: string }> {
+  const qbitBase = process.env.QBIT_URL ?? "http://192.168.1.192:25556";
+  const qbitUser = process.env.QBIT_USERNAME;
+  const qbitPass = process.env.QBIT_PASSWORD;
+  if (!qbitUser || !qbitPass) {
+    return { ok: false, error: "QBIT_USERNAME / QBIT_PASSWORD nu sunt configurate" };
+  }
+  const savePath = isMovie
+    ? (process.env.MEDIA_MOVIES_PATH ?? "/media/ssd2tb/Filme")
+    : (process.env.MEDIA_SERIES_PATH ?? "/media/ssd2tb/Seriale");
+
+  const url = qbitBase.replace(/\/$/, "");
+  let cookie: string;
   try {
-    // 3. Autentifică-te la qBittorrent
-    const url = qbitBase.replace(/\/$/, "");
-    let cookie: string;
-    try {
-      cookie = await qbitEnsureCookie(url, qbitUser, qbitPass);
-    } catch {
-      resetQbitCookie();
-      cookie = await qbitLogin(url, qbitUser, qbitPass);
-    }
+    cookie = await qbitEnsureCookie(url, qbitUser, qbitPass);
+  } catch {
+    resetQbitCookie();
+    cookie = await qbitLogin(url, qbitUser, qbitPass);
+  }
 
-    // 4. Trimite torrentul la qBittorrent cu save path corect
-    const form = new FormData();
-    const fileBytes = await readFile(tmpPath);
-    form.append(
-      "torrents",
-      new Blob([fileBytes], { type: "application/x-bittorrent" }),
-      `${safeName}.torrent`,
-    );
-    form.append("savepath", savePath);
-    form.append("category", isMovie ? "filme" : "seriale");
+  const safeName = torrentName.replace(/[^a-z0-9_\-. ]/gi, "_").slice(0, 80);
+  const form = new FormData();
+  form.append(
+    "torrents",
+    new Blob([torrentBuffer], { type: "application/x-bittorrent" }),
+    `${safeName}.torrent`,
+  );
+  form.append("savepath", savePath);
+  form.append("category", isMovie ? "filme" : "seriale");
 
-    let uploadRes = await fetch(`${url}/api/v2/torrents/add`, {
+  let uploadRes = await fetch(`${url}/api/v2/torrents/add`, {
+    method: "POST",
+    headers: { Cookie: cookie, Referer: url, Origin: url },
+    body: form,
+    signal: AbortSignal.timeout(30_000),
+  });
+
+  // Un SID expirat primește tot 403 (nu 401) — reîncercăm o dată cu login
+  // proaspăt. Alte erori nu se rezolvă prin relogin.
+  if (uploadRes.status === 401 || uploadRes.status === 403) {
+    resetQbitCookie();
+    cookie = await qbitLogin(url, qbitUser, qbitPass);
+    uploadRes = await fetch(`${url}/api/v2/torrents/add`, {
       method: "POST",
       headers: { Cookie: cookie, Referer: url, Origin: url },
       body: form,
       signal: AbortSignal.timeout(30_000),
     });
-
-    // Un SID expirat primește tot 403 (nu 401) — reîncercăm o dată cu login
-    // proaspăt. Alte erori nu se rezolvă prin relogin.
-    if (uploadRes.status === 401 || uploadRes.status === 403) {
-      resetQbitCookie();
-      cookie = await qbitLogin(url, qbitUser, qbitPass);
-      uploadRes = await fetch(`${url}/api/v2/torrents/add`, {
-        method: "POST",
-        headers: { Cookie: cookie, Referer: url, Origin: url },
-        body: form,
-        signal: AbortSignal.timeout(30_000),
-      });
-    }
-
-    if (!uploadRes.ok) {
-      const txt = await uploadRes.text().catch(() => "");
-      return {
-        status: "error",
-        error: `qBittorrent upload eșuat: HTTP ${uploadRes.status} ${txt.slice(0, 120)}`,
-      };
-    }
-
-    const uploadText = await uploadRes.text();
-    if (!uploadText.includes("Ok")) {
-      console.warn("qBit upload răspuns neașteptat:", uploadText);
-    }
-
-    // 5–7 rulează în fundal: clientul n-are nevoie de hash ca să știe că
-    // trimiterea a reușit.
-    const catName = params.categoryName || CATEGORY_NAMES[catId] || `Cat ${catId}`;
-    finishFilelistDownload({
-      params,
-      catId,
-      catName,
-      savePath,
-      isMovie,
-      torrentHash: computeTorrentInfoHash(torrentBuffer),
-    }).catch((e) => console.error("[filelist] Eroare la finalizarea descărcării în fundal:", e));
-
-    return { status: "ok", torrentName: params.torrentName, savePath };
-  } finally {
-    // Curăță fișierul temporar
-    await unlink(tmpPath).catch(() => {});
   }
+
+  if (!uploadRes.ok) {
+    const txt = await uploadRes.text().catch(() => "");
+    return {
+      ok: false,
+      error: `qBittorrent upload eșuat: HTTP ${uploadRes.status} ${txt.slice(0, 120)}`,
+    };
+  }
+
+  const uploadText = await uploadRes.text();
+  if (!uploadText.includes("Ok")) {
+    console.warn("qBit upload răspuns neașteptat:", uploadText);
+  }
+  return { ok: true, savePath, duplicate: uploadText.includes("Fails") };
 }
 
-// Pașii 5–7, fără await, după ce qBittorrent a confirmat torrentul.
-async function finishFilelistDownload(ctx: {
+// Pașii 5–7, după ce qBittorrent a confirmat torrentul. Întoarce id-ul rândului
+// din `media` (null dacă scrierea a eșuat).
+export async function finishFilelistDownload(ctx: {
   params: DownloadFilelistParams;
   catId: number;
   catName: string;
   savePath: string;
   isMovie: boolean;
   torrentHash: string | null;
-}): Promise<void> {
+}): Promise<number | null> {
   const { params, catId, catName, savePath, isMovie, torrentHash } = ctx;
 
   // 6. `media` ÎNAINTE de notificare — notificarea citește titlul și posterul
@@ -392,12 +428,14 @@ async function finishFilelistDownload(ctx: {
     isSeasonPack: !isMovie && parsed?.episode == null,
     addedVia: "manual" as const,
   };
+  let mediaId: number | null = null;
   try {
-    const mediaId = upsertMediaEntry({
+    mediaId = upsertMediaEntry({
       ...(mediaPayload ?? fallbackPayload),
       torrentName: params.torrentName,
       torrentHash: torrentHash ?? null,
-      filelistId: params.torrentId,
+      // 0 = fișier .torrent adăugat de mână, fără id Filelist.
+      filelistId: params.torrentId || null,
       category: catId,
       categoryName: catName,
       size: params.size ?? 0,
@@ -459,6 +497,7 @@ async function finishFilelistDownload(ctx: {
   } else {
     console.warn("[filelist] Hash nedisponibil — descărcarea nu poate fi urmărită până la final");
   }
+  return mediaId;
 }
 
 // Corectează subtitrarea unui singur titlu, cu aceeași logică

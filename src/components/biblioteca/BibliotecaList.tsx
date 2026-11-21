@@ -11,6 +11,7 @@ import { deleteMediaEntry } from "@/lib/filelist.functions";
 import type { PlexBrowseItem } from "@/lib/services/plex-browse";
 import { StatusBadge } from "./StatusBadge";
 import { WantedMoviesSection } from "./WantedMoviesSection";
+import { AddTorrentFileSection } from "./AddTorrentFileSection";
 import { TitleDetailDrawer } from "./TitleDetailDrawer";
 import { DeleteTimerBadge } from "./ScheduledDelete";
 import {
@@ -226,6 +227,8 @@ export function BibliotecaList({
           <option value="unwatched">Nevăzute de nimeni</option>
         </select>
       </div>
+
+      <AddTorrentFileSection onAdded={setSelectedMediaId} />
 
       {/* Filmele așteptate nu sunt titluri pe care le ai — în afara căutării și
           sortării. Se ascunde singură când e goală. */}
