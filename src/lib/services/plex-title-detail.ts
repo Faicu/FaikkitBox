@@ -84,6 +84,8 @@ export interface PlexTitleDetail {
   torrentHash: string | null;
   // Pagina pe Filelist — doar descărcările de după v36.
   filelistId: number | null;
+  // Link-ul unui .torrent adăugat de mână și numele sursei (category_name).
+  source: { name: string; url: string } | null;
   // Reîncercarea zilnică a subtitrării: „se caută zilnic până pe…” sau
   // „căutarea s-a încheiat”; null când nu e cazul.
   subtitleRetry: {
@@ -132,7 +134,6 @@ export interface PlexTitleDetail {
     freeleech: boolean;
     internal: boolean;
     savePath: string | null;
-    sourceUrl: string | null;
     addedVia: string | null;
     completedAt: string | null;
     subtitleSource: string | null;
@@ -462,6 +463,7 @@ async function buildDetailFromMediaRow(
     eta,
     torrentHash: row.torrent_hash,
     filelistId: row.filelist_id,
+    source: row.source_url ? { name: row.category_name || "Sursă", url: row.source_url } : null,
     subtitleRetry: subtitleRetryOf(row),
     isSeasonPack: !!row.is_season_pack,
     canManage,
@@ -490,7 +492,6 @@ async function buildDetailFromMediaRow(
           freeleech: !!row.freeleech,
           internal: !!row.internal,
           savePath: row.save_path,
-          sourceUrl: row.source_url,
           addedVia: row.added_via,
           completedAt: row.completed_at,
           subtitleSource: row.subtitle_source,

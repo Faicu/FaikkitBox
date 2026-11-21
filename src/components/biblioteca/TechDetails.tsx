@@ -45,7 +45,6 @@ export function TechDetails({
                 .filter(Boolean)
                 .join(", "),
             ],
-            tech.sourceUrl && ["Link sursă", tech.sourceUrl],
             tech.savePath && ["Cale disk", tech.savePath],
             tech.addedVia && ["Adăugat via", tech.addedVia],
             tech.completedAt && ["Finalizat", sqliteDay(tech.completedAt)],
@@ -67,21 +66,10 @@ export function TechDetails({
             // etichetă, pe toată lățimea, aliniate la stânga;
             // `wrap-anywhere` rupe și șirurile fără spații.
             .map(([label, value]) =>
-              value.length > 40 || label === "Link sursă" ? (
+              value.length > 40 ? (
                 <div key={label} className="flex flex-col gap-0.5">
                   <span className="text-muted-foreground">{label}</span>
-                  {label === "Link sursă" ? (
-                    <a
-                      href={value}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="wrap-anywhere text-primary underline"
-                    >
-                      {value}
-                    </a>
-                  ) : (
-                    <span className="wrap-anywhere text-foreground">{value}</span>
-                  )}
+                  <span className="wrap-anywhere text-foreground">{value}</span>
                 </div>
               ) : (
                 <div key={label} className="flex justify-between gap-3">

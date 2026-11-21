@@ -115,7 +115,11 @@ export async function addTorrentFileCore(
   if (!sent.ok) return { status: "error", error: sent.error };
   if (sent.duplicate) return { status: "error", error: "Torrentul există deja în qBittorrent" };
 
+  // Doar http(s): link-ul ajunge în butonul din fișă, văzut de toți userii.
   const sourceUrl = input.sourceUrl?.trim() || null;
+  if (sourceUrl && !/^https?:\/\//i.test(sourceUrl)) {
+    return { status: "error", error: "Link-ul trebuie să înceapă cu http:// sau https://" };
+  }
   // Un link Filelist poartă id-ul torrentului — rândul se leagă de el ca la
   // descărcările din aplicație.
   const filelistId =

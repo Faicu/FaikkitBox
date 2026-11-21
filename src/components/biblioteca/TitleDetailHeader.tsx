@@ -77,15 +77,16 @@ export function TitleDetailHeader({ detail: d }: { detail: PlexTitleDetail | nul
                 </a>
               )}
               {/* Ține de FIȘIER (film, episod, pachet), nu de serial; doar
-                descărcările noi au ID-ul. */}
-              {d.type !== "tv_show" && d.filelistId != null && (
+                descărcările noi au ID-ul. Un .torrent adăugat de mână are
+                link-ul salvat și numele sursei. */}
+              {d.type !== "tv_show" && (d.source || d.filelistId != null) && (
                 <a
-                  href={`https://filelist.io/details.php?id=${d.filelistId}`}
+                  href={d.source?.url ?? `https://filelist.io/details.php?id=${d.filelistId}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex shrink-0 items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 font-medium text-foreground hover:bg-muted/70 transition-colors"
                 >
-                  <ExternalLink className="h-3 w-3" /> Filelist
+                  <ExternalLink className="h-3 w-3" /> {d.source?.name ?? "Filelist"}
                 </a>
               )}
             </div>
