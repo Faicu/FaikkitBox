@@ -42,6 +42,7 @@ import {
   MEDIA_EXTENSIONS,
   parseSeasonEpisode,
   extractEpisodeKey,
+  detectAlreadyRomanianContent,
 } from "./subtitle-checks";
 import { processMediaFile, type ProcessMediaFileResult } from "./subtitle-pipeline";
 
@@ -206,6 +207,13 @@ export async function ensureRomanianSubtitle(
   const mediaFile = mediaFiles[0];
 
   if (!imdbId) {
+    // Emisiunile locale n-au de obicei IMDb, dar nici nevoie de subtitrare —
+    // verificarea sonului român, din pipeline, nu se mai ajungea.
+    const romanian = await detectAlreadyRomanianContent(
+      join(savePath, mediaFile.name),
+      mediaFile.name,
+    );
+    if (romanian) return item(torrentName, displayTitle, "audio_already_romanian", romanian);
     console.log(`[subtitles] "${torrentName}": fără IMDb id, nu pot căuta subtitrare`);
     return item(
       torrentName,
@@ -393,6 +401,11 @@ async function processSeasonPack(params: ProcessSeasonPackParams): Promise<Subti
     mediaFiles.map((f) => parseSeasonEpisode(f.name)?.season).find((s) => s != null) ?? null;
 
   if (!imdbId || seasonNumber == null) {
+    // Ca la episodul individual: pachetul unei emisiuni locale, fără IMDb.
+    const romanian = !imdbId
+      ? await detectAlreadyRomanianContent(join(savePath, mediaFiles[0].name), mediaFiles[0].name)
+      : null;
+    if (romanian) return item(torrentName, displayTitle, "audio_already_romanian", romanian);
     return item(
       torrentName,
       displayTitle,
