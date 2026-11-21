@@ -162,9 +162,10 @@ export function AddTorrentFileSection({ onAdded }: { onAdded: (mediaId: number) 
             <span className="wrap-anywhere">
               {file ? file.name : "Trage aici fișierul .torrent sau atinge ca să-l alegi"}
             </span>
+            {/* Fără `accept`: Android nu cunoaște tipul .torrent și îl arată
+                gri în selector. Extensia se verifică în pickFile. */}
             <input
               type="file"
-              accept=".torrent,application/x-bittorrent"
               className="hidden"
               onChange={(e) => {
                 void pickFile(e.target.files?.[0]);
