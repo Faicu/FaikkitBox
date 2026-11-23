@@ -25,11 +25,18 @@ export async function pollPlexSessions(): Promise<void> {
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
   } catch (e) {
+    // Repornit de noi (Update/Restart): sesiunile rămân cum erau, fără eroare.
+    const { plexRestartExpected } = await import("../system/service-jobs");
+    if (plexRestartExpected()) return;
     throw new Error(`Plex nu răspunde (${e instanceof Error ? e.message : String(e)})`, {
       cause: e,
     });
   }
-  if (!res.ok) throw new Error(`Plex a răspuns HTTP ${res.status}`);
+  if (!res.ok) {
+    const { plexRestartExpected } = await import("../system/service-jobs");
+    if (plexRestartExpected()) return;
+    throw new Error(`Plex a răspuns HTTP ${res.status}`);
+  }
 
   const json = (await res.json()) as {
     MediaContainer?: {

@@ -104,6 +104,22 @@ export function runningJob(): ServiceJob | null {
   return r ? rowToJob(r) : null;
 }
 
+// Plex repornește prin Update/Restart de la noi: cât rulează acțiunea și un
+// minut după ea, indisponibilitatea lui e așteptată, nu o eroare de raportat.
+const PLEX_RESTART_GRACE_MS = 60_000;
+
+export function plexRestartExpected(now = Date.now()): boolean {
+  const r = getDb()
+    .prepare(
+      `SELECT status, finished_at FROM service_jobs
+       WHERE service = 'plex' ORDER BY id DESC LIMIT 1`,
+    )
+    .get() as { status: string; finished_at: string | null } | undefined;
+  if (!r) return false;
+  if (r.status === "running") return true;
+  return r.finished_at !== null && now - Date.parse(r.finished_at) < PLEX_RESTART_GRACE_MS;
+}
+
 // Ultima acțiune a fiecărui serviciu. Cerută la 2s cât rulează, deci ieșirea
 // (până la 64 KB) se trimite doar cât e de afișat.
 export function latestJobs(): Partial<Record<ServiceKey, ServiceJob>> {

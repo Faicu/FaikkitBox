@@ -161,4 +161,29 @@ describe("ce trimite serverul paginilor", () => {
     const n = db.prepare("SELECT COUNT(*) n FROM service_jobs").get() as { n: number };
     expect(n.n).toBe(50);
   });
+
+  it("Plex repornit de noi: indisponibilitatea e așteptată cât rulează acțiunea și un minut după", () => {
+    const now = Date.now();
+    const insert = db.prepare(
+      "INSERT INTO service_jobs (service, kind, status, started_at, finished_at) VALUES (?, 'update', ?, ?, ?)",
+    );
+    expect(jobs.plexRestartExpected(now)).toBe(false);
+
+    insert.run("plex", "running", new Date(now).toISOString(), null);
+    expect(jobs.plexRestartExpected(now)).toBe(true);
+
+    db.exec("DELETE FROM service_jobs");
+    insert.run(
+      "plex",
+      "ok",
+      new Date(now - 90_000).toISOString(),
+      new Date(now - 30_000).toISOString(),
+    );
+    expect(jobs.plexRestartExpected(now)).toBe(true);
+    expect(jobs.plexRestartExpected(now + 31_000)).toBe(false);
+
+    db.exec("DELETE FROM service_jobs");
+    insert.run("immich", "running", new Date(now).toISOString(), null);
+    expect(jobs.plexRestartExpected(now)).toBe(false);
+  });
 });
